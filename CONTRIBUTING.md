@@ -31,7 +31,7 @@ A pull request that touches `src/` also runs the [real-world corpus](#real-world
 
 `pnpm pack-test` (after `pnpm build`) tests the package as a user gets it: it packs the repository with `npm pack`, so the publish hooks run, installs the tarball into a new project in the system temp folder, and runs the installed `onsystem` bin (`--version`, `inspect`, `check`), an MCP stdio handshake with the installed server in both protocol eras, and the Claude Code hook, which picks up the project's own install. It needs the npm registry for the package's dependencies.
 
-Commit `schema.json` when `pnpm build` changes it, and `.github/assets/*.svg` when `pnpm assets` does: the hero image is rendered from real `check` output on the demo, so a changed message changes the picture.
+Commit `schema.json` when `pnpm build` changes it, and `.github/assets/architecture.svg` when `pnpm assets` does.
 
 ## Adding a lint rule
 
