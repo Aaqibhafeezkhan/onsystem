@@ -34,7 +34,7 @@ A client that loads the Agent Plugins format starts the server in the plugin's f
 
 ## Cursor and VS Code
 
-One click installs it: [Install in Cursor](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19) or [Install in VS Code](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22onsystem%22%5D%7D). To share it with the team, commit the config instead:
+One click installs it: [Install in Cursor](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19) or [Install in VS Code](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22onsystem%22%2C%22--root%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D). To share it with the team, commit the config instead:
 
 <details open>
 <summary><strong>Cursor</strong></summary>
@@ -145,7 +145,7 @@ In a session, `/mcp show onsystem` lists its tools.
 <details>
 <summary><strong>Windsurf (Devin Desktop)</strong></summary>
 
-Windsurf is now Devin Desktop, and its agent reads the Devin CLI's MCP config: `~/.config/devin/mcp_config.json` (`%APPDATA%\devin\mcp_config.json` on Windows), or `.devin/mcp_config.json` in the repository to share it with the team:
+Windsurf is now Devin Desktop. Its default agent, Devin Local, reads the Devin CLI's MCP config: `~/.config/devin/mcp_config.json` (`%APPDATA%\devin\mcp_config.json` on Windows) for every project, or `.devin/mcp_config.json` in the repository to share it with the team:
 
 ```json
 {
@@ -158,7 +158,9 @@ Windsurf is now Devin Desktop, and its agent reads the Devin CLI's MCP config: `
 }
 ```
 
-From the terminal, `devin mcp add onsystem -- npx -y onsystem --root /absolute/path/to/app` adds the same entry.
+From the terminal, `devin mcp add -s user onsystem -- npx -y onsystem --root /absolute/path/to/app` adds the same entry to the user file, and `-s project` to `.devin/mcp_config.json`; without `-s`, it goes to `.devin/mcp_config.local.json`, for this repository only and ignored by git.
+
+The legacy Cascade agent reads the same user file. Devin CLI versions before 3000.3 keep the servers under `mcpServers` in `config.json` at the same places, and move them on upgrade.
 
 </details>
 
