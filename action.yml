@@ -1,5 +1,5 @@
 name: onsystem design system check
-description: Gate pull requests on your design system. Annotates invented components, props and variants and hardcoded tokens on the lines a pull request changes.
+description: Gate pull requests on your design system. Flags invented components, props, variants and hardcoded values on changed lines.
 author: Diogo Esteves
 branding:
   icon: check-square

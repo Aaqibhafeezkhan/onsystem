@@ -288,6 +288,16 @@ describe('the GitHub Action, in parts', () => {
     expect(name).toBe('onsystem design system check');
     expect(name.toLowerCase()).not.toBe('onsystem');
   });
+
+  it('has a description the GitHub Marketplace accepts', () => {
+    // Publishing a release to the Marketplace refuses a description of 125 characters or more.
+    const yml = fs.readFileSync(path.join(import.meta.dirname, '..', 'action.yml'), 'utf8');
+    const description = (/^description: (.+)$/m.exec(yml)?.[1] ?? '')
+      .trim()
+      .replace(/^(['"])(.*)\1$/, '$2');
+    expect(description.length).toBeGreaterThan(0);
+    expect(description.length).toBeLessThan(125);
+  });
 });
 
 describe('the GitHub Action', () => {
