@@ -47,7 +47,15 @@ onsystem reads your components, `cva` and `tv` variants, parts and tokens from s
 
 ## Quickstart
 
-Run it from the app's folder or from the monorepo root, with Node.js 20.19 or later. `npx onsystem inspect` shows what it found, and `--explain` why; at a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), every app and design-system package, each file checked by its own project's design system. `npx onsystem init` writes the config from it and offers a baseline.
+Run it from the app's folder or from the monorepo root, with Node.js 20.19 or later:
+
+```sh
+npx -y onsystem inspect   # what it found; --explain says why
+npx -y onsystem check .   # the same check the agent and CI run
+npx -y onsystem init      # write the config, and offer a baseline
+```
+
+At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system.
 
 **Claude Code.** The plugin brings the hook, the MCP server and a skill:
 
@@ -58,7 +66,7 @@ Run it from the app's folder or from the monorepo root, with Node.js 20.19 or la
 
 After each Write or Edit of a `.tsx` or `.jsx` file, the hook runs `onsystem check` on it. Errors go back to Claude as a blocking error with the fix, so Claude corrects the file before it moves on; warnings go as a note. It stays quiet in projects without a design system. [What it runs and touches](https://onsystem.vercel.app/docs/plugin).
 
-**Cursor or VS Code.** [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_server-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19) [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat-square)](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22onsystem%22%5D%7D), or commit the [config](https://onsystem.vercel.app/docs/clients#cursor-and-vs-code). The agent gets the tools and runs `check_ui` on what it writes.
+**Cursor or VS Code.** [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_server-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19) [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat-square)](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22onsystem%22%2C%22--root%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D), or commit the [config](https://onsystem.vercel.app/docs/clients#cursor-and-vs-code). The agent gets the tools and runs `check_ui` on what it writes.
 
 **Other agents.** `npx skills add dgesteves/onsystem` adds the skill to any agent with Agent Skills, and there are [plugins for Codex, GitHub Copilot CLI, VS Code and Cursor](https://onsystem.vercel.app/docs/clients#plugins-for-other-agents).
 
