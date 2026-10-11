@@ -12,7 +12,7 @@ Built for design-system and platform teams with a React design-system package; a
 
 <!-- npm-readme:video -->
 
-https://github.com/user-attachments/assets/ebfa176b-a66a-4ab7-bc3b-a4787540647f
+https://github.com/user-attachments/assets/8ca1c640-94c2-4003-b59e-2b0d819c492d
 
 <sub>On the <a href="https://onsystem.vercel.app">website</a>, an agent drafts a settings card, <code>check_ui</code> finds 11 problems with a fix each, and the agent applies them. Then a real Claude Code session with the plugin: Claude looks the components up before writing, and <code>check_ui</code> passes. Last, the benchmark.</sub>
 
@@ -43,7 +43,7 @@ onsystem reads your components, `cva` and `tv` variants, parts and tokens from s
 | `no-hardcoded-spacing`           | warn    | Arbitrary padding, margin and gap (`p-[13px]` → `p-3`)                          |
 | `no-hardcoded-radius`            | warn    | Arbitrary radius (`rounded-[7px]` → `rounded-sm`)                               |
 
-**How often it is wrong.** The [corpus](corpus) job runs `check` on 10 public repositories pinned by commit (Documenso, Dub, Cal.com, midday and others, the four monorepos also from their root and Dub's app also with a config: 21 runs, 3,702 distinct findings) and compares the findings with hand labels. In a random sample of 126 findings, 67 are clearly right (53.2%), 55 are debatable and 4 are false positives (3.2%); weighted by each run's and rule's share of all findings, about 1.0% are false positives. Shipped code rarely invents components, props or variants, so those three rules have 1 finding in the corpus and none in the sample; their precision comes from the test suite. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
+**How often it is wrong.** The [corpus](corpus) job runs `check` on 12 public repositories pinned by commit (Documenso, Dub, Cal.com, midday, Flowise and others, the four monorepos also from their root and Dub's app also with a config: 23 runs, 4,076 distinct findings) and compares the findings with hand labels. In a random sample of 149 findings, 87 are clearly right (58.4%), 56 are debatable and 6 are false positives (4.0%); weighted by each run's and rule's share of all findings, about 1.1% are false positives. Shipped code rarely invents components, props or variants: those three rules have 56 findings in the corpus, 55 of them in Flowise, an MUI app that passes props and values MUI's components do not take, and the 10 in the sample are all right. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
 
 ## Quickstart
 
