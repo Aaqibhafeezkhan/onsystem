@@ -1,6 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { Eyebrow } from '@/components/section';
+
+// The tab and search results say what happened, rather than repeating the home page's title.
+export const metadata: Metadata = { title: 'Page not found' };
 
 export default function NotFound() {
   return (
