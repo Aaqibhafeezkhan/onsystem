@@ -25,7 +25,7 @@
     "mcp",
     "model-context-protocol"
   ],
-  "homepage": "https://github.com/dgesteves/onsystem#readme",
+  "homepage": "https://onsystem.vercel.app",
   "bugs": "https://github.com/dgesteves/onsystem/issues",
   "repository": {
     "type": "git",
