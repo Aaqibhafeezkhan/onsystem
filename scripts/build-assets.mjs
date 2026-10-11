@@ -1,17 +1,12 @@
-// Generates .github/assets/{hero,architecture}.svg.
+// Generates .github/assets/architecture.svg.
 //
 // All text is converted to vector paths (Geist / Geist Mono via opentype.js)
-// so the images render identically everywhere, including GitHub's image proxy,
-// which never loads web fonts. The hero's diagnostics come from running the
-// built checker on examples/shadcn-demo, so the picture cannot drift from the
-// tool's real output. Run `pnpm build` first.
-import assert from 'node:assert/strict';
+// so the image renders identically everywhere, including GitHub's image proxy,
+// which never loads web fonts.
 import fs from 'node:fs';
 import path from 'node:path';
 
 import opentype from 'opentype.js';
-
-import { applyFixes, loadConfig, loadDesignSystem } from '../dist/index.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(root, '.github/assets');
@@ -154,25 +149,6 @@ function runs(parts, x, y, size, font = F.mono) {
   return { svg, width: cx - x };
 }
 
-/** "ΔE 0.071", right-aligned at x. Geist has no Δ, so the triangle is drawn. */
-function deltaE(value, x, y, size, fill) {
-  const label = `E ${value}`;
-  const w = measure(F.mono, label, size);
-  const t = size * 0.62;
-  const left = x - w - t - 1.5;
-  const base = y;
-  const tri = `<path d="M${num(left)} ${num(base)}L${num(left + t / 2)} ${num(base - size * 0.7)}L${num(left + t)} ${num(base)}Z" fill="none" stroke="${fill}" stroke-width="1.2" stroke-linejoin="round"/>`;
-  return tri + text(F.mono, label, x, y, size, { anchor: 'end', fill });
-}
-
-/** A check mark drawn as a stroke (Geist has no ✓). */
-function check(x, y, size, stroke) {
-  const s = size / 16;
-  return `<path d="M${num(x)} ${num(y - 6 * s)}l${num(4 * s)} ${num(4 * s)}l${num(8 * s)} ${num(-9 * s)}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
-}
-
-const escapeXml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
 function write(name, svg) {
   fs.writeFileSync(path.join(OUT, name), `${svg.replace(/\n\s*/g, '\n').trim()}\n`);
   console.log('wrote', name, `${(Buffer.byteLength(svg) / 1024).toFixed(1)}kB`);
@@ -191,211 +167,6 @@ const frame = (W, H) => `
     <rect width="${W}" height="${H}" fill="url(#glow)"/>
   </g>
   <rect x=".5" y=".5" width="${W - 1}" height="${H - 1}" rx="17.5" fill="none" stroke="${C.edge}"/>`;
-
-// ─── Hero: an agent calling check_ui ────────────────────────────────────────
-
-async function hero() {
-  const demo = path.join(root, 'examples/shadcn-demo');
-  const ds = await loadDesignSystem(await loadConfig({ root: demo }), { cache: false });
-  const file = 'app/settings/danger-zone.tsx';
-  const draft = fs.readFileSync(path.join(demo, file), 'utf8');
-  const result = ds.check(draft, file);
-  assert.equal(result.errorCount, 8, 'hero expects the demo draft to have 8 errors');
-
-  // What the agent writes after reading the diagnostics. Verified clean below.
-  const fixed = applyFixes(draft, result.diagnostics)
-    .replace('tone="warning"', 'variant="destructive"')
-    .replace(
-      ' style={{ color: "var(--muted-foreground)", marginTop: 6 }}',
-      ' className="mt-1.5 text-muted-foreground"',
-    )
-    .replace(
-      'import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"',
-      'import {\n  Card,\n  CardContent,\n  CardDescription,\n  CardHeader,\n  CardTitle,\n} from "@/components/ui/card"',
-    );
-  const after = ds.check(fixed, file);
-  assert.equal(
-    after.diagnostics.length,
-    0,
-    `fixed draft should be clean: ${JSON.stringify(after.diagnostics)}`,
-  );
-
-  const rows = result.diagnostics.map((d) => {
-    let found = d.source;
-    let fix = d.suggestion ?? '';
-    if (d.ruleId === 'icon-button-accessible-name') found = '<Button size="icon">';
-    else if (d.ruleId === 'prefer-design-system-component') found = `<${d.source}>`;
-    else if (d.ruleId === 'no-unknown-component') found = `<${d.source}>`;
-    else if (d.ruleId === 'no-unknown-prop') found = `${d.source}=`;
-    else if (d.ruleId === 'no-unknown-variant') found = `variant=${d.source}`;
-    else if (d.ruleId === 'no-hardcoded-spacing' && /^\d+$/.test(d.source))
-      found = `marginTop: ${d.source}`;
-    else if (d.source.startsWith('#')) found = `color: "${d.source}"`;
-    if (d.ruleId === 'no-unknown-prop') fix = `${fix}=`;
-    const delta = /ΔE (\d\.\d+)|exact match/.exec(d.message);
-    const note = delta ? (delta[1] ?? '0') : '';
-    return {
-      loc: `${d.line}:${d.column}`,
-      error: d.severity === 'error',
-      rule: d.ruleId,
-      found,
-      fix,
-      note,
-    };
-  });
-
-  const W = 1200;
-  const X = 44;
-  const size = 17;
-  const lh = 31;
-  const charW = measure(F.mono, 'M', size);
-  const parts = [];
-
-  // Title bar
-  parts.push(`<rect x="1" y="1" width="${W - 2}" height="46" rx="17" fill="${C.raisedSoft}"/>`);
-  parts.push(`<rect x="1" y="30" width="${W - 2}" height="17" fill="${C.raisedSoft}"/>`);
-  parts.push(`<path d="M1 47.5H${W - 1}" stroke="${C.edge}"/>`);
-  [0, 1, 2].forEach((i) =>
-    parts.push(`<circle cx="${28 + i * 20}" cy="24" r="6" fill="${C.edgeStrong}"/>`),
-  );
-  parts.push(
-    text(F.mono, '~/acme-app — agent session', W / 2, 29, 14, { anchor: 'middle', fill: C.subtle }),
-  );
-
-  // Prompt
-  let y = 98;
-  parts.push(text(F.monoMedium, '›', X, y, size + 2, { fill: C.cyan }));
-  parts.push(
-    text(F.mono, 'Add a danger-zone card to the workspace settings page', X + 26, y, size, {
-      fill: C.fg,
-    }),
-  );
-
-  // Agent steps
-  y += lh + 14;
-  parts.push(`<circle cx="${X + 6}" cy="${y - 6}" r="4.5" fill="${C.subtle}"/>`);
-  parts.push(
-    runs(
-      [
-        { text: 'Write ', fill: C.muted },
-        { text: file, fill: C.fgSoft },
-        { text: '  +28 lines', fill: C.subtle },
-      ],
-      X + 26,
-      y,
-      size,
-    ).svg,
-  );
-  y += lh + 6;
-  parts.push(`<circle cx="${X + 6}" cy="${y - 6}" r="4.5" fill="${C.cyan}"/>`);
-  parts.push(
-    runs(
-      [
-        { text: 'design-system', fill: C.cyanBright, font: F.monoMedium },
-        { text: ' · ', fill: C.subtle },
-        { text: 'check_ui', fill: C.cyanBright, font: F.monoMedium },
-        { text: `  (path: "${file}")`, fill: C.muted },
-      ],
-      X + 26,
-      y,
-      size,
-    ).svg,
-  );
-
-  // Result panel
-  y += 20;
-  const panelX = X + 26;
-  const panelW = W - panelX - X;
-  const headerH = 46;
-  const panelH = headerH + rows.length * lh + 22;
-  parts.push(
-    `<rect x="${panelX}" y="${y}" width="${panelW}" height="${panelH}" rx="12" fill="${C.raised}" stroke="${C.edge}"/>`,
-  );
-  const hy = y + 30;
-  const header = runs(
-    [
-      { text: `${result.errorCount} errors`, fill: C.magenta, font: F.monoMedium },
-      { text: ' · ', fill: C.subtle },
-      { text: `${result.warningCount} warnings`, fill: C.cyan, font: F.monoMedium },
-      { text: '  each with a rule id, a location and a fix', fill: C.subtle },
-    ],
-    panelX + 22,
-    hy,
-    15,
-  );
-  parts.push(header.svg);
-  parts.push(`<path d="M${panelX} ${y + headerH - 0.5}H${panelX + panelW}" stroke="${C.edge}"/>`);
-
-  const col = {
-    dot: panelX + 24,
-    loc: panelX + 40,
-    rule: panelX + 40 + charW * 7,
-    found: panelX + 40 + charW * 36,
-  };
-  let ry = y + headerH + 30;
-  for (const row of rows) {
-    const tone = row.error ? C.magenta : C.cyan;
-    parts.push(`<circle cx="${col.dot}" cy="${ry - 5.5}" r="3.5" fill="${tone}"/>`);
-    parts.push(text(F.mono, row.loc, col.loc, ry, 15, { fill: C.subtle }));
-    parts.push(text(F.mono, row.rule, col.rule, ry, 15, { fill: C.muted }));
-    const line = runs(
-      [
-        { text: row.found, fill: C.fgSoft },
-        { text: '  →  ', fill: C.subtle },
-        { text: row.fix, fill: C.cyanBright },
-      ],
-      col.found,
-      ry,
-      15,
-    );
-    parts.push(line.svg);
-    if (row.note) parts.push(deltaE(row.note, panelX + panelW - 22, ry, 14, C.subtle));
-    ry += lh;
-  }
-
-  // Outcome
-  y += panelH + 44;
-  parts.push(`<circle cx="${X + 6}" cy="${y - 6}" r="4.5" fill="${C.subtle}"/>`);
-  parts.push(
-    runs(
-      [
-        { text: 'Edit ', fill: C.muted },
-        { text: file, fill: C.fgSoft },
-        { text: `  resolved all ${result.diagnostics.length} findings`, fill: C.subtle },
-      ],
-      X + 26,
-      y,
-      size,
-    ).svg,
-  );
-  y += lh + 6;
-  parts.push(`<circle cx="${X + 6}" cy="${y - 6}" r="4.5" fill="${C.cyan}"/>`);
-  const done = runs(
-    [{ text: 'check_ui', fill: C.cyanBright, font: F.monoMedium }],
-    X + 26,
-    y,
-    size,
-  );
-  parts.push(done.svg);
-  parts.push(check(X + 26 + done.width + 18, y, size, C.cyan));
-  parts.push(
-    text(F.mono, 'no design-system problems', X + 26 + done.width + 42, y, size, {
-      fill: C.fgSoft,
-    }),
-  );
-  const H = y + 40;
-
-  const desc = `An agent writes ${file}, calls the check_ui tool and gets ${result.errorCount} errors and ${result.warningCount} warnings, each with a fix: ${rows
-    .map((r) => `${r.found} → ${r.fix}`)
-    .join('; ')}. After applying them, check_ui reports no problems.`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="t d">
-  <title id="t">onsystem: an agent checks its UI against the design system</title>
-  <desc id="d">${escapeXml(desc)}</desc>
-  <defs>${glyphDefs()}</defs>
-  ${frame(W, H)}
-  ${parts.join('\n')}
-</svg>`;
-}
 
 // ─── Architecture ───────────────────────────────────────────────────────────
 
@@ -536,7 +307,5 @@ function architecture() {
 </svg>`;
 }
 
-resetGlyphs();
-write('hero.svg', await hero());
 resetGlyphs();
 write('architecture.svg', architecture());
