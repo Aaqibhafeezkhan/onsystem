@@ -221,6 +221,7 @@ function check(selected) {
     current[run.name] = {
       inspect,
       files: results.length,
+      flagged: new Set(runFindings.map((f) => f.file)).size,
       rules: ruleCounts(runFindings),
       ...(run.sameAs ? { added: ruleCounts(outside(runFindings, Object.keys(run.sameAs))) } : {}),
     };
@@ -244,7 +245,7 @@ function check(selected) {
       const before = snapshot.runs[run];
       lines.push(
         before
-          ? `${run}: inspect or files checked changed: ${JSON.stringify({ checked: before.files, ...before.inspect })} → ${JSON.stringify({ checked: current[run].files, ...current[run].inspect })}`
+          ? `${run}: inspect, or files checked or flagged, changed: ${JSON.stringify({ checked: before.files, flagged: before.flagged, ...before.inspect })} → ${JSON.stringify({ checked: current[run].files, flagged: current[run].flagged, ...current[run].inspect })}`
           : `${run}: new run`,
       );
     }

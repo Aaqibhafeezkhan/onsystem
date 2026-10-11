@@ -401,6 +401,11 @@ const labelKey = (label) =>
 const sample = readCorpus('labels.json').filter(
   (label) => label.sample === 'random' && corpusSnapshot.labels[labelKey(label)] === true,
 );
+const corpusRepos = readCorpus('repos.json').repos;
+// A run with a config of its own checks the same files as another run: not counted twice.
+const rechecks = new Set(
+  corpusRepos.flatMap((repo) => repo.runs.filter((run) => run.config).map((run) => run.name)),
+);
 let corpusFindings = 0;
 let corpusCovered = 0;
 let corpusWeighted = 0;
@@ -408,7 +413,7 @@ let corpusWeighted = 0;
 for (const [run, { rules, added }] of Object.entries(corpusSnapshot.runs)) {
   for (const [rule, counts] of Object.entries(added ?? rules)) {
     const n = counts.errors + counts.warnings;
-    corpusFindings += n;
+    if (!rechecks.has(run)) corpusFindings += n;
     const stratum = sample.filter((label) => label.run === run && label.rule === rule);
     if (!stratum.length) continue;
     corpusCovered += n;
@@ -417,15 +422,25 @@ for (const [run, { rules, added }] of Object.entries(corpusSnapshot.runs)) {
   }
 }
 assert.ok(sample.length > 0 && corpusCovered > 0, 'the corpus should have a labelled sample');
+// The baseline example: midday's dashboard, as the corpus checks it (`check src`).
+const midday = corpusSnapshot.runs['midday-dashboard'];
+assert.ok(midday?.flagged !== undefined, 'the corpus snapshot should have midday-dashboard');
 write('corpus.json', {
-  repos: readCorpus('repos.json').repos.length,
+  repos: corpusRepos.length,
   runs: Object.keys(corpusSnapshot.runs).length,
+  /** Distinct findings: a root run counts what it adds, a run with a config not at all. */
   findings: corpusFindings,
   sample: sample.length,
+  truePositives: sample.filter((label) => label.verdict === 'TP').length,
   falsePositives: sample.filter((label) => label.verdict === 'FP').length,
   debatable: sample.filter((label) => label.verdict === 'D').length,
   /** False positives as a share of all findings, weighted by each run's and rule's share. */
   weightedRate: corpusWeighted / corpusCovered,
+  baseline: {
+    findings: Object.values(midday.rules).reduce((n, c) => n + c.errors + c.warnings, 0),
+    flagged: midday.flagged,
+    files: midday.files,
+  },
 });
 
 // ─── From the docs and the README ───────────────────────────────────────────

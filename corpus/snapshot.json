@@ -1,6 +1,6 @@
 {
   "$comment": "Written by `node scripts/corpus.mjs --update`. Counts per run and rule; `labels` records which labelled findings were reported.",
-  "version": "0.3.3",
+  "version": "0.5.0",
   "runs": {
     "saas-starter": {
       "inspect": {
@@ -16,6 +16,7 @@
         "warnings": 0
       },
       "files": 16,
+      "flagged": 13,
       "rules": {
         "no-hardcoded-color": {
           "errors": 102,
@@ -45,6 +46,7 @@
         "warnings": 0
       },
       "files": 61,
+      "flagged": 23,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 11,
@@ -83,6 +85,7 @@
         "warnings": 0
       },
       "files": 279,
+      "flagged": 34,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 1,
@@ -124,6 +127,7 @@
         "warnings": 0
       },
       "files": 569,
+      "flagged": 269,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 97,
@@ -161,6 +165,7 @@
         "warnings": 0
       },
       "files": 506,
+      "flagged": 120,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 35,
@@ -204,6 +209,7 @@
         "others": 15
       },
       "files": 693,
+      "flagged": 127,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 42,
@@ -244,6 +250,7 @@
         "warnings": 1
       },
       "files": 1484,
+      "flagged": 411,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 52,
@@ -267,6 +274,7 @@
         "warnings": 2
       },
       "files": 27,
+      "flagged": 5,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 2,
@@ -292,6 +300,7 @@
         "warnings": 0
       },
       "files": 1422,
+      "flagged": 409,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 56,
@@ -337,6 +346,7 @@
         "others": 8
       },
       "files": 1521,
+      "flagged": 416,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 54,
@@ -366,6 +376,7 @@
         "warnings": 1
       },
       "files": 445,
+      "flagged": 25,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 14,
@@ -409,6 +420,7 @@
         "warnings": 1
       },
       "files": 172,
+      "flagged": 13,
       "rules": {
         "no-hardcoded-color": {
           "errors": 5,
@@ -441,6 +453,7 @@
         "warnings": 0
       },
       "files": 60,
+      "flagged": 8,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 2,
@@ -533,6 +546,7 @@
         "others": 39
       },
       "files": 699,
+      "flagged": 46,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 16,
@@ -576,6 +590,7 @@
         "warnings": 1
       },
       "files": 576,
+      "flagged": 132,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 17,
@@ -609,6 +624,7 @@
         "warnings": 2
       },
       "files": 17,
+      "flagged": 2,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 1,
@@ -639,6 +655,7 @@
         "warnings": 0
       },
       "files": 55,
+      "flagged": 7,
       "rules": {
         "no-hardcoded-color": {
           "errors": 11,
@@ -772,6 +789,7 @@
         "others": 102
       },
       "files": 928,
+      "flagged": 152,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 18,
@@ -837,6 +855,7 @@
         "warnings": 1
       },
       "files": 148,
+      "flagged": 2,
       "rules": {
         "prefer-design-system-component": {
           "errors": 2,
@@ -857,6 +876,7 @@
         "warnings": 0
       },
       "files": 2905,
+      "flagged": 4,
       "rules": {
         "prefer-design-system-component": {
           "errors": 4,
@@ -878,6 +898,7 @@
         "warnings": 0
       },
       "files": 49,
+      "flagged": 2,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 5,

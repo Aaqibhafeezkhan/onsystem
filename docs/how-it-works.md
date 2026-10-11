@@ -12,13 +12,13 @@ onsystem reads the design system from source into one model, then checks UI code
 
 ## On real codebases
 
-Run as is, with no config, on public apps (with version 0.2.0). These counts are not a judgement of the teams: hardcoded values and unlabeled icon buttons slip through review everywhere, and agents copy what they see.
+Run as is, with no config, on public apps: the counts the [corpus](../corpus) snapshot records, rechecked on every pull request that changes the rules. These counts are not a judgement of the teams: hardcoded values and unlabeled icon buttons slip through review everywhere, and agents copy what they see.
 
-| Project                                                                   | Found with zero config                         | `check` findings                                                                                                                                  |
-| ------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [vercel/ai-chatbot](https://github.com/vercel/ai-chatbot) `c2f8235`       | `components.json` → 23 components, 52 tokens   | 77 in `app/` and `components/`: 41 raw colors, 20 native elements the design system wraps, 11 icon-only buttons without an accessible name        |
-| [midday](https://github.com/midday-ai/midday) `5158731`, `apps/dashboard` | workspace package `@midday/ui` → 78 components | 1,237 in `src/`, including 105 icon-only buttons without an accessible name. Adopted with a [baseline](ci.md#adopting-it-in-an-existing-codebase) |
-| [shadcn/ui](https://github.com/shadcn-ui/ui) website `0132174`            | custom `ui` alias → 66 components              | 115 in `app/` and `components/`, mostly raw colors                                                                                                |
+| Project                                                                   | Found with zero config                         | `check` findings                                                                                                                                               |
+| ------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [vercel/ai-chatbot](https://github.com/vercel/ai-chatbot) `c2f8235`       | `components.json` → 23 components, 52 tokens   | 72 in `app/` and `components/`: 41 raw colors, 19 native elements the design system wraps, 11 icon-only buttons without an accessible name, 1 arbitrary radius |
+| [midday](https://github.com/midday-ai/midday) `5158731`, `apps/dashboard` | workspace package `@midday/ui` → 79 components | 1,232 in `src/`, including 97 icon-only buttons without an accessible name. Adopted with a [baseline](ci.md#adopting-it-in-an-existing-codebase)               |
+| [shadcn/ui](https://github.com/shadcn-ui/ui) website `0132174`            | custom `ui` alias → 68 components              | 115 in `app/` and `components/`, mostly raw colors (96)                                                                                                        |
 
 ## How it compares
 

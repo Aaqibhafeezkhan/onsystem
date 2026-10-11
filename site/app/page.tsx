@@ -232,11 +232,12 @@ function RealCodebases() {
           How often it is wrong is measured, not guessed: the{' '}
           <TextLink href={repoLink('corpus', 'tree')}>corpus</TextLink> runs{' '}
           <InlineCode>check</InlineCode> on {corpus.repos} public repositories pinned by commit (
-          {corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} findings) and compares the
-          findings with hand labels. In a random sample of {corpus.sample}, {corpus.falsePositives}{' '}
-          are false positives ({((corpus.falsePositives / corpus.sample) * 100).toFixed(1)}%) and{' '}
-          {corpus.debatable} debatable; weighted by run and rule, about{' '}
-          {(corpus.weightedRate * 100).toFixed(1)}% of all findings.
+          {corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct findings) and
+          compares the findings with hand labels. In a random sample of {corpus.sample},{' '}
+          {corpus.truePositives} are clearly right, {corpus.debatable} debatable and{' '}
+          {corpus.falsePositives} false positives (
+          {((corpus.falsePositives / corpus.sample) * 100).toFixed(1)}%); weighted by run and rule,
+          about {(corpus.weightedRate * 100).toFixed(1)}% of all findings are false positives.
         </p>
       </div>
       <ul className="mt-8 grid gap-4 lg:grid-cols-3">
@@ -636,11 +637,14 @@ function WorksWith() {
 }
 
 function Adoption() {
-  const baseline = `$ npx -y onsystem check "src/**/*.tsx" --update-baseline
-Baseline: 1,307 findings in 275 files → onsystem.baseline.json
+  // midday's dashboard, as the corpus snapshot records it.
+  const n = (value: number) => value.toLocaleString('en-US');
+  const { findings, flagged, files } = corpus.baseline;
+  const baseline = `$ npx -y onsystem check src --update-baseline
+Baseline: ${n(findings)} findings in ${n(flagged)} files → onsystem.baseline.json
 
-$ npx -y onsystem check "src/**/*.tsx"
-No new problems in 504 files (1,307 in the baseline).`;
+$ npx -y onsystem check src
+No new problems in ${n(files)} files (${n(findings)} in the baseline).`;
   const ci = `- run: npx onsystem check . --format github --require-design-system`;
   return (
     <Section
@@ -649,9 +653,9 @@ No new problems in 504 files (1,307 in the baseline).`;
       title="An existing codebase fails only on new findings."
       lead={
         <p>
-          An established app can start with hundreds of findings: midday&apos;s dashboard has about
-          1,300. Record them once, commit the file, and <InlineCode>check</InlineCode> fails only on
-          what is new.
+          An established app can start with hundreds of findings: midday&apos;s dashboard has{' '}
+          {n(findings)}. Record them once, commit the file, and <InlineCode>check</InlineCode> fails
+          only on what is new.
         </p>
       }
     >
