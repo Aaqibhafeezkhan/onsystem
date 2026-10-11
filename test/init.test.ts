@@ -184,6 +184,53 @@ describe('onsystem init', () => {
     expect(fs.existsSync(path.join(root, 'onsystem.baseline.json'))).toBe(false);
   });
 
+  it('writes the default folders when they hold the components, as check and inspect find them', async () => {
+    // components/ui without a components.json: zero config detects nothing, but the default
+    // globs match, so `inspect` and `check` work, and init must too.
+    const files = {
+      'tsconfig.json': TSCONFIG,
+      'package.json': json({ name: 'app' }),
+      'components/ui/button.tsx':
+        'export function Button(props: { variant?: "default" | "outline"; children?: unknown }) { return <button /> }\n',
+      'app/globals.css': ':root { --primary: oklch(0.2 0 0); }\n',
+      'app/page.tsx':
+        'import { Button } from "@/components/ui/button"\nexport default () => <Button variant="ghost">Go</Button>\n',
+    };
+    const expected = {
+      $schema: 'https://unpkg.com/onsystem/schema.json',
+      components: ['components/ui/**/*.{tsx,jsx}'],
+      tokens: ['app/globals.css'],
+    };
+    const read = (root: string) =>
+      JSON.parse(fs.readFileSync(path.join(root, 'onsystem.config.json'), 'utf8')) as unknown;
+
+    // With --yes.
+    const yes = fixture(files);
+    const answered = await run(['init', '--yes', '--no-cache'], yes);
+    expect(answered.code).toBe(0);
+    expect(read(yes)).toEqual(expected);
+    expect(answered.stdout).toContain(
+      'Found the design system in the default folders: components/ui/**/*.{tsx,jsx}.',
+    );
+    expect(answered.stdout).toContain('Baseline: 1 finding in 1 file → onsystem.baseline.json');
+
+    // Without a terminal, and without --yes: written, with no baseline.
+    const blind = fixture(files);
+    const unattended = await run(['init', '--no-cache'], blind);
+    expect(unattended.code).toBe(0);
+    expect(read(blind)).toEqual(expected);
+    expect(unattended.stdout).toContain('No baseline written');
+
+    // In a terminal: nothing to ask about where the components are, only the baseline.
+    const asked = fixture(files);
+    const interactive = await run(['init', '--no-cache'], asked, ['n']);
+    expect(interactive.code).toBe(0);
+    expect(interactive.asked).toEqual([
+      'Record these 1 findings in onsystem.baseline.json, so check fails only on new ones? [Y/n] ',
+    ]);
+    expect(read(asked)).toEqual(expected);
+  });
+
   it('needs --components without a terminal when nothing is found, and takes them', async () => {
     const root = fixture({
       'package.json': json({ name: 'shop' }),

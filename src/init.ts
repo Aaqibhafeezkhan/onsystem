@@ -96,6 +96,17 @@ export async function init(
       if (docs.length) file.docs = [...DEFAULT_DOCS, ...docs];
     }
     if (tokens.length) file.tokens = tokens;
+  } else if ((await componentFiles(config)).length) {
+    // Nothing detected, but the default folders hold components (`components/ui` without a
+    // components.json), as `check` and `inspect` find them: spell out the ones that match.
+    const matching: string[] = [];
+    for (const glob of config.components) {
+      if ((await componentFiles({ ...config, components: [glob] })).length) matching.push(glob);
+    }
+    notes.push(`Found the design system in the default folders: ${matching.join(', ')}.`);
+    file.components = matching;
+    const tokens = (await tokenFiles(config)).map(relative);
+    if (tokens.length) file.tokens = tokens;
   } else {
     if (!ask) {
       io.stderr(

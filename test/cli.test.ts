@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
@@ -812,5 +814,45 @@ describe('onsystem inspect, --help, --version', () => {
   it('prints help and version', async () => {
     expect((await run(['--help'])).stdout).toContain('onsystem check <paths...>');
     expect((await run(['-v'])).stdout).toBe(VERSION);
+  });
+});
+
+describe('onsystem with no command', () => {
+  /** Serves over an in-memory transport, as stdio would, with stdin a terminal or not. */
+  async function serve(stdinIsTTY: boolean) {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const err: string[] = [];
+    const io: Io = {
+      cwd: DEMO_ROOT,
+      color: false,
+      stdout: () => undefined,
+      stderr: (t) => err.push(t),
+      stdinIsTTY,
+      transport: serverSide,
+    };
+    const code = await main(['--no-watch', '--no-cache'], io);
+    const client = new Client({ name: 'terminal', version: '1.0.0' });
+    await client.connect(clientSide);
+    const { tools } = await client.listTools();
+    await client.close();
+    return { code, stderr: err.join('\n'), tools: tools.length };
+  }
+
+  it('says what it is on stderr when started in a terminal, then serves as usual', async () => {
+    const terminal = await serve(true);
+    expect(terminal.code).toBe(0);
+    expect(terminal.tools).toBe(5);
+    expect(terminal.stderr.split('\n')).toEqual([
+      expect.stringMatching(
+        /^onsystem is an MCP server: it is waiting for an agent on stdin\. Add it to your agent \(https:\/\/\S+\/docs\/clients\), or run `npx -y onsystem inspect` or `npx -y onsystem check \.` here\. Ctrl\+C quits\.$/,
+      ),
+    ]);
+  });
+
+  it('prints nothing when an MCP client starts it, its stdin a pipe', async () => {
+    const piped = await serve(false);
+    expect(piped.code).toBe(0);
+    expect(piped.tools).toBe(5);
+    expect(piped.stderr).toBe('');
   });
 });

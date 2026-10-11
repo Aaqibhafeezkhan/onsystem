@@ -5,6 +5,7 @@ import path from 'node:path';
 import readline from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 
+import type { Transport } from '@modelcontextprotocol/server';
 import { escapePath, glob, type GlobOptions } from 'tinyglobby';
 
 import {
@@ -113,6 +114,10 @@ export interface Io {
   prompt?: ((question: string) => Promise<string>) | undefined;
   /** Environment variables (GITHUB_WORKSPACE); the process's by default. */
   env?: Record<string, string | undefined> | undefined;
+  /** Whether stdin is a terminal rather than an MCP client's pipe. */
+  stdinIsTTY?: boolean | undefined;
+  /** The transport `serve` uses instead of stdio, for tests. */
+  transport?: Transport | undefined;
 }
 
 const defaultIo: Io = {
@@ -121,6 +126,7 @@ const defaultIo: Io = {
   stderr: (text) => process.stderr.write(`${text}\n`),
   color: process.stdout.isTTY && !process.env.NO_COLOR,
   prompt: process.stdin.isTTY && process.stdout.isTTY ? askInTerminal : undefined,
+  stdinIsTTY: process.stdin.isTTY,
 };
 
 /** One question on the terminal, answered with a line. */
@@ -206,11 +212,19 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
   try {
     switch (command) {
       case 'serve':
+        // `npx onsystem` typed in a terminal waits on stdin for an agent that never comes: say so.
+        // An MCP client's stdin is a pipe, and stdout belongs to the protocol.
+        if (io.stdinIsTTY) {
+          io.stderr(
+            `${NAME} is an MCP server: it is waiting for an agent on stdin. Add it to your agent (${DOCS}/clients), or run \`npx -y ${NAME} inspect\` or \`npx -y ${NAME} check .\` here. Ctrl+C quits.`,
+          );
+        }
         await serveStdio({
           ...configOptions,
           cache: values.cache,
           watch: values.watch,
           logger: stderrLogger,
+          ...(io.transport ? { transport: io.transport } : {}),
         });
         return 0;
       case 'check':
