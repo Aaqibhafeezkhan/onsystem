@@ -22,13 +22,12 @@ export const MORE = [
   {
     name: 'ondocs',
     url: 'https://ondocs.vercel.app',
-    description:
-      'Docs answerable by people and agents from one static index: a cited Ask box, an MCP server and llms.txt.',
+    description: 'Makes your docs answerable by people and agents, from one static index.',
   },
   {
     name: 'signoff-ui',
     url: 'https://signoff-ui.vercel.app',
-    description: 'React components to review what your agent changed and approve what it may do.',
+    description: 'Review what your agent changed and approve what it may do.',
   },
 ];
 
