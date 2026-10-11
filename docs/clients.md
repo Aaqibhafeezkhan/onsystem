@@ -145,7 +145,7 @@ In a session, `/mcp show onsystem` lists its tools.
 <details>
 <summary><strong>Windsurf (Devin Desktop)</strong></summary>
 
-Windsurf is now Devin Desktop, and its agent reads the Devin CLI's MCP config: `~/.config/devin/mcp_config.json` (`%APPDATA%\devin\mcp_config.json` on Windows), or `.devin/mcp_config.json` in the repository to share it with the team:
+Windsurf is now Devin Desktop. Its default agent, Devin Local, reads the Devin CLI's MCP config: `~/.config/devin/mcp_config.json` (`%APPDATA%\devin\mcp_config.json` on Windows) for every project, or `.devin/mcp_config.json` in the repository to share it with the team:
 
 ```json
 {
@@ -158,7 +158,9 @@ Windsurf is now Devin Desktop, and its agent reads the Devin CLI's MCP config: `
 }
 ```
 
-From the terminal, `devin mcp add onsystem -- npx -y onsystem --root /absolute/path/to/app` adds the same entry.
+From the terminal, `devin mcp add -s user onsystem -- npx -y onsystem --root /absolute/path/to/app` adds the same entry to the user file, and `-s project` to `.devin/mcp_config.json`; without `-s`, it goes to `.devin/mcp_config.local.json`, for this repository only and ignored by git.
+
+The legacy Cascade agent reads the same user file. Devin CLI versions before 3000.3 keep the servers under `mcpServers` in `config.json` at the same places, and move them on upgrade.
 
 </details>
 
