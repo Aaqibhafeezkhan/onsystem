@@ -61,6 +61,8 @@ export interface RuleCounts {
 export interface RunSnapshot {
   inspect: Record<string, unknown>;
   files: number;
+  /** Files with at least one finding: what a baseline of the run would hold. */
+  flagged?: number;
   rules: Record<string, RuleCounts>;
   /**
    * A run from a monorepo root: its findings outside the folders other runs check from
@@ -171,7 +173,7 @@ export interface CountChange {
 export interface Comparison {
   /** Rule counts that differ from the snapshot. */
   changes: CountChange[];
-  /** Runs whose inspect summary or number of checked files differs. */
+  /** Runs whose inspect summary, or number of checked or flagged files, differs. */
   changedRuns: string[];
   /** Failures no `--update` accepts: a TP that went away, an FP that came back, a stale label. */
   labelFailures: string[];
@@ -194,6 +196,7 @@ export function compare(
     if (
       !before ||
       before.files !== now.files ||
+      before.flagged !== now.flagged ||
       JSON.stringify(before.inspect) !== JSON.stringify(now.inspect) ||
       JSON.stringify(before.added) !== JSON.stringify(now.added)
     ) {

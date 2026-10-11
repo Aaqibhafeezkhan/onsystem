@@ -143,11 +143,15 @@ export interface Docs {
 export interface Corpus {
   repos: number;
   runs: number;
+  /** Distinct findings across the runs. */
   findings: number;
   sample: number;
+  truePositives: number;
   falsePositives: number;
   debatable: number;
   weightedRate: number;
+  /** midday's dashboard, the baseline example: its findings, the files they are in, and the files checked. */
+  baseline: { findings: number; flagged: number; files: number };
 }
 
 export interface MarkdownTable {
