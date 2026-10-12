@@ -18,15 +18,13 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const readme = read('README.md');
 
 describe('the README', () => {
+  // test/install.test.ts checks what each install link installs.
   it('opens with one-click installs for Cursor, VS Code and Claude Code', () => {
     const top = readme.slice(0, readme.indexOf('<!-- npm-readme:video -->'));
-    const cursor = /cursor\.com\/en\/install-mcp\?name=onsystem&config=([\w=]+)\)/.exec(top)?.[1];
-    const vscode = /vscode\.dev\/redirect\/mcp\/install\?name=onsystem&config=([^)\s]+)\)/.exec(
-      top,
-    )?.[1];
-    const server = { command: 'npx', args: ['-y', 'onsystem', '--root', '${workspaceFolder}'] };
-    expect(JSON.parse(Buffer.from(cursor ?? '', 'base64').toString('utf8'))).toEqual(server);
-    expect(JSON.parse(decodeURIComponent(vscode ?? ''))).toEqual(server);
+    expect(top).toContain('](https://cursor.com/en/install-mcp?name=onsystem&config=');
+    expect(top).toContain(
+      '](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=',
+    );
     expect(top).toContain('](https://onsystem.vercel.app/docs/plugin)');
   });
 
