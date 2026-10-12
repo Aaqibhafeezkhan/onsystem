@@ -1,0 +1,87 @@
+{
+  "$comment": "Named run matrices. A group crosses its models, its arms, the first `tasksPerRepo` tasks of every repository and `repeats` repeats. `plan --matrix <name>` prints the runs and their estimated cost. See bench/v2/README.md for what each size can and cannot conclude.",
+  "matrices": {
+    "mock": {
+      "description": "Offline end-to-end check with the scripted mock model: every repository, every arm, no network, no key.",
+      "groups": [
+        {
+          "models": ["mock"],
+          "arms": ["none", "skill", "mcp", "hook", "all"],
+          "tasksPerRepo": 2,
+          "repeats": 1
+        }
+      ]
+    },
+    "canary": {
+      "description": "One task, the two extreme arms, the small and mid models: checks each API adapter against the live API and measures real cost per run before a larger matrix.",
+      "repos": ["chatbot"],
+      "groups": [
+        {
+          "models": [
+            "claude-haiku-5-5",
+            "gpt-6-luna",
+            "gemini-3.5-flash-lite",
+            "claude-sonnet-5-5",
+            "gpt-6.1-sol",
+            "gemini-3.8-flash"
+          ],
+          "arms": ["none", "all"],
+          "tasksPerRepo": 1,
+          "repeats": 1
+        }
+      ]
+    },
+    "small": {
+      "description": "Small models only, every arm, every task, 3 repeats.",
+      "groups": [
+        {
+          "models": ["claude-haiku-5-5", "gpt-6-luna", "gemini-3.5-flash-lite"],
+          "arms": ["none", "skill", "mcp", "hook", "all"],
+          "tasksPerRepo": 4,
+          "repeats": 3
+        }
+      ]
+    },
+    "standard": {
+      "description": "The proposal: small models with 3 repeats plus mid models with 1, every arm, every task.",
+      "groups": [
+        {
+          "models": ["claude-haiku-5-5", "gpt-6-luna", "gemini-3.5-flash-lite"],
+          "arms": ["none", "skill", "mcp", "hook", "all"],
+          "tasksPerRepo": 4,
+          "repeats": 3
+        },
+        {
+          "models": ["claude-sonnet-5-5", "gpt-6.1-sol", "gemini-3.8-flash"],
+          "arms": ["none", "skill", "mcp", "hook", "all"],
+          "tasksPerRepo": 4,
+          "repeats": 1
+        }
+      ]
+    },
+    "large": {
+      "description": "Small and mid models with 3 repeats, plus one run of each frontier model, every arm, every task.",
+      "groups": [
+        {
+          "models": [
+            "claude-haiku-5-5",
+            "gpt-6-luna",
+            "gemini-3.5-flash-lite",
+            "claude-sonnet-5-5",
+            "gpt-6.1-sol",
+            "gemini-3.8-flash"
+          ],
+          "arms": ["none", "skill", "mcp", "hook", "all"],
+          "tasksPerRepo": 4,
+          "repeats": 3
+        },
+        {
+          "models": ["claude-opus-5-5", "gpt-6-astra", "gemini-3.1-pro-preview"],
+          "arms": ["none", "skill", "mcp", "hook", "all"],
+          "tasksPerRepo": 4,
+          "repeats": 1
+        }
+      ]
+    }
+  }
+}

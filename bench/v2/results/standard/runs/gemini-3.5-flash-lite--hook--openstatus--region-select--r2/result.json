@@ -1,0 +1,52 @@
+{
+  "id": "gemini-3.5-flash-lite--hook--openstatus--region-select--r2",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "hook",
+  "repo": "openstatus",
+  "task": "region-select",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/dashboard/src/components/monitors/region-select.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "src/components/monitors/region-select.tsx",
+      "line": 33,
+      "column": 3,
+      "code": "TS2339",
+      "message": "Property 'className' does not exist on type 'RegionSelectProps'."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/dashboard/src/components/monitors/region-select.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.11295369,
+  "calls": 33,
+  "toolCalls": 32,
+  "toolErrors": 0,
+  "inputTokens": 1608436,
+  "cacheReadTokens": 1464943,
+  "cacheWriteTokens": 0,
+  "outputTokens": 10383,
+  "seconds": 65,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:36:23.972Z"
+}

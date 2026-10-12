@@ -1,0 +1,58 @@
+{
+  "id": "claude-haiku-5-5--none--saas-starter--user-menu--r3",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "none",
+  "repo": "saas-starter",
+  "task": "user-menu",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/user-menu.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/user-menu.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-gray-700` is Tailwind's default palette, not a design-system color. No close token; nearest is primary (ΔE 0.165, same value as secondary-foreground, accent-foreground). Pick the semantic token that fits.",
+      "line": 57,
+      "column": 69,
+      "endLine": 57,
+      "endColumn": 82,
+      "source": "text-gray-700"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/user-menu.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0035627049999999998,
+  "calls": 6,
+  "toolCalls": 9,
+  "toolErrors": 0,
+  "inputTokens": 55969,
+  "cacheReadTokens": 43218,
+  "cacheWriteTokens": 12737,
+  "outputTokens": 3074,
+  "seconds": 18,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:24:07.453Z"
+}

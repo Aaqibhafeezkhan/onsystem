@@ -1,0 +1,75 @@
+{
+  "id": "gpt-6-luna--skill--dub--delete-workspace-modal--r3",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "dub",
+  "task": "delete-workspace-modal",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/workspaces/delete-workspace-modal.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 51,
+      "column": 12,
+      "endLine": 51,
+      "endColumn": 17,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            1499,
+            1504
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            2003,
+            2008
+          ],
+          "text": "Label"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/workspaces/delete-workspace-modal.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.005666895,
+  "calls": 8,
+  "toolCalls": 19,
+  "toolErrors": 0,
+  "inputTokens": 132303,
+  "cacheReadTokens": 103517,
+  "cacheWriteTokens": 28085,
+  "outputTokens": 2102,
+  "seconds": 48,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:03:13.642Z"
+}

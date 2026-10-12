@@ -1,0 +1,52 @@
+{
+  "id": "gemini-3.5-flash-lite--all--chatbot--settings-card--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "all",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "line": 9,
+      "column": 18,
+      "code": "TS2430",
+      "message": "Interface 'ModelSettingsCardProps' incorrectly extends interface 'ClassAttributes<HTMLDivElement> & HTMLAttributes<HTMLDivElement>'.\nType 'ModelSettingsCardProps' is not assignable to type 'HTMLAttributes<HTMLDivElement>'.\nTypes of property 'title' are incompatible.\nType 'ReactNode' is not assignable to type 'string | undefined'.\nType 'null' is not assignable to type 'string | undefined'."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.04689618,
+  "calls": 21,
+  "toolCalls": 20,
+  "toolErrors": 0,
+  "inputTokens": 341053,
+  "cacheReadTokens": 265536,
+  "cacheWriteTokens": 0,
+  "outputTokens": 6510,
+  "seconds": 40,
+  "hookBlocks": 1,
+  "hookNotes": 0,
+  "mcpCalls": 4,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:37:52.687Z"
+}

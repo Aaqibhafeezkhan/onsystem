@@ -1,0 +1,58 @@
+{
+  "id": "claude-sonnet-5-5--none--chatbot--settings-card--r1",
+  "provider": "anthropic",
+  "model": "claude-sonnet-5-5",
+  "tier": "mid",
+  "arm": "none",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.200), a gray. Pick the semantic token that fits.",
+      "line": 22,
+      "column": 26,
+      "endLine": 22,
+      "endColumn": 40,
+      "source": "text-green-600"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.023745799999999997,
+  "calls": 5,
+  "toolCalls": 7,
+  "toolErrors": 0,
+  "inputTokens": 13958,
+  "cacheReadTokens": 9618,
+  "cacheWriteTokens": 4328,
+  "outputTokens": 1194,
+  "seconds": 19,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T13:09:16.109Z"
+}

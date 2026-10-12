@@ -1,0 +1,75 @@
+{
+  "id": "claude-haiku-5-5--none--shadcn-website--feedback-widget--r2",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "none",
+  "repo": "shadcn-website",
+  "task": "feedback-widget",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/feedback-widget.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/feedback-widget.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@/registry/new-york-v4/ui/label\"); its variants replace the custom classes.",
+      "line": 74,
+      "column": 18,
+      "endLine": 74,
+      "endColumn": 23,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            2473,
+            2478
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            2593,
+            2598
+          ],
+          "text": "Label"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/feedback-widget.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0032436450000000003,
+  "calls": 6,
+  "toolCalls": 9,
+  "toolErrors": 0,
+  "inputTokens": 49198,
+  "cacheReadTokens": 36937,
+  "cacheWriteTokens": 12247,
+  "outputTokens": 2684,
+  "seconds": 18,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:28:22.120Z"
+}

@@ -1,0 +1,58 @@
+{
+  "id": "claude-haiku-5-5--skill--saas-starter--plan-summary-card--r3",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "saas-starter",
+  "task": "plan-summary-card",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.286), a gray. Pick the semantic token that fits.",
+      "line": 29,
+      "column": 28,
+      "endLine": 29,
+      "endColumn": 42,
+      "source": "text-green-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/billing/plan-summary-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.002442985,
+  "calls": 6,
+  "toolCalls": 9,
+  "toolErrors": 1,
+  "inputTokens": 35729,
+  "cacheReadTokens": 26546,
+  "cacheWriteTokens": 9169,
+  "outputTokens": 2060,
+  "seconds": 14,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:26:56.871Z"
+}

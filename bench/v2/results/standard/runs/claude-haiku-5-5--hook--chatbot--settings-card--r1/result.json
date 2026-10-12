@@ -1,0 +1,69 @@
+{
+  "id": "claude-haiku-5-5--hook--chatbot--settings-card--r1",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "hook",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.200), a gray. Pick the semantic token that fits.",
+      "line": 62,
+      "column": 48,
+      "endLine": 62,
+      "endColumn": 62,
+      "source": "text-green-600"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is secondary-foreground in dark mode (ΔE 0.221), a gray. Pick the semantic token that fits.",
+      "line": 62,
+      "column": 63,
+      "endLine": 62,
+      "endColumn": 82,
+      "source": "dark:text-green-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0029274250000000004,
+  "calls": 6,
+  "toolCalls": 10,
+  "toolErrors": 0,
+  "inputTokens": 49938,
+  "cacheReadTokens": 38865,
+  "cacheWriteTokens": 11059,
+  "outputTokens": 2310,
+  "seconds": 20,
+  "hookBlocks": 1,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T13:55:29.536Z"
+}

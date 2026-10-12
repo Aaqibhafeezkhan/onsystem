@@ -1,0 +1,253 @@
+{
+  "id": "gemini-3.5-flash-lite--none--chatbot--rate-limit-alert--r2",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "none",
+  "repo": "chatbot",
+  "task": "rate-limit-alert",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/rate-limit-alert.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 16,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 16
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`border-red-200` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive (ΔE 0.347). Pick the semantic token that fits.",
+      "line": 22,
+      "column": 104,
+      "endLine": 22,
+      "endColumn": 118,
+      "source": "border-red-200"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-red-50` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive (ΔE 0.443). Pick the semantic token that fits.",
+      "line": 22,
+      "column": 119,
+      "endLine": 22,
+      "endColumn": 128,
+      "source": "bg-red-50"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-red-900` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive (ΔE 0.154). Pick the semantic token that fits.",
+      "line": 22,
+      "column": 133,
+      "endLine": 22,
+      "endColumn": 145,
+      "source": "text-red-900"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:border-red-900/50` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive in dark mode (ΔE 0.304). Pick the semantic token that fits.",
+      "line": 22,
+      "column": 146,
+      "endLine": 22,
+      "endColumn": 168,
+      "source": "dark:border-red-900/50"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:bg-red-950/50` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive in dark mode (ΔE 0.446). Pick the semantic token that fits.",
+      "line": 22,
+      "column": 169,
+      "endLine": 22,
+      "endColumn": 187,
+      "source": "dark:bg-red-950/50"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-red-200` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive in dark mode (ΔE 0.205). Pick the semantic token that fits.",
+      "line": 22,
+      "column": 188,
+      "endLine": 22,
+      "endColumn": 205,
+      "source": "dark:text-red-200"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-red-600` is Tailwind's default palette, not a design-system color. Nearest token destructive (ΔE 0.099) → `text-destructive`.",
+      "line": 27,
+      "column": 41,
+      "endLine": 27,
+      "endColumn": 53,
+      "source": "text-red-600",
+      "suggestion": "text-destructive",
+      "fix": [
+        {
+          "range": [
+            744,
+            756
+          ],
+          "text": "text-destructive"
+        }
+      ]
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-red-400` is Tailwind's default palette, not a design-system color. Nearest token destructive in dark mode (ΔE 0.042) → `dark:text-destructive`.",
+      "line": 27,
+      "column": 54,
+      "endLine": 27,
+      "endColumn": 71,
+      "source": "dark:text-red-400",
+      "suggestion": "text-destructive",
+      "fix": [
+        {
+          "range": [
+            757,
+            774
+          ],
+          "text": "dark:text-destructive"
+        }
+      ]
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-red-700` is Tailwind's default palette, not a design-system color. Nearest token destructive (ΔE 0.078) → `text-destructive`.",
+      "line": 32,
+      "column": 25,
+      "endLine": 32,
+      "endColumn": 37,
+      "source": "text-red-700",
+      "suggestion": "text-destructive",
+      "fix": [
+        {
+          "range": [
+            961,
+            973
+          ],
+          "text": "text-destructive"
+        }
+      ]
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-red-300` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive in dark mode (ΔE 0.115). Pick the semantic token that fits.",
+      "line": 32,
+      "column": 38,
+      "endLine": 32,
+      "endColumn": 55,
+      "source": "dark:text-red-300"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`border-red-200` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive (ΔE 0.347). Pick the semantic token that fits. <Button> already sets border-* through `variant`; prefer a variant over overriding it.",
+      "line": 41,
+      "column": 20,
+      "endLine": 41,
+      "endColumn": 34,
+      "source": "border-red-200"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`hover:bg-red-100` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive (ΔE 0.404). Pick the semantic token that fits. <Button> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 41,
+      "column": 49,
+      "endLine": 41,
+      "endColumn": 65,
+      "source": "hover:bg-red-100"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`hover:text-red-900` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive (ΔE 0.154). Pick the semantic token that fits.",
+      "line": 41,
+      "column": 66,
+      "endLine": 41,
+      "endColumn": 84,
+      "source": "hover:text-red-900"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:border-red-900` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive in dark mode (ΔE 0.304). Pick the semantic token that fits. <Button> already sets border-* through `variant`; prefer a variant over overriding it.",
+      "line": 41,
+      "column": 85,
+      "endLine": 41,
+      "endColumn": 104,
+      "source": "dark:border-red-900"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:hover:bg-red-900/40` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive in dark mode (ΔE 0.304). Pick the semantic token that fits. <Button> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 41,
+      "column": 124,
+      "endLine": 41,
+      "endColumn": 148,
+      "source": "dark:hover:bg-red-900/40"
+    },
+    {
+      "file": "components/chat/rate-limit-alert.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:hover:text-red-200` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive in dark mode (ΔE 0.205). Pick the semantic token that fits.",
+      "line": 41,
+      "column": 149,
+      "endLine": 41,
+      "endColumn": 172,
+      "source": "dark:hover:text-red-200"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/rate-limit-alert.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.04418919999999999,
+  "calls": 20,
+  "toolCalls": 19,
+  "toolErrors": 0,
+  "inputTokens": 337504,
+  "cacheReadTokens": 268100,
+  "cacheWriteTokens": 0,
+  "outputTokens": 6130,
+  "seconds": 34,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:41:49.762Z"
+}

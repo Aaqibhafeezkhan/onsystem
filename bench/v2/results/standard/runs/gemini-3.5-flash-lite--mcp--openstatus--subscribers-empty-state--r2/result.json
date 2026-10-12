@@ -1,0 +1,52 @@
+{
+  "id": "gemini-3.5-flash-lite--mcp--openstatus--subscribers-empty-state--r2",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "mcp",
+  "repo": "openstatus",
+  "task": "subscribers-empty-state",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/dashboard/src/components/status-pages/subscribers-empty-state.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "src/components/status-pages/subscribers-empty-state.tsx",
+      "line": 11,
+      "column": 18,
+      "code": "TS2430",
+      "message": "Interface 'SubscribersEmptyStateProps' incorrectly extends interface 'ClassAttributes<HTMLDivElement> & HTMLAttributes<HTMLDivElement>'.\nType 'SubscribersEmptyStateProps' is not assignable to type 'HTMLAttributes<HTMLDivElement>'.\nTypes of property 'title' are incompatible.\nType 'ReactNode' is not assignable to type 'string | undefined'.\nType 'null' is not assignable to type 'string | undefined'."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/dashboard/src/components/status-pages/subscribers-empty-state.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.07807349999999999,
+  "calls": 32,
+  "toolCalls": 31,
+  "toolErrors": 0,
+  "inputTokens": 914483,
+  "cacheReadTokens": 800570,
+  "cacheWriteTokens": 0,
+  "outputTokens": 7953,
+  "seconds": 62,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 4,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:46:33.273Z"
+}

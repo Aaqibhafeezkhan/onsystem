@@ -1,0 +1,16 @@
+{"id":"claude-sonnet-5-5--none--chatbot--settings-card--r1","status":"error","cost":0,"at":"2026-10-12T12:56:15.744Z"}
+{"id":"gemini-3.5-flash-lite--none--chatbot--settings-card--r1","status":"done","cost":0.026570770000000004,"at":"2026-10-12T12:56:38.984Z"}
+{"id":"gpt-6-luna--none--chatbot--settings-card--r1","status":"done","cost":0.001686875,"at":"2026-10-12T12:56:45.923Z"}
+{"id":"claude-haiku-5-5--all--chatbot--settings-card--r1","status":"error","cost":0,"at":"2026-10-12T12:56:47.925Z"}
+{"id":"gpt-6.1-sol--all--chatbot--settings-card--r1","status":"done","cost":0.035719400000000005,"at":"2026-10-12T12:56:56.313Z"}
+{"id":"gpt-6-luna--all--chatbot--settings-card--r1","status":"done","cost":0.0026861249999999997,"at":"2026-10-12T12:57:09.917Z"}
+{"id":"gpt-6.1-sol--none--chatbot--settings-card--r1","status":"done","cost":0.031098799999999996,"at":"2026-10-12T12:57:26.063Z"}
+{"id":"claude-haiku-5-5--none--chatbot--settings-card--r1","status":"error","cost":0,"at":"2026-10-12T12:57:26.372Z"}
+{"id":"claude-sonnet-5-5--all--chatbot--settings-card--r1","status":"error","cost":0,"at":"2026-10-12T12:57:28.267Z"}
+{"id":"gemini-3.5-flash-lite--all--chatbot--settings-card--r1","status":"done","cost":0.054880849999999995,"at":"2026-10-12T12:57:50.207Z"}
+{"id":"gemini-3.8-flash--all--chatbot--settings-card--r1","status":"max-calls","cost":0.22698517499999996,"at":"2026-10-12T13:00:31.388Z"}
+{"id":"gemini-3.8-flash--none--chatbot--settings-card--r1","status":"done","cost":0.2532012,"at":"2026-10-12T13:03:14.128Z"}
+{"id":"claude-haiku-5-5--none--chatbot--settings-card--r1","status":"done","cost":0.0031528800000000003,"at":"2026-10-12T13:09:13.637Z"}
+{"id":"claude-sonnet-5-5--all--chatbot--settings-card--r1","status":"done","cost":0.039407199999999996,"at":"2026-10-12T13:09:14.191Z"}
+{"id":"claude-sonnet-5-5--none--chatbot--settings-card--r1","status":"done","cost":0.023745799999999997,"at":"2026-10-12T13:09:16.109Z"}
+{"id":"claude-haiku-5-5--all--chatbot--settings-card--r1","status":"done","cost":0.004273625,"at":"2026-10-12T13:09:22.901Z"}

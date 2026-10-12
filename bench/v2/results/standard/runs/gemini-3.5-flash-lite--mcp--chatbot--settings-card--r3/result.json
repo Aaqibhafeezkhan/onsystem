@@ -1,0 +1,59 @@
+{
+  "id": "gemini-3.5-flash-lite--mcp--chatbot--settings-card--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "mcp",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": false,
+  "tscErrors": 2,
+  "tscDiagnostics": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "line": 11,
+      "column": 18,
+      "code": "TS2430",
+      "message": "Interface 'ModelSettingsCardProps' incorrectly extends interface 'ClassAttributes<HTMLDivElement> & HTMLAttributes<HTMLDivElement>'.\nType 'ModelSettingsCardProps' is not assignable to type 'HTMLAttributes<HTMLDivElement>'.\nTypes of property 'onChange' are incompatible.\nType '((value: string) => void) | undefined' is not assignable to type 'FormEventHandler<HTMLDivElement> | undefined'.\nType '(value: string) => void' is not assignable to type 'FormEventHandler<HTMLDivElement>'.\nTypes of parameters 'value' and 'event' are incompatible.\nType 'FormEvent<HTMLDivElement>' is not assignable to type 'string'."
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "line": 63,
+      "column": 34,
+      "code": "TS2322",
+      "message": "Type '{ className: string; }' is not assignable to type 'IntrinsicAttributes & { size?: number | undefined; }'.\nProperty 'className' does not exist on type 'IntrinsicAttributes & { size?: number | undefined; }'."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.05286163,
+  "calls": 24,
+  "toolCalls": 23,
+  "toolErrors": 1,
+  "inputTokens": 376761,
+  "cacheReadTokens": 299571,
+  "cacheWriteTokens": 0,
+  "outputTokens": 8287,
+  "seconds": 42,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 5,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:05:21.302Z"
+}

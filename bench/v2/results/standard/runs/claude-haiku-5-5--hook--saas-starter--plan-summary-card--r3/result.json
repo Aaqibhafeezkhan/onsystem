@@ -1,0 +1,69 @@
+{
+  "id": "claude-haiku-5-5--hook--saas-starter--plan-summary-card--r3",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "hook",
+  "repo": "saas-starter",
+  "task": "plan-summary-card",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-500/10` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.297, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 44,
+      "column": 64,
+      "endLine": 44,
+      "endColumn": 79,
+      "source": "bg-green-500/10"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.286), a gray. Pick the semantic token that fits.",
+      "line": 44,
+      "column": 112,
+      "endLine": 44,
+      "endColumn": 126,
+      "source": "text-green-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/billing/plan-summary-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.002622615,
+  "calls": 6,
+  "toolCalls": 8,
+  "toolErrors": 0,
+  "inputTokens": 36370,
+  "cacheReadTokens": 28059,
+  "cacheWriteTokens": 8297,
+  "outputTokens": 2607,
+  "seconds": 17,
+  "hookBlocks": 1,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:40:33.124Z"
+}

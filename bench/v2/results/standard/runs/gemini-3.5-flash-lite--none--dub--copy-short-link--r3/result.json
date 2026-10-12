@@ -1,0 +1,75 @@
+{
+  "id": "gemini-3.5-flash-lite--none--dub--copy-short-link--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "copy-short-link",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/links/copy-short-link.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <button> where the design system has <Button>. Use <Button> (import { Button } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 48,
+      "column": 8,
+      "endLine": 48,
+      "endColumn": 14,
+      "source": "button",
+      "suggestion": "<Button>",
+      "fix": [
+        {
+          "range": [
+            1079,
+            1085
+          ],
+          "text": "Button"
+        },
+        {
+          "range": [
+            1714,
+            1720
+          ],
+          "text": "Button"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/links/copy-short-link.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.10872862999999999,
+  "calls": 35,
+  "toolCalls": 34,
+  "toolErrors": 0,
+  "inputTokens": 1265271,
+  "cacheReadTokens": 1137871,
+  "cacheWriteTokens": 0,
+  "outputTokens": 14549,
+  "seconds": 76,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T13:54:58.218Z"
+}

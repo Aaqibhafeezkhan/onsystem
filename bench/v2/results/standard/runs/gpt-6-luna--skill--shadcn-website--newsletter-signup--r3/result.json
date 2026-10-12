@@ -1,0 +1,75 @@
+{
+  "id": "gpt-6-luna--skill--shadcn-website--newsletter-signup--r3",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "shadcn-website",
+  "task": "newsletter-signup",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/newsletter-signup.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/newsletter-signup.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@/registry/new-york-v4/ui/label\"); its variants replace the custom classes.",
+      "line": 28,
+      "column": 10,
+      "endLine": 28,
+      "endColumn": 15,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            703,
+            708
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            782,
+            787
+          ],
+          "text": "Label"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/newsletter-signup.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0023437749999999998,
+  "calls": 5,
+  "toolCalls": 8,
+  "toolErrors": 1,
+  "inputTokens": 36883,
+  "cacheReadTokens": 23890,
+  "cacheWriteTokens": 12303,
+  "outputTokens": 996,
+  "seconds": 20,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:03:19.975Z"
+}

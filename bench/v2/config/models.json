@@ -1,0 +1,207 @@
+{
+  "$comment": "Models and their standard (not batch, not priority) API prices in USD per million tokens, read from each provider's own pages on `verified`. `cacheWrite` is the 5-minute cache write; null means the provider charges no write premium (new tokens cost the input price). `above` applies to a request whose prompt is longer than `promptTokens`. `effort` is sent with every request: Anthropic output_config.effort, OpenAI reasoning.effort, Gemini thinkingLevel. `profile` picks the v1 usage profile the cost estimate starts from (usage-model.json). Re-check prices before a paid run: `run` refuses to start when `verified` is more than 30 days old, and Gemini 3.8 Flash's introductory price ends on `validUntil`.",
+  "verified": "2026-10-12",
+  "providers": {
+    "anthropic": {
+      "keyEnv": "ANTHROPIC_API_KEY",
+      "endpoint": "https://api.anthropic.com/v1/messages"
+    },
+    "openai": { "keyEnv": "OPENAI_API_KEY", "endpoint": "https://api.openai.com/v1/responses" },
+    "google": {
+      "keyEnv": "GEMINI_API_KEY",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models"
+    },
+    "mock": { "keyEnv": null, "endpoint": null }
+  },
+  "models": [
+    {
+      "id": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "name": "Claude Haiku 5.5",
+      "tier": "small",
+      "effort": "medium",
+      "profile": "small",
+      "price": {
+        "input": 0.1,
+        "cacheWrite": 0.125,
+        "cacheRead": 0.01,
+        "output": 0.5,
+        "above": {
+          "promptTokens": 100000,
+          "input": 0.5,
+          "cacheWrite": 0.625,
+          "cacheRead": 0.05,
+          "output": 2.5
+        }
+      },
+      "sources": ["https://platform.claude.com/docs/en/models/haiku-5-5/overview"],
+      "notes": "Prompts over 100,000 tokens pay the higher rates for the whole request. Default effort is medium."
+    },
+    {
+      "id": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "name": "Claude Sonnet 5.5",
+      "tier": "mid",
+      "effort": "medium",
+      "profile": "large",
+      "price": { "input": 2, "cacheWrite": 2.5, "cacheRead": 0.1, "output": 10 },
+      "sources": ["https://platform.claude.com/docs/en/models/sonnet-5-5/overview"],
+      "notes": "Default effort is high; medium is set so every model runs at the same nominal setting."
+    },
+    {
+      "id": "claude-opus-5-5",
+      "provider": "anthropic",
+      "name": "Claude Opus 5.5",
+      "tier": "frontier",
+      "effort": "medium",
+      "profile": "large",
+      "price": { "input": 4, "cacheWrite": 5, "cacheRead": 0.2, "output": 20 },
+      "sources": ["https://platform.claude.com/docs/en/models/opus-5-5/overview"],
+      "notes": "Thinking is always on; default effort is medium."
+    },
+    {
+      "id": "gpt-6-luna",
+      "provider": "openai",
+      "name": "GPT-6 Luna",
+      "tier": "small",
+      "effort": "medium",
+      "profile": "small",
+      "price": {
+        "input": 0.1,
+        "cacheWrite": 0.125,
+        "cacheRead": 0.01,
+        "output": 0.5,
+        "above": {
+          "promptTokens": 272000,
+          "input": 0.2,
+          "cacheWrite": 0.25,
+          "cacheRead": 0.02,
+          "output": 0.75
+        }
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/models/gpt-6-luna"
+      ],
+      "notes": "Responses API. Reasoning tokens are billed as output."
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "provider": "openai",
+      "name": "GPT-6.1 Sol",
+      "tier": "mid",
+      "effort": "medium",
+      "profile": "large",
+      "price": {
+        "input": 2,
+        "cacheWrite": 2.5,
+        "cacheRead": 0.1,
+        "output": 10,
+        "above": {
+          "promptTokens": 272000,
+          "input": 4,
+          "cacheWrite": 5,
+          "cacheRead": 0.2,
+          "output": 15
+        }
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+      ],
+      "notes": "Described as near-Astra performance at a lower cost for complex coding. Tool calling needs the Responses API; effort none and minimal are not supported."
+    },
+    {
+      "id": "gpt-6-astra",
+      "provider": "openai",
+      "name": "GPT-6 Astra",
+      "tier": "frontier",
+      "effort": "medium",
+      "profile": "large",
+      "price": {
+        "input": 10,
+        "cacheWrite": 12.5,
+        "cacheRead": 1,
+        "output": 50,
+        "above": {
+          "promptTokens": 272000,
+          "input": 20,
+          "cacheWrite": 25,
+          "cacheRead": 2,
+          "output": 75
+        }
+      },
+      "sources": [
+        "https://developers.openai.com/api/docs/pricing",
+        "https://developers.openai.com/api/docs/models/gpt-6-astra"
+      ],
+      "notes": "The most expensive GPT-6 model on the pricing page."
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "provider": "google",
+      "name": "Gemini 3.5 Flash-Lite",
+      "tier": "small",
+      "effort": "medium",
+      "profile": "small",
+      "price": { "input": 0.3, "cacheWrite": null, "cacheRead": 0.03, "output": 2.5 },
+      "sources": [
+        "https://ai.google.dev/gemini-api/docs/pricing",
+        "https://ai.google.dev/gemini-api/docs/generate-content/thinking"
+      ],
+      "notes": "Output price includes thinking tokens. Default thinking level is minimal; medium is set to match the other models."
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "provider": "google",
+      "name": "Gemini 3.8 Flash",
+      "tier": "mid",
+      "effort": "medium",
+      "profile": "large",
+      "price": { "input": 0.75, "cacheWrite": null, "cacheRead": 0.075, "output": 3.75 },
+      "validUntil": "2026-12-31",
+      "sources": [
+        "https://ai.google.dev/gemini-api/docs/pricing",
+        "https://ai.google.dev/gemini-api/docs/generate-content/thinking"
+      ],
+      "notes": "Introductory price through 2026-12-31; from 2027-01-01 every rate doubles ($1.50 / $0.15 / $7.50). Default thinking level is medium."
+    },
+    {
+      "id": "gemini-3.1-pro-preview",
+      "provider": "google",
+      "name": "Gemini 3.1 Pro (preview)",
+      "tier": "frontier",
+      "effort": "medium",
+      "profile": "large",
+      "price": {
+        "input": 2,
+        "cacheWrite": null,
+        "cacheRead": 0.2,
+        "output": 12,
+        "above": {
+          "promptTokens": 200000,
+          "input": 4,
+          "cacheWrite": null,
+          "cacheRead": 0.4,
+          "output": 18
+        }
+      },
+      "sources": [
+        "https://ai.google.dev/gemini-api/docs/pricing",
+        "https://ai.google.dev/gemini-api/docs/generate-content/thinking"
+      ],
+      "notes": "Preview model, Google's only Pro model. Default thinking level is high."
+    },
+    {
+      "id": "mock",
+      "provider": "mock",
+      "name": "Mock (offline, scripted)",
+      "tier": "test",
+      "effort": null,
+      "profile": "small",
+      "price": { "input": 1, "cacheWrite": 1.25, "cacheRead": 0.1, "output": 5 },
+      "sources": [],
+      "notes": "Not a model: lib/mock.ts. Its made-up price lets the spend cap be tested offline."
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "id": "gemini-3.8-flash--none--saas-starter--invite-member-form--r1",
+  "provider": "google",
+  "model": "gemini-3.8-flash",
+  "tier": "mid",
+  "arm": "none",
+  "repo": "saas-starter",
+  "task": "invite-member-form",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 4,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 4
+  },
+  "onsystemFindings": [
+    {
+      "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-red-500` is Tailwind's default palette, not a design-system color. Nearest token destructive (ΔE 0.029) → `text-destructive`.",
+      "line": 80,
+      "column": 23,
+      "endLine": 80,
+      "endColumn": 35,
+      "source": "text-red-500",
+      "suggestion": "text-destructive",
+      "fix": [
+        {
+          "range": [
+            2258,
+            2270
+          ],
+          "text": "text-destructive"
+        }
+      ]
+    },
+    {
+      "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.286), a gray. Pick the semantic token that fits.",
+      "line": 83,
+      "column": 23,
+      "endLine": 83,
+      "endColumn": 37,
+      "source": "text-green-500"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-orange-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is destructive (ΔE 0.106), another hue. Pick the semantic token that fits.",
+      "line": 87,
+      "column": 20,
+      "endLine": 87,
+      "endColumn": 33,
+      "source": "bg-orange-500"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`hover:bg-orange-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is destructive (ΔE 0.061), another hue. Pick the semantic token that fits.",
+      "line": 87,
+      "column": 34,
+      "endLine": 87,
+      "endColumn": 53,
+      "source": "hover:bg-orange-600"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/team/invite-member-form.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.26053612499999995,
+  "calls": 30,
+  "toolCalls": 29,
+  "toolErrors": 0,
+  "inputTokens": 433051,
+  "cacheReadTokens": 223205,
+  "cacheWriteTokens": 0,
+  "outputTokens": 23043,
+  "seconds": 212,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:45:01.118Z"
+}

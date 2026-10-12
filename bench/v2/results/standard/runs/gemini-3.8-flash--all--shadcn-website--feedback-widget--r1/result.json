@@ -1,0 +1,52 @@
+{
+  "id": "gemini-3.8-flash--all--shadcn-website--feedback-widget--r1",
+  "provider": "google",
+  "model": "gemini-3.8-flash",
+  "tier": "mid",
+  "arm": "all",
+  "repo": "shadcn-website",
+  "task": "feedback-widget",
+  "repeat": 1,
+  "status": "max-calls",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/feedback-widget.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "components/feedback-widget.tsx",
+      "line": 17,
+      "column": 18,
+      "code": "TS2430",
+      "message": "Interface 'FeedbackWidgetProps' incorrectly extends interface 'ClassAttributes<HTMLDivElement> & HTMLAttributes<HTMLDivElement>'.\nType 'FeedbackWidgetProps' is not assignable to type 'HTMLAttributes<HTMLDivElement>'.\nTypes of property 'onSubmit' are incompatible.\nType '((data: { vote: \"up\" | \"down\"; comment: string; comments: string; }) => void) | undefined' is not assignable to type 'FormEventHandler<HTMLDivElement> | undefined'.\nType '(data: { vote: \"up\" | \"down\"; comment: string; comments: string; }) => void' is not assignable to type 'FormEventHandler<HTMLDivElement>'.\nTypes of parameters 'data' and 'event' are incompatible.\nType 'FormEvent<HTMLDivElement>' is missing the following properties from type '{ vote: \"up\" | \"down\"; comment: string; comments: string; }': vote, comment, comments"
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/feedback-widget.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.27891734999999995,
+  "calls": 40,
+  "toolCalls": 40,
+  "toolErrors": 1,
+  "inputTokens": 1141858,
+  "cacheReadTokens": 967798,
+  "cacheWriteTokens": 0,
+  "outputTokens": 20210,
+  "seconds": 302,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 15,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:06:23.899Z"
+}

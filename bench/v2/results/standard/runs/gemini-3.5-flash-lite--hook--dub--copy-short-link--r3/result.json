@@ -1,0 +1,104 @@
+{
+  "id": "gemini-3.5-flash-lite--hook--dub--copy-short-link--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "hook",
+  "repo": "dub",
+  "task": "copy-short-link",
+  "repeat": 3,
+  "status": "max-calls",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/links/copy-short-link.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "line": 37,
+      "column": 6,
+      "code": "TS2322",
+      "message": "Type '{ children: Element[]; as?: string | undefined; is?: string | undefined; id?: string | undefined; tw?: string | undefined; about?: string | undefined; title?: string | undefined; ... 371 more ...; className: string; }' is not assignable to type 'DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>'.\nType '{ children: Element[]; as?: string | undefined; is?: string | undefined; id?: string | undefined; tw?: string | undefined; about?: string | undefined; title?: string | undefined; ... 371 more ...; className: string; }' is not assignable to type 'ClassAttributes<HTMLDivElement>'.\nTypes of property 'ref' are incompatible.\nType 'import(\"/private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/dub/src/node_modules/.pnpm/@types+react@19.1.14/node_modules/@types/react/index\").Ref<HTMLDivElement> | undefined' is not assignable to type 'React.Ref<HTMLDivElement> | undefined'.\nType '(instance: HTMLDivElement | null) => void | (() => VoidOrUndefinedOnly)' is not assignable to type 'Ref<HTMLDivElement> | undefined'.\nType '(instance: HTMLDivElement | null) => void | (() => VoidOrUndefinedOnly)' is not assignable to type '(instance: HTMLDivElement | null) => void | (() => VoidOrUndefinedOnly)'. Two different types with this name exist, but they are unrelated.\nType 'void | (() => VoidOrUndefinedOnly)' is not assignable to type 'void | (() => VoidOrUndefinedOnly)'. Two different types with this name exist, but they are unrelated."
+    }
+  ],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <input> where the design system has <Input>. Use <Input> (import { Input } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 44,
+      "column": 8,
+      "endLine": 44,
+      "endColumn": 13,
+      "source": "input",
+      "suggestion": "<Input>",
+      "fix": [
+        {
+          "range": [
+            946,
+            951
+          ],
+          "text": "Input"
+        }
+      ]
+    },
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <button> where the design system has <Button>. Use <Button> (import { Button } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 51,
+      "column": 8,
+      "endLine": 51,
+      "endColumn": 14,
+      "source": "button",
+      "suggestion": "<Button>",
+      "fix": [
+        {
+          "range": [
+            1219,
+            1225
+          ],
+          "text": "Button"
+        },
+        {
+          "range": [
+            1844,
+            1850
+          ],
+          "text": "Button"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/links/copy-short-link.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.12939719,
+  "calls": 40,
+  "toolCalls": 40,
+  "toolErrors": 0,
+  "inputTokens": 1437799,
+  "cacheReadTokens": 1285463,
+  "cacheWriteTokens": 0,
+  "outputTokens": 18053,
+  "seconds": 88,
+  "hookBlocks": 1,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:30:41.912Z"
+}

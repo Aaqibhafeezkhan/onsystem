@@ -4,6 +4,8 @@ Does an agent write UI that fits the design system more often with onsystem than
 
 The runs below were made on 2026-10-08, before the rename, with `@dgesteves/design-system-mcp` 0.1 and its `design-system` plugin.
 
+A larger benchmark, across three providers, five repositories and five conditions, and scored with `tsc`, onsystem and a blind-labelled sample as well, is set up in [bench/v2](../v2).
+
 ## Setup
 
 - **Project:** [vercel/ai-chatbot](https://github.com/vercel/ai-chatbot) at `c2f8235`, a real shadcn/ui app with 23 components and 52 tokens. Dependencies are not installed.

@@ -1,0 +1,42 @@
+import { Kbd, KbdGroup } from "@/registry/new-york-v4/ui/kbd"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/registry/new-york-v4/ui/table"
+
+const shortcuts = [
+  { action: "Search", keys: ["⌘", "K"] },
+  { action: "Toggle theme", keys: ["⌘", "J"] },
+  { action: "Copy code", keys: ["⌘", "C"] },
+] as const
+
+export function ShortcutsTable() {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead className="text-muted-foreground">Action</TableHead>
+          <TableHead className="text-muted-foreground">Keys</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {shortcuts.map(({ action, keys }) => (
+          <TableRow key={action}>
+            <TableCell>{action}</TableCell>
+            <TableCell>
+              <KbdGroup>
+                {keys.map((key) => (
+                  <Kbd key={key}>{key}</Kbd>
+                ))}
+              </KbdGroup>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+}

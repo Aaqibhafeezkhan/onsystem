@@ -1,0 +1,102 @@
+{
+  "id": "gpt-6-luna--none--chatbot--settings-card--r2",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "none",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 5,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 5
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`border-emerald-500/20` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.259), a gray. Pick the semantic token that fits. <Badge> already sets border-* through `variant`; prefer a variant over overriding it.",
+      "line": 16,
+      "column": 43,
+      "endLine": 16,
+      "endColumn": 64,
+      "source": "border-emerald-500/20"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-emerald-500/10` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.259), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 16,
+      "column": 65,
+      "endLine": 16,
+      "endColumn": 82,
+      "source": "bg-emerald-500/10"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-emerald-700` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.138), a gray. Pick the semantic token that fits. <Badge> already sets text-* through `variant`; prefer a variant over overriding it.",
+      "line": 16,
+      "column": 83,
+      "endLine": 16,
+      "endColumn": 99,
+      "source": "text-emerald-700"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-emerald-300` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is foreground in dark mode (ΔE 0.172, same value as card-foreground, popover-foreground, primary, accent-foreground), a gray. Pick the semantic token that fits.",
+      "line": 16,
+      "column": 100,
+      "endLine": 16,
+      "endColumn": 121,
+      "source": "dark:text-emerald-300"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-emerald-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.259), a gray. Pick the semantic token that fits.",
+      "line": 17,
+      "column": 69,
+      "endLine": 17,
+      "endColumn": 83,
+      "source": "bg-emerald-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0015774699999999999,
+  "calls": 5,
+  "toolCalls": 8,
+  "toolErrors": 0,
+  "inputTokens": 19416,
+  "cacheReadTokens": 11897,
+  "cacheWriteTokens": 6964,
+  "outputTokens": 1065,
+  "seconds": 22,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:18:06.909Z"
+}

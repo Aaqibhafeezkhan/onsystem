@@ -1,0 +1,302 @@
+{
+  "S001": {
+    "run": "gpt-6.1-sol--none--saas-starter--danger-zone-card--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "none"
+  },
+  "S002": {
+    "run": "gemini-3.8-flash--skill--saas-starter--invite-member-form--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "skill"
+  },
+  "S003": {
+    "run": "gemini-3.5-flash-lite--mcp--chatbot--message-toolbar--r3",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "mcp"
+  },
+  "S004": {
+    "run": "gpt-6-luna--none--shadcn-website--shortcuts-table--r3",
+    "model": "gpt-6-luna",
+    "arm": "none"
+  },
+  "S005": {
+    "run": "claude-sonnet-5-5--hook--openstatus--resolve-incident-dialog--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "hook"
+  },
+  "S006": {
+    "run": "claude-sonnet-5-5--mcp--saas-starter--danger-zone-card--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "mcp"
+  },
+  "S007": {
+    "run": "gpt-6.1-sol--hook--chatbot--message-toolbar--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "hook"
+  },
+  "S008": {
+    "run": "gpt-6-luna--skill--saas-starter--danger-zone-card--r2",
+    "model": "gpt-6-luna",
+    "arm": "skill"
+  },
+  "S009": {
+    "run": "claude-sonnet-5-5--skill--openstatus--monitor-status-card--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "skill"
+  },
+  "S010": {
+    "run": "gemini-3.5-flash-lite--skill--chatbot--settings-card--r3",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "skill"
+  },
+  "S011": {
+    "run": "gemini-3.8-flash--none--saas-starter--plan-summary-card--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "none"
+  },
+  "S012": {
+    "run": "gpt-6.1-sol--hook--dub--delete-workspace-modal--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "hook"
+  },
+  "S013": {
+    "run": "gpt-6.1-sol--skill--openstatus--region-select--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "skill"
+  },
+  "S014": {
+    "run": "gpt-6-luna--all--shadcn-website--feedback-widget--r3",
+    "model": "gpt-6-luna",
+    "arm": "all"
+  },
+  "S015": {
+    "run": "gpt-6.1-sol--skill--openstatus--resolve-incident-dialog--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "skill"
+  },
+  "S016": {
+    "run": "claude-haiku-5-5--skill--saas-starter--invite-member-form--r2",
+    "model": "claude-haiku-5-5",
+    "arm": "skill"
+  },
+  "S017": {
+    "run": "gemini-3.5-flash-lite--none--openstatus--subscribers-empty-state--r3",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "none"
+  },
+  "S018": {
+    "run": "gpt-6-luna--hook--dub--stat-card--r2",
+    "model": "gpt-6-luna",
+    "arm": "hook"
+  },
+  "S019": {
+    "run": "claude-haiku-5-5--mcp--saas-starter--plan-summary-card--r3",
+    "model": "claude-haiku-5-5",
+    "arm": "mcp"
+  },
+  "S020": {
+    "run": "claude-haiku-5-5--skill--chatbot--share-dialog--r2",
+    "model": "claude-haiku-5-5",
+    "arm": "skill"
+  },
+  "S021": {
+    "run": "gemini-3.8-flash--hook--shadcn-website--newsletter-signup--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "hook"
+  },
+  "S022": {
+    "run": "claude-haiku-5-5--hook--shadcn-website--newsletter-signup--r2",
+    "model": "claude-haiku-5-5",
+    "arm": "hook"
+  },
+  "S023": {
+    "run": "claude-sonnet-5-5--none--saas-starter--user-menu--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "none"
+  },
+  "S024": {
+    "run": "gemini-3.5-flash-lite--skill--openstatus--region-select--r1",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "skill"
+  },
+  "S025": {
+    "run": "gemini-3.5-flash-lite--mcp--saas-starter--invite-member-form--r3",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "mcp"
+  },
+  "S026": {
+    "run": "gemini-3.8-flash--mcp--saas-starter--danger-zone-card--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "mcp"
+  },
+  "S027": {
+    "run": "claude-sonnet-5-5--hook--chatbot--message-toolbar--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "hook"
+  },
+  "S028": {
+    "run": "gemini-3.5-flash-lite--all--chatbot--settings-card--r2",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "all"
+  },
+  "S029": {
+    "run": "claude-haiku-5-5--mcp--saas-starter--danger-zone-card--r1",
+    "model": "claude-haiku-5-5",
+    "arm": "mcp"
+  },
+  "S030": {
+    "run": "gpt-6-luna--skill--openstatus--monitor-status-card--r3",
+    "model": "gpt-6-luna",
+    "arm": "skill"
+  },
+  "S031": {
+    "run": "gpt-6-luna--all--dub--stat-card--r3",
+    "model": "gpt-6-luna",
+    "arm": "all"
+  },
+  "S032": {
+    "run": "gemini-3.8-flash--mcp--saas-starter--invite-member-form--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "mcp"
+  },
+  "S033": {
+    "run": "gpt-6-luna--mcp--dub--delete-workspace-modal--r3",
+    "model": "gpt-6-luna",
+    "arm": "mcp"
+  },
+  "S034": {
+    "run": "claude-sonnet-5-5--all--dub--stat-card--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "all"
+  },
+  "S035": {
+    "run": "gemini-3.5-flash-lite--none--openstatus--monitor-status-card--r2",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "none"
+  },
+  "S036": {
+    "run": "gpt-6-luna--hook--chatbot--settings-card--r2",
+    "model": "gpt-6-luna",
+    "arm": "hook"
+  },
+  "S037": {
+    "run": "gpt-6.1-sol--none--dub--link-expiry-banner--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "none"
+  },
+  "S038": {
+    "run": "claude-haiku-5-5--all--saas-starter--invite-member-form--r1",
+    "model": "claude-haiku-5-5",
+    "arm": "all"
+  },
+  "S039": {
+    "run": "claude-haiku-5-5--none--shadcn-website--newsletter-signup--r3",
+    "model": "claude-haiku-5-5",
+    "arm": "none"
+  },
+  "S040": {
+    "run": "gpt-6-luna--mcp--shadcn-website--newsletter-signup--r3",
+    "model": "gpt-6-luna",
+    "arm": "mcp"
+  },
+  "S041": {
+    "run": "gemini-3.8-flash--all--saas-starter--danger-zone-card--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "all"
+  },
+  "S042": {
+    "run": "claude-sonnet-5-5--none--chatbot--share-dialog--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "none"
+  },
+  "S043": {
+    "run": "claude-haiku-5-5--hook--openstatus--subscribers-empty-state--r2",
+    "model": "claude-haiku-5-5",
+    "arm": "hook"
+  },
+  "S044": {
+    "run": "gemini-3.5-flash-lite--all--shadcn-website--feedback-widget--r2",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "all"
+  },
+  "S045": {
+    "run": "gpt-6-luna--none--openstatus--subscribers-empty-state--r2",
+    "model": "gpt-6-luna",
+    "arm": "none"
+  },
+  "S046": {
+    "run": "claude-sonnet-5-5--all--dub--copy-short-link--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "all"
+  },
+  "S047": {
+    "run": "claude-sonnet-5-5--skill--openstatus--subscribers-empty-state--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "skill"
+  },
+  "S048": {
+    "run": "claude-haiku-5-5--none--saas-starter--danger-zone-card--r2",
+    "model": "claude-haiku-5-5",
+    "arm": "none"
+  },
+  "S049": {
+    "run": "gemini-3.5-flash-lite--hook--openstatus--subscribers-empty-state--r2",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "hook"
+  },
+  "S050": {
+    "run": "gpt-6.1-sol--all--saas-starter--user-menu--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "all"
+  },
+  "S051": {
+    "run": "gpt-6.1-sol--all--dub--delete-workspace-modal--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "all"
+  },
+  "S052": {
+    "run": "gemini-3.5-flash-lite--hook--saas-starter--plan-summary-card--r3",
+    "model": "gemini-3.5-flash-lite",
+    "arm": "hook"
+  },
+  "S053": {
+    "run": "gemini-3.8-flash--skill--saas-starter--plan-summary-card--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "skill"
+  },
+  "S054": {
+    "run": "gemini-3.8-flash--hook--saas-starter--invite-member-form--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "hook"
+  },
+  "S055": {
+    "run": "claude-sonnet-5-5--mcp--openstatus--region-select--r1",
+    "model": "claude-sonnet-5-5",
+    "arm": "mcp"
+  },
+  "S056": {
+    "run": "gpt-6.1-sol--mcp--openstatus--resolve-incident-dialog--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "mcp"
+  },
+  "S057": {
+    "run": "gpt-6.1-sol--mcp--openstatus--region-select--r1",
+    "model": "gpt-6.1-sol",
+    "arm": "mcp"
+  },
+  "S058": {
+    "run": "gemini-3.8-flash--all--shadcn-website--newsletter-signup--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "all"
+  },
+  "S059": {
+    "run": "claude-haiku-5-5--all--dub--copy-short-link--r1",
+    "model": "claude-haiku-5-5",
+    "arm": "all"
+  },
+  "S060": {
+    "run": "gemini-3.8-flash--none--saas-starter--invite-member-form--r1",
+    "model": "gemini-3.8-flash",
+    "arm": "none"
+  }
+}

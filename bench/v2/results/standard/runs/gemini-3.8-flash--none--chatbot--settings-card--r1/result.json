@@ -1,0 +1,124 @@
+{
+  "id": "gemini-3.8-flash--none--chatbot--settings-card--r1",
+  "provider": "google",
+  "model": "gemini-3.8-flash",
+  "tier": "mid",
+  "arm": "none",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 7,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 7
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`border-emerald-500/20` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.259), a gray. Pick the semantic token that fits. <Badge> already sets border-* through `variant`; prefer a variant over overriding it.",
+      "line": 106,
+      "column": 38,
+      "endLine": 106,
+      "endColumn": 59,
+      "source": "border-emerald-500/20"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-emerald-500/10` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.259), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 106,
+      "column": 60,
+      "endLine": 106,
+      "endColumn": 77,
+      "source": "bg-emerald-500/10"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-emerald-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.146), a gray. Pick the semantic token that fits. <Badge> already sets text-* through `variant`; prefer a variant over overriding it.",
+      "line": 106,
+      "column": 107,
+      "endLine": 106,
+      "endColumn": 123,
+      "source": "text-emerald-600"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:border-emerald-500/30` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is primary in dark mode (ΔE 0.297, same value as foreground, card-foreground, popover-foreground, accent-foreground), a gray. Pick the semantic token that fits. <Badge> already sets border-* through `variant`; prefer a variant over overriding it.",
+      "line": 106,
+      "column": 124,
+      "endLine": 106,
+      "endColumn": 150,
+      "source": "dark:border-emerald-500/30"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:bg-emerald-500/15` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is primary in dark mode (ΔE 0.297, same value as foreground, card-foreground, popover-foreground, accent-foreground), a gray. Pick the semantic token that fits.",
+      "line": 106,
+      "column": 151,
+      "endLine": 106,
+      "endColumn": 173,
+      "source": "dark:bg-emerald-500/15"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-emerald-400` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is secondary-foreground in dark mode (ΔE 0.178), a gray. Pick the semantic token that fits.",
+      "line": 106,
+      "column": 174,
+      "endLine": 106,
+      "endColumn": 195,
+      "source": "dark:text-emerald-400"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-emerald-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.259), a gray. Pick the semantic token that fits.",
+      "line": 110,
+      "column": 50,
+      "endLine": 110,
+      "endColumn": 64,
+      "source": "bg-emerald-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.22812502500000006,
+  "calls": 29,
+  "toolCalls": 28,
+  "toolErrors": 0,
+  "inputTokens": 596474,
+  "cacheReadTokens": 427897,
+  "cacheWriteTokens": 0,
+  "outputTokens": 18560,
+  "seconds": 202,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T13:57:56.386Z"
+}

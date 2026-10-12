@@ -1,0 +1,125 @@
+{
+  "$comment": "Four UI tasks per repository, in the order matrices take them (a matrix with 2 tasks per repository runs the first two). Each asks for one new file; `file` is relative to the repository root. The prompt is sent as written plus v1's suffix (lib/prompt.ts): use the project's components and tokens, create only that file, run nothing. Each task names something the design system has to answer: a status color, a destructive action, an icon-only button, a dialog, a form control. The chatbot tasks are four of v1's ten, word for word.",
+  "tasks": [
+    {
+      "id": "plan-summary-card",
+      "repo": "saas-starter",
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "prompt": "Create app/(dashboard)/dashboard/billing/plan-summary-card.tsx exporting PlanSummaryCard: a card showing the current plan name, the monthly price, the next renewal date, a small green 'Active' status label and a 'Manage subscription' button."
+    },
+    {
+      "id": "invite-member-form",
+      "repo": "saas-starter",
+      "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+      "prompt": "Create app/(dashboard)/dashboard/team/invite-member-form.tsx exporting InviteMemberForm: a form to invite a team member, with a labelled email input, a choice between the Member and Owner roles as radio buttons, and an 'Invite member' submit button."
+    },
+    {
+      "id": "danger-zone-card",
+      "repo": "saas-starter",
+      "file": "app/(dashboard)/dashboard/settings/danger-zone-card.tsx",
+      "prompt": "Create app/(dashboard)/dashboard/settings/danger-zone-card.tsx exporting DangerZoneCard: a card with a red 'Delete team' heading, a short warning that this removes every member and all data, and a destructive 'Delete team' button."
+    },
+    {
+      "id": "user-menu",
+      "repo": "saas-starter",
+      "file": "components/user-menu.tsx",
+      "prompt": "Create components/user-menu.tsx exporting UserMenu: a round avatar button showing the user's initials that opens a dropdown menu with 'Settings', 'Billing' and 'Sign out' items, with 'Sign out' shown in red."
+    },
+    {
+      "id": "settings-card",
+      "repo": "chatbot",
+      "file": "components/chat/model-settings-card.tsx",
+      "prompt": "Create components/chat/model-settings-card.tsx exporting ModelSettingsCard: a card with a title, a description, an API key text input, a Save button and a small green 'Connected' status label."
+    },
+    {
+      "id": "rate-limit-alert",
+      "repo": "chatbot",
+      "file": "components/chat/rate-limit-alert.tsx",
+      "prompt": "Create components/chat/rate-limit-alert.tsx exporting RateLimitAlert: an inline red error alert telling the user they were rate limited, showing when they can retry, with a 'Try again' button."
+    },
+    {
+      "id": "message-toolbar",
+      "repo": "chatbot",
+      "file": "components/chat/message-toolbar.tsx",
+      "prompt": "Create components/chat/message-toolbar.tsx exporting MessageToolbar: a row of icon-only buttons under an assistant message: copy, regenerate, thumbs up and thumbs down."
+    },
+    {
+      "id": "share-dialog",
+      "repo": "chatbot",
+      "file": "components/chat/share-chat-dialog.tsx",
+      "prompt": "Create components/chat/share-chat-dialog.tsx exporting ShareChatDialog: a dialog showing the share link in a read-only input, with an icon-only copy button next to it and a secondary 'Make private' action."
+    },
+    {
+      "id": "feedback-widget",
+      "repo": "shadcn-website",
+      "file": "apps/v4/components/feedback-widget.tsx",
+      "prompt": "Create apps/v4/components/feedback-widget.tsx exporting FeedbackWidget: a small card asking 'Was this page helpful?' with icon-only thumbs-up and thumbs-down buttons; after a vote, a textarea for optional comments and a 'Send feedback' button appear."
+    },
+    {
+      "id": "release-badges",
+      "repo": "shadcn-website",
+      "file": "apps/v4/components/release-badges.tsx",
+      "prompt": "Create apps/v4/components/release-badges.tsx exporting ReleaseBadges: a list of component names, each with a status label: 'New' in green, 'Updated' in blue and 'Deprecated' in amber."
+    },
+    {
+      "id": "newsletter-signup",
+      "repo": "shadcn-website",
+      "file": "apps/v4/components/newsletter-signup.tsx",
+      "prompt": "Create apps/v4/components/newsletter-signup.tsx exporting NewsletterSignup: an inline form with an email input and a 'Subscribe' button, muted helper text under it, and a success message in place of the form once it is submitted."
+    },
+    {
+      "id": "shortcuts-table",
+      "repo": "shadcn-website",
+      "file": "apps/v4/components/shortcuts-table.tsx",
+      "prompt": "Create apps/v4/components/shortcuts-table.tsx exporting ShortcutsTable: a table of keyboard shortcuts with an 'Action' column and a 'Keys' column that shows each key as a small styled key label (Search ⌘K, Toggle theme ⌘J, Copy code ⌘C)."
+    },
+    {
+      "id": "monitor-status-card",
+      "repo": "openstatus",
+      "file": "apps/dashboard/src/components/monitors/monitor-status-card.tsx",
+      "prompt": "Create apps/dashboard/src/components/monitors/monitor-status-card.tsx exporting MonitorStatusCard: a card for one uptime monitor with its name, its URL, a status label that is green when up, red when down and yellow when degraded, the time of the last check, and a 'Pause' button."
+    },
+    {
+      "id": "resolve-incident-dialog",
+      "repo": "openstatus",
+      "file": "apps/dashboard/src/components/incidents/resolve-incident-dialog.tsx",
+      "prompt": "Create apps/dashboard/src/components/incidents/resolve-incident-dialog.tsx exporting ResolveIncidentDialog: a dialog to resolve an incident, with a textarea for the final update, a Cancel button and a 'Resolve incident' button."
+    },
+    {
+      "id": "subscribers-empty-state",
+      "repo": "openstatus",
+      "file": "apps/dashboard/src/components/status-pages/subscribers-empty-state.tsx",
+      "prompt": "Create apps/dashboard/src/components/status-pages/subscribers-empty-state.tsx exporting SubscribersEmptyState: an empty state for a status page without subscribers, with an icon, a title, a short description and an 'Add subscriber' button."
+    },
+    {
+      "id": "region-select",
+      "repo": "openstatus",
+      "file": "apps/dashboard/src/components/monitors/region-select.tsx",
+      "prompt": "Create apps/dashboard/src/components/monitors/region-select.tsx exporting RegionSelect: a labelled select to choose a monitoring region (Amsterdam, Frankfurt, Virginia, Singapore, Sydney), with helper text under it."
+    },
+    {
+      "id": "link-expiry-banner",
+      "repo": "dub",
+      "file": "apps/web/ui/links/link-expiry-banner.tsx",
+      "prompt": "Create apps/web/ui/links/link-expiry-banner.tsx exporting LinkExpiryBanner: a dismissible warning banner shown when a short link expires within 24 hours, with an 'Extend expiration' button and an icon-only close button."
+    },
+    {
+      "id": "delete-workspace-modal",
+      "repo": "dub",
+      "file": "apps/web/ui/workspaces/delete-workspace-modal.tsx",
+      "prompt": "Create apps/web/ui/workspaces/delete-workspace-modal.tsx exporting DeleteWorkspaceModal: a confirmation modal for deleting a workspace that asks the user to type the workspace slug to confirm, with a Cancel button and a red, destructive 'Delete workspace' button."
+    },
+    {
+      "id": "stat-card",
+      "repo": "dub",
+      "file": "apps/web/ui/analytics/stat-card.tsx",
+      "prompt": "Create apps/web/ui/analytics/stat-card.tsx exporting StatCard: a small card with a metric label, a large number, and a change indicator that is green for an increase and red for a decrease, with an info icon that shows a tooltip explaining the metric."
+    },
+    {
+      "id": "copy-short-link",
+      "repo": "dub",
+      "file": "apps/web/ui/links/copy-short-link.tsx",
+      "prompt": "Create apps/web/ui/links/copy-short-link.tsx exporting CopyShortLink: a short link shown in a read-only field next to an icon-only copy button, which shows a 'Copied' state for two seconds after copying."
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Trash2 } from 'lucide-react';
+
+export function DangerZoneCard() {
+  return (
+    <Card className="border-destructive/50">
+      <CardHeader>
+        <CardTitle className="text-destructive">Delete team</CardTitle>
+        <CardDescription>
+          Deleting this team removes every member and all of its data. This
+          action cannot be undone.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button type="button" variant="destructive">
+          <Trash2 />
+          Delete team
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}

@@ -1,0 +1,80 @@
+{
+  "id": "gemini-3.5-flash-lite--skill--saas-starter--plan-summary-card--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "saas-starter",
+  "task": "plan-summary-card",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 3,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 3
+  },
+  "onsystemFindings": [
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-500/10` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.297, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 24,
+      "column": 106,
+      "endLine": 24,
+      "endColumn": 121,
+      "source": "bg-green-500/10"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.286), a gray. Pick the semantic token that fits.",
+      "line": 24,
+      "column": 122,
+      "endLine": 24,
+      "endColumn": 136,
+      "source": "text-green-500"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.297, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 25,
+      "column": 53,
+      "endLine": 25,
+      "endColumn": 65,
+      "source": "bg-green-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/billing/plan-summary-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.03443928,
+  "calls": 17,
+  "toolCalls": 16,
+  "toolErrors": 0,
+  "inputTokens": 134106,
+  "cacheReadTokens": 82676,
+  "cacheWriteTokens": 0,
+  "outputTokens": 6612,
+  "seconds": 29,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:17:13.549Z"
+}

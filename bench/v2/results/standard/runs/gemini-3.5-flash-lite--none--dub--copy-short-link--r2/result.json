@@ -1,0 +1,68 @@
+{
+  "id": "gemini-3.5-flash-lite--none--dub--copy-short-link--r2",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "copy-short-link",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/links/copy-short-link.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <input> where the design system has <Input>. Use <Input> (import { Input } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 54,
+      "column": 12,
+      "endLine": 54,
+      "endColumn": 17,
+      "source": "input",
+      "suggestion": "<Input>",
+      "fix": [
+        {
+          "range": [
+            1223,
+            1228
+          ],
+          "text": "Input"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/links/copy-short-link.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.11765547999999998,
+  "calls": 36,
+  "toolCalls": 35,
+  "toolErrors": 0,
+  "inputTokens": 1346667,
+  "cacheReadTokens": 1213156,
+  "cacheWriteTokens": 0,
+  "outputTokens": 16483,
+  "seconds": 83,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:04:39.584Z"
+}

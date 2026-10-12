@@ -1,0 +1,90 @@
+{
+  "id": "gemini-3.5-flash-lite--skill--saas-starter--user-menu--r1",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "saas-starter",
+  "task": "user-menu",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/user-menu.tsx",
+  "tscPass": false,
+  "tscErrors": 2,
+  "tscDiagnostics": [
+    {
+      "file": "components/user-menu.tsx",
+      "line": 56,
+      "column": 15,
+      "code": "TS7006",
+      "message": "Parameter 'n' implicitly has an 'any' type."
+    },
+    {
+      "file": "components/user-menu.tsx",
+      "line": 64,
+      "column": 15,
+      "code": "TS7006",
+      "message": "Parameter 'n' implicitly has an 'any' type."
+    }
+  ],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/user-menu.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <button> where the design system has <Button>. Use <Button> (import { Button } from \"@/components/ui/button\"); its variants replace the custom classes.",
+      "line": 92,
+      "column": 12,
+      "endLine": 92,
+      "endColumn": 18,
+      "source": "button",
+      "suggestion": "<Button>",
+      "fix": [
+        {
+          "range": [
+            2785,
+            2791
+          ],
+          "text": "Button"
+        },
+        {
+          "range": [
+            3096,
+            3102
+          ],
+          "text": "Button"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/user-menu.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.05597927,
+  "calls": 20,
+  "toolCalls": 19,
+  "toolErrors": 0,
+  "inputTokens": 270665,
+  "cacheReadTokens": 188399,
+  "cacheWriteTokens": 0,
+  "outputTokens": 10259,
+  "seconds": 42,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:34:25.893Z"
+}

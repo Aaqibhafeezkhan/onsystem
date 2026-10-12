@@ -12,6 +12,8 @@ export default defineConfig(
     'test/fixtures',
     'schema.json',
     'bench/agents/output',
+    // Files the agents wrote in bench/v2 runs, published as they are.
+    'bench/v2/results',
     // The website lints itself, with its React and Next.js rules: pnpm --filter site lint.
     'site',
   ]),

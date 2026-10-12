@@ -1,0 +1,52 @@
+{
+  "id": "claude-haiku-5-5--mcp--shadcn-website--feedback-widget--r2",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "mcp",
+  "repo": "shadcn-website",
+  "task": "feedback-widget",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/feedback-widget.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "components/feedback-widget.tsx",
+      "line": 12,
+      "column": 18,
+      "code": "TS2430",
+      "message": "Interface 'FeedbackWidgetProps' incorrectly extends interface 'ClassAttributes<HTMLDivElement> & HTMLAttributes<HTMLDivElement>'.\nType 'FeedbackWidgetProps' is not assignable to type 'HTMLAttributes<HTMLDivElement>'.\nTypes of property 'onSubmit' are incompatible.\nType '((feedback: { vote: Vote; comment: string; }) => void) | undefined' is not assignable to type 'FormEventHandler<HTMLDivElement> | undefined'.\nType '(feedback: { vote: Vote; comment: string; }) => void' is not assignable to type 'FormEventHandler<HTMLDivElement>'.\nTypes of parameters 'feedback' and 'event' are incompatible.\nType 'FormEvent<HTMLDivElement>' is missing the following properties from type '{ vote: Vote; comment: string; }': vote, comment"
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/feedback-widget.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.00304371,
+  "calls": 5,
+  "toolCalls": 9,
+  "toolErrors": 0,
+  "inputTokens": 50560,
+  "cacheReadTokens": 39626,
+  "cacheWriteTokens": 10922,
+  "outputTokens": 2562,
+  "seconds": 20,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 7,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:24:30.499Z"
+}

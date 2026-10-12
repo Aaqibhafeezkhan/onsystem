@@ -1,0 +1,96 @@
+{
+  "id": "claude-haiku-5-5--none--dub--delete-workspace-modal--r2",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "delete-workspace-modal",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/workspaces/delete-workspace-modal.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 63,
+      "column": 12,
+      "endLine": 63,
+      "endColumn": 17,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            1840,
+            1845
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            2076,
+            2081
+          ],
+          "text": "Label"
+        }
+      ]
+    },
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <input> where the design system has <Input>. Use <Input> (import { Input } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 71,
+      "column": 14,
+      "endLine": 71,
+      "endColumn": 19,
+      "source": "input",
+      "suggestion": "<Input>",
+      "fix": [
+        {
+          "range": [
+            2159,
+            2164
+          ],
+          "text": "Input"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/workspaces/delete-workspace-modal.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.005558614999999999,
+  "calls": 7,
+  "toolCalls": 10,
+  "toolErrors": 0,
+  "inputTokens": 118686,
+  "cacheReadTokens": 95989,
+  "cacheWriteTokens": 22681,
+  "outputTokens": 3524,
+  "seconds": 31,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:34:28.208Z"
+}

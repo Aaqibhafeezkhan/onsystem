@@ -1,0 +1,96 @@
+{
+  "id": "gemini-3.8-flash--hook--dub--delete-workspace-modal--r1",
+  "provider": "google",
+  "model": "gemini-3.8-flash",
+  "tier": "mid",
+  "arm": "hook",
+  "repo": "dub",
+  "task": "delete-workspace-modal",
+  "repeat": 1,
+  "status": "max-calls",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/workspaces/delete-workspace-modal.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 180,
+      "column": 14,
+      "endLine": 180,
+      "endColumn": 19,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            5370,
+            5375
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            5648,
+            5653
+          ],
+          "text": "Label"
+        }
+      ]
+    },
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <input> where the design system has <Input>. Use <Input> (import { Input } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 189,
+      "column": 16,
+      "endLine": 189,
+      "endColumn": 21,
+      "source": "input",
+      "suggestion": "<Input>",
+      "fix": [
+        {
+          "range": [
+            5735,
+            5740
+          ],
+          "text": "Input"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/workspaces/delete-workspace-modal.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.327610875,
+  "calls": 40,
+  "toolCalls": 40,
+  "toolErrors": 0,
+  "inputTokens": 1574996,
+  "cacheReadTokens": 1395335,
+  "cacheWriteTokens": 0,
+  "outputTokens": 23524,
+  "seconds": 280,
+  "hookBlocks": 1,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:06:58.110Z"
+}

@@ -1,0 +1,91 @@
+{
+  "$comment": "The repositories bench/v2 runs in. URL, commit and fetched folders come from corpus/repos.json (`corpus` names the entry). `project` is the app the tasks write into, where tsc and `onsystem check` run. `install` runs once per repository with lifecycle scripts off. `control` is a correct and an invented use of a design-system component: `prepare` requires tsc and onsystem to pass the first and fail the second, and the mock model writes with it. `reference` files must type-check unchanged. `tscPaths` maps workspace packages to their sources where their exports point at a build output that an install without scripts does not have.",
+  "repos": [
+    {
+      "name": "saas-starter",
+      "corpus": "saas-starter",
+      "project": ".",
+      "install": ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"],
+      "designSystem": "shadcn/ui in components/ui: 7 components, 40 color tokens. Next.js, Tailwind v4.",
+      "control": {
+        "import": "import { Button } from '@/components/ui/button';",
+        "component": "Button",
+        "valid": "<Button variant=\"outline\">Retry</Button>",
+        "invalid": "<Button variant=\"warning\">Retry</Button>"
+      },
+      "reference": [
+        "app/(dashboard)/pricing/submit-button.tsx",
+        "app/(dashboard)/dashboard/general/page.tsx"
+      ]
+    },
+    {
+      "name": "chatbot",
+      "corpus": "chatbot",
+      "project": ".",
+      "install": ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"],
+      "designSystem": "shadcn/ui in components/ui: 23 components, 31 color tokens. The v1 benchmark's repository.",
+      "control": {
+        "import": "import { Button } from '@/components/ui/button';",
+        "component": "Button",
+        "valid": "<Button variant=\"outline\">Retry</Button>",
+        "invalid": "<Button variant=\"warning\">Retry</Button>"
+      },
+      "reference": ["components/chat/suggestion.tsx", "components/chat/sidebar-user-nav.tsx"]
+    },
+    {
+      "name": "shadcn-website",
+      "corpus": "shadcn-ui",
+      "project": "apps/v4",
+      "install": [
+        "pnpm",
+        "install",
+        "--frozen-lockfile",
+        "--ignore-scripts",
+        "--filter",
+        "./apps/v4..."
+      ],
+      "designSystem": "The shadcn/ui registry (registry/new-york-v4/ui): 68 components, 40 color tokens. The ui.shadcn.com site.",
+      "control": {
+        "import": "import { Button } from '@/registry/new-york-v4/ui/button';",
+        "component": "Button",
+        "valid": "<Button variant=\"outline\">Retry</Button>",
+        "invalid": "<Button variant=\"warning\">Retry</Button>"
+      },
+      "reference": ["components/copy-button.tsx", "components/announcement.tsx"]
+    },
+    {
+      "name": "openstatus",
+      "corpus": "openstatus",
+      "project": "apps/dashboard",
+      "install": ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"],
+      "designSystem": "Workspace package @openstatus/ui (shadcn-based) plus app components: 132 components, 51 color tokens. TypeScript 7.",
+      "control": {
+        "import": "import { Button } from '@openstatus/ui/components/ui/button';",
+        "component": "Button",
+        "valid": "<Button variant=\"outline\">Retry</Button>",
+        "invalid": "<Button variant=\"warning\">Retry</Button>"
+      },
+      "reference": ["src/components/theme-toggle.tsx", "src/components/date-picker.tsx"]
+    },
+    {
+      "name": "dub",
+      "corpus": "dub",
+      "project": "apps/web",
+      "install": ["pnpm", "install", "--frozen-lockfile", "--ignore-scripts"],
+      "designSystem": "Workspace package @dub/ui, a custom (not shadcn) system: 430 components and icons, no color tokens found, so the color rules stay quiet here and the component, prop and variant rules do the work.",
+      "control": {
+        "import": "import { Button } from '@dub/ui';",
+        "component": "Button",
+        "valid": "<Button text=\"Retry\" variant=\"secondary\" />",
+        "invalid": "<Button text=\"Retry\" variant=\"warning\" />"
+      },
+      "reference": ["ui/token-avatar.tsx", "ui/dub-partners-logo.tsx", "ui/shared/back-link.tsx"],
+      "tscPaths": {
+        "@dub/ui": ["../../packages/ui/src"],
+        "@dub/ui/*": ["../../packages/ui/src/*"],
+        "@dub/utils": ["../../packages/utils/src"],
+        "@dub/utils/*": ["../../packages/utils/src/*"]
+      }
+    }
+  ]
+}

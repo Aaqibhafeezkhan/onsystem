@@ -1,0 +1,75 @@
+{
+  "id": "claude-haiku-5-5--none--dub--stat-card--r1",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "stat-card",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/analytics/stat-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/analytics/stat-card.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <button> where the design system has <Button>. Use <Button> (import { Button } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 48,
+      "column": 14,
+      "endLine": 48,
+      "endColumn": 20,
+      "source": "button",
+      "suggestion": "<Button>",
+      "fix": [
+        {
+          "range": [
+            1469,
+            1475
+          ],
+          "text": "Button"
+        },
+        {
+          "range": [
+            1782,
+            1788
+          ],
+          "text": "Button"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/analytics/stat-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0062983499999999994,
+  "calls": 8,
+  "toolCalls": 16,
+  "toolErrors": 0,
+  "inputTokens": 134311,
+  "cacheReadTokens": 109105,
+  "cacheWriteTokens": 25188,
+  "outputTokens": 4114,
+  "seconds": 33,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:10:55.844Z"
+}

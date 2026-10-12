@@ -1,0 +1,96 @@
+{
+  "id": "gpt-6-luna--none--dub--delete-workspace-modal--r3",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "delete-workspace-modal",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/workspaces/delete-workspace-modal.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 55,
+      "column": 14,
+      "endLine": 55,
+      "endColumn": 19,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            1531,
+            1536
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            1777,
+            1782
+          ],
+          "text": "Label"
+        }
+      ]
+    },
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <input> where the design system has <Input>. Use <Input> (import { Input } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 62,
+      "column": 14,
+      "endLine": 62,
+      "endColumn": 19,
+      "source": "input",
+      "suggestion": "<Input>",
+      "fix": [
+        {
+          "range": [
+            1797,
+            1802
+          ],
+          "text": "Input"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/workspaces/delete-workspace-modal.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.00288328,
+  "calls": 5,
+  "toolCalls": 9,
+  "toolErrors": 0,
+  "inputTokens": 44356,
+  "cacheReadTokens": 29453,
+  "cacheWriteTokens": 14338,
+  "outputTokens": 1480,
+  "seconds": 27,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:22:15.304Z"
+}

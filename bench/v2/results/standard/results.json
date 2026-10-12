@@ -1,0 +1,3374 @@
+{
+  "info": {
+    "matrix": "standard",
+    "seed": 1,
+    "onsystem": "0.5.0",
+    "node": "v24.18.0",
+    "startedAt": "2026-10-12T13:51:31.359Z",
+    "lastStartedAt": "2026-10-12T13:51:31.359Z",
+    "cap": 60,
+    "pricesVerified": "2026-10-12",
+    "repos": {
+      "chatbot": {
+        "name": "chatbot",
+        "url": "https://github.com/vercel/chatbot",
+        "sha": "c2f8235e1f3ea903ad8b7f61447c4f74164b5c58",
+        "preparedAt": "2026-10-12T12:56:15.173Z",
+        "typescript": "5.8.2",
+        "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/chatbot/src\nconfig   (defaults)\ndetected components.json (ui: @/components/ui → components/ui)\nfiles    22 component files, 1 token file, 0 docs\ntime     1431ms\n\nComponents (23 + 97 parts)\n  AlertDialog        4 props · 11 parts · 0 examples",
+        "controls": {
+          "valid": {
+            "tscErrors": 0,
+            "tscFirst": null,
+            "onsystemErrors": 0,
+            "rules": {}
+          },
+          "invalid": {
+            "tscErrors": 1,
+            "tscFirst": "Type '\"warning\"' is not assignable to type '\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined'.",
+            "onsystemErrors": 1,
+            "rules": {
+              "no-unknown-variant": 1
+            }
+          },
+          "reference": {
+            "files": [
+              "components/chat/suggestion.tsx",
+              "components/chat/sidebar-user-nav.tsx"
+            ],
+            "tscErrors": 0,
+            "first": null
+          }
+        }
+      },
+      "dub": {
+        "name": "dub",
+        "url": "https://github.com/dubinc/dub",
+        "sha": "70c96f90701451358bc9438f8b7fdf4b3b46a6f4",
+        "preparedAt": "2026-10-12T13:50:30.981Z",
+        "typescript": "5.4.4",
+        "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/dub/src/apps/web\nconfig   (defaults)\ndetected workspace package @dub/ui\nfiles    430 component files, 1 token file, 1 doc\ntime     1624ms\n\nComponents (430 + 17 parts)\n  Accordion          9 props · 3 parts · 0 examples",
+        "controls": {
+          "valid": {
+            "tscErrors": 0,
+            "tscFirst": null,
+            "onsystemErrors": 0,
+            "rules": {}
+          },
+          "invalid": {
+            "tscErrors": 1,
+            "tscFirst": "Type '\"warning\"' is not assignable to type '\"success\" | \"outline\" | \"primary\" | \"secondary\" | \"danger\" | \"danger-outline\" | null | undefined'.",
+            "onsystemErrors": 1,
+            "rules": {
+              "no-unknown-variant": 1
+            }
+          },
+          "reference": {
+            "files": [
+              "ui/token-avatar.tsx",
+              "ui/dub-partners-logo.tsx",
+              "ui/shared/back-link.tsx"
+            ],
+            "tscErrors": 0,
+            "first": null
+          }
+        }
+      },
+      "saas-starter": {
+        "name": "saas-starter",
+        "url": "https://github.com/nextjs/saas-starter",
+        "sha": "6e33e58b1e553a41fe22e6b941a7229a002de361",
+        "preparedAt": "2026-10-12T13:50:41.245Z",
+        "typescript": "5.8.3",
+        "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/saas-starter/src\nconfig   (defaults)\ndetected components.json (ui: @/components/ui → components/ui)\nfiles    7 component files, 1 token file, 0 docs\ntime     552ms\n\nComponents (7 + 23 parts)\n  Avatar             1 prop · 2 parts · 0 examples",
+        "controls": {
+          "valid": {
+            "tscErrors": 0,
+            "tscFirst": null,
+            "onsystemErrors": 0,
+            "rules": {}
+          },
+          "invalid": {
+            "tscErrors": 1,
+            "tscFirst": "Type '\"warning\"' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | \"ghost\" | \"link\" | null | undefined'.",
+            "onsystemErrors": 1,
+            "rules": {
+              "no-unknown-variant": 1
+            }
+          },
+          "reference": {
+            "files": [
+              "app/(dashboard)/pricing/submit-button.tsx",
+              "app/(dashboard)/dashboard/general/page.tsx"
+            ],
+            "tscErrors": 0,
+            "first": null
+          }
+        }
+      },
+      "openstatus": {
+        "name": "openstatus",
+        "url": "https://github.com/openstatusHQ/openstatus",
+        "sha": "e36446dc7d6980c16959f07d683f6261bc9c37d0",
+        "preparedAt": "2026-10-12T13:51:00.147Z",
+        "typescript": "7.0.2",
+        "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/openstatus/src/apps/dashboard\nconfig   (defaults)\ndetected primary: workspace package @openstatus/ui (718 imports); also: components.json (ui: @/components/ui → src/components/ui) (69 imports)\nfiles    112 component files, 2 token files, 1 doc\ntime     1366ms\n\nComponents (132 + 246 parts)\n  CheckboxTree       <div> · 4 props · 0 examples",
+        "controls": {
+          "valid": {
+            "tscErrors": 0,
+            "tscFirst": null,
+            "onsystemErrors": 0,
+            "rules": {}
+          },
+          "invalid": {
+            "tscErrors": 1,
+            "tscFirst": "Type '\"warning\"' is not assignable to type '\"default\" | \"destructive\" | \"ghost\" | \"link\" | \"outline\" | \"secondary\" | null | undefined'.",
+            "onsystemErrors": 1,
+            "rules": {
+              "no-unknown-variant": 1
+            }
+          },
+          "reference": {
+            "files": [
+              "src/components/theme-toggle.tsx",
+              "src/components/date-picker.tsx"
+            ],
+            "tscErrors": 0,
+            "first": null
+          }
+        }
+      },
+      "shadcn-website": {
+        "name": "shadcn-website",
+        "url": "https://github.com/shadcn-ui/ui",
+        "sha": "0132174664c07d41262fb51012d0cc782e458e6c",
+        "preparedAt": "2026-10-12T13:51:31.359Z",
+        "typescript": "5.9.2",
+        "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/shadcn-website/src/apps/v4\nconfig   (defaults)\ndetected components.json (ui: @/registry/new-york-v4/ui → registry/new-york-v4/ui)\nfiles    61 component files, 1 token file, 0 docs\ntime     1385ms\n\nComponents (68 + 263 parts)\n  Accordion          9 props · 3 parts · 0 examples",
+        "controls": {
+          "valid": {
+            "tscErrors": 0,
+            "tscFirst": null,
+            "onsystemErrors": 0,
+            "rules": {}
+          },
+          "invalid": {
+            "tscErrors": 1,
+            "tscFirst": "Type '\"warning\"' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | \"ghost\" | \"link\" | null | undefined'.",
+            "onsystemErrors": 1,
+            "rules": {
+              "no-unknown-variant": 1
+            }
+          },
+          "reference": {
+            "files": [
+              "components/copy-button.tsx",
+              "components/announcement.tsx"
+            ],
+            "tscErrors": 0,
+            "first": null
+          }
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "arm": "none",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 58,
+        "n": 60,
+        "value": 0.9666666666666667,
+        "low": 0.886362256341505,
+        "high": 0.9908106808265498
+      },
+      "onsystemClean": {
+        "successes": 42,
+        "n": 60,
+        "value": 0.7,
+        "low": 0.5749129195048435,
+        "high": 0.8010183392814656
+      },
+      "accepted": {
+        "successes": 41,
+        "n": 60,
+        "value": 0.6833333333333333,
+        "low": 0.5576623287169538,
+        "high": 0.7869413251704964
+      },
+      "onsystemErrors": {
+        "value": 0.5833333333333334,
+        "low": 0.2,
+        "high": 1.0666666666666667
+      },
+      "cost": {
+        "value": 0.004102881833333333,
+        "low": 0.003295438508333334,
+        "high": 0.004986536320833334
+      },
+      "calls": 6.233333333333333,
+      "inputTokens": 84056.4,
+      "outputTokens": 2652.9333333333334,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "arm": "skill",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 53,
+        "n": 60,
+        "value": 0.8833333333333333,
+        "low": 0.7782121187599428,
+        "high": 0.9423227939138165
+      },
+      "accepted": {
+        "successes": 53,
+        "n": 60,
+        "value": 0.8833333333333333,
+        "low": 0.7782121187599428,
+        "high": 0.9423227939138165
+      },
+      "onsystemErrors": {
+        "value": 0.13333333333333333,
+        "low": 0.016666666666666666,
+        "high": 0.26666666666666666
+      },
+      "cost": {
+        "value": 0.004458974583333333,
+        "low": 0.0036061563708333338,
+        "high": 0.005370219029166667
+      },
+      "calls": 7.966666666666667,
+      "inputTokens": 98366.65,
+      "outputTokens": 2890.866666666667,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 1
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "arm": "mcp",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemClean": {
+        "successes": 59,
+        "n": 60,
+        "value": 0.9833333333333333,
+        "low": 0.9114487018291041,
+        "high": 0.9970518402378096
+      },
+      "accepted": {
+        "successes": 55,
+        "n": 60,
+        "value": 0.9166666666666666,
+        "low": 0.8193105788446039,
+        "high": 0.9638795436268733
+      },
+      "onsystemErrors": {
+        "value": 0.05,
+        "low": 0,
+        "high": 0.15
+      },
+      "cost": {
+        "value": 0.004541667166666668,
+        "low": 0.0037294111437499995,
+        "high": 0.005417548906249997
+      },
+      "calls": 6.45,
+      "inputTokens": 106405,
+      "outputTokens": 2813.633333333333,
+      "hookBlocks": 0,
+      "mcpCalls": 7.533333333333333,
+      "skillLoads": 0
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "arm": "hook",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 59,
+        "n": 60,
+        "value": 0.9833333333333333,
+        "low": 0.9114487018291041,
+        "high": 0.9970518402378096
+      },
+      "onsystemClean": {
+        "successes": 57,
+        "n": 60,
+        "value": 0.95,
+        "low": 0.8629948343000966,
+        "high": 0.9828504979690988
+      },
+      "accepted": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemErrors": {
+        "value": 0.11666666666666667,
+        "low": 0,
+        "high": 0.31666666666666665
+      },
+      "cost": {
+        "value": 0.004400795999999998,
+        "low": 0.0033996506833333336,
+        "high": 0.00554910291875
+      },
+      "calls": 6.85,
+      "inputTokens": 100601.53333333334,
+      "outputTokens": 2824.8166666666666,
+      "hookBlocks": 0.31666666666666665,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "provider": "anthropic",
+      "arm": "all",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 58,
+        "n": 60,
+        "value": 0.9666666666666667,
+        "low": 0.886362256341505,
+        "high": 0.9908106808265498
+      },
+      "onsystemClean": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 58,
+        "n": 60,
+        "value": 0.9666666666666667,
+        "low": 0.886362256341505,
+        "high": 0.9908106808265498
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.004113926166666666,
+        "low": 0.0034513034833333336,
+        "high": 0.004804349872916666
+      },
+      "calls": 5.866666666666666,
+      "inputTokens": 90203.26666666666,
+      "outputTokens": 2586.3333333333335,
+      "hookBlocks": 0.05,
+      "mcpCalls": 6.95,
+      "skillLoads": 1
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "arm": "none",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 17,
+        "n": 20,
+        "value": 0.85,
+        "low": 0.6395811333571357,
+        "high": 0.9476312545132735
+      },
+      "accepted": {
+        "successes": 17,
+        "n": 20,
+        "value": 0.85,
+        "low": 0.6395811333571357,
+        "high": 0.9476312545132735
+      },
+      "onsystemErrors": {
+        "value": 0.4,
+        "low": 0,
+        "high": 0.9
+      },
+      "cost": {
+        "value": 0.03748630499999999,
+        "low": 0.030818341625000002,
+        "high": 0.044400492375
+      },
+      "calls": 5.35,
+      "inputTokens": 36233.55,
+      "outputTokens": 1515.95,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "arm": "skill",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 18,
+        "n": 20,
+        "value": 0.9,
+        "low": 0.6989663528135878,
+        "high": 0.9721335190383086
+      },
+      "accepted": {
+        "successes": 18,
+        "n": 20,
+        "value": 0.9,
+        "low": 0.6989663528135878,
+        "high": 0.9721335190383086
+      },
+      "onsystemErrors": {
+        "value": 0.15,
+        "low": 0,
+        "high": 0.4
+      },
+      "cost": {
+        "value": 0.047648050000000004,
+        "low": 0.04115739050000001,
+        "high": 0.054558744
+      },
+      "calls": 6.4,
+      "inputTokens": 50404.7,
+      "outputTokens": 1638.85,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 1
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "arm": "mcp",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 19,
+        "n": 20,
+        "value": 0.95,
+        "low": 0.7638688045357189,
+        "high": 0.9911185512976646
+      },
+      "onsystemClean": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 19,
+        "n": 20,
+        "value": 0.95,
+        "low": 0.7638688045357189,
+        "high": 0.9911185512976646
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.04026562,
+        "low": 0.03303917125,
+        "high": 0.04803429425
+      },
+      "calls": 4.6,
+      "inputTokens": 40195,
+      "outputTokens": 1343.3,
+      "hookBlocks": 0,
+      "mcpCalls": 3.5,
+      "skillLoads": 0
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "arm": "hook",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.03936748999999999,
+        "low": 0.03317868637499999,
+        "high": 0.046079841
+      },
+      "calls": 5.55,
+      "inputTokens": 36819.2,
+      "outputTokens": 1584.1,
+      "hookBlocks": 0.2,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "provider": "anthropic",
+      "arm": "all",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 19,
+        "n": 20,
+        "value": 0.95,
+        "low": 0.7638688045357189,
+        "high": 0.9911185512976646
+      },
+      "onsystemClean": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 19,
+        "n": 20,
+        "value": 0.95,
+        "low": 0.7638688045357189,
+        "high": 0.9911185512976646
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.04251304,
+        "low": 0.03476689925000001,
+        "high": 0.05125216987499998
+      },
+      "calls": 4.2,
+      "inputTokens": 39408.6,
+      "outputTokens": 1369.85,
+      "hookBlocks": 0.1,
+      "mcpCalls": 3.95,
+      "skillLoads": 1
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "provider": "google",
+      "arm": "none",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 57,
+        "n": 60,
+        "value": 0.95,
+        "low": 0.8629948343000966,
+        "high": 0.9828504979690988
+      },
+      "onsystemClean": {
+        "successes": 36,
+        "n": 60,
+        "value": 0.6,
+        "low": 0.47366053393698454,
+        "high": 0.7143050954561698
+      },
+      "accepted": {
+        "successes": 35,
+        "n": 60,
+        "value": 0.5833333333333334,
+        "low": 0.4572808092532306,
+        "high": 0.699357215241065
+      },
+      "onsystemErrors": {
+        "value": 1.4833333333333334,
+        "low": 0.7,
+        "high": 2.3833333333333333
+      },
+      "cost": {
+        "value": 0.060741154333333346,
+        "low": 0.051982837775000006,
+        "high": 0.0701155021125
+      },
+      "calls": 22.066666666666666,
+      "inputTokens": 561553.4666666667,
+      "outputTokens": 8408.283333333333,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "provider": "google",
+      "arm": "skill",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 59,
+        "n": 60,
+        "value": 0.9833333333333333,
+        "low": 0.9114487018291041,
+        "high": 0.9970518402378096
+      },
+      "tscPass": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemClean": {
+        "successes": 41,
+        "n": 60,
+        "value": 0.6833333333333333,
+        "low": 0.5576623287169538,
+        "high": 0.7869413251704964
+      },
+      "accepted": {
+        "successes": 39,
+        "n": 60,
+        "value": 0.65,
+        "low": 0.5236261874086521,
+        "high": 0.7583222566810799
+      },
+      "onsystemErrors": {
+        "value": 1.0666666666666667,
+        "low": 0.4,
+        "high": 1.8166666666666667
+      },
+      "cost": {
+        "value": 0.06168094483333332,
+        "low": 0.05278723985,
+        "high": 0.07143632225833334
+      },
+      "calls": 22.9,
+      "inputTokens": 572637.6333333333,
+      "outputTokens": 8372.983333333334,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0.9
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "provider": "google",
+      "arm": "mcp",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 58,
+        "n": 60,
+        "value": 0.9666666666666667,
+        "low": 0.886362256341505,
+        "high": 0.9908106808265498
+      },
+      "tscPass": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemClean": {
+        "successes": 58,
+        "n": 60,
+        "value": 0.9666666666666667,
+        "low": 0.886362256341505,
+        "high": 0.9908106808265498
+      },
+      "accepted": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.0638421255,
+        "low": 0.0535382115125,
+        "high": 0.07432379172083332
+      },
+      "calls": 24.4,
+      "inputTokens": 652095.9833333333,
+      "outputTokens": 7632.8,
+      "hookBlocks": 0,
+      "mcpCalls": 6.316666666666666,
+      "skillLoads": 0
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "provider": "google",
+      "arm": "hook",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemClean": {
+        "successes": 59,
+        "n": 60,
+        "value": 0.9833333333333333,
+        "low": 0.9114487018291041,
+        "high": 0.9970518402378096
+      },
+      "accepted": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemErrors": {
+        "value": 0.03333333333333333,
+        "low": 0,
+        "high": 0.1
+      },
+      "cost": {
+        "value": 0.0709598255,
+        "low": 0.06216636778750002,
+        "high": 0.08063815114583332
+      },
+      "calls": 25.116666666666667,
+      "inputTokens": 697633.8166666667,
+      "outputTokens": 9852.75,
+      "hookBlocks": 0.48333333333333334,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "provider": "google",
+      "arm": "all",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemClean": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 56,
+        "n": 60,
+        "value": 0.9333333333333333,
+        "low": 0.8407464259125857,
+        "high": 0.9737713014577508
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.05749206266666666,
+        "low": 0.04766688317083333,
+        "high": 0.06812715762916666
+      },
+      "calls": 22.45,
+      "inputTokens": 585123.6,
+      "outputTokens": 7018.066666666667,
+      "hookBlocks": 0.31666666666666665,
+      "mcpCalls": 5.566666666666666,
+      "skillLoads": 0.1
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "provider": "google",
+      "arm": "none",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 7,
+        "n": 20,
+        "value": 0.35,
+        "low": 0.18119182312398308,
+        "high": 0.5671457249315559
+      },
+      "tscPass": {
+        "successes": 7,
+        "n": 20,
+        "value": 0.35,
+        "low": 0.18119182312398308,
+        "high": 0.5671457249315559
+      },
+      "onsystemClean": {
+        "successes": 3,
+        "n": 20,
+        "value": 0.15,
+        "low": 0.05236874548672649,
+        "high": 0.36041886664286427
+      },
+      "accepted": {
+        "successes": 3,
+        "n": 20,
+        "value": 0.15,
+        "low": 0.05236874548672649,
+        "high": 0.36041886664286427
+      },
+      "onsystemErrors": {
+        "value": 0.9,
+        "low": 0.05,
+        "high": 1.9
+      },
+      "cost": {
+        "value": 0.2716137899999999,
+        "low": 0.2479298338125,
+        "high": 0.2975173368749999
+      },
+      "calls": 37.25,
+      "inputTokens": 969090.1,
+      "outputTokens": 17396.95,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "provider": "google",
+      "arm": "skill",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 4,
+        "n": 20,
+        "value": 0.2,
+        "low": 0.08065766201776073,
+        "high": 0.41601743409331715
+      },
+      "tscPass": {
+        "successes": 4,
+        "n": 20,
+        "value": 0.2,
+        "low": 0.08065766201776073,
+        "high": 0.41601743409331715
+      },
+      "onsystemClean": {
+        "successes": 3,
+        "n": 20,
+        "value": 0.15,
+        "low": 0.05236874548672649,
+        "high": 0.36041886664286427
+      },
+      "accepted": {
+        "successes": 3,
+        "n": 20,
+        "value": 0.15,
+        "low": 0.05236874548672649,
+        "high": 0.36041886664286427
+      },
+      "onsystemErrors": {
+        "value": 0.4,
+        "low": 0,
+        "high": 1.2
+      },
+      "cost": {
+        "value": 0.27235645875,
+        "low": 0.25442855015625,
+        "high": 0.2932103000625
+      },
+      "calls": 38.15,
+      "inputTokens": 1040265.25,
+      "outputTokens": 16065.85,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 1
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "provider": "google",
+      "arm": "mcp",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 7,
+        "n": 20,
+        "value": 0.35,
+        "low": 0.18119182312398308,
+        "high": 0.5671457249315559
+      },
+      "tscPass": {
+        "successes": 7,
+        "n": 20,
+        "value": 0.35,
+        "low": 0.18119182312398308,
+        "high": 0.5671457249315559
+      },
+      "onsystemClean": {
+        "successes": 7,
+        "n": 20,
+        "value": 0.35,
+        "low": 0.18119182312398308,
+        "high": 0.5671457249315559
+      },
+      "accepted": {
+        "successes": 7,
+        "n": 20,
+        "value": 0.35,
+        "low": 0.18119182312398308,
+        "high": 0.5671457249315559
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.25367992125,
+        "low": 0.23821863684375003,
+        "high": 0.26978716443749995
+      },
+      "calls": 38,
+      "inputTokens": 929427.75,
+      "outputTokens": 12544.3,
+      "hookBlocks": 0,
+      "mcpCalls": 10.5,
+      "skillLoads": 0
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "provider": "google",
+      "arm": "hook",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 8,
+        "n": 20,
+        "value": 0.4,
+        "low": 0.21880653127178018,
+        "high": 0.6134185007652458
+      },
+      "tscPass": {
+        "successes": 6,
+        "n": 20,
+        "value": 0.3,
+        "low": 0.14547724402157294,
+        "high": 0.518972820052479
+      },
+      "onsystemClean": {
+        "successes": 7,
+        "n": 20,
+        "value": 0.35,
+        "low": 0.18119182312398308,
+        "high": 0.5671457249315559
+      },
+      "accepted": {
+        "successes": 5,
+        "n": 20,
+        "value": 0.25,
+        "low": 0.11186170069997625,
+        "high": 0.46870087939258864
+      },
+      "onsystemErrors": {
+        "value": 0.1,
+        "low": 0,
+        "high": 0.3
+      },
+      "cost": {
+        "value": 0.2890672125,
+        "low": 0.2673885140625,
+        "high": 0.31197795525
+      },
+      "calls": 38.6,
+      "inputTokens": 1074304.15,
+      "outputTokens": 18568.7,
+      "hookBlocks": 0.25,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "provider": "google",
+      "arm": "all",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 9,
+        "n": 20,
+        "value": 0.45,
+        "low": 0.25819785703764037,
+        "high": 0.6579146589808726
+      },
+      "tscPass": {
+        "successes": 8,
+        "n": 20,
+        "value": 0.4,
+        "low": 0.21880653127178018,
+        "high": 0.6134185007652458
+      },
+      "onsystemClean": {
+        "successes": 9,
+        "n": 20,
+        "value": 0.45,
+        "low": 0.25819785703764037,
+        "high": 0.6579146589808726
+      },
+      "accepted": {
+        "successes": 8,
+        "n": 20,
+        "value": 0.4,
+        "low": 0.21880653127178018,
+        "high": 0.6134185007652458
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.256722765,
+        "low": 0.24107632237499999,
+        "high": 0.27346013024999993
+      },
+      "calls": 39.05,
+      "inputTokens": 963652.15,
+      "outputTokens": 13110.05,
+      "hookBlocks": 0,
+      "mcpCalls": 11,
+      "skillLoads": 1
+    },
+    {
+      "model": "gpt-6-luna",
+      "provider": "openai",
+      "arm": "none",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 41,
+        "n": 60,
+        "value": 0.6833333333333333,
+        "low": 0.5576623287169538,
+        "high": 0.7869413251704964
+      },
+      "accepted": {
+        "successes": 41,
+        "n": 60,
+        "value": 0.6833333333333333,
+        "low": 0.5576623287169538,
+        "high": 0.7869413251704964
+      },
+      "onsystemErrors": {
+        "value": 0.7,
+        "low": 0.2,
+        "high": 1.3166666666666667
+      },
+      "cost": {
+        "value": 0.003204125750000001,
+        "low": 0.0027561825312500004,
+        "high": 0.0036712282999999996
+      },
+      "calls": 6.416666666666667,
+      "inputTokens": 63263.683333333334,
+      "outputTokens": 1517.5666666666666,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gpt-6-luna",
+      "provider": "openai",
+      "arm": "skill",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 58,
+        "n": 60,
+        "value": 0.9666666666666667,
+        "low": 0.886362256341505,
+        "high": 0.9908106808265498
+      },
+      "onsystemClean": {
+        "successes": 48,
+        "n": 60,
+        "value": 0.8,
+        "low": 0.6821819409122731,
+        "high": 0.8817149472671906
+      },
+      "accepted": {
+        "successes": 46,
+        "n": 60,
+        "value": 0.7666666666666667,
+        "low": 0.6456372951896278,
+        "high": 0.855604383192118
+      },
+      "onsystemErrors": {
+        "value": 0.31666666666666665,
+        "low": 0.1,
+        "high": 0.5666666666666667
+      },
+      "cost": {
+        "value": 0.0038564910833333325,
+        "low": 0.0033486008062500005,
+        "high": 0.004389986991666667
+      },
+      "calls": 7.266666666666667,
+      "inputTokens": 80314.21666666666,
+      "outputTokens": 1713.7166666666667,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 1
+    },
+    {
+      "model": "gpt-6-luna",
+      "provider": "openai",
+      "arm": "mcp",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.0042572231666666675,
+        "low": 0.0035489530458333337,
+        "high": 0.004969686699999999
+      },
+      "calls": 8.733333333333333,
+      "inputTokens": 124212.06666666667,
+      "outputTokens": 1948.5166666666667,
+      "hookBlocks": 0,
+      "mcpCalls": 9.333333333333334,
+      "skillLoads": 0
+    },
+    {
+      "model": "gpt-6-luna",
+      "provider": "openai",
+      "arm": "hook",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.0035895537500000006,
+        "low": 0.0030619686041666663,
+        "high": 0.004129863231249999
+      },
+      "calls": 7.233333333333333,
+      "inputTokens": 80603.88333333333,
+      "outputTokens": 1641.8833333333334,
+      "hookBlocks": 0.35,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gpt-6-luna",
+      "provider": "openai",
+      "arm": "all",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 60,
+        "n": 60,
+        "value": 1,
+        "low": 0.9398281469657729,
+        "high": 1
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.003731999250000001,
+        "low": 0.0031277661666666667,
+        "high": 0.004357751933333334
+      },
+      "calls": 8.866666666666667,
+      "inputTokens": 106401.78333333334,
+      "outputTokens": 1772.8333333333333,
+      "hookBlocks": 0.03333333333333333,
+      "mcpCalls": 9.466666666666667,
+      "skillLoads": 0.9833333333333333
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "arm": "none",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 14,
+        "n": 20,
+        "value": 0.7,
+        "low": 0.4810271799475211,
+        "high": 0.8545227559784271
+      },
+      "accepted": {
+        "successes": 14,
+        "n": 20,
+        "value": 0.7,
+        "low": 0.4810271799475211,
+        "high": 0.8545227559784271
+      },
+      "onsystemErrors": {
+        "value": 0.55,
+        "low": 0.15,
+        "high": 1.15
+      },
+      "cost": {
+        "value": 0.04329702,
+        "low": 0.038318706249999994,
+        "high": 0.048340237999999994
+      },
+      "calls": 5.45,
+      "inputTokens": 39169.55,
+      "outputTokens": 974.2,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "arm": "skill",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.05328341999999999,
+        "low": 0.04759367600000001,
+        "high": 0.058764311749999985
+      },
+      "calls": 6.35,
+      "inputTokens": 49845.7,
+      "outputTokens": 1015.85,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 1
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "arm": "mcp",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.04864509000000001,
+        "low": 0.03997313712500001,
+        "high": 0.05793923775
+      },
+      "calls": 6.35,
+      "inputTokens": 73271.55,
+      "outputTokens": 1105.65,
+      "hookBlocks": 0,
+      "mcpCalls": 8.2,
+      "skillLoads": 0
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "arm": "hook",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 19,
+        "n": 20,
+        "value": 0.95,
+        "low": 0.7638688045357189,
+        "high": 0.9911185512976646
+      },
+      "onsystemClean": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 19,
+        "n": 20,
+        "value": 0.95,
+        "low": 0.7638688045357189,
+        "high": 0.9911185512976646
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.04424745,
+        "low": 0.03916418125,
+        "high": 0.04952705149999999
+      },
+      "calls": 6.2,
+      "inputTokens": 46862.45,
+      "outputTokens": 1040.75,
+      "hookBlocks": 0.25,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "provider": "openai",
+      "arm": "all",
+      "runs": 20,
+      "scored": 20,
+      "created": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemClean": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 20,
+        "n": 20,
+        "value": 1,
+        "low": 0.8388748398148705,
+        "high": 1
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.04913209,
+        "low": 0.0411889395,
+        "high": 0.05760209075
+      },
+      "calls": 6.45,
+      "inputTokens": 71880.65,
+      "outputTokens": 1168.85,
+      "hookBlocks": 0,
+      "mcpCalls": 8.85,
+      "skillLoads": 1
+    },
+    {
+      "model": "mid models",
+      "provider": "all",
+      "arm": "none",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 47,
+        "n": 60,
+        "value": 0.7833333333333333,
+        "low": 0.6637997232345094,
+        "high": 0.8687695600460952
+      },
+      "tscPass": {
+        "successes": 47,
+        "n": 60,
+        "value": 0.7833333333333333,
+        "low": 0.6637997232345094,
+        "high": 0.8687695600460952
+      },
+      "onsystemClean": {
+        "successes": 34,
+        "n": 60,
+        "value": 0.5666666666666667,
+        "low": 0.4410343867991941,
+        "high": 0.6842760327962423
+      },
+      "accepted": {
+        "successes": 34,
+        "n": 60,
+        "value": 0.5666666666666667,
+        "low": 0.4410343867991941,
+        "high": 0.6842760327962423
+      },
+      "onsystemErrors": {
+        "value": 0.6166666666666667,
+        "low": 0.11666666666666667,
+        "high": 1.25
+      },
+      "cost": {
+        "value": 0.11746570500000002,
+        "low": 0.10993957019791666,
+        "high": 0.12610402611458332
+      },
+      "calls": 16.016666666666666,
+      "inputTokens": 348164.4,
+      "outputTokens": 6629.033333333334,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "mid models",
+      "provider": "all",
+      "arm": "skill",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 44,
+        "n": 60,
+        "value": 0.7333333333333333,
+        "low": 0.6099128680007747,
+        "high": 0.8286736005832526
+      },
+      "tscPass": {
+        "successes": 44,
+        "n": 60,
+        "value": 0.7333333333333333,
+        "low": 0.6099128680007747,
+        "high": 0.8286736005832526
+      },
+      "onsystemClean": {
+        "successes": 41,
+        "n": 60,
+        "value": 0.6833333333333333,
+        "low": 0.5576623287169538,
+        "high": 0.7869413251704964
+      },
+      "accepted": {
+        "successes": 41,
+        "n": 60,
+        "value": 0.6833333333333333,
+        "low": 0.5576623287169538,
+        "high": 0.7869413251704964
+      },
+      "onsystemErrors": {
+        "value": 0.18333333333333332,
+        "low": 0,
+        "high": 0.5166666666666667
+      },
+      "cost": {
+        "value": 0.12442930958333337,
+        "low": 0.11901437095833335,
+        "high": 0.13034770308333332
+      },
+      "calls": 16.966666666666665,
+      "inputTokens": 380171.88333333336,
+      "outputTokens": 6240.183333333333,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 1
+    },
+    {
+      "model": "mid models",
+      "provider": "all",
+      "arm": "mcp",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 47,
+        "n": 60,
+        "value": 0.7833333333333333,
+        "low": 0.6637997232345094,
+        "high": 0.8687695600460952
+      },
+      "tscPass": {
+        "successes": 46,
+        "n": 60,
+        "value": 0.7666666666666667,
+        "low": 0.6456372951896278,
+        "high": 0.855604383192118
+      },
+      "onsystemClean": {
+        "successes": 47,
+        "n": 60,
+        "value": 0.7833333333333333,
+        "low": 0.6637997232345094,
+        "high": 0.8687695600460952
+      },
+      "accepted": {
+        "successes": 46,
+        "n": 60,
+        "value": 0.7666666666666667,
+        "low": 0.6456372951896278,
+        "high": 0.855604383192118
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.11419687708333336,
+        "low": 0.10672165234375,
+        "high": 0.12144616364583331
+      },
+      "calls": 16.316666666666666,
+      "inputTokens": 347631.43333333335,
+      "outputTokens": 4997.75,
+      "hookBlocks": 0,
+      "mcpCalls": 7.4,
+      "skillLoads": 0
+    },
+    {
+      "model": "mid models",
+      "provider": "all",
+      "arm": "hook",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 48,
+        "n": 60,
+        "value": 0.8,
+        "low": 0.6821819409122731,
+        "high": 0.8817149472671906
+      },
+      "tscPass": {
+        "successes": 45,
+        "n": 60,
+        "value": 0.75,
+        "low": 0.6276792981955739,
+        "high": 0.8422347752873125
+      },
+      "onsystemClean": {
+        "successes": 47,
+        "n": 60,
+        "value": 0.7833333333333333,
+        "low": 0.6637997232345094,
+        "high": 0.8687695600460952
+      },
+      "accepted": {
+        "successes": 44,
+        "n": 60,
+        "value": 0.7333333333333333,
+        "low": 0.6099128680007747,
+        "high": 0.8286736005832526
+      },
+      "onsystemErrors": {
+        "value": 0.03333333333333333,
+        "low": 0,
+        "high": 0.1
+      },
+      "cost": {
+        "value": 0.12422738416666662,
+        "low": 0.11707053288541666,
+        "high": 0.13219077881250002
+      },
+      "calls": 16.783333333333335,
+      "inputTokens": 385995.26666666666,
+      "outputTokens": 7064.516666666666,
+      "hookBlocks": 0.23333333333333334,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "mid models",
+      "provider": "all",
+      "arm": "all",
+      "runs": 60,
+      "scored": 60,
+      "created": {
+        "successes": 49,
+        "n": 60,
+        "value": 0.8166666666666667,
+        "low": 0.7008024615073325,
+        "high": 0.8944220315709903
+      },
+      "tscPass": {
+        "successes": 47,
+        "n": 60,
+        "value": 0.7833333333333333,
+        "low": 0.6637997232345094,
+        "high": 0.8687695600460952
+      },
+      "onsystemClean": {
+        "successes": 49,
+        "n": 60,
+        "value": 0.8166666666666667,
+        "low": 0.7008024615073325,
+        "high": 0.8944220315709903
+      },
+      "accepted": {
+        "successes": 47,
+        "n": 60,
+        "value": 0.7833333333333333,
+        "low": 0.6637997232345094,
+        "high": 0.8687695600460952
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.11612263166666673,
+        "low": 0.10919014514583336,
+        "high": 0.12307383137500003
+      },
+      "calls": 16.566666666666666,
+      "inputTokens": 358313.8,
+      "outputTokens": 5216.25,
+      "hookBlocks": 0.03333333333333333,
+      "mcpCalls": 7.933333333333334,
+      "skillLoads": 1
+    },
+    {
+      "model": "small models",
+      "provider": "all",
+      "arm": "none",
+      "runs": 180,
+      "scored": 180,
+      "created": {
+        "successes": 180,
+        "n": 180,
+        "value": 1,
+        "low": 0.979104501755633,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 175,
+        "n": 180,
+        "value": 0.9722222222222222,
+        "low": 0.9366319291712623,
+        "high": 0.9880778780423912
+      },
+      "onsystemClean": {
+        "successes": 119,
+        "n": 180,
+        "value": 0.6611111111111111,
+        "low": 0.5892403967812732,
+        "high": 0.7262488315622087
+      },
+      "accepted": {
+        "successes": 117,
+        "n": 180,
+        "value": 0.65,
+        "low": 0.5778472006196068,
+        "high": 0.715884149907083
+      },
+      "onsystemErrors": {
+        "value": 0.9222222222222223,
+        "low": 0.46111111111111114,
+        "high": 1.4555555555555555
+      },
+      "cost": {
+        "value": 0.022682720638888886,
+        "low": 0.01945236949722223,
+        "high": 0.026109873296527784
+      },
+      "calls": 11.572222222222223,
+      "inputTokens": 236291.18333333332,
+      "outputTokens": 4192.927777777778,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "small models",
+      "provider": "all",
+      "arm": "skill",
+      "runs": 180,
+      "scored": 180,
+      "created": {
+        "successes": 179,
+        "n": 180,
+        "value": 0.9944444444444445,
+        "low": 0.9692069289036124,
+        "high": 0.9990186339436248
+      },
+      "tscPass": {
+        "successes": 174,
+        "n": 180,
+        "value": 0.9666666666666667,
+        "low": 0.9291956592001352,
+        "high": 0.9846352091051221
+      },
+      "onsystemClean": {
+        "successes": 142,
+        "n": 180,
+        "value": 0.7888888888888889,
+        "low": 0.7235528129061191,
+        "high": 0.8421520103304689
+      },
+      "accepted": {
+        "successes": 138,
+        "n": 180,
+        "value": 0.7666666666666667,
+        "low": 0.6997021798119246,
+        "high": 0.8224868877910797
+      },
+      "onsystemErrors": {
+        "value": 0.5055555555555555,
+        "low": 0.21666666666666667,
+        "high": 0.8277777777777777
+      },
+      "cost": {
+        "value": 0.023332136833333322,
+        "low": 0.020016573824999998,
+        "high": 0.02694156907847222
+      },
+      "calls": 12.71111111111111,
+      "inputTokens": 250439.5,
+      "outputTokens": 4325.855555555556,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0.9666666666666667
+    },
+    {
+      "model": "small models",
+      "provider": "all",
+      "arm": "mcp",
+      "runs": 180,
+      "scored": 180,
+      "created": {
+        "successes": 178,
+        "n": 180,
+        "value": 0.9888888888888889,
+        "low": 0.9603989987573877,
+        "high": 0.9969476251814536
+      },
+      "tscPass": {
+        "successes": 172,
+        "n": 180,
+        "value": 0.9555555555555556,
+        "low": 0.9147630838247718,
+        "high": 0.9773099066636939
+      },
+      "onsystemClean": {
+        "successes": 177,
+        "n": 180,
+        "value": 0.9833333333333333,
+        "low": 0.9521517716067466,
+        "high": 0.9943159134236986
+      },
+      "accepted": {
+        "successes": 171,
+        "n": 180,
+        "value": 0.95,
+        "low": 0.9077191899336299,
+        "high": 0.9734748616464397
+      },
+      "onsystemErrors": {
+        "value": 0.016666666666666666,
+        "low": 0,
+        "high": 0.05
+      },
+      "cost": {
+        "value": 0.024213671944444445,
+        "low": 0.020381148727083336,
+        "high": 0.028124865150694445
+      },
+      "calls": 13.194444444444445,
+      "inputTokens": 294237.68333333335,
+      "outputTokens": 4131.65,
+      "hookBlocks": 0,
+      "mcpCalls": 7.727777777777778,
+      "skillLoads": 0
+    },
+    {
+      "model": "small models",
+      "provider": "all",
+      "arm": "hook",
+      "runs": 180,
+      "scored": 180,
+      "created": {
+        "successes": 180,
+        "n": 180,
+        "value": 1,
+        "low": 0.979104501755633,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 175,
+        "n": 180,
+        "value": 0.9722222222222222,
+        "low": 0.9366319291712623,
+        "high": 0.9880778780423912
+      },
+      "onsystemClean": {
+        "successes": 176,
+        "n": 180,
+        "value": 0.9777777777777777,
+        "low": 0.9442636694888034,
+        "high": 0.991325076633246
+      },
+      "accepted": {
+        "successes": 172,
+        "n": 180,
+        "value": 0.9555555555555556,
+        "low": 0.9147630838247718,
+        "high": 0.9773099066636939
+      },
+      "onsystemErrors": {
+        "value": 0.05,
+        "low": 0,
+        "high": 0.11666666666666667
+      },
+      "cost": {
+        "value": 0.026316725083333343,
+        "low": 0.022994267400000004,
+        "high": 0.02995138137986111
+      },
+      "calls": 13.066666666666666,
+      "inputTokens": 292946.4111111111,
+      "outputTokens": 4773.15,
+      "hookBlocks": 0.38333333333333336,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "small models",
+      "provider": "all",
+      "arm": "all",
+      "runs": 180,
+      "scored": 180,
+      "created": {
+        "successes": 180,
+        "n": 180,
+        "value": 1,
+        "low": 0.979104501755633,
+        "high": 1
+      },
+      "tscPass": {
+        "successes": 174,
+        "n": 180,
+        "value": 0.9666666666666667,
+        "low": 0.9291956592001352,
+        "high": 0.9846352091051221
+      },
+      "onsystemClean": {
+        "successes": 180,
+        "n": 180,
+        "value": 1,
+        "low": 0.979104501755633,
+        "high": 1
+      },
+      "accepted": {
+        "successes": 174,
+        "n": 180,
+        "value": 0.9666666666666667,
+        "low": 0.9291956592001352,
+        "high": 0.9846352091051221
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.02177932936111112,
+        "low": 0.01818160177152778,
+        "high": 0.025668842416666667
+      },
+      "calls": 12.394444444444444,
+      "inputTokens": 260576.21666666667,
+      "outputTokens": 3792.411111111111,
+      "hookBlocks": 0.13333333333333333,
+      "mcpCalls": 7.3277777777777775,
+      "skillLoads": 0.6944444444444444
+    },
+    {
+      "model": "all models",
+      "provider": "all",
+      "arm": "none",
+      "runs": 240,
+      "scored": 240,
+      "created": {
+        "successes": 227,
+        "n": 240,
+        "value": 0.9458333333333333,
+        "low": 0.9095446088323931,
+        "high": 0.9680748123349356
+      },
+      "tscPass": {
+        "successes": 222,
+        "n": 240,
+        "value": 0.925,
+        "low": 0.8845739330319837,
+        "high": 0.9520352348097691
+      },
+      "onsystemClean": {
+        "successes": 153,
+        "n": 240,
+        "value": 0.6375,
+        "low": 0.5749573110693581,
+        "high": 0.6957103608794443
+      },
+      "accepted": {
+        "successes": 151,
+        "n": 240,
+        "value": 0.6291666666666667,
+        "low": 0.5664705790347077,
+        "high": 0.6877929915838642
+      },
+      "onsystemErrors": {
+        "value": 0.8458333333333333,
+        "low": 0.4,
+        "high": 1.3833333333333333
+      },
+      "cost": {
+        "value": 0.04637846672916667,
+        "low": 0.0432067345453125,
+        "high": 0.049666483422916664
+      },
+      "calls": 12.683333333333334,
+      "inputTokens": 264259.4875,
+      "outputTokens": 4801.954166666666,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "all models",
+      "provider": "all",
+      "arm": "skill",
+      "runs": 240,
+      "scored": 240,
+      "created": {
+        "successes": 223,
+        "n": 240,
+        "value": 0.9291666666666667,
+        "low": 0.8895031553827981,
+        "high": 0.9553080631240698
+      },
+      "tscPass": {
+        "successes": 218,
+        "n": 240,
+        "value": 0.9083333333333333,
+        "low": 0.8651157815775392,
+        "high": 0.9386851836037526
+      },
+      "onsystemClean": {
+        "successes": 183,
+        "n": 240,
+        "value": 0.7625,
+        "low": 0.7047918598779902,
+        "high": 0.8119373320242688
+      },
+      "accepted": {
+        "successes": 179,
+        "n": 240,
+        "value": 0.7458333333333333,
+        "low": 0.6871754047141027,
+        "high": 0.7967455845276955
+      },
+      "onsystemErrors": {
+        "value": 0.425,
+        "low": 0.16666666666666666,
+        "high": 0.7208333333333333
+      },
+      "cost": {
+        "value": 0.04860643002083333,
+        "low": 0.045508697761979154,
+        "high": 0.05177222895885417
+      },
+      "calls": 13.775,
+      "inputTokens": 282872.5958333333,
+      "outputTokens": 4804.4375,
+      "hookBlocks": 0,
+      "mcpCalls": 0,
+      "skillLoads": 0.975
+    },
+    {
+      "model": "all models",
+      "provider": "all",
+      "arm": "mcp",
+      "runs": 240,
+      "scored": 240,
+      "created": {
+        "successes": 225,
+        "n": 240,
+        "value": 0.9375,
+        "low": 0.8994534368868804,
+        "high": 0.961761882950218
+      },
+      "tscPass": {
+        "successes": 218,
+        "n": 240,
+        "value": 0.9083333333333333,
+        "low": 0.8651157815775392,
+        "high": 0.9386851836037526
+      },
+      "onsystemClean": {
+        "successes": 224,
+        "n": 240,
+        "value": 0.9333333333333333,
+        "low": 0.8944621695649901,
+        "high": 0.958551099606993
+      },
+      "accepted": {
+        "successes": 217,
+        "n": 240,
+        "value": 0.9041666666666667,
+        "low": 0.8603080235756821,
+        "high": 0.9352908909404944
+      },
+      "onsystemErrors": {
+        "value": 0.0125,
+        "low": 0,
+        "high": 0.0375
+      },
+      "cost": {
+        "value": 0.046709473229166666,
+        "low": 0.0426127865578125,
+        "high": 0.050752977904687496
+      },
+      "calls": 13.975,
+      "inputTokens": 307586.12083333335,
+      "outputTokens": 4348.175,
+      "hookBlocks": 0,
+      "mcpCalls": 7.645833333333333,
+      "skillLoads": 0
+    },
+    {
+      "model": "all models",
+      "provider": "all",
+      "arm": "hook",
+      "runs": 240,
+      "scored": 240,
+      "created": {
+        "successes": 228,
+        "n": 240,
+        "value": 0.95,
+        "low": 0.9146517749641138,
+        "high": 0.9711696968683302
+      },
+      "tscPass": {
+        "successes": 220,
+        "n": 240,
+        "value": 0.9166666666666666,
+        "low": 0.8747965520896444,
+        "high": 0.9454085144218778
+      },
+      "onsystemClean": {
+        "successes": 223,
+        "n": 240,
+        "value": 0.9291666666666667,
+        "low": 0.8895031553827981,
+        "high": 0.9553080631240698
+      },
+      "accepted": {
+        "successes": 216,
+        "n": 240,
+        "value": 0.9,
+        "low": 0.8555203940378554,
+        "high": 0.9318764698132059
+      },
+      "onsystemErrors": {
+        "value": 0.04583333333333333,
+        "low": 0.008333333333333333,
+        "high": 0.09583333333333334
+      },
+      "cost": {
+        "value": 0.0507943898541667,
+        "low": 0.04790614253229166,
+        "high": 0.053832952276041665
+      },
+      "calls": 13.995833333333334,
+      "inputTokens": 316208.625,
+      "outputTokens": 5345.991666666667,
+      "hookBlocks": 0.3458333333333333,
+      "mcpCalls": 0,
+      "skillLoads": 0
+    },
+    {
+      "model": "all models",
+      "provider": "all",
+      "arm": "all",
+      "runs": 240,
+      "scored": 240,
+      "created": {
+        "successes": 229,
+        "n": 240,
+        "value": 0.9541666666666667,
+        "low": 0.9198060049805705,
+        "high": 0.9742175175169889
+      },
+      "tscPass": {
+        "successes": 221,
+        "n": 240,
+        "value": 0.9208333333333333,
+        "low": 0.8796723588622837,
+        "high": 0.9487347583143537
+      },
+      "onsystemClean": {
+        "successes": 229,
+        "n": 240,
+        "value": 0.9541666666666667,
+        "low": 0.9198060049805705,
+        "high": 0.9742175175169889
+      },
+      "accepted": {
+        "successes": 221,
+        "n": 240,
+        "value": 0.9208333333333333,
+        "low": 0.8796723588622837,
+        "high": 0.9487347583143537
+      },
+      "onsystemErrors": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "cost": {
+        "value": 0.04536515493750002,
+        "low": 0.041590317411979175,
+        "high": 0.04914457683958333
+      },
+      "calls": 13.4375,
+      "inputTokens": 285010.6125,
+      "outputTokens": 4148.370833333333,
+      "hookBlocks": 0.10833333333333334,
+      "mcpCalls": 7.479166666666667,
+      "skillLoads": 0.7708333333333334
+    }
+  ],
+  "deltas": [
+    {
+      "model": "claude-haiku-5-5",
+      "arm": "skill",
+      "pairs": 60,
+      "tscPass": {
+        "value": 0.03333333333333333,
+        "low": 0,
+        "high": 0.1
+      },
+      "onsystemClean": {
+        "value": 0.18333333333333332,
+        "low": 0.08333333333333333,
+        "high": 0.3
+      },
+      "accepted": {
+        "value": 0.2,
+        "low": 0.08333333333333333,
+        "high": 0.3333333333333333
+      },
+      "onsystemErrors": {
+        "value": -0.45,
+        "low": -0.8166666666666667,
+        "high": -0.15
+      }
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "arm": "mcp",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.03333333333333333,
+        "low": -0.08333333333333333,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.2833333333333333,
+        "low": 0.13333333333333333,
+        "high": 0.45
+      },
+      "accepted": {
+        "value": 0.23333333333333334,
+        "low": 0.1,
+        "high": 0.38333333333333336
+      },
+      "onsystemErrors": {
+        "value": -0.5333333333333333,
+        "low": -0.95,
+        "high": -0.18333333333333332
+      }
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "arm": "hook",
+      "pairs": 60,
+      "tscPass": {
+        "value": 0.016666666666666666,
+        "low": 0,
+        "high": 0.05
+      },
+      "onsystemClean": {
+        "value": 0.25,
+        "low": 0.11666666666666667,
+        "high": 0.4
+      },
+      "accepted": {
+        "value": 0.25,
+        "low": 0.11666666666666667,
+        "high": 0.4
+      },
+      "onsystemErrors": {
+        "value": -0.4666666666666667,
+        "low": -0.8,
+        "high": -0.18333333333333332
+      }
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "arm": "all",
+      "pairs": 60,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.3,
+        "low": 0.13333333333333333,
+        "high": 0.48333333333333334
+      },
+      "accepted": {
+        "value": 0.2833333333333333,
+        "low": 0.11666666666666667,
+        "high": 0.4666666666666667
+      },
+      "onsystemErrors": {
+        "value": -0.5833333333333334,
+        "low": -1.0666666666666667,
+        "high": -0.2
+      }
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "arm": "skill",
+      "pairs": 20,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.05,
+        "low": 0,
+        "high": 0.15
+      },
+      "accepted": {
+        "value": 0.05,
+        "low": 0,
+        "high": 0.15
+      },
+      "onsystemErrors": {
+        "value": -0.25,
+        "low": -0.65,
+        "high": 0
+      }
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "arm": "mcp",
+      "pairs": 20,
+      "tscPass": {
+        "value": -0.05,
+        "low": -0.15,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.15,
+        "low": 0,
+        "high": 0.3
+      },
+      "accepted": {
+        "value": 0.1,
+        "low": -0.1,
+        "high": 0.3
+      },
+      "onsystemErrors": {
+        "value": -0.4,
+        "low": -0.9,
+        "high": 0
+      }
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "arm": "hook",
+      "pairs": 20,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.15,
+        "low": 0,
+        "high": 0.3
+      },
+      "accepted": {
+        "value": 0.15,
+        "low": 0,
+        "high": 0.3
+      },
+      "onsystemErrors": {
+        "value": -0.4,
+        "low": -0.9,
+        "high": 0
+      }
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "arm": "all",
+      "pairs": 20,
+      "tscPass": {
+        "value": -0.05,
+        "low": -0.15,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.15,
+        "low": 0,
+        "high": 0.3
+      },
+      "accepted": {
+        "value": 0.1,
+        "low": -0.1,
+        "high": 0.3
+      },
+      "onsystemErrors": {
+        "value": -0.4,
+        "low": -0.9,
+        "high": 0
+      }
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "arm": "skill",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.08333333333333333,
+        "high": 0.05
+      },
+      "onsystemClean": {
+        "value": 0.08333333333333333,
+        "low": 0.016666666666666666,
+        "high": 0.16666666666666666
+      },
+      "accepted": {
+        "value": 0.06666666666666667,
+        "low": 0,
+        "high": 0.15
+      },
+      "onsystemErrors": {
+        "value": -0.4166666666666667,
+        "low": -1.0666666666666667,
+        "high": 0.016666666666666666
+      }
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "arm": "mcp",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.11666666666666667,
+        "high": 0.06666666666666667
+      },
+      "onsystemClean": {
+        "value": 0.36666666666666664,
+        "low": 0.2,
+        "high": 0.55
+      },
+      "accepted": {
+        "value": 0.35,
+        "low": 0.18333333333333332,
+        "high": 0.5333333333333333
+      },
+      "onsystemErrors": {
+        "value": -1.4833333333333334,
+        "low": -2.3833333333333333,
+        "high": -0.7
+      }
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "arm": "hook",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.1,
+        "high": 0.06666666666666667
+      },
+      "onsystemClean": {
+        "value": 0.38333333333333336,
+        "low": 0.2,
+        "high": 0.5666666666666667
+      },
+      "accepted": {
+        "value": 0.35,
+        "low": 0.18333333333333332,
+        "high": 0.5170833333333273
+      },
+      "onsystemErrors": {
+        "value": -1.45,
+        "low": -2.3666666666666667,
+        "high": -0.6666666666666666
+      }
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "arm": "all",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.13333333333333333,
+        "high": 0.08333333333333333
+      },
+      "onsystemClean": {
+        "value": 0.4,
+        "low": 0.21666666666666667,
+        "high": 0.5833333333333334
+      },
+      "accepted": {
+        "value": 0.35,
+        "low": 0.15,
+        "high": 0.55
+      },
+      "onsystemErrors": {
+        "value": -1.4833333333333334,
+        "low": -2.3833333333333333,
+        "high": -0.7
+      }
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "arm": "skill",
+      "pairs": 20,
+      "tscPass": {
+        "value": -0.15,
+        "low": -0.35,
+        "high": 0.05
+      },
+      "onsystemClean": {
+        "value": 0,
+        "low": -0.2,
+        "high": 0.2
+      },
+      "accepted": {
+        "value": 0,
+        "low": -0.2,
+        "high": 0.2
+      },
+      "onsystemErrors": {
+        "value": -0.5,
+        "low": -1.4,
+        "high": 0.15
+      }
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "arm": "mcp",
+      "pairs": 20,
+      "tscPass": {
+        "value": 0,
+        "low": -0.25,
+        "high": 0.25
+      },
+      "onsystemClean": {
+        "value": 0.2,
+        "low": -0.05,
+        "high": 0.45
+      },
+      "accepted": {
+        "value": 0.2,
+        "low": -0.05,
+        "high": 0.45
+      },
+      "onsystemErrors": {
+        "value": -0.9,
+        "low": -1.9,
+        "high": -0.05
+      }
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "arm": "hook",
+      "pairs": 20,
+      "tscPass": {
+        "value": -0.05,
+        "low": -0.25,
+        "high": 0.15
+      },
+      "onsystemClean": {
+        "value": 0.2,
+        "low": 0,
+        "high": 0.45
+      },
+      "accepted": {
+        "value": 0.1,
+        "low": -0.15,
+        "high": 0.35
+      },
+      "onsystemErrors": {
+        "value": -0.8,
+        "low": -1.85,
+        "high": 0.05
+      }
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "arm": "all",
+      "pairs": 20,
+      "tscPass": {
+        "value": 0.05,
+        "low": -0.15,
+        "high": 0.25
+      },
+      "onsystemClean": {
+        "value": 0.3,
+        "low": 0.05,
+        "high": 0.55
+      },
+      "accepted": {
+        "value": 0.25,
+        "low": 0,
+        "high": 0.5
+      },
+      "onsystemErrors": {
+        "value": -0.9,
+        "low": -1.9,
+        "high": -0.05
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "arm": "skill",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.03333333333333333,
+        "low": -0.1,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.11666666666666667,
+        "low": -0.06666666666666667,
+        "high": 0.3
+      },
+      "accepted": {
+        "value": 0.08333333333333333,
+        "low": -0.11666666666666667,
+        "high": 0.2833333333333333
+      },
+      "onsystemErrors": {
+        "value": -0.38333333333333336,
+        "low": -0.85,
+        "high": 0
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "arm": "mcp",
+      "pairs": 60,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.31666666666666665,
+        "low": 0.13333333333333333,
+        "high": 0.5166666666666667
+      },
+      "accepted": {
+        "value": 0.31666666666666665,
+        "low": 0.13333333333333333,
+        "high": 0.5166666666666667
+      },
+      "onsystemErrors": {
+        "value": -0.7,
+        "low": -1.3166666666666667,
+        "high": -0.2
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "arm": "hook",
+      "pairs": 60,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.31666666666666665,
+        "low": 0.13333333333333333,
+        "high": 0.5166666666666667
+      },
+      "accepted": {
+        "value": 0.31666666666666665,
+        "low": 0.13333333333333333,
+        "high": 0.5166666666666667
+      },
+      "onsystemErrors": {
+        "value": -0.7,
+        "low": -1.3166666666666667,
+        "high": -0.2
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "arm": "all",
+      "pairs": 60,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.31666666666666665,
+        "low": 0.13333333333333333,
+        "high": 0.5166666666666667
+      },
+      "accepted": {
+        "value": 0.31666666666666665,
+        "low": 0.13333333333333333,
+        "high": 0.5166666666666667
+      },
+      "onsystemErrors": {
+        "value": -0.7,
+        "low": -1.3166666666666667,
+        "high": -0.2
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "arm": "skill",
+      "pairs": 20,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.3,
+        "low": 0.1,
+        "high": 0.5
+      },
+      "accepted": {
+        "value": 0.3,
+        "low": 0.1,
+        "high": 0.5
+      },
+      "onsystemErrors": {
+        "value": -0.55,
+        "low": -1.15,
+        "high": -0.15
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "arm": "mcp",
+      "pairs": 20,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.3,
+        "low": 0.1,
+        "high": 0.5
+      },
+      "accepted": {
+        "value": 0.3,
+        "low": 0.1,
+        "high": 0.5
+      },
+      "onsystemErrors": {
+        "value": -0.55,
+        "low": -1.15,
+        "high": -0.15
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "arm": "hook",
+      "pairs": 20,
+      "tscPass": {
+        "value": -0.05,
+        "low": -0.15,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.3,
+        "low": 0.1,
+        "high": 0.5
+      },
+      "accepted": {
+        "value": 0.25,
+        "low": 0.1,
+        "high": 0.45
+      },
+      "onsystemErrors": {
+        "value": -0.55,
+        "low": -1.15,
+        "high": -0.15
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "arm": "all",
+      "pairs": 20,
+      "tscPass": {
+        "value": 0,
+        "low": 0,
+        "high": 0
+      },
+      "onsystemClean": {
+        "value": 0.3,
+        "low": 0.1,
+        "high": 0.5
+      },
+      "accepted": {
+        "value": 0.3,
+        "low": 0.1,
+        "high": 0.5
+      },
+      "onsystemErrors": {
+        "value": -0.55,
+        "low": -1.15,
+        "high": -0.15
+      }
+    },
+    {
+      "model": "mid models",
+      "arm": "skill",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.05,
+        "low": -0.11666666666666667,
+        "high": 0.016666666666666666
+      },
+      "onsystemClean": {
+        "value": 0.11666666666666667,
+        "low": 0,
+        "high": 0.23333333333333334
+      },
+      "accepted": {
+        "value": 0.11666666666666667,
+        "low": 0,
+        "high": 0.23333333333333334
+      },
+      "onsystemErrors": {
+        "value": -0.43333333333333335,
+        "low": -0.8166666666666667,
+        "high": -0.11666666666666667
+      }
+    },
+    {
+      "model": "mid models",
+      "arm": "mcp",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.1,
+        "high": 0.06666666666666667
+      },
+      "onsystemClean": {
+        "value": 0.21666666666666667,
+        "low": 0.06666666666666667,
+        "high": 0.38333333333333336
+      },
+      "accepted": {
+        "value": 0.2,
+        "low": 0.03333333333333333,
+        "high": 0.36666666666666664
+      },
+      "onsystemErrors": {
+        "value": -0.6166666666666667,
+        "low": -1.25,
+        "high": -0.11666666666666667
+      }
+    },
+    {
+      "model": "mid models",
+      "arm": "hook",
+      "pairs": 60,
+      "tscPass": {
+        "value": -0.03333333333333333,
+        "low": -0.1,
+        "high": 0.03333333333333333
+      },
+      "onsystemClean": {
+        "value": 0.21666666666666667,
+        "low": 0.06666666666666667,
+        "high": 0.36666666666666664
+      },
+      "accepted": {
+        "value": 0.16666666666666666,
+        "low": 0.016666666666666666,
+        "high": 0.31666666666666665
+      },
+      "onsystemErrors": {
+        "value": -0.5833333333333334,
+        "low": -1.2333333333333334,
+        "high": -0.1
+      }
+    },
+    {
+      "model": "mid models",
+      "arm": "all",
+      "pairs": 60,
+      "tscPass": {
+        "value": 0,
+        "low": -0.08333333333333333,
+        "high": 0.08333333333333333
+      },
+      "onsystemClean": {
+        "value": 0.25,
+        "low": 0.1,
+        "high": 0.4166666666666667
+      },
+      "accepted": {
+        "value": 0.21666666666666667,
+        "low": 0.06666666666666667,
+        "high": 0.38333333333333336
+      },
+      "onsystemErrors": {
+        "value": -0.6166666666666667,
+        "low": -1.25,
+        "high": -0.11666666666666667
+      }
+    },
+    {
+      "model": "small models",
+      "arm": "skill",
+      "pairs": 180,
+      "tscPass": {
+        "value": -0.005555555555555556,
+        "low": -0.044444444444444446,
+        "high": 0.03333333333333333
+      },
+      "onsystemClean": {
+        "value": 0.12777777777777777,
+        "low": 0.03333333333333333,
+        "high": 0.2222222222222222
+      },
+      "accepted": {
+        "value": 0.11666666666666667,
+        "low": 0.016666666666666666,
+        "high": 0.2222222222222222
+      },
+      "onsystemErrors": {
+        "value": -0.4166666666666667,
+        "low": -0.6890277777777766,
+        "high": -0.17777777777777778
+      }
+    },
+    {
+      "model": "small models",
+      "arm": "mcp",
+      "pairs": 180,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.05555555555555555,
+        "high": 0.016666666666666666
+      },
+      "onsystemClean": {
+        "value": 0.32222222222222224,
+        "low": 0.17222222222222222,
+        "high": 0.48333333333333334
+      },
+      "accepted": {
+        "value": 0.3,
+        "low": 0.15555555555555556,
+        "high": 0.45
+      },
+      "onsystemErrors": {
+        "value": -0.9055555555555556,
+        "low": -1.4222222222222223,
+        "high": -0.46111111111111114
+      }
+    },
+    {
+      "model": "small models",
+      "arm": "hook",
+      "pairs": 180,
+      "tscPass": {
+        "value": 0,
+        "low": -0.03333333333333333,
+        "high": 0.027777777777777776
+      },
+      "onsystemClean": {
+        "value": 0.31666666666666665,
+        "low": 0.17222222222222222,
+        "high": 0.4722222222222222
+      },
+      "accepted": {
+        "value": 0.3055555555555556,
+        "low": 0.16666666666666666,
+        "high": 0.46111111111111114
+      },
+      "onsystemErrors": {
+        "value": -0.8722222222222222,
+        "low": -1.35,
+        "high": -0.45
+      }
+    },
+    {
+      "model": "small models",
+      "arm": "all",
+      "pairs": 180,
+      "tscPass": {
+        "value": -0.005555555555555556,
+        "low": -0.044444444444444446,
+        "high": 0.027777777777777776
+      },
+      "onsystemClean": {
+        "value": 0.3388888888888889,
+        "low": 0.18333333333333332,
+        "high": 0.5111111111111111
+      },
+      "accepted": {
+        "value": 0.31666666666666665,
+        "low": 0.16111111111111112,
+        "high": 0.48333333333333334
+      },
+      "onsystemErrors": {
+        "value": -0.9222222222222223,
+        "low": -1.4555555555555555,
+        "high": -0.46111111111111114
+      }
+    },
+    {
+      "model": "all models",
+      "arm": "skill",
+      "pairs": 240,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.04583333333333333,
+        "high": 0.0125
+      },
+      "onsystemClean": {
+        "value": 0.125,
+        "low": 0.05416666666666667,
+        "high": 0.2
+      },
+      "accepted": {
+        "value": 0.11666666666666667,
+        "low": 0.0375,
+        "high": 0.19583333333333333
+      },
+      "onsystemErrors": {
+        "value": -0.42083333333333334,
+        "low": -0.6916666666666667,
+        "high": -0.19583333333333333
+      }
+    },
+    {
+      "model": "all models",
+      "arm": "mcp",
+      "pairs": 240,
+      "tscPass": {
+        "value": -0.016666666666666666,
+        "low": -0.05416666666666667,
+        "high": 0.020833333333333332
+      },
+      "onsystemClean": {
+        "value": 0.29583333333333334,
+        "low": 0.15416666666666667,
+        "high": 0.45
+      },
+      "accepted": {
+        "value": 0.275,
+        "low": 0.14166666666666666,
+        "high": 0.4166666666666667
+      },
+      "onsystemErrors": {
+        "value": -0.8333333333333334,
+        "low": -1.3501041666666658,
+        "high": -0.3958333333333333
+      }
+    },
+    {
+      "model": "all models",
+      "arm": "hook",
+      "pairs": 240,
+      "tscPass": {
+        "value": -0.008333333333333333,
+        "low": -0.0375,
+        "high": 0.020833333333333332
+      },
+      "onsystemClean": {
+        "value": 0.2916666666666667,
+        "low": 0.15833333333333333,
+        "high": 0.4375
+      },
+      "accepted": {
+        "value": 0.2708333333333333,
+        "low": 0.14166666666666666,
+        "high": 0.4125
+      },
+      "onsystemErrors": {
+        "value": -0.8,
+        "low": -1.2916666666666667,
+        "high": -0.38333333333333336
+      }
+    },
+    {
+      "model": "all models",
+      "arm": "all",
+      "pairs": 240,
+      "tscPass": {
+        "value": -0.004166666666666667,
+        "low": -0.041666666666666664,
+        "high": 0.029166666666666667
+      },
+      "onsystemClean": {
+        "value": 0.31666666666666665,
+        "low": 0.17083333333333334,
+        "high": 0.475
+      },
+      "accepted": {
+        "value": 0.2916666666666667,
+        "low": 0.15416666666666667,
+        "high": 0.44166666666666665
+      },
+      "onsystemErrors": {
+        "value": -0.8458333333333333,
+        "low": -1.3833333333333333,
+        "high": -0.4
+      }
+    }
+  ]
+}

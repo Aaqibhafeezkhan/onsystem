@@ -1,0 +1,75 @@
+{
+  "id": "claude-haiku-5-5--skill--dub--delete-workspace-modal--r3",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "dub",
+  "task": "delete-workspace-modal",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/workspaces/delete-workspace-modal.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/workspaces/delete-workspace-modal.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 53,
+      "column": 12,
+      "endLine": 53,
+      "endColumn": 17,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            1594,
+            1599
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            1909,
+            1914
+          ],
+          "text": "Label"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/workspaces/delete-workspace-modal.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.00691639,
+  "calls": 10,
+  "toolCalls": 16,
+  "toolErrors": 3,
+  "inputTokens": 154017,
+  "cacheReadTokens": 125319,
+  "cacheWriteTokens": 28676,
+  "outputTokens": 4153,
+  "seconds": 36,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:16:38.654Z"
+}
