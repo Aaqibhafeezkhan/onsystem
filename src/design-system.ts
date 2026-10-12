@@ -7,11 +7,12 @@ import path from 'node:path';
 import { glob } from 'tinyglobby';
 import type ts from 'typescript';
 
-import { loadConfig, rulesFor, type ResolvedConfig } from './config.js';
+import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } from './config.js';
 import { moduleResolver } from './detect.js';
 import { extractComponents } from './extract/components.js';
 import { attachDocs, parseDoc, type ParsedDoc } from './extract/docs.js';
 import { isProjectFile, projectFiles, readProjectConfig } from './extract/program.js';
+import { loadLibraries } from './libraries/load.js';
 import { checkSource, LintTarget } from './lint/index.js';
 import { ModuleResolver } from './modules.js';
 import {
@@ -21,7 +22,12 @@ import {
   type SearchHit,
 } from './search/index.js';
 import { loadTokens, type TokenIndex } from './tokens/index.js';
-import { applyTailwindColors, readTailwindColors } from './tokens/tailwind-config.js';
+import {
+  applyTailwindColors,
+  applyTailwindRadii,
+  readTailwindColors,
+  readTailwindRadii,
+} from './tokens/tailwind-config.js';
 import type {
   CheckResult,
   ComponentInfo,
@@ -39,13 +45,25 @@ import { VERSION } from './version.js';
 export class DesignSystem {
   readonly lint: LintTarget;
   private readonly searchIndex: Bm25Index<ComponentInfo>;
+  /**
+   * The components the tools offer: all of them, except a library's (MUI's) where the project
+   * has its own of that name, a wrapper the team means to be used. The rules still check code
+   * that imports the library's directly against the library's.
+   */
+  private readonly offered: ComponentInfo[];
 
   constructor(
     readonly model: DesignSystemModel,
     readonly config: ResolvedConfig,
   ) {
     this.lint = new LintTarget(model, config, new ModuleResolver(config));
-    this.searchIndex = buildSearchIndex(model.components);
+    const own = new Set(
+      model.components.filter((c) => !c.library).flatMap((c) => [c.name, ...c.aliases]),
+    );
+    this.offered = model.components.filter(
+      (c) => !c.library || !(own.has(c.name) || (c.parent !== undefined && own.has(c.parent))),
+    );
+    this.searchIndex = buildSearchIndex(this.offered);
   }
 
   get root(): string {
@@ -53,7 +71,7 @@ export class DesignSystem {
   }
 
   get components(): ComponentInfo[] {
-    return this.model.components;
+    return this.offered;
   }
 
   get tokens(): Token[] {
@@ -66,7 +84,7 @@ export class DesignSystem {
 
   /** Top-level components, i.e. not parts of another component. */
   roots(): ComponentInfo[] {
-    return this.model.components.filter((c) => !c.parent);
+    return this.offered.filter((c) => !c.parent);
   }
 
   /** Looks a component up by name, alias, `Card.Header`/`CardHeader` or case-insensitively. */
@@ -75,7 +93,7 @@ export class DesignSystem {
     if (exact) return exact;
     const key = (n: string) => n.replace(/\./g, '').toLowerCase();
     const wanted = key(name);
-    return this.model.components.find(
+    return this.offered.find(
       (c) => key(c.name) === wanted || c.aliases.some((a) => key(a) === wanted),
     );
   }
@@ -128,6 +146,17 @@ export class DesignSystem {
       if (token) found.set(token.name, token);
     }
     return [...found.values()];
+  }
+
+  /**
+   * Whether `check --require-design-system` (and the GitHub Action, where it is on by default)
+   * finds a design system to check against: components and color tokens, or components from a
+   * published library (MUI). A library is the design system whatever its theme: when the theme's
+   * colors cannot be read (a palette from Sass variables), the check still runs and `notice()`
+   * says that no-hardcoded-color did not.
+   */
+  hasDesignSystem(): boolean {
+    return !this.notice() || this.model.components.some((c) => c.library !== undefined);
   }
 
   /**
@@ -238,13 +267,18 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
   const docs = await find(config, config.docs);
   const tokens: ResolvedFiles['tokens'] = [];
   const seen = new Set<string>();
-  for (const source of config.tokens) {
-    for (const file of await find(config, [source.path])) {
-      if (seen.has(file)) continue;
-      seen.add(file);
-      tokens.push({ file, prefix: source.prefix });
+  const add = async (sources: TokenSourceConfig[]) => {
+    for (const source of sources) {
+      for (const file of await find(config, [source.path])) {
+        if (seen.has(file)) continue;
+        seen.add(file);
+        tokens.push({ file, prefix: source.prefix });
+      }
     }
-  }
+  };
+  await add(config.tokens.filter((t) => !t.fallback));
+  // A DESIGN.md stands in only when no stylesheet or DTCG file was found.
+  if (!tokens.length) await add(config.tokens.filter((t) => t.fallback));
   return { components, tokens, docs };
 }
 
@@ -387,26 +421,40 @@ export async function buildModel(
   warnings.push(...attachDocs(extracted.components, docs));
   const tokens = await loadTokens(config.root, files.tokens);
   warnings.push(...tokens.warnings);
+  // Published libraries the project uses (MUI), from their type declarations, after the
+  // project's own components, and the tokens of the theme it gives them.
+  const libraries = await loadLibraries(config);
+  warnings.push(...libraries.warnings);
+  tokens.tokens.push(...libraries.tokens);
   // Tailwind v3 maps color classes in its config rather than in `@theme`.
   const tailwind = config.tailwindConfig
     ? readTailwindColors(config.tailwindConfig, moduleResolver(config.root))
     : undefined;
   if (tailwind) applyTailwindColors(tokens.tokens, tailwind.colors);
+  // Same for radius: v3 borderRadius entries (config, then presets) name the scale.
+  let radiiFiles: string[] = [];
+  if (config.tailwindConfig) {
+    const radii = readTailwindRadii(config.tailwindConfig, moduleResolver(config.root));
+    applyTailwindRadii(tokens.tokens, radii.radii, config.tailwindConfig);
+    radiiFiles = radii.files;
+  }
 
-  if (!files.components.length) {
+  if (!files.components.length && !libraries.components.length) {
     warnings.push(
       `No component files matched ${config.components.join(', ')} under ${config.root}`,
     );
   }
-  if (!files.tokens.length) warnings.push('No token files found; token rules are disabled.');
+  if (!files.tokens.length && !libraries.tokens.length) {
+    warnings.push('No token files found; token rules are disabled.');
+  }
 
   const model: DesignSystemModel = {
     version: 1,
     root: config.root,
-    components: extracted.components,
+    components: [...extracted.components, ...libraries.components],
     tokens: tokens.tokens,
-    propSets: extracted.propSets,
-    exports: extracted.exports,
+    propSets: { ...extracted.propSets, ...libraries.propSets },
+    exports: unique([...extracted.exports, ...libraries.exports]).sort(),
     warnings,
     sources: files.components.map((file) => relativePath(config.root, file)),
     stats: {
@@ -420,7 +468,12 @@ export async function buildModel(
     },
   };
 
-  const dependencies = unique([...extracted.dependencies, ...(tailwind?.files ?? [])]);
+  const dependencies = unique([
+    ...extracted.dependencies,
+    ...(tailwind?.files ?? []),
+    ...radiiFiles,
+    ...libraries.dependencies,
+  ]);
   const key = await cacheKey(config, files, dependencies, stats);
   if (useCache) {
     try {

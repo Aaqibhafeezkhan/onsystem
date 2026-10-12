@@ -5,6 +5,7 @@ import ts from 'typescript';
 
 import { propertyName } from '../extract/cva.js';
 import type { Token } from '../types.js';
+import { evaluateLength } from './units.js';
 import { usageFor } from './usage.js';
 
 /** Resolves an import specifier from a file to a project file, or undefined (installed packages). */
@@ -86,6 +87,128 @@ function collect(
     const variable = /var\(\s*(--[\w-]+)/.exec(value.text)?.[1];
     const name = nested.filter((k) => k !== 'DEFAULT').join('-');
     if (variable && name && !colors.has(variable)) colors.set(variable, name);
+  }
+}
+
+export interface TailwindRadii {
+  /** borderRadius key → raw value: `sm` → `calc(var(--radius) - 4px)`. */
+  radii: Map<string, string>;
+  /** The files read: the config and the project modules it imports. */
+  files: string[];
+}
+
+/**
+ * Reads `borderRadius` entries from a Tailwind v3 config without running it:
+ * every `borderRadius` object in the file, then in the project modules it
+ * imports, such as a shared preset. The config's own entries win.
+ */
+export function readTailwindRadii(file: string, resolve: ModuleResolver): TailwindRadii {
+  const radii = new Map<string, string>();
+  const files: string[] = [];
+  const queue = [file];
+  while (queue.length && files.length < MAX_FILES) {
+    const current = queue.shift() ?? '';
+    if (files.includes(current)) continue;
+    let text: string;
+    try {
+      text = fs.readFileSync(current, 'utf8');
+    } catch {
+      continue;
+    }
+    files.push(current);
+    const source = ts.createSourceFile(
+      current,
+      text,
+      ts.ScriptTarget.Latest,
+      true,
+      scriptKind(current),
+    );
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isPropertyAssignment(node) &&
+        propertyName(node.name) === 'borderRadius' &&
+        ts.isObjectLiteralExpression(node.initializer)
+      ) {
+        collectRadius(node.initializer, radii);
+        return;
+      }
+      const specifier = importedSpecifier(node);
+      const target = specifier === undefined ? undefined : resolve(specifier, current);
+      if (target && /\.[cm]?[jt]s$/.test(target)) queue.push(target);
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+  return { radii, files };
+}
+
+/** `sm: "calc(var(--radius) - 4px)"` → `sm` → raw string; first seen wins. */
+function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, string>): void {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const key = propertyName(property.name);
+    if (key === undefined) continue;
+    const value = property.initializer;
+    let raw: string | undefined;
+    if (ts.isStringLiteralLike(value)) {
+      raw = value.text;
+    } else if (ts.isNumericLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) {
+      raw = value.text;
+    }
+    // SpreadElement (`...defaultTheme.borderRadius`) cannot be resolved
+    // statically; those steps are skipped (documented limitation).
+    if (raw === undefined || radii.has(key)) continue;
+    radii.set(key, raw);
+  }
+}
+
+/**
+ * Gives radius tokens their Tailwind v3 class names: each config entry is
+ * evaluated (its `var()` against radius token values, so
+ * `calc(var(--radius) - 4px)` resolves with the theme), then radius tokens
+ * whose px matches exactly take the entry key. Entries with no matching
+ * token add a synthetic one, so the scale step exists as a candidate
+ * (mirrors the spacing-steps synthesis); without it the literal would keep
+ * matching the nearest unrelated token. Config entries win over presets.
+ */
+export function applyTailwindRadii(
+  tokens: Token[],
+  radii: Map<string, string>,
+  configFile = 'tailwind.config',
+): void {
+  const byVar = new Map<string, string>();
+  for (const token of tokens) {
+    if (token.category === 'radius' && token.cssVar) byVar.set(token.cssVar, token.value);
+  }
+  const resolve = (name: string): string | undefined => byVar.get(name);
+  const byPx = new Map<number, string>();
+  for (const [key, raw] of radii) {
+    const px = evaluateLength(raw, resolve);
+    if (px !== undefined && !byPx.has(px)) byPx.set(px, key);
+  }
+  const havePx = new Set<number>();
+  for (const token of tokens) {
+    if (token.category !== 'radius') continue;
+    const px = evaluateLength(token.value, resolve);
+    if (px === undefined) continue;
+    havePx.add(px);
+    const key = byPx.get(px);
+    if (key === undefined) continue;
+    token.tailwind = key;
+    token.usage = usageFor(token, '--radius');
+  }
+  for (const [px, key] of byPx) {
+    if (havePx.has(px)) continue;
+    const token: Token = {
+      name: `radius-${key}`,
+      category: 'radius',
+      value: `${px}px`,
+      tailwind: key,
+      usage: usageFor({ category: 'radius', tailwind: key } as Token, '--radius'),
+      source: { file: configFile, line: 1 },
+    };
+    tokens.push(token);
+    havePx.add(px);
   }
 }
 
