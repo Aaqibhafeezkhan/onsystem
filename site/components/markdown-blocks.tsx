@@ -118,6 +118,12 @@ export function parseBlocks(markdown: string): Block[] {
           i++;
           continue;
         }
+        // A blank line before the next item of the same list, such as after a code block.
+        const next = /^(?:[-*]|(\d+)\.) /.exec(lines[i + 1] ?? '');
+        if (!current.trim() && next && (next[1] !== undefined) === ordered) {
+          i++;
+          continue;
+        }
         break;
       }
       blocks.push({

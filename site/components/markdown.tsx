@@ -1,25 +1,29 @@
 import type { ReactNode } from 'react';
 
+import { codeWrap } from '@/components/section';
 import { resolveDocHref } from '@/lib/site';
 
 /**
- * Inline Markdown from the docs: `code`, [links](...), **bold** and _italics_. Enough for
- * table cells and short paragraphs; anything else stays as text.
+ * Inline Markdown from the docs: `code` (and ``code with `backticks` ``), [links](...), **bold**
+ * and _italics_. Enough for table cells and short paragraphs; anything else stays as text.
  */
 export function InlineMarkdown({ text }: { text: string }): ReactNode {
   const parts: ReactNode[] = [];
-  const pattern = /`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|(?<!\w)_(\S.*?)_(?!\w)/g;
+  const pattern =
+    /``(.+?)``|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|(?<!\w)_(\S.*?)_(?!\w)/g;
   let last = 0;
   for (const match of text.matchAll(pattern)) {
     const index = match.index;
     if (index > last) parts.push(text.slice(last, index));
-    const [, code, label, href, bold, italic] = match;
+    const [, fenced, plain, label, href, bold, italic] = match;
+    // A double-backtick span drops the one space on each side that keeps its backticks apart.
+    const code = fenced?.replace(/^ (.*) $/, '$1') ?? plain;
     const key = parts.length;
     if (code !== undefined) {
       parts.push(
         <code
           key={key}
-          className="rounded bg-white/[0.06] px-1 py-px font-mono text-[0.9em] text-fg-soft"
+          className={`rounded bg-white/[0.06] px-1 py-px font-mono text-[0.9em] text-fg-soft ${codeWrap(code)}`}
         >
           {code}
         </code>,
@@ -37,7 +41,7 @@ export function InlineMarkdown({ text }: { text: string }): ReactNode {
     } else if (bold !== undefined) {
       parts.push(
         <strong key={key} className="font-semibold text-fg">
-          {bold}
+          <InlineMarkdown text={bold} />
         </strong>,
       );
     } else if (italic !== undefined) {
