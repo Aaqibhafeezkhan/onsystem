@@ -9,7 +9,7 @@ import { cssReference } from './usage.js';
 
 /**
  * Writes the tokens onsystem found as a DTCG 2025.10 file or a DESIGN.md. Both are grouped by
- * category; reading the DTCG file back gives the same tokens, with names that are its paths.
+ * category; reading the DTCG file back gives the same tokens, with the same names.
  */
 
 export interface Exported {
@@ -35,8 +35,8 @@ const GROUP_NAMES: Record<TokenCategory, readonly string[]> = {
 /**
  * The tokens as a DTCG 2025.10 file: a group per category, colors as color objects in their
  * own color space, lengths as `{ value, unit }`, aliases as references, and what DTCG has no
- * field for (the custom property, the Tailwind theme variable, dark and other modes) under
- * `$extensions["com.github.dgesteves.onsystem"]`.
+ * field for (the token's name, the custom property, the Tailwind theme variable, dark and
+ * other modes) under `$extensions["com.github.dgesteves.onsystem"]`.
  */
 export function toDtcg(tokens: readonly Token[]): Exported {
   const warnings: string[] = [];
@@ -59,6 +59,8 @@ export function toDtcg(tokens: readonly Token[]): Exported {
       if (token.description) node.$description = token.description;
       if (token.deprecated) node.$deprecated = token.deprecated;
       const extension: OnsystemExtension = {};
+      // Read back, the token keeps its name (`destructive`), not its path (`color.destructive`).
+      if (token.name !== path.join('.')) extension.name = token.name;
       if (token.cssVar) extension.cssVar = token.cssVar;
       const tailwind = tailwindVariable(token);
       if (tailwind) extension.tailwind = tailwind;

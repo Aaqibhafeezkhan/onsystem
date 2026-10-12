@@ -43,6 +43,7 @@ describe('export --format dtcg', () => {
       $description: 'Errors and irreversible actions.',
       $extensions: {
         'com.github.dgesteves.onsystem': {
+          name: 'destructive',
           cssVar: '--destructive',
           tailwind: '--color-destructive',
           modes: { dark: { colorSpace: 'oklch', components: [0.704, 0.191, 22.216] } },
@@ -62,13 +63,19 @@ describe('export --format dtcg', () => {
     expect(json.radius?.sm).toEqual({
       $type: 'dimension',
       $value: { value: 6, unit: 'px' },
-      $extensions: { 'com.github.dgesteves.onsystem': { tailwind: '--radius-sm' } },
+      $extensions: {
+        'com.github.dgesteves.onsystem': { name: 'radius-sm', tailwind: '--radius-sm' },
+      },
     });
     // Tailwind's spacing unit is the spacing group's own value.
     expect(json.spacing?.$root).toMatchObject({
       $value: { value: 0.25, unit: 'rem' },
       $extensions: {
-        'com.github.dgesteves.onsystem': { cssVar: '--spacing', tailwind: '--spacing' },
+        'com.github.dgesteves.onsystem': {
+          name: 'spacing',
+          cssVar: '--spacing',
+          tailwind: '--spacing',
+        },
       },
     });
     expect(json.typography?.['font-sans']).toMatchObject({
@@ -103,7 +110,7 @@ describe('export --format dtcg', () => {
     });
     expect(out.other?.overlay).toEqual({
       $value: 'color-mix(in oklch, black 40%, transparent)',
-      $extensions: { 'com.github.dgesteves.onsystem': { cssVar: '--overlay' } },
+      $extensions: { 'com.github.dgesteves.onsystem': { name: 'overlay', cssVar: '--overlay' } },
     });
     expect(out.shadow?.card).toMatchObject({
       $type: 'shadow',
@@ -128,12 +135,13 @@ describe('export --format dtcg', () => {
 
     const back = parseDtcgTokens(toDtcg(tokens).text, 'tokens.json');
     expect(back.warnings).toEqual([]);
-    expect(back.tokens.find((t) => t.name === 'color.card')).toMatchObject({
+    // The names are the stylesheet's, and so is the name an alias points at.
+    expect(back.tokens.find((t) => t.name === 'card')).toMatchObject({
       value: '#ffffff',
-      aliasOf: 'color.background',
+      aliasOf: 'background',
       cssVar: '--card',
     });
-    expect(back.tokens.find((t) => t.name === 'shadow.card')?.value).toBe(
+    expect(back.tokens.find((t) => t.name === 'shadow-card')?.value).toBe(
       '0px 1px 2px 0px rgb(0 0 0 / 0.05), inset 0px 0px 0px 1px #e5e5e5',
     );
   });
@@ -199,12 +207,58 @@ describe('export --format dtcg', () => {
     const fromCss = await findings(DEMO_ROOT);
     const fromDtcg = await findings(root);
     expect(fromCss.length).toBeGreaterThan(0);
-    // A DTCG token is named by its path: `color.destructive` is the stylesheet's `destructive`.
-    const named = fromDtcg.filter((d) => /\bcolor\.[\w-]+/.test(d.message));
-    expect(named.length).toBeGreaterThan(0);
+    // The tokens keep the stylesheet's names: `destructive`, not their path `color.destructive`.
+    expect(fromDtcg.some((d) => d.message.includes('Nearest token destructive '))).toBe(true);
+    expect(fromDtcg).toEqual(fromCss);
+  });
+
+  it('names a token in a finding as the stylesheet did, after export and import', async () => {
+    const root = fixture({
+      'package.json': '{"name":"round-trip"}',
+      'app/globals.css': `@import "tailwindcss";
+
+:root {
+  --destructive: oklch(0.577 0.245 27.325);
+}
+
+@theme inline {
+  --color-destructive: var(--destructive);
+}
+`,
+      'app/page.tsx': `export default function Page() {
+  return <p className="text-[#e7000b]">Delete</p>;
+}
+`,
+    });
+    const file = path.join(root, 'design.tokens.json');
     expect(
-      fromDtcg.map((d) => ({ ...d, message: d.message.replace(/\bcolor\.([\w-]+)/g, '$1') })),
-    ).toEqual(fromCss);
+      await run(['export', '--format', 'dtcg', '--out', file, '--no-cache'], root),
+    ).toMatchObject({ code: 0, stderr: '' });
+    const json = JSON.parse(fs.readFileSync(file, 'utf8')) as Tree;
+    expect(json.color?.destructive?.$extensions).toEqual({
+      'com.github.dgesteves.onsystem': {
+        name: 'destructive',
+        cssVar: '--destructive',
+        tailwind: '--color-destructive',
+      },
+    });
+
+    // Only the exported file is left to read the tokens from.
+    fs.rmSync(path.join(root, 'app/globals.css'));
+    fs.writeFileSync(
+      path.join(root, 'onsystem.config.json'),
+      JSON.stringify({ tokens: ['design.tokens.json'] }),
+    );
+    const { code, stdout } = await run(['check', 'app', '--format', 'json', '--no-cache'], root);
+    expect(code).toBe(1);
+    const findings = (JSON.parse(stdout) as CheckResult[]).flatMap((r) => r.diagnostics);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      ruleId: 'no-hardcoded-color',
+      suggestion: 'text-destructive',
+    });
+    expect(findings[0]?.message).toMatch(/ token destructive \(/);
+    expect(findings[0]?.message).not.toContain('color.destructive');
   });
 });
 

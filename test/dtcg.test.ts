@@ -252,6 +252,34 @@ describe("onsystem's DTCG extension", () => {
     expect(md.cssVar).toBeUndefined();
   });
 
+  it("names a token by the name the extension keeps, and an alias by its target's", () => {
+    const json = {
+      color: {
+        $type: 'color',
+        background: {
+          $value: '#ffffff',
+          $extensions: extension({ name: 'background', cssVar: '--background' }),
+        },
+        card: {
+          $value: '{color.background}',
+          $extensions: extension({ name: 'card', cssVar: '--card' }),
+        },
+        // A name another token has, or one with spaces, is not used: the path is.
+        muted: { $value: '#f5f5f5', $extensions: extension({ name: 'card' }) },
+        accent: { $value: '#f5f5f5', $extensions: extension({ name: 'an accent' }) },
+      },
+    };
+    const { tokens, warnings } = parseDtcgTokens(JSON.stringify(json), 'tokens.json');
+    expect(warnings).toEqual([]);
+    expect(tokens.map((t) => t.name)).toEqual([
+      'background',
+      'card',
+      'color.muted',
+      'color.accent',
+    ]);
+    expect(byName(tokens, 'card')).toMatchObject({ value: '#ffffff', aliasOf: 'background' });
+  });
+
   it('gives Tailwind v3 colors back as the bare HSL channels their custom property holds', () => {
     const json = {
       color: {

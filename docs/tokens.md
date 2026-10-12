@@ -22,7 +22,7 @@ DTCG files are read as the [Format Module 2025.10](https://www.designtokens.org/
 - `$root` tokens: the token a group has for itself. `color.accent.$root` is referenced as `{color.accent.$root}` and its custom property is `--color-accent`,
 - groups that extend another: `"$extends": "{button}"` (or JSON Schema's `"$ref": "#/button"`) gives the group every token and property of `button`, and its own tokens replace the ones at the same path. Circular extension, a reference that resolves to nothing and `$extends` that names a token are reported by `inspect` and left out.
 
-A token is named by its path (`color.brand.500`), and its custom property is the path with dashes (`--color-brand-500`, or `--acme-color-brand-500` with `"prefix": "acme"`). Values for other themes can sit under `$extensions.modes` (`{ "dark": "#000" }`). A DTCG file and the CSS generated from it are merged by custom property.
+A token is named by its path (`color.brand.500`), unless onsystem's extension keeps another name for it, and its custom property is the path with dashes (`--color-brand-500`, or `--acme-color-brand-500` with `"prefix": "acme"`). Values for other themes can sit under `$extensions.modes` (`{ "dark": "#000" }`). A DTCG file and the CSS generated from it are merged by custom property.
 
 ### onsystem's extension
 
@@ -30,6 +30,7 @@ DTCG has no field for how code uses a token, so onsystem keeps it under `$extens
 
 | Field      | What it holds                                                                                                                       |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | The token's name where onsystem read it, when it is not its path: `destructive` for `color.destructive`. Findings use it            |
 | `cssVar`   | The custom property code reads: `--primary`. A token with the extension and no `cssVar` has none (a Tailwind `@theme inline` value) |
 | `tailwind` | The Tailwind theme variable that makes the class: `--color-primary` for `bg-primary`, `--spacing` for the spacing unit              |
 | `modes`    | Values in other themes, in the form of `$value`: `{ "dark": { "colorSpace": "oklch", "components": [0.922, 0, 0] } }`               |
@@ -67,6 +68,7 @@ One group per category (`color`, `spacing`, `radius`, `typography`, `shadow`, `o
       "$description": "Errors and irreversible actions.",
       "$extensions": {
         "com.github.dgesteves.onsystem": {
+          "name": "destructive",
           "cssVar": "--destructive",
           "tailwind": "--color-destructive",
           "modes": { "dark": { "colorSpace": "oklch", "components": [0.704, 0.191, 22.216] } }
@@ -83,7 +85,7 @@ One group per category (`color`, `spacing`, `radius`, `typography`, `shadow`, `o
 - An alias stays a reference: `--card: var(--background)` is `"{color.background}"`.
 - What DTCG has no type for (`color-mix()`, a `var()` no token defines, lengths in `em` or `%`) is written as the CSS string, without `$type`.
 
-Read back as a token source, the file gives the same tokens, named by their path: the shadcn demo's `check` reports the same findings from its exported file as from `globals.css`, with `color.destructive` where the stylesheet says `destructive`. The test suite runs this round trip.
+Read back as a token source, the file gives the same tokens with the same names: the shadcn demo's `check` reports the same findings from its exported file as from `globals.css`, and names `destructive`, not `color.destructive`. The test suite runs this round trip.
 
 ### DESIGN.md
 

@@ -15,13 +15,19 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export type JsonObject = { [key: string]: Json };
 
 /**
- * The `$extensions` key under which onsystem keeps what DTCG has no field for: the custom
- * property code uses, the Tailwind theme variable and the values in other modes.
+ * The `$extensions` key under which onsystem keeps what DTCG has no field for: the token's
+ * own name, the custom property code uses, the Tailwind theme variable and the values in
+ * other modes.
  */
 export const ONSYSTEM_EXTENSION = 'com.github.dgesteves.onsystem';
 
 /** What a token keeps under `$extensions["com.github.dgesteves.onsystem"]`. */
 export interface OnsystemExtension {
+  /**
+   * The token's name where it was read (`destructive` for `--destructive`), when it is not
+   * its path: findings and aliases name it so, rather than `color.destructive`.
+   */
+  name?: string;
   /** The custom property code uses: `--primary`. */
   cssVar?: string;
   /** The Tailwind theme variable that exposes the token: `--color-primary` makes `bg-primary`. */
@@ -119,12 +125,27 @@ export function parseDtcgTokens(
     return target ? typeOf(target, seen) : undefined;
   };
 
+  // A token is named by its path, or by the name onsystem's extension keeps for it
+  // (`destructive` for `color.destructive`). A kept name another token already has is not
+  // used: names stay unique.
+  const nameOf = new Map<string, string>();
+  const taken = new Set(raw.filter((t) => !t.own?.name).map((t) => t.path.join('.')));
+  for (const t of raw) {
+    const path = t.path.join('.');
+    const own = t.own?.name;
+    const name = own !== undefined && !taken.has(own) ? own : path;
+    taken.add(name);
+    nameOf.set(path, name);
+  }
+
   const tokens = raw.map((t): Token => {
-    const name = t.path.join('.');
-    const aliasOf = aliasTarget(t.value);
+    const path = t.path.join('.');
+    const name = nameOf.get(path) ?? path;
+    const alias = aliasTarget(t.value);
+    const aliasOf = alias === undefined ? undefined : (nameOf.get(alias) ?? alias);
     const type = typeOf(t);
     const format = (value: Json) => {
-      const resolved = resolve(value, new Set([name]));
+      const resolved = resolve(value, new Set([path]));
       return (t.own?.channels === 'hsl' && hslChannels(resolved)) || formatValue(resolved, type);
     };
     // `color.accent.$root` is the group's own value: `--color-accent`.
@@ -298,6 +319,7 @@ function onsystemExtension(extensions: Json | undefined): OnsystemExtension | un
   const own = isObject(extensions) ? extensions[ONSYSTEM_EXTENSION] : undefined;
   if (!isObject(own)) return undefined;
   const out: OnsystemExtension = {};
+  if (typeof own.name === 'string' && /^[^\s{}]+$/.test(own.name)) out.name = own.name;
   if (typeof own.cssVar === 'string' && /^--[\w-]+$/.test(own.cssVar)) out.cssVar = own.cssVar;
   if (typeof own.tailwind === 'string' && themeVariable(own.tailwind)) {
     out.tailwind = own.tailwind;
