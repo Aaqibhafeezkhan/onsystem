@@ -8,6 +8,10 @@ Built for design-system and platform teams with a React design-system package; a
 [![npm](https://img.shields.io/npm/v/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](https://www.npmjs.com/package/onsystem)
 [![License: MIT](https://img.shields.io/github/license/dgesteves/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](LICENSE)
 
+[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_server-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat-square)](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22onsystem%22%2C%22--root%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D)
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-Install_plugin-d97757?style=flat-square&logo=claude&logoColor=white)](https://onsystem.vercel.app/docs/plugin)
+
 **Website and docs:** [onsystem.vercel.app](https://onsystem.vercel.app), with a [playground](https://onsystem.vercel.app/playground) that checks your own code.
 
 <!-- npm-readme:video -->
