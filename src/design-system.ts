@@ -21,7 +21,12 @@ import {
   type SearchHit,
 } from './search/index.js';
 import { loadTokens, type TokenIndex } from './tokens/index.js';
-import { applyTailwindColors, readTailwindColors } from './tokens/tailwind-config.js';
+import {
+  applyTailwindColors,
+  applyTailwindRadii,
+  readTailwindColors,
+  readTailwindRadii,
+} from './tokens/tailwind-config.js';
 import type {
   CheckResult,
   ComponentInfo,
@@ -392,6 +397,13 @@ export async function buildModel(
     ? readTailwindColors(config.tailwindConfig, moduleResolver(config.root))
     : undefined;
   if (tailwind) applyTailwindColors(tokens.tokens, tailwind.colors);
+  // Same for radius: v3 borderRadius entries (config, then presets) name the scale.
+  let radiiFiles: string[] = [];
+  if (config.tailwindConfig) {
+    const radii = readTailwindRadii(config.tailwindConfig, moduleResolver(config.root));
+    applyTailwindRadii(tokens.tokens, radii.radii, config.tailwindConfig);
+    radiiFiles = radii.files;
+  }
 
   if (!files.components.length) {
     warnings.push(
@@ -420,7 +432,11 @@ export async function buildModel(
     },
   };
 
-  const dependencies = unique([...extracted.dependencies, ...(tailwind?.files ?? [])]);
+  const dependencies = unique([
+    ...extracted.dependencies,
+    ...(tailwind?.files ?? []),
+    ...radiiFiles,
+  ]);
   const key = await cacheKey(config, files, dependencies, stats);
   if (useCache) {
     try {

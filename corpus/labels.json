@@ -127,9 +127,9 @@
     "rule": "no-hardcoded-radius",
     "source": "'4px'",
     "occurrence": 3,
-    "suggestion": "var(--radius)",
-    "verdict": "FP",
-    "reason": "4px is the preset's rounded-sm, but the Tailwind v3 preset's borderRadius is not read, so it suggests var(--radius), which is 8px.",
+    "suggestion": "rounded-sm",
+    "verdict": "TP",
+    "reason": "4px is the preset rounded-sm (v3 preset borderRadius now read); suggests rounded-sm with exact auto-fix.",
     "sample": "audit"
   },
   {
@@ -751,9 +751,9 @@
     "rule": "no-hardcoded-radius",
     "source": "'4px'",
     "occurrence": 2,
-    "suggestion": "var(--radius)",
-    "verdict": "FP",
-    "reason": "4px is the preset's rounded-sm, but the Tailwind v3 preset's borderRadius is not read, so it suggests var(--radius), which is 8px.",
+    "suggestion": "rounded-sm",
+    "verdict": "TP",
+    "reason": "4px is the preset rounded-sm (v3 preset borderRadius now read); suggests rounded-sm with exact auto-fix.",
     "sample": "random"
   },
   {
