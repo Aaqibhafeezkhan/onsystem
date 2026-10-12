@@ -62,6 +62,10 @@ describe('onsystem inspect --explain', () => {
     expect(stdout).toContain('Resolved config');
     expect(stdout).toContain('  components   components/ui/**/*.{tsx,jsx}');
     expect(stdout).toContain('  tokens       app/globals.css, **/*.tokens.json');
+    // components.json's folder is also a default docs folder: listed once.
+    expect(stdout).toContain(
+      '  docs         docs/components/**/*.{md,mdx}, components/ui/**/*.{md,mdx}, src/components/ui/**/*.{md,mdx}\n',
+    );
     expect(stdout).toMatch(
       / {2}rules {8}no-hardcoded-color error, .*icon-button-accessible-name error/,
     );
@@ -219,7 +223,7 @@ describe('onsystem init', () => {
     const unattended = await run(['init', '--no-cache'], blind);
     expect(unattended.code).toBe(0);
     expect(read(blind)).toEqual(expected);
-    expect(unattended.stdout).toContain('No baseline written');
+    expect(unattended.stdout).toContain('the baseline question was skipped');
 
     // In a terminal: nothing to ask about where the components are, only the baseline.
     const asked = fixture(files);
@@ -229,6 +233,42 @@ describe('onsystem init', () => {
       'Record these 1 findings in onsystem.baseline.json, so check fails only on new ones? [Y/n] ',
     ]);
     expect(read(asked)).toEqual(expected);
+  });
+
+  it('names the baseline in the next steps only when it wrote one', async () => {
+    const next = (stdout: string) => stdout.split('\n').find((line) => line.startsWith('Next:'));
+    const baseline = (root: string) => fs.existsSync(path.join(root, 'onsystem.baseline.json'));
+
+    // Without a terminal: the question is skipped, and says how to record one.
+    const blind = fixture(SHADCN);
+    const unattended = await run(['init', '--no-cache'], blind);
+    expect(unattended.code).toBe(0);
+    expect(unattended.stdout).toContain(
+      'No terminal to ask in, so the baseline question was skipped and no baseline was written; `onsystem check . --update-baseline` records one.',
+    );
+    expect(baseline(blind)).toBe(false);
+    expect(next(unattended.stdout)).toBe(
+      'Next: commit onsystem.config.json, and run `npx onsystem check . --format github --require-design-system` in CI.',
+    );
+
+    // Declined in a terminal.
+    const declined = fixture(SHADCN);
+    const answered = await run(['init', '--no-cache'], declined, ['n']);
+    expect(answered.stdout).toContain(
+      'No baseline written; `onsystem check . --update-baseline` records one later.',
+    );
+    expect(baseline(declined)).toBe(false);
+    expect(next(answered.stdout)).toBe(
+      'Next: commit onsystem.config.json, and run `npx onsystem check . --format github --require-design-system` in CI.',
+    );
+
+    // Accepted: the baseline is written and named.
+    const accepted = fixture(SHADCN);
+    const yes = await run(['init', '--no-cache'], accepted, ['']);
+    expect(baseline(accepted)).toBe(true);
+    expect(next(yes.stdout)).toBe(
+      'Next: commit onsystem.config.json and onsystem.baseline.json, and run `npx onsystem check . --format github --require-design-system` in CI.',
+    );
   });
 
   it('needs --components without a terminal when nothing is found, and takes them', async () => {

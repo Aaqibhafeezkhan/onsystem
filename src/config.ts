@@ -577,7 +577,7 @@ export async function loadConfigWith(
     docs: (options.docs?.length
       ? options.docs
       : configDocs === undefined
-        ? [...DEFAULT_DOCS, ...(detection?.docs ?? [])]
+        ? [...new Set([...DEFAULT_DOCS, ...(detection?.docs ?? [])])]
         : configDocs.map(fromBase)
     ).map(slashGlob),
     tsconfig,

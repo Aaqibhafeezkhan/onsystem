@@ -242,6 +242,7 @@ export async function init(
   const hasBaseline = [BASELINE_FILE, LEGACY_BASELINE_FILE].some((name) =>
     fs.existsSync(path.join(root, name)),
   );
+  let baselineWritten = false;
   if (total && !hasBaseline) {
     const answer = options.yes
       ? 'y'
@@ -253,18 +254,23 @@ export async function init(
           )
             .trim()
             .toLowerCase()
-        : 'n';
-    if (answer === '' || answer.startsWith('y')) {
+        : undefined;
+    if (answer === undefined) {
+      io.stdout(
+        `No terminal to ask in, so the baseline question was skipped and no baseline was written; \`${NAME} check . --update-baseline\` records one.`,
+      );
+    } else if (answer === '' || answer.startsWith('y')) {
       const recorded = await runCheck(
         ['check', '.', '--update-baseline', ...(options.cache ? [] : ['--no-cache'])],
         checkIo,
       );
       if (recorded.stdout) io.stdout(recorded.stdout);
+      baselineWritten = fs.existsSync(path.join(root, BASELINE_FILE));
     } else {
       io.stdout(`No baseline written; \`${NAME} check . --update-baseline\` records one later.`);
     }
   }
-  const commit = [...written, ...(total && !hasBaseline ? [BASELINE_FILE] : [])];
+  const commit = [...written, ...(baselineWritten ? [BASELINE_FILE] : [])];
   const files =
     commit.length > 1 ? `${commit.slice(0, -1).join(', ')} and ${commit.at(-1) ?? ''}` : commit[0];
   io.stdout(

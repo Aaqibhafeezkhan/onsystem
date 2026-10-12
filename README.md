@@ -64,6 +64,8 @@ npx -y onsystem init      # write the config, and offer a baseline
 
 At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system. In a [design-system package](https://onsystem.vercel.app/docs/design-system-packages), `init` sets it up for every app that depends on it, workspace or npm, with no config in the apps.
 
+In a new create-next-app, the template page's hardcoded colors already make the first `check .` fail; `init` offers to record them as a baseline, so only new findings fail.
+
 **Claude Code.** The plugin brings the hook, the MCP server and a skill:
 
 ```text

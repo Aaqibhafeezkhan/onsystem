@@ -238,6 +238,19 @@ describe('DesignSystemHost', () => {
     expect(await host.get()).toBe(newer);
   });
 
+  it('counts components and parts in its load line as inspect does', async () => {
+    const config = await loadConfig({ root: copyFixture() });
+    const infos: string[] = [];
+    const logger = {
+      info: (m: string) => infos.push(m),
+      warn: () => undefined,
+      error: () => undefined,
+    };
+    await new DesignSystemHost(config, { cache: false, logger }).get();
+    // `inspect` prints `Components (6 + 4 parts)` and `Tokens (14)` for the fixture.
+    expect(infos[0]).toMatch(/^loaded 6 components \(\+4 parts\), 14 tokens from /);
+  });
+
   it('keeps serving the previous model when a reload fails', async () => {
     const root = copyFixture();
     const config = await loadConfig({ root });
