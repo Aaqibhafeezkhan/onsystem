@@ -21,7 +21,7 @@ const FAQ: [question: string, answer: string][] = [
   ],
   [
     'How often is it wrong?',
-    'It is measured: every pull request that touches the rules runs them on 10 public repositories pinned by commit and compares the findings with a hand-labelled sample, and the [corpus](https://github.com/dgesteves/onsystem/tree/main/corpus) has the labels. The README quotes the current false-positive rate. When it flags something that is fine, [suppress it](/rules#suppressing-findings) with a comment, turn the rule down in the [config](/rules#configure), and please open an issue with the snippet and the output of `inspect`: those are the reports I most want.',
+    'It is measured: every pull request that touches the rules runs them on 10 public repositories pinned by commit and compares the findings with a labelled sample, and the [corpus](https://github.com/dgesteves/onsystem/tree/main/corpus) has the labels. The README quotes the current false-positive rate. When it flags something that is fine, [suppress it](/rules#suppressing-findings) with a comment, turn the rule down in the [config](/rules#configure), and please open an issue with the snippet and the output of `inspect`: those are the reports I most want.',
   ],
   [
     'How is it different from @shadcn/lint?',
