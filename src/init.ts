@@ -194,6 +194,7 @@ export async function init(
   const hasBaseline = [BASELINE_FILE, LEGACY_BASELINE_FILE].some((name) =>
     fs.existsSync(path.join(root, name)),
   );
+  let baselineWritten = false;
   if (total && !hasBaseline) {
     const answer = options.yes
       ? 'y'
@@ -205,19 +206,24 @@ export async function init(
           )
             .trim()
             .toLowerCase()
-        : 'n';
-    if (answer === '' || answer.startsWith('y')) {
+        : undefined;
+    if (answer === undefined) {
+      io.stdout(
+        `No terminal to ask in, so the baseline question was skipped and no baseline was written; \`${NAME} check . --update-baseline\` records one.`,
+      );
+    } else if (answer === '' || answer.startsWith('y')) {
       const recorded = await runCheck(
         ['check', '.', '--update-baseline', ...(options.cache ? [] : ['--no-cache'])],
         checkIo,
       );
       if (recorded.stdout) io.stdout(recorded.stdout);
+      baselineWritten = fs.existsSync(path.join(root, BASELINE_FILE));
     } else {
       io.stdout(`No baseline written; \`${NAME} check . --update-baseline\` records one later.`);
     }
   }
   io.stdout(
-    `Next: commit onsystem.config.json${total && !hasBaseline ? ` and ${BASELINE_FILE}` : ''}, and run \`npx ${NAME} check . --format github --require-design-system\` in CI.`,
+    `Next: commit onsystem.config.json${baselineWritten ? ` and ${BASELINE_FILE}` : ''}, and run \`npx ${NAME} check . --format github --require-design-system\` in CI.`,
   );
   return 0;
 }
