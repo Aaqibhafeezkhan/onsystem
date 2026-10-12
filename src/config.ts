@@ -8,9 +8,11 @@ import {
   declaredConfig,
   detectProject,
   findDesignSystemPackage,
+  PackageFinder,
   packageImports,
   PACKAGE_FIELD,
   type DesignSystemPackage,
+  type DesignSystemPackageLookup,
   type DesignSystemSource,
   type ImportMapping,
 } from './detect.js';
@@ -21,7 +23,7 @@ import {
   type LibrarySource,
 } from './libraries/index.js';
 import { findTailwindConfig } from './tokens/tailwind-config.js';
-import { matchesGlob, slashGlob, toPosix } from './util/paths.js';
+import { globBase, isInside, matchesGlob, slashGlob, toPosix } from './util/paths.js';
 import { closest } from './util/strings.js';
 
 export const RULE_IDS = [
@@ -203,7 +205,14 @@ export interface ResolvedConfig {
   root: string;
   configFile?: string | undefined;
   components: string[];
+  /** What `check`, the ESLint plugin and the hook leave out of the project's own files. */
   exclude: string[];
+  /**
+   * What finding the design system's own files (components, tokens, docs) leaves out, when it
+   * is not `exclude`: a design-system package's own list, rebased onto the package. An app that
+   * takes on the package's config leaves out the default `exclude` patterns as well.
+   */
+  designSystemExclude?: string[] | undefined;
   tokens: TokenSourceConfig[];
   docs: string[];
   tsconfig?: string | undefined;
@@ -257,6 +266,13 @@ export interface ResolvedConfig {
    * before the rename to onsystem. The CLI prints these once per run, the server logs them once.
    */
   deprecations?: string[] | undefined;
+  /**
+   * What to tell the user about a design-system package's config: one installed from a
+   * registry whose declaration cannot be read, which was skipped, or paths in one that point
+   * outside it, which were ignored. The CLI prints these once per run, the server logs them
+   * once, and the ESLint plugin writes them once to stderr.
+   */
+  warnings?: string[] | undefined;
 }
 
 /** Config file names, in the order they are looked for. */
@@ -351,9 +367,30 @@ export class ConfigError extends Error {
 }
 
 export async function loadConfig(options: LoadConfigOptions = {}): Promise<ResolvedConfig> {
+  return loadConfigWith(options);
+}
+
+/** What one load shares with the code that started it, so nothing is looked up twice. */
+export interface LoadContext {
+  /** The finder for the folder searched, shared by the design-system package lookup and detection. */
+  packages?: PackageFinder | undefined;
+  /** The design-system package lookup, when the caller has already made it for the folder searched. */
+  lookup?: DesignSystemPackageLookup | undefined;
+}
+
+/** {@link loadConfig}, with what the caller has already found in the folder searched. */
+export async function loadConfigWith(
+  options: LoadConfigOptions,
+  context: LoadContext = {},
+): Promise<ResolvedConfig> {
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const searchDir = options.root ? path.resolve(cwd, options.root) : cwd;
   const deprecations: string[] = [];
+  const warnings: string[] = [];
+  let packages = context.packages?.root === searchDir ? context.packages : undefined;
+  const finder = (dir: string) =>
+    packages?.root === dir ? packages : (packages = new PackageFinder(dir));
+  let lookup = context.lookup;
   let configFile: string | undefined;
   /** The design-system package whose config this project takes on, having none of its own. */
   let declared: DesignSystemPackage | undefined;
@@ -367,9 +404,17 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     if (legacy) deprecations.push(legacyConfigNotice(legacy, configFile));
     configFile ??= legacy ?? ownDeclaredConfig(searchDir);
     if (!configFile) {
-      declared = designSystemPackage(searchDir);
+      lookup ??= findDesignSystemPackage(searchDir, finder(searchDir));
+      if (lookup?.problems.length) throw declarationError(lookup, searchDir);
+      declared = lookup?.found;
       configFile = declared?.config;
     }
+  }
+  // Installed packages whose declaration cannot be read: the project is read as if they had none.
+  for (const { name, problem } of lookup?.skipped ?? []) {
+    warnings.push(
+      `${name}'s onsystem config was skipped: ${problem} ${name} is installed in node_modules, so this project is read as if it declared none.`,
+    );
   }
 
   let raw: unknown = {};
@@ -411,6 +456,30 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     if (declared) return fromBase(e);
     return e.startsWith(`${toProject}/`) ? e.slice(toProject.length + 1) : undefined;
   };
+  // A dependency's config reads only within its package when installed, or its workspace: a
+  // path that leaves it is ignored, so a published package cannot have its apps read files
+  // elsewhere on the machine.
+  const outside: string[] = [];
+  const within = (field: string) => (p: string) => {
+    if (!declared || staysIn(declared.dir, declared.boundary, slashGlob(p))) return true;
+    outside.push(`${field} ${p}`);
+    return false;
+  };
+  const configComponents =
+    config.components === undefined
+      ? undefined
+      : toArray(config.components).filter(within('components'));
+  const configTokens =
+    config.tokens === undefined
+      ? undefined
+      : toArray(config.tokens).filter((t) => within('tokens')(typeof t === 'string' ? t : t.path));
+  const configDocs =
+    config.docs === undefined ? undefined : toArray(config.docs).filter(within('docs'));
+  if (declared && outside.length) {
+    warnings.push(
+      `${declared.name}'s onsystem config names paths outside ${declared.installed ? 'the package' : 'the workspace'}, which were ignored: ${outside.join(', ')}.`,
+    );
+  }
 
   const rules = {} as Record<RuleId, ResolvedRule>;
   for (const id of RULE_IDS) {
@@ -445,7 +514,9 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
 
   // Without component globs, look for components.json or a design-system package.
   const componentsSet = Boolean(options.components?.length) || config.components !== undefined;
-  const detection = componentsSet ? undefined : detectProject(root, tsconfig, undefined, declared);
+  const detection = componentsSet
+    ? undefined
+    : detectProject(root, tsconfig, undefined, declared, finder(root));
 
   // A token file named outright (not a glob) that does not exist is a typo, not "no tokens".
   // Not in a design-system package's config, whose own checks catch it: a package installed
@@ -469,8 +540,8 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
 
   const tokenSources = options.tokens?.length
     ? options.tokens.map((p) => ({ path: p }))
-    : config.tokens !== undefined
-      ? toArray(config.tokens).map((t) =>
+    : configTokens !== undefined
+      ? configTokens.map((t) =>
           typeof t === 'string' ? { path: fromBase(t) } : { ...t, path: fromBase(t.path) },
         )
       : // Detected stylesheets replace the stylesheet guesses, not DTCG files.
@@ -482,27 +553,32 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
           ...FALLBACK_TOKENS.map((p) => ({ path: p, fallback: true })),
         ];
 
+  const exclude = (config.exclude ?? DEFAULT_EXCLUDE)
+    .map(slashGlob)
+    .map(excludeFromBase)
+    .filter((e): e is string => e !== undefined);
+
   return {
     root,
     configFile,
     components: (options.components?.length
       ? options.components
-      : config.components !== undefined
-        ? toArray(config.components).map(fromBase)
+      : configComponents !== undefined
+        ? configComponents.map(fromBase)
         : detection
           ? [...(detection.withDefaults ? DEFAULT_COMPONENTS : []), ...detection.components]
           : DEFAULT_COMPONENTS
     ).map(slashGlob),
-    exclude: (config.exclude ?? DEFAULT_EXCLUDE)
-      .map(slashGlob)
-      .map(excludeFromBase)
-      .filter((e): e is string => e !== undefined),
+    // An app keeps the default excludes for its own files: a package's own `exclude` is about
+    // the package, and only adds to them. Finding the package's files uses its list as it is.
+    exclude: declared && config.exclude ? [...new Set([...DEFAULT_EXCLUDE, ...exclude])] : exclude,
+    ...(declared && config.exclude ? { designSystemExclude: exclude } : {}),
     tokens: tokenSources.map((t) => ({ ...t, path: slashGlob(t.path) })),
     docs: (options.docs?.length
       ? options.docs
-      : config.docs === undefined
+      : configDocs === undefined
         ? [...DEFAULT_DOCS, ...(detection?.docs ?? [])]
-        : toArray(config.docs).map(fromBase)
+        : configDocs.map(fromBase)
     ).map(slashGlob),
     tsconfig,
     importPath: config.importPath,
@@ -524,6 +600,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     ...(declared ? { designSystemPackage: declared } : {}),
     configured: componentsSet,
     ...(deprecations.length ? { deprecations } : {}),
+    ...(warnings.length ? { warnings } : {}),
   };
 }
 
@@ -545,19 +622,24 @@ function ownDeclaredConfig(dir: string): string | undefined {
   return declared?.file;
 }
 
+/** The error for workspace packages whose declaration cannot be read: their team can fix them. */
+function declarationError(lookup: DesignSystemPackageLookup, dir: string): ConfigError {
+  return new ConfigError(
+    `${lookup.problems.map((p) => `${p.name}: ${p.problem}`).join('\n')}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
+  );
+}
+
 /**
- * The design-system package `dir` takes its config from: the dependency whose package.json
- * declares one (`"onsystem": "./onsystem.config.json"`). A declaration that cannot be read is an
- * error, rather than a design system silently not found.
+ * Whether a path or glob in a dependency's config, relative to its folder `dir`, stays in
+ * `boundary`: its static part resolves inside it, and no `..` hides among its wildcards and
+ * braces (`{src,../..}/**`), which could reach anywhere.
  */
-function designSystemPackage(dir: string): DesignSystemPackage | undefined {
-  const lookup = findDesignSystemPackage(dir);
-  if (lookup?.problems.length) {
-    throw new ConfigError(
-      `${lookup.problems.join('\n')}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
-    );
-  }
-  return lookup?.found;
+function staysIn(dir: string, boundary: string, pattern: string): boolean {
+  const base = globBase(pattern);
+  const parts = pattern.split('/');
+  const fixed = base === '.' ? (parts[0] === '.' ? 1 : 0) : base.split('/').length;
+  if (parts.slice(fixed).some((part) => part.includes('..'))) return false;
+  return isInside(boundary, path.resolve(dir, base));
 }
 
 /** What to say about a config file under its old name, with or without a new one next to it. */

@@ -215,6 +215,23 @@ describe('the ESLint plugin', () => {
     expect(keys(await lint(root, ['apps']), root)).toEqual(expected.map((k) => `apps/web/${k}`));
   });
 
+  it('checks as check does when an installed package declares a config that cannot be read', async () => {
+    const root = fixture({
+      'package.json': JSON.stringify({ name: 'shop', dependencies: { '@acme/kit': '^1.0.0' } }),
+      'node_modules/@acme/kit/package.json': JSON.stringify({
+        name: '@acme/kit',
+        onsystem: './onsystem.config.json',
+      }),
+      'components/ui/button.tsx': BUTTON,
+      'app/globals.css': TOKENS,
+      'app/page.tsx': RED,
+    });
+    // Skipped, with a warning on stderr: zero config reads the app, with no error on the file.
+    const expected = ['app/page.tsx:1:38 onsystem/no-hardcoded-color error'];
+    expect(await checkJson(root, ['app'])).toEqual(expected);
+    expect(keys(await lint(root, ['app']), root)).toEqual(expected);
+  });
+
   it('takes the project root and config from settings.onsystem', async () => {
     const root = fixture({
       'ui/kit/button.tsx': BUTTON,

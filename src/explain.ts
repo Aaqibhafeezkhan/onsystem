@@ -226,12 +226,15 @@ function packageSteps(config: ResolvedConfig, cwd: string): DetectionStep[] {
   const lookup = findDesignSystemPackage(config.root);
   if (!lookup) return [];
   const candidate = "a design-system package's config";
+  const skipped = lookup.skipped.length
+    ? `; ${lookup.skipped.map((p) => p.name).join(', ')} ${lookup.skipped.length === 1 ? 'declares one' : 'declare one'} that cannot be read, skipped since installed`
+    : '';
   if (!declared) {
     return [
       {
         candidate,
         accepted: false,
-        reason: `no dependency declares one ("onsystem" in its package.json) among ${lookup.dependencies} ${lookup.dependencies === 1 ? 'dependency' : 'dependencies'}`,
+        reason: `no dependency declares one ("onsystem" in its package.json) among ${lookup.dependencies} ${lookup.dependencies === 1 ? 'dependency' : 'dependencies'}${skipped}`,
       },
     ];
   }
@@ -239,7 +242,7 @@ function packageSteps(config: ResolvedConfig, cwd: string): DetectionStep[] {
     {
       candidate,
       accepted: true,
-      reason: `${declared.name} (${declared.installed ? 'installed' : 'a workspace package'}) declares ${display(cwd, declared.config)}, which this project takes on, with its paths from ${display(cwd, declared.dir)}${lookup.others.length ? `; ${lookup.others.join(', ')} also declare one, not read: one config is taken on, from the package the code imports most` : ''}`,
+      reason: `${declared.name} (${declared.installed ? 'installed' : 'a workspace package'}) declares ${display(cwd, declared.config)}, which this project takes on, with its paths from ${display(cwd, declared.dir)}${lookup.others.length ? `; ${lookup.others.join(', ')} also declare one, not read: one config is taken on, from the package the code imports most` : ''}${skipped}`,
     },
   ];
 }

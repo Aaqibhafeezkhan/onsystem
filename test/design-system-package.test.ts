@@ -7,7 +7,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
-import { loadConfig } from '../src/config.js';
+import { DEFAULT_COMPONENTS, DEFAULT_EXCLUDE, loadConfig } from '../src/config.js';
 import { DesignSystemHost } from '../src/design-system.js';
 import { serveStdio } from '../src/server/stdio.js';
 import { silentLogger } from '../src/util/log.js';
@@ -236,9 +236,19 @@ describe('a config a design-system package declares', () => {
       dir: path.join(root, 'packages/kit'),
       config: path.join(root, 'packages/kit/onsystem.config.json'),
       installed: false,
+      boundary: root,
     });
     expect(config.components).toEqual(['../../packages/kit/src/**/*.tsx']);
-    expect(config.exclude).toEqual(['../../packages/kit/src/index.tsx', '**/*.stories.tsx']);
+    // The app keeps the default excludes; the package's own list finds the package's files.
+    expect(config.exclude).toEqual([
+      ...DEFAULT_EXCLUDE,
+      '../../packages/kit/src/index.tsx',
+      '**/*.stories.tsx',
+    ]);
+    expect(config.designSystemExclude).toEqual([
+      '../../packages/kit/src/index.tsx',
+      '**/*.stories.tsx',
+    ]);
     // A file the package names but does not have is no error in an app: a published package
     // ships only some of its files, and the package's own checks catch a typo.
     expect(config.tokens.map((t) => t.path)).toEqual([
@@ -390,6 +400,179 @@ describe('a config a design-system package declares', () => {
     expect(outside.message).toContain(
       'names ../../onsystem.config.json, which is outside the package.',
     );
+  });
+
+  it('is skipped with one warning when an installed package names one that cannot be read', async () => {
+    const root = fixture({
+      'package.json': json({
+        name: 'shop',
+        dependencies: { '@acme/kit': '^1.0.0', 'left-pad': '^1.0.0' },
+      }),
+      'tsconfig.json': json({ compilerOptions: { jsx: 'react-jsx', paths: { '@/*': ['./*'] } } }),
+      // A published package that names a config it does not publish, and another use of the field.
+      'node_modules/@acme/kit/package.json': json({
+        name: '@acme/kit',
+        files: ['dist'],
+        onsystem: './onsystem.config.json',
+      }),
+      'node_modules/left-pad/package.json': json({ name: 'left-pad', onsystem: { other: 'use' } }),
+      'components/ui/button.tsx': KIT['packages/kit/src/button.tsx'],
+      'app/page.tsx':
+        'import { Button } from "@/components/ui/button";\nexport default () => <Button variant="danger" />;\n',
+    });
+    const config = await loadConfig({ root });
+    // Read as if no dependency declared one: zero config finds the app's components/ui.
+    expect(config.configFile).toBeUndefined();
+    expect(config.designSystemPackage).toBeUndefined();
+    expect(config.components).toEqual(DEFAULT_COMPONENTS);
+    expect(config.warnings).toEqual([
+      `@acme/kit's onsystem config was skipped: "onsystem" in ${path.join(root, 'node_modules/@acme/kit/package.json')} names ./onsystem.config.json, which does not exist. @acme/kit is installed in node_modules, so this project is read as if it declared none.`,
+      `left-pad's onsystem config was skipped: "onsystem" in ${path.join(root, 'node_modules/left-pad/package.json')} is {"other":"use"}: it names a JSON config file in the package, such as "./onsystem.config.json". left-pad is installed in node_modules, so this project is read as if it declared none.`,
+    ]);
+
+    // check says each once, and checks the app as zero config does.
+    const checked = await run(['check', '.', '--format', 'json', '--no-cache'], root);
+    expect(checked.code).toBe(1);
+    expect(checked.stderr.split('\n').filter((line) => line.includes('was skipped'))).toEqual(
+      config.warnings,
+    );
+    expect(await findings(root)).toContain(
+      'app/page.tsx no-unknown-variant: "danger" is not a valid variant for <Button>. Allowed: default, outline.',
+    );
+    const explained = await run(['inspect', '--explain', '--no-cache'], root);
+    expect(explained.stdout).toContain(
+      'no dependency declares one ("onsystem" in its package.json) among 2 dependencies; @acme/kit, left-pad declare one that cannot be read, skipped since installed',
+    );
+
+    // The MCP server logs them once, and serves the app's components.
+    const warned: string[] = [];
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = await serveStdio({
+      cwd: root,
+      cache: false,
+      watch: false,
+      logger: { ...silentLogger, warn: (text) => warned.push(text) },
+      transport: serverTransport,
+    });
+    const client = new Client({ name: 'package-test', version: '1.0.0' });
+    await client.connect(clientTransport);
+    const button = await client.callTool({ name: 'get_component', arguments: { name: 'Button' } });
+    expect((button as CallToolResult).isError).toBeFalsy();
+    expect(warned.filter((text) => text.includes('was skipped'))).toEqual(config.warnings);
+    await client.close();
+    await server.close();
+
+    // A workspace package with the same problem is still an error: its team owns it.
+    const workspace = fixture({
+      ...MONOREPO,
+      'packages/kit/package.json': json({ name: '@acme/kit', onsystem: './onsystem.config.json' }),
+    });
+    await expect(loadConfig({ root: path.join(workspace, 'apps/web') })).rejects.toThrow(
+      /^@acme\/kit: "onsystem" in .*package\.json names \.\/onsystem\.config\.json, which does not exist\./,
+    );
+  });
+
+  it("adds a package's exclude to the app's defaults, which keep its tests and stories out", async () => {
+    const root = fixture({
+      ...MONOREPO,
+      ...kitAt('packages/kit', {
+        components: ['src/**/*.tsx'],
+        exclude: ['src/index.tsx', 'src/legacy/**'],
+      }),
+      'packages/kit/src/legacy/old-button.tsx':
+        'export function OldButton(props: { children?: unknown }) { return <button /> }\n',
+      'apps/web/app/page.stories.tsx': PAGE,
+      'apps/web/app/__tests__/page.tsx': PAGE,
+    });
+    const app = path.join(root, 'apps/web');
+    const config = await loadConfig({ root: app });
+    const own = ['../../packages/kit/src/index.tsx', '../../packages/kit/src/legacy/**'];
+    expect(config.exclude).toEqual([...DEFAULT_EXCLUDE, ...own]);
+    // The package's files are found with its own list, as the package finds them.
+    expect(config.designSystemExclude).toEqual(own);
+    expect((await run(['inspect', '--no-cache'], app)).stdout).toMatch(
+      /Components \(3 \+ 0 parts\)\n {2}Button .*\n {2}Card .*\n {2}Input /,
+    );
+    // The app's story and test stay out, from its folder and from the monorepo root.
+    const files = (found: string[]) => [...new Set(found.map((f) => f.split(' ')[0]))];
+    expect(files(await findings(app))).toEqual(['app/page.tsx']);
+    expect(files(await findings(root))).toEqual(['apps/web/app/page.tsx']);
+  });
+
+  it("ignores paths that leave an installed package, or a workspace package's workspace, with one warning", async () => {
+    const outside = {
+      'outside/notes.md': '# Button\n\nNot from the package.\n',
+      'outside/theme.css': ':root {\n  --leak: #abcdef;\n}\n',
+    };
+    // Installed: only the package's own folder.
+    const shop = fixture({
+      ...outside,
+      'shop/package.json': json({ name: 'shop', dependencies: { '@acme/kit': '^1.0.0' } }),
+      ...kitAt('shop/node_modules/@acme/kit', {
+        tokens: ['src/globals.css', '../../../../outside/theme.css'],
+        docs: ['../../../../outside/*.md', '{src,../../../../outside}/**/*.md', '/etc/*.md'],
+      }),
+      'shop/app/page.tsx': PAGE,
+    });
+    const app = path.join(shop, 'shop');
+    const installed = await loadConfig({ root: app });
+    expect(installed.tokens.map((t) => t.path)).toEqual(['node_modules/@acme/kit/src/globals.css']);
+    expect(installed.docs).toEqual([]);
+    expect(installed.warnings).toEqual([
+      "@acme/kit's onsystem config names paths outside the package, which were ignored: tokens ../../../../outside/theme.css, docs ../../../../outside/*.md, docs {src,../../../../outside}/**/*.md, docs /etc/*.md.",
+    ]);
+    const model = (await run(['inspect', '--format', 'json', '--no-cache'], app)).stdout;
+    expect(model).toContain('--primary');
+    expect(model).not.toContain('--leak');
+    expect(model).not.toContain('Not from the package');
+
+    // A workspace package: anywhere in the workspace (a sibling package's tokens), not outside it.
+    const repo = fixture({
+      ...outside,
+      ...Object.fromEntries(Object.entries(MONOREPO).map(([file, text]) => [`repo/${file}`, text])),
+      ...kitAt('repo/packages/kit', {
+        tokens: ['../tokens/theme.css', '../../../outside/theme.css'],
+        docs: ['../../../outside/*.md'],
+      }),
+      'repo/packages/tokens/package.json': json({ name: '@acme/tokens' }),
+      'repo/packages/tokens/theme.css': ':root {\n  --brand: #123456;\n}\n',
+    });
+    const workspace = await loadConfig({ root: path.join(repo, 'repo/apps/web') });
+    expect(workspace.designSystemPackage?.boundary).toBe(path.join(repo, 'repo'));
+    expect(workspace.tokens.map((t) => t.path)).toEqual(['../../packages/tokens/theme.css']);
+    expect(workspace.docs).toEqual([]);
+    expect(workspace.warnings).toEqual([
+      "@acme/kit's onsystem config names paths outside the workspace, which were ignored: tokens ../../../outside/theme.css, docs ../../../outside/*.md.",
+    ]);
+  });
+
+  it('finds a workspace package added or declared after a load, in the same process', async () => {
+    const root = fixture({
+      ...MONOREPO,
+      'apps/web/package.json': json({
+        name: '@acme/web',
+        dependencies: { '@acme/kit': 'workspace:*', '@acme/brand': 'workspace:*' },
+      }),
+    });
+    const app = path.join(root, 'apps/web');
+    expect((await loadConfig({ root: app })).designSystemPackage).toBeUndefined();
+    // A package added to packages/ is found: the workspace is read again.
+    fs.mkdirSync(path.join(root, 'packages/brand'));
+    fs.writeFileSync(
+      path.join(root, 'packages/brand/package.json'),
+      json({ name: '@acme/brand', onsystem: './onsystem.config.json' }),
+    );
+    fs.writeFileSync(path.join(root, 'packages/brand/onsystem.config.json'), json({}));
+    expect((await loadConfig({ root: app })).designSystemPackage?.name).toBe('@acme/brand');
+    // So is a declaration added to a package already read.
+    fs.rmSync(path.join(root, 'packages/brand'), { recursive: true });
+    const kit = read(path.join(root, 'packages/kit/package.json'));
+    fs.writeFileSync(
+      path.join(root, 'packages/kit/package.json'),
+      json({ ...kit, onsystem: './onsystem.config.json' }),
+    );
+    fs.writeFileSync(path.join(root, 'packages/kit/onsystem.config.json'), json({}));
+    expect((await loadConfig({ root: app })).designSystemPackage?.name).toBe('@acme/kit');
   });
 
   it('comes from the package the code imports most when several declare one', async () => {

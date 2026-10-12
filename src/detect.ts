@@ -5,7 +5,7 @@ import { escapePath, globSync } from 'tinyglobby';
 
 import { readProjectConfig, type ProjectConfig } from './extract/program.js';
 import { buildEntries, exportedFiles, moduleFile, sourceTarget } from './package-source.js';
-import { isInside, relativePath, toPosix } from './util/paths.js';
+import { globBase, isInside, relativePath, toPosix } from './util/paths.js';
 import { unique } from './util/strings.js';
 
 /**
@@ -68,6 +68,30 @@ export interface DesignSystemPackage {
   config: string;
   /** Installed from a registry into `node_modules`, rather than a workspace package. */
   installed: boolean;
+  /**
+   * The folder its config's paths must stay in: its own folder when installed, else the
+   * workspace root (a sibling package's tokens, `../tokens/...`), or its own folder outside one.
+   */
+  boundary: string;
+}
+
+/** A dependency's declaration that cannot be read, and what was done with it. */
+export interface DeclarationProblem {
+  name: string;
+  problem: string;
+}
+
+/** What {@link findDesignSystemPackage} found among a project's dependencies. */
+export interface DesignSystemPackageLookup {
+  found?: DesignSystemPackage | undefined;
+  /** Other dependencies that declare a config, not read. */
+  others: string[];
+  /** Workspace packages whose declaration cannot be read: an error, the team owns them. */
+  problems: DeclarationProblem[];
+  /** Installed packages whose declaration cannot be read: skipped with a warning. */
+  skipped: DeclarationProblem[];
+  /** How many dependencies were looked at, for the trace. */
+  dependencies: number;
 }
 
 /** One of several design systems an app uses, and how often its code imports it. */
@@ -129,10 +153,10 @@ export function detectProject(
   tsconfig?: string,
   trace?: DetectionStep[],
   declared?: Pick<DesignSystemPackage, 'name' | 'dir' | 'installed'>,
+  packages: PackageFinder = new PackageFinder(root),
 ): Detection | undefined {
   const step = (candidate: string, accepted: boolean, reason: string) =>
     trace?.push({ candidate, accepted, reason });
-  const packages = new PackageFinder(root);
   const found: Found[] = [];
 
   const shadcn = readJson(path.join(root, 'components.json'));
@@ -942,36 +966,45 @@ export function declaredConfig(
  * The dependency of `root` (in `dependencies` or `devDependencies`) whose package.json declares
  * its onsystem config, as a workspace package or installed from a registry: the design system
  * the root uses, set up in its own package. With several, the one the root's code imports
- * most, then the first listed; `others` names the rest. `problems` lists declarations that
- * cannot be read. Undefined at a workspace root, whose projects each find their own, and
- * without a package.json.
+ * most, then the first listed; `others` names the rest. A declaration that cannot be read is a
+ * problem in a workspace package, which its team owns, and is skipped in an installed one, so a
+ * published package cannot stop the apps that use it. Undefined at a workspace root, whose
+ * projects each find their own, and without a package.json.
+ *
+ * Only the root's own dependencies are looked at, each where Node.js resolves it
+ * ({@link PackageFinder.locate}). `packages` is the load's finder, shared with detection.
  */
-export function findDesignSystemPackage(root: string):
-  | {
-      found?: DesignSystemPackage | undefined;
-      others: string[];
-      problems: string[];
-      /** How many dependencies were looked at, for the trace. */
-      dependencies: number;
-    }
-  | undefined {
+export function findDesignSystemPackage(
+  root: string,
+  packages: PackageFinder = new PackageFinder(root),
+): DesignSystemPackageLookup | undefined {
   const own = readJson(path.join(root, 'package.json'));
   if (!own || isWorkspaceRoot(root)) return undefined;
   const names = Object.keys({
     ...asRecord(own.dependencies),
     ...asRecord(own.devDependencies),
   });
-  const packages = new PackageFinder(root);
   const declaring: DesignSystemPackage[] = [];
-  const problems: string[] = [];
+  const problems: DeclarationProblem[] = [];
+  const skipped: DeclarationProblem[] = [];
   for (const name of names) {
-    const workspace = packages.find(name);
-    const dir = workspace ?? installedPackageDir(root, name);
-    if (!dir) continue;
-    const declared = declaredConfig(dir);
+    const located = packages.locate(name);
+    // Most dependencies declare nothing: only those that do are followed to their real folder.
+    if (located?.json[PACKAGE_FIELD] === undefined) continue;
+    const resolved = packages.place(located.dir);
+    const declared = declaredConfig(resolved.dir, located.json);
     if (!declared) continue;
-    if ('problem' in declared) problems.push(`${name}: ${declared.problem}`);
-    else declaring.push({ name, dir, config: declared.file, installed: !workspace });
+    if ('problem' in declared) {
+      (resolved.installed ? skipped : problems).push({ name, problem: declared.problem });
+    } else {
+      declaring.push({
+        name,
+        dir: resolved.dir,
+        config: declared.file,
+        installed: resolved.installed,
+        boundary: resolved.boundary,
+      });
+    }
   }
   let ranked = declaring;
   if (declaring.length > 1) {
@@ -985,7 +1018,13 @@ export function findDesignSystemPackage(root: string):
       .map((r) => r.p);
   }
   const [found, ...others] = ranked;
-  return { found, others: others.map((p) => p.name), problems, dependencies: names.length };
+  return {
+    found,
+    others: others.map((p) => p.name),
+    problems,
+    skipped,
+    dependencies: names.length,
+  };
 }
 
 /**
@@ -998,17 +1037,25 @@ export function packageImports(root: string, dir: string): ImportMapping[] {
 }
 
 /**
- * Where `name` is installed for code in `root`, in `node_modules` there or in a folder above,
- * as Node.js finds it: its real folder, expressed from the root as given.
+ * Dependencies' package.json files, parsed, by path: read again only when one's size or mtime
+ * changes, so a config loaded again (the ESLint plugin's and the MCP server's reloads) does not
+ * read every dependency again.
  */
-function installedPackageDir(root: string, name: string): string | undefined {
-  for (let dir = path.resolve(root); ; dir = path.dirname(dir)) {
-    const candidate = path.join(dir, 'node_modules', ...name.split('/'));
-    if (fs.existsSync(path.join(candidate, 'package.json'))) {
-      return path.resolve(root, path.relative(fs.realpathSync(root), fs.realpathSync(candidate)));
-    }
-    if (dir === path.dirname(dir)) return undefined;
-  }
+const manifests = new Map<string, { stamp: string; json: Record<string, unknown> | undefined }>();
+
+function cachedManifest(file: string): Record<string, unknown> | undefined {
+  const stamp = fileStamp(file);
+  const cached = manifests.get(file);
+  if (cached?.stamp === stamp) return cached.json;
+  const json = readJson(file);
+  manifests.set(file, { stamp, json });
+  return json;
+}
+
+/** A file's or folder's size and mtime, or `-` when it is missing. */
+function fileStamp(file: string): string {
+  const stats = fs.statSync(file, { throwIfNoEntry: false });
+  return stats ? `${String(stats.mtimeMs)}:${String(stats.size)}` : '-';
 }
 
 /** `@acme/ui`, `@acme/ui-kit`, `@acme/design-system`, `acme-ui`; not `@acme/email-components`. */
@@ -1021,13 +1068,20 @@ export function isDesignSystemName(name: string): boolean {
 }
 
 /**
- * Locates workspace packages by name: through `node_modules` links up to the
- * workspace root, then by scanning the workspace's package globs.
+ * Locates packages by name for one load: a project's config, its design-system package and
+ * its detection share one. Workspace packages are found through `node_modules` links up to the
+ * workspace root, then by the workspace's package globs ({@link find}); any dependency as
+ * Node.js resolves it ({@link locate}).
  */
-class PackageFinder {
+export class PackageFinder {
   private byName?: Map<string, string>;
+  /** The packages the package manager links: those its workspace globs list, without Nx's. */
+  private linkable?: Map<string, string>;
+  private nodeModules?: string[];
+  private realRoot?: string;
+  private workspace?: string | null;
 
-  constructor(private readonly root: string) {}
+  constructor(readonly root: string) {}
 
   find(name: string): string | undefined {
     for (let dir = this.root; ; dir = path.dirname(dir)) {
@@ -1046,6 +1100,57 @@ class PackageFinder {
     this.byName ??= scanWorkspace(this.root);
     return this.byName.get(name);
   }
+
+  /**
+   * Where `name` resolves for code in the root, as Node.js finds it: in the nearest
+   * `node_modules` at or above it that has it; else the workspace package of that name, in a
+   * checkout that is not installed (only then is the workspace scanned). With its package.json.
+   */
+  locate(name: string): { dir: string; json: Record<string, unknown> } | undefined {
+    for (const nodeModules of this.nodeModulesDirs()) {
+      const dir = path.join(nodeModules, ...name.split('/'));
+      const json = cachedManifest(path.join(dir, 'package.json'));
+      if (json) return { dir, json };
+    }
+    // A dependency resolves only to a package the package manager links, never to a folder
+    // only Nx knows of, so Nx's projects (a glob of the whole repository) are not looked for.
+    this.linkable ??= scanWorkspace(this.root, false);
+    const dir = this.linkable.get(name);
+    const json = dir ? cachedManifest(path.join(dir, 'package.json')) : undefined;
+    return dir && json ? { dir, json } : undefined;
+  }
+
+  /**
+   * A located package at its real folder, expressed from the root as given: `installed` when
+   * that is in a `node_modules`, rather than a workspace package linked there, and the
+   * `boundary` its config's paths must stay in.
+   */
+  place(located: string): { dir: string; installed: boolean; boundary: string } {
+    this.realRoot ??= fs.realpathSync(this.root);
+    const real = path.relative(this.realRoot, fs.realpathSync(located));
+    const dir = path.resolve(this.root, real);
+    const installed = /(?:^|[\\/])node_modules[\\/]/.test(real);
+    return { dir, installed, boundary: installed ? dir : this.boundaryOf(dir) };
+  }
+
+  /** The `node_modules` folders at and above the root, nearest first, looked up once. */
+  private nodeModulesDirs(): string[] {
+    if (!this.nodeModules) {
+      this.nodeModules = [];
+      for (let dir = path.resolve(this.root); ; dir = path.dirname(dir)) {
+        const candidate = path.join(dir, 'node_modules');
+        if (isDirectory(candidate)) this.nodeModules.push(candidate);
+        if (dir === path.dirname(dir)) break;
+      }
+    }
+    return this.nodeModules;
+  }
+
+  /** The workspace root when `dir` is in it, else `dir` itself. */
+  private boundaryOf(dir: string): string {
+    if (this.workspace === undefined) this.workspace = workspaceRootOf(this.root) ?? null;
+    return this.workspace !== null && isInside(this.workspace, dir) ? this.workspace : dir;
+  }
 }
 
 /**
@@ -1061,24 +1166,69 @@ export function isWorkspaceRoot(dir: string): boolean {
   return Array.isArray(readJson(path.join(dir, 'lerna.json'))?.packages);
 }
 
-/** Package name → directory for every package the workspace declares. */
-function scanWorkspace(start: string): Map<string, string> {
-  const packages = new Map<string, string>();
-  let workspaceRoot: string | undefined;
+/** The nearest workspace root at or above `start`. */
+function workspaceRootOf(start: string): string | undefined {
   for (let dir = start; ; dir = path.dirname(dir)) {
-    if (isWorkspaceRoot(dir)) {
-      workspaceRoot = dir;
-      break;
-    }
-    if (dir === path.dirname(dir)) break;
+    if (isWorkspaceRoot(dir)) return dir;
+    if (dir === path.dirname(dir)) return undefined;
   }
-  if (!workspaceRoot) return packages;
+}
 
-  for (const dir of workspacePackageDirs(workspaceRoot)) {
-    const name = readJson(path.join(dir, 'package.json'))?.name;
+/** What a workspace root declares its packages in, and Nx's marker. */
+const WORKSPACE_MANIFESTS = ['pnpm-workspace.yaml', 'package.json', 'lerna.json', 'nx.json'];
+
+/**
+ * Workspace maps by workspace root (with Nx's projects or not), kept for the next load in the
+ * same process (a monorepo root's projects, the ESLint plugin's and the MCP server's reloads)
+ * while the files they were read from keep their size and mtime: the root's manifests, each
+ * package's package.json, the folders the packages are in and the folders the package globs
+ * start from. A package added to one of those folders, or a manifest edited, makes the next
+ * load read the workspace again.
+ */
+const workspaceMaps = new Map<
+  string,
+  { stamp: string; watched: string[]; packages: Map<string, string> }
+>();
+
+/**
+ * Package name → directory for every package the workspace declares, with Nx's projects
+ * unless `nx` is false.
+ */
+function scanWorkspace(start: string, nx = true): Map<string, string> {
+  const workspaceRoot = workspaceRootOf(start);
+  if (!workspaceRoot) return new Map();
+  const key = `${workspaceRoot}\0${String(nx)}`;
+  const cached = workspaceMaps.get(key);
+  if (cached && stampOf(cached.watched) === cached.stamp) return cached.packages;
+
+  // Stamped before reading, so a change made meanwhile is read next time.
+  const before = [
+    ...WORKSPACE_MANIFESTS.map((name) => path.join(workspaceRoot, name)),
+    ...workspacePatterns(workspaceRoot).include.map((p) =>
+      path.resolve(workspaceRoot, globBase(`${p}/package.json`)),
+    ),
+  ];
+  const stamps = new Map(before.map((file) => [file, fileStamp(file)]));
+  const packages = new Map<string, string>();
+  const dirs = workspacePackageDirs(workspaceRoot, nx);
+  for (const dir of dirs) {
+    const manifest = path.join(dir, 'package.json');
+    stamps.set(manifest, fileStamp(manifest));
+    if (!stamps.has(path.dirname(dir))) stamps.set(path.dirname(dir), fileStamp(path.dirname(dir)));
+    const name = readJson(manifest)?.name;
     if (typeof name === 'string' && !packages.has(name)) packages.set(name, dir);
   }
+  const watched = [...stamps.keys()];
+  workspaceMaps.set(key, {
+    stamp: watched.map((file) => stamps.get(file)).join('|'),
+    watched,
+    packages,
+  });
   return packages;
+}
+
+function stampOf(files: readonly string[]): string {
+  return files.map(fileStamp).join('|');
 }
 
 /** Folders a workspace root's package globs list, without its `!` exclusions. */
@@ -1129,7 +1279,7 @@ const NOT_PACKAGES = ['**/node_modules/**', '**/.git/**'];
  * package globs match that hold a package.json, and with an nx.json, every folder with an
  * Nx project.json.
  */
-export function workspacePackageDirs(root: string): string[] {
+export function workspacePackageDirs(root: string, nx = true): string[] {
   const { include, exclude } = workspacePatterns(root);
   const ignore = [...NOT_PACKAGES, ...exclude];
   const dirs = include.length
@@ -1138,7 +1288,7 @@ export function workspacePackageDirs(root: string): string[] {
         { cwd: root, absolute: true, ignore },
       ).map((manifest) => path.dirname(manifest))
     : [];
-  if (fs.existsSync(path.join(root, 'nx.json'))) {
+  if (nx && fs.existsSync(path.join(root, 'nx.json'))) {
     const projects = globSync('**/project.json', {
       cwd: root,
       absolute: true,
