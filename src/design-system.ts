@@ -21,7 +21,12 @@ import {
   type SearchHit,
 } from './search/index.js';
 import { loadTokens, type TokenIndex } from './tokens/index.js';
-import { applyTailwindColors, applyTailwindRadii, readTailwindColors, readTailwindRadii } from './tokens/tailwind-config.js';
+import {
+  applyTailwindColors,
+  applyTailwindRadii,
+  readTailwindColors,
+  readTailwindRadii,
+} from './tokens/tailwind-config.js';
 import type {
   CheckResult,
   ComponentInfo,
@@ -427,7 +432,11 @@ export async function buildModel(
     },
   };
 
-  const dependencies = unique([...extracted.dependencies, ...(tailwind?.files ?? []), ...radiiFiles]);
+  const dependencies = unique([
+    ...extracted.dependencies,
+    ...(tailwind?.files ?? []),
+    ...radiiFiles,
+  ]);
   const key = await cacheKey(config, files, dependencies, stats);
   if (useCache) {
     try {

@@ -63,10 +63,7 @@ function radiusToken(value: string, cssVar = '--radius-x'): Token {
 describe('Tailwind v3 borderRadius presets (issue #60)', () => {
   it('reads raw borderRadius from the config and its preset', () => {
     const dir = writeFixture();
-    const { radii, files } = readTailwindRadii(
-      path.join(dir, 'tailwind.config.cjs'),
-      resolve,
-    );
+    const { radii, files } = readTailwindRadii(path.join(dir, 'tailwind.config.cjs'), resolve);
     expect(radii.get('sm')).toBe('calc(var(--radius) - 4px)');
     expect(radii.get('lg')).toBe('0.5rem');
     expect(radii.get('DEFAULT')).toBe('var(--radius)');
