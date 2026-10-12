@@ -11,14 +11,14 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { href: '/#benchmark', label: 'Benchmark' },
+  { href: '/benchmark', label: 'Benchmark' },
   { href: '/playground', label: 'Playground' },
   { href: '/rules', label: 'Rules' },
   { href: '/docs', label: 'Docs' },
 ];
 
 /** Shown on small screens too; the rest from md up. */
-const ALWAYS = new Set(['Playground', 'Docs']);
+const ALWAYS = new Set(['Playground', 'Rules', 'Docs']);
 
 export function SiteHeader() {
   return (

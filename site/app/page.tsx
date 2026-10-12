@@ -1,14 +1,20 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Fragment } from 'react';
 
-import { Benchmark } from '@/components/benchmark';
+import { Headline, HeadlineStats } from '@/components/benchmark-summary';
 import { Code } from '@/components/code';
 import { ArrowRightIcon, CheckIcon } from '@/components/icons';
 import { InstallPanel, StarButton } from '@/components/install';
 import { LoopDemo } from '@/components/loop-demo';
 import { InlineMarkdown } from '@/components/markdown';
 import { Eyebrow, InlineCode, Section, TextLink } from '@/components/section';
-import { bench, corpus, demo, readme, rules, tools } from '@/lib/data';
+import { headline } from '@/lib/benchmark';
+import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
 import { AUTHOR, docsHref, NPM, REPO, repoLink, SITE_URL } from '@/lib/site';
+
+// The home page's own canonical URL; the root layout's would apply to every page without one.
+export const metadata: Metadata = { alternates: { canonical: '/' } };
 
 /** What search engines get as structured data. */
 const jsonLd = {
@@ -52,8 +58,21 @@ export default function Home() {
 
 // ─── Hero and the loop ──────────────────────────────────────────────────────
 
+/** The primary call to action: the quickstart. */
+function GetStarted() {
+  return (
+    <Link
+      href="/docs"
+      className="group inline-flex items-center gap-1.5 rounded-lg border border-cyan bg-cyan px-3.5 py-2 text-sm font-semibold text-ink transition-colors hover:border-cyan-bright hover:bg-cyan-bright"
+    >
+      Get started
+      <ArrowRightIcon className="size-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
 function Hero() {
-  const [first] = bench.models;
+  const result = headline(benchmark);
   return (
     <div className="relative">
       <div className="glow pointer-events-none absolute inset-x-0 top-0 h-180" aria-hidden="true" />
@@ -64,7 +83,15 @@ function Hero() {
       <div className="relative mx-auto w-full max-w-6xl px-4 pt-14 pb-12 sm:px-6 sm:pt-20 lg:pt-24">
         <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_28.5rem] lg:gap-14">
           <div>
-            <Eyebrow>Claude Code hook · CI check · MCP server · MIT</Eyebrow>
+            {/* Lines break only after a separator, and balance so the last item is not alone. */}
+            <Eyebrow className="text-balance">
+              {['Claude Code hook', 'CI check', 'MCP server', 'MIT'].map((item, i) => (
+                <Fragment key={item}>
+                  {i > 0 && '\u00a0· '}
+                  <span className="whitespace-nowrap">{item}</span>
+                </Fragment>
+              ))}
+            </Eyebrow>
             <h1 className="mt-5 text-[2.15rem] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-fg sm:text-5xl lg:text-[3.15rem]">
               Keeps coding agents on your design system.
             </h1>
@@ -82,15 +109,15 @@ function Hero() {
               package; a shadcn/ui app works with no config at all.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <GetStarted />
               <StarButton />
-              <a
-                href="#benchmark"
+              <Link
+                href="/benchmark"
                 className="group inline-flex items-center gap-1.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
               >
-                {first &&
-                  `${first.name}: ${String(first.base.clean)}/${String(first.base.runs)} → ${String(first.plugin.clean)}/${String(first.plugin.runs)} clean components`}
+                {`Rule violations per run: ${result.from} → ${result.to} over ${result.runs} runs`}
                 <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
-              </a>
+              </Link>
             </div>
           </div>
           <InstallPanel className="lg:mt-2" />
@@ -168,44 +195,31 @@ function Problem() {
 // ─── Proof ──────────────────────────────────────────────────────────────────
 
 function Proof() {
-  const calls = bench.models.map((m) => m.plugin.toolCalls).sort((a, b) => a - b);
-  const [small] = bench.models;
   return (
     <Section
       id="benchmark"
       eyebrow="Does it help?"
-      title="The same ten components, built twice per model."
+      title="The same tasks, with and without onsystem."
       lead={
         <p>
-          Claude Code built ten components a chat product needs for{' '}
-          <TextLink href="https://github.com/vercel/ai-chatbot">vercel/ai-chatbot</TextLink>, a real
-          shadcn/ui app: once as it ships, once with the{' '}
-          <TextLink href={docsHref('claude-code-plugin')}>plugin</TextLink>. Then{' '}
-          <InlineCode>onsystem check</InlineCode> scored every file it wrote.
+          In the benchmark of {benchmark.date}, <Headline benchmark={benchmark} />.
         </p>
       }
     >
-      <Benchmark bench={bench} />
-      <div className="mt-8 grid gap-6 text-[15px] leading-relaxed text-muted md:grid-cols-2 md:gap-10">
-        <p>
-          Without the plugin, the misses were raw colors for things the prompt described (“a red
-          alert”, “a green label”), a native <InlineCode>&lt;label&gt;</InlineCode> where the
-          project has <InlineCode>Label</InlineCode>, and an icon button nobody could name with a
-          screen reader. With it, the agent looked components and tokens up before writing (
-          {calls.join(' to ')} design-system tool calls per task), and the hook that checks each
-          file never had to step in.
-        </p>
-        <p>
-          It is one project and forty runs, one per task, model and condition, so read it as a
-          direction rather than a rate. Opus 5 already does well by copying the codebase; the
-          smaller model gained the most
-          {small && small.costDelta < 0 ? ', and cost less with the plugin than without' : ''}.{' '}
-          <TextLink href={repoLink('bench/agents', 'tree')}>
-            The method, per-run results and every generated file
-          </TextLink>{' '}
-          are in the repository.
-        </p>
-      </div>
+      <p className="mb-3 text-[13px] text-muted">
+        No onsystem → skill, MCP server and hook, all {benchmark.models.length} models pooled, with
+        95% intervals.
+      </p>
+      <HeadlineStats benchmark={benchmark} />
+      <p className="mt-6 text-[15px] leading-relaxed text-muted">
+        <Link
+          href="/benchmark"
+          className="group inline-flex items-center gap-1.5 font-medium text-fg-soft transition-colors hover:text-fg"
+        >
+          The tables by arm and model, the blind labels, the method and how to reproduce it
+          <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+        </Link>
+      </p>
     </Section>
   );
 }
@@ -350,8 +364,10 @@ function HowItWorks() {
         <Card step="02" title="Checks every edit and every pull request">
           <p>
             In Claude Code, the plugin&apos;s hook runs these rules right after each file is written
-            and hands the errors back for Claude to fix. In CI, <InlineCode>check</InlineCode> runs
-            them on every pull request.
+            and hands the errors back for Claude to fix. In CI, <InlineCode>check</InlineCode> or
+            the <TextLink href={docsHref('required-check')}>GitHub Action</TextLink> runs them on
+            every pull request, and the <TextLink href={docsHref('eslint')}>ESLint plugin</TextLink>{' '}
+            runs them wherever ESLint 9 or 10 runs.
           </p>
           <ul className="mt-3 grid gap-1.5">
             {rules.map((rule) => (
@@ -522,6 +538,7 @@ function ShadcnLint() {
               Flag arbitrary values (<InlineCode>p-[13px]</InlineCode>,{' '}
               <InlineCode>rounded-[7px]</InlineCode>)
             </>,
+            'Run as ESLint rules: onsystem in ESLint 9 and 10, @shadcn/lint in 9.30+',
           ]}
         />
         <Column
@@ -551,7 +568,7 @@ function ShadcnLint() {
             'Unknown and dynamic classes',
             'Per-component contracts you write',
             'Svelte and Vue, as well as React',
-            'Runs as ESLint 9.30+ or Oxlint rules',
+            'Runs as Oxlint rules',
           ]}
         />
       </div>
@@ -617,6 +634,9 @@ function WorksWith() {
           </ul>
           <p className="mt-4 text-[14px] text-muted">
             Configs for each are in the <TextLink href={docsHref('setup')}>setup guide</TextLink>.
+            The same rules run in ESLint 9 and 10 with the{' '}
+            <TextLink href={docsHref('eslint')}>ESLint plugin</TextLink>, and on pull requests with
+            the <TextLink href={docsHref('required-check')}>GitHub Action</TextLink>.
           </p>
         </div>
         <div>
@@ -714,6 +734,7 @@ function FinalCta() {
             the most useful thing you can send.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+            <GetStarted />
             <StarButton />
             <a
               href={`${REPO}/issues/new/choose`}

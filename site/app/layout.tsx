@@ -10,8 +10,9 @@ import { mono, sans } from './fonts';
 import './globals.css';
 
 const title = 'onsystem: keeps coding agents on your design system';
+// 160 characters at most: search results cut longer descriptions off.
 const description =
-  'Keeps coding agents on your design system: it knows your real components, props, variants and tokens, catches the moment an agent invents one and has it fix it, and the same check gates your PRs. Local, zero config, works alongside @shadcn/lint.';
+  'Keeps coding agents on your design system: catches invented components, props, variants and tokens, has the agent fix them, and gates PRs. Local, zero config.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -33,7 +34,6 @@ export const metadata: Metadata = {
     'coding agents',
     'Cursor',
   ],
-  alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     siteName: 'onsystem',

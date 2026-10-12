@@ -62,6 +62,11 @@ export function SiteFooter() {
                 Issues
               </a>
             </li>
+            <li>
+              <a className={link} href="/llms.txt">
+                llms.txt
+              </a>
+            </li>
           </ul>
         </nav>
         <nav aria-label="More by Diogo Esteves">

@@ -13,8 +13,8 @@ export const PLUGIN_COMMANDS = readme.install.plugin;
 export const CURSOR_INSTALL = readme.install.cursor;
 export const VSCODE_INSTALL = readme.install.vscode;
 
-/** A file or folder in the repository on GitHub. */
-export function repoLink(file: string, kind: 'blob' | 'tree' = 'blob'): string {
+/** A file or folder in the repository on GitHub, or the editor for a file. */
+export function repoLink(file: string, kind: 'blob' | 'tree' | 'edit' = 'blob'): string {
   return `${REPO}/${kind}/main/${file}`;
 }
 
@@ -31,9 +31,29 @@ export const MORE = [
   },
 ];
 
-/** A rule's entry in the catalog. */
+/** A rule's page. */
 export function ruleHref(id: string): string {
-  return `/rules#${id}`;
+  return `/rules/${id}`;
+}
+
+/** Inline Markdown as plain text, for titles and meta tags: `code` loses its backticks. */
+export function plainText(markdown: string): string {
+  return markdown.replace(/`/g, '');
+}
+
+/**
+ * Where an old link to a rule's section of /rules (`/rules#no-unknown-prop`, which the CLI's
+ * SARIF and the ESLint plugin print) should go now: the rule's page, or nowhere for any other
+ * anchor (`#suppressing-findings` is still a section of /rules).
+ */
+export function ruleFromHash(hash: string, ids: readonly string[]): string | null {
+  let id = hash.replace(/^#/, '');
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    return null;
+  }
+  return ids.includes(id) ? ruleHref(id) : null;
 }
 
 /** The docs/*.md files and the page each one is rendered on. */
@@ -68,6 +88,8 @@ const SECTIONS: Record<string, string> = {
   'zero-config': '/docs/configuration#zero-config',
   'config-file': '/docs/configuration#config-file',
   ci: '/docs/ci',
+  'required-check': '/docs/required-check',
+  eslint: '/docs/eslint',
   'adopting-it-in-an-existing-codebase': '/docs/ci#adopting-it-in-an-existing-codebase',
   troubleshooting: '/docs/troubleshooting',
   'how-it-works': '/docs/how-it-works',

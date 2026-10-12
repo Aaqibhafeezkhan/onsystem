@@ -3,6 +3,7 @@
  * library, the demo design system, the benchmark results, docs/*.md and the README.
  */
 import benchJson from '@/generated/bench.json';
+import benchmarkJson from '@/generated/benchmark.json';
 import corpusJson from '@/generated/corpus.json';
 import demoJson from '@/generated/demo.json';
 import designSystemJson from '@/generated/design-system.json';
@@ -73,6 +74,112 @@ export interface Bench {
   models: BenchModel[];
 }
 
+/** A rate with its 95% Wilson interval, as bench/v2's results.json has it (fractions). */
+export interface BenchRate {
+  successes: number;
+  n: number;
+  value: number;
+  low: number;
+  high: number;
+}
+
+/** A mean or a difference with its 95% cluster-bootstrap interval. */
+export interface BenchInterval {
+  value: number;
+  low: number;
+  high: number;
+}
+
+/** One model (or a pool of models) and arm, from bench/v2's results.json. */
+export interface BenchRow {
+  model: string;
+  provider: string;
+  arm: string;
+  runs: number;
+  scored: number;
+  created: BenchRate;
+  tscPass: BenchRate;
+  onsystemClean: BenchRate;
+  accepted: BenchRate;
+  onsystemErrors: BenchInterval;
+  cost: BenchInterval;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  hookBlocks: number;
+  mcpCalls: number;
+  skillLoads: number;
+}
+
+/** An arm against `none`, paired on model, task and repeat. */
+export interface BenchDelta {
+  model: string;
+  arm: string;
+  pairs: number;
+  tscPass: BenchInterval;
+  onsystemClean: BenchInterval;
+  accepted: BenchInterval;
+  onsystemErrors: BenchInterval;
+}
+
+/** A rate as results.md prints it: whole percents. */
+export interface LabelRate {
+  successes: number;
+  n: number;
+  percent: number;
+  low: number;
+  high: number;
+}
+
+/** bench/v2's standard run: results.json, the blind labels, and the method from the README. */
+export interface Benchmark {
+  matrix: string;
+  date: string;
+  onsystem: string;
+  runs: number;
+  statuses: Record<string, number>;
+  models: { id: string; name: string; provider: string; tier: string; runs: number }[];
+  providers: { id: string; name: string }[];
+  arms: string[];
+  repos: {
+    name: string;
+    url: string;
+    sha: string;
+    project: string;
+    typescript: string;
+    designSystem: string;
+  }[];
+  tasks: { id: string; repo: string; prompt: string }[];
+  rows: BenchRow[];
+  deltas: BenchDelta[];
+  cost: { total: number; cap: number; pricesVerified: string };
+  time: { wallMinutes: number; medianSeconds: number; minSeconds: number; maxSeconds: number };
+  labels: {
+    files: number;
+    findings: number;
+    labeller: { kind: string; model: string; provider: string; sameFamily: string[] };
+    arms: {
+      arm: string;
+      labelled: number;
+      wouldMerge: LabelRate;
+      clean: LabelRate;
+      violations: BenchInterval;
+    }[];
+    agreement: { both: number; onsystemOnly: number; labellerOnly: number; neither: number };
+    precision: LabelRate & { debatable: number };
+  };
+  /** Sections of bench/v2/README.md, as Markdown with links relative to the repository root. */
+  method: {
+    v1: string;
+    arms: string;
+    scoring: string;
+    statistics: string;
+    threats: string;
+    running: string;
+  };
+  release: { url: string; tag: string };
+}
+
 export interface Tools {
   version: string;
   tools: { name: string; title: string; description: string }[];
@@ -98,6 +205,10 @@ export interface RuleEntry extends Rule {
   good: string;
   fixedBy: 'rule' | 'hand';
   changes: { start: number; end: number }[];
+  /** Rules to read next, from scripts/rule-docs.mjs. */
+  related: string[];
+  /** The example with a comment that suppresses the finding on `line`, checked when built. */
+  suppressed: { code: string; line: number };
   findings: {
     severity: 'error' | 'warning';
     message: string;
@@ -117,6 +228,8 @@ export interface RuleCatalog {
   details: string;
   /** Suppression comments and overrides, as Markdown from docs/rules.md. */
   suppression: string;
+  /** Its last paragraph: what each suppression comment covers. */
+  suppressionScope: string;
 }
 
 /** The docs/*.md pages, each without its `# title`. */
@@ -186,6 +299,7 @@ function typed<T>(json: unknown): T {
 
 export const demo = typed<Demo>(demoJson);
 export const bench = typed<Bench>(benchJson);
+export const benchmark = typed<Benchmark>(benchmarkJson);
 export const corpus = typed<Corpus>(corpusJson);
 export const tools = typed<Tools>(toolsJson);
 export const ruleCatalog = typed<RuleCatalog>(rulesJson);

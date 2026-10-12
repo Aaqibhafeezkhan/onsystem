@@ -50,7 +50,7 @@ export function Code({
       <div className="relative">
         <pre
           tabIndex={0}
-          className={`code overflow-x-auto px-4 py-3.5 text-[12.5px] leading-[1.7] ${wrap ? 'whitespace-pre-wrap' : ''}`}
+          className={`code overflow-x-auto px-4 py-3.5 text-[12.5px] leading-[1.7] ${copy && !title ? 'pr-12' : ''} ${wrap ? 'whitespace-pre-wrap' : ''}`}
         >
           <code>
             {lines.map((segments, i) => (
