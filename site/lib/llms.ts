@@ -9,6 +9,7 @@ import {
   REPO,
   repoLink,
   resolveDocHref,
+  ruleHref,
   SITE_URL,
 } from '@/lib/site';
 
@@ -57,7 +58,7 @@ export function llmsTxt(): string {
     '',
     ...ruleCatalog.rules.map(
       (rule) =>
-        `- [\`${rule.id}\`](${SITE_URL}/rules#${rule.id}) (${rule.severity}): ${rule.description}`,
+        `- [\`${rule.id}\`](${SITE_URL}${ruleHref(rule.id)}) (${rule.severity}): ${rule.description}`,
     ),
     '',
     '## Optional',

@@ -31,9 +31,29 @@ export const MORE = [
   },
 ];
 
-/** A rule's entry in the catalog. */
+/** A rule's page. */
 export function ruleHref(id: string): string {
-  return `/rules#${id}`;
+  return `/rules/${id}`;
+}
+
+/** Inline Markdown as plain text, for titles and meta tags: `code` loses its backticks. */
+export function plainText(markdown: string): string {
+  return markdown.replace(/`/g, '');
+}
+
+/**
+ * Where an old link to a rule's section of /rules (`/rules#no-unknown-prop`, which the CLI's
+ * SARIF and the ESLint plugin print) should go now: the rule's page, or nowhere for any other
+ * anchor (`#suppressing-findings` is still a section of /rules).
+ */
+export function ruleFromHash(hash: string, ids: readonly string[]): string | null {
+  let id = hash.replace(/^#/, '');
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    return null;
+  }
+  return ids.includes(id) ? ruleHref(id) : null;
 }
 
 /** The docs/*.md files and the page each one is rendered on. */

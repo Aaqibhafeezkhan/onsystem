@@ -205,6 +205,10 @@ export interface RuleEntry extends Rule {
   good: string;
   fixedBy: 'rule' | 'hand';
   changes: { start: number; end: number }[];
+  /** Rules to read next, from scripts/rule-docs.mjs. */
+  related: string[];
+  /** The example with a comment that suppresses the finding on `line`, checked when built. */
+  suppressed: { code: string; line: number };
   findings: {
     severity: 'error' | 'warning';
     message: string;
@@ -224,6 +228,8 @@ export interface RuleCatalog {
   details: string;
   /** Suppression comments and overrides, as Markdown from docs/rules.md. */
   suppression: string;
+  /** Its last paragraph: what each suppression comment covers. */
+  suppressionScope: string;
 }
 
 /** The docs/*.md pages, each without its `# title`. */
