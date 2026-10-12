@@ -1,4 +1,5 @@
-import { bench, docs, readme, ruleCatalog, tools } from '@/lib/data';
+import { headlineText } from '@/lib/benchmark';
+import { benchmark, docs, readme, ruleCatalog, tools } from '@/lib/data';
 import { DOCS_PAGES } from '@/lib/docs';
 import {
   NPM,
@@ -26,7 +27,6 @@ const summary =
 
 /** llms.txt (https://llmstxt.org): what this is, how to install it, and where everything is. */
 export function llmsTxt(): string {
-  const [model] = bench.models;
   const lines = [
     '# onsystem',
     '',
@@ -41,13 +41,12 @@ export function llmsTxt(): string {
     '- Required check on pull requests: the GitHub Action `uses: dgesteves/onsystem@v0`, which annotates the lines a pull request changed',
     `- Any MCP client, over stdio: \`${NPX}\``,
     '',
-    model
-      ? `Benchmark: Claude Code built the same ten components for vercel/ai-chatbot with and without the plugin. ${bench.models.map((m) => `${m.name}: ${String(m.base.clean)}/${String(m.base.runs)} → ${String(m.plugin.clean)}/${String(m.plugin.runs)} clean, ${String(m.base.errors)} → ${String(m.plugin.errors)} errors`).join('; ')}.`
-      : '',
+    `Benchmark (${benchmark.date}): ${headlineText(benchmark)}. Tables, method and blind labels: ${SITE_URL}/benchmark`,
     '',
     '## Docs',
     '',
     ...DOCS_PAGES.map((page) => `- [${page.title}](${SITE_URL}${page.href}): ${page.description}`),
+    `- [Benchmark](${SITE_URL}/benchmark): coding agents from ${String(benchmark.providers.length)} providers with and without onsystem, by arm and model, with the method and how to reproduce it`,
     `- [Rules](${SITE_URL}/rules): every rule with what it catches, why it matters, an example and its fix`,
     `- [Playground](${SITE_URL}/playground): run check_ui on code in the browser, against a demo design system`,
     '',
@@ -66,7 +65,7 @@ export function llmsTxt(): string {
     '',
     `- [All the docs in one file](${SITE_URL}/llms-full.txt)`,
     `- [README](${REPO}#readme)`,
-    `- [Benchmark method and per-run results](${repoLink('bench/agents', 'tree')})`,
+    `- [Benchmark method and per-run results](${repoLink('bench/v2', 'tree')})`,
     `- [npm](${NPM})`,
     `- [MCP Registry](${REGISTRY})`,
     `- [Changelog](${repoLink('CHANGELOG.md')})`,
