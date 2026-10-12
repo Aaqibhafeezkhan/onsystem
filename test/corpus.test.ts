@@ -244,6 +244,15 @@ describe('corpus comparison', () => {
     expect(outside(findings('root', same), ['apps/web']).map((f) => f.file)).toEqual([
       'packages/ui/button.tsx',
     ]);
+
+    // `.`: the same folder checked another way (after init in its design-system package)
+    // must report every file as the other run does, and adds nothing to the rate.
+    expect(rootDifferences(run('again', project), '.', run('web', project))).toEqual([]);
+    expect(rootDifferences(run('again', [at('app/page.tsx')]), '.', run('web', project))).toEqual([
+      'app/x.tsx: checked from ., not from the root',
+      'app/page.tsx:1 [no-hardcoded-color] "bg-red-500": 0 from the root, 1 from .',
+    ]);
+    expect(outside(findings('again', project), ['.'])).toEqual([]);
   });
 });
 
