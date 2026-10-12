@@ -6,6 +6,9 @@ Built for design-system and platform teams with a React design-system package; a
 
 [![CI](https://img.shields.io/github/actions/workflow/status/dgesteves/onsystem/ci.yml?branch=main&style=flat-square&label=CI&labelColor=0d0f12)](https://github.com/dgesteves/onsystem/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](https://www.npmjs.com/package/onsystem)
+[![Downloads](https://img.shields.io/npm/dw/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](https://www.npmjs.com/package/onsystem)
+[![MCP Registry](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.modelcontextprotocol.io%2Fv0%2Fservers%3Fsearch%3Dio.github.dgesteves%2Fonsystem%26version%3Dlatest&query=%24.servers%5B0%5D.server.version&prefix=v&label=MCP%20Registry&style=flat-square&labelColor=0d0f12&color=22d3ee&logo=modelcontextprotocol&logoColor=white)](https://registry.modelcontextprotocol.io/?q=io.github.dgesteves%2Fonsystem)
+[![Cursor Directory](https://img.shields.io/badge/Cursor_Directory-Listed-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.directory/plugins/design-system-mcp)
 [![License: MIT](https://img.shields.io/github/license/dgesteves/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](LICENSE)
 
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_server-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19)

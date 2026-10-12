@@ -30,6 +30,14 @@ describe('the README', () => {
     expect(top).toContain('](https://onsystem.vercel.app/docs/plugin)');
   });
 
+  it('links the MCP Registry badge to the server.json name, and reads the version from there', () => {
+    const top = readme.slice(0, readme.indexOf('<!-- npm-readme:video -->'));
+    const { name } = JSON.parse(read('server.json')) as { name: string };
+    const encoded = encodeURIComponent(name);
+    expect(top).toContain(`search%3D${encoded}%26version%3Dlatest`);
+    expect(top).toContain(`](https://registry.modelcontextprotocol.io/?q=${encoded})`);
+  });
+
   it('lists every rule with its default severity', async () => {
     const { rules } = await loadConfig({ cwd: fs.mkdtempSync(path.join(os.tmpdir(), 'readme-')) });
     const rows = readme.split('\n').filter((line) => /^\| `[\w-]+` +\|/.test(line));
