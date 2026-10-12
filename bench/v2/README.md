@@ -8,16 +8,16 @@ Does onsystem make coding agents write UI that fits a project's design system, a
 
 [v1](../agents) was one repository, Claude only, 40 runs, and onsystem scored its own output. It showed a direction, not a result.
 
-|              | v1 (2026-10-08)                                           | v2                                                                                        |
-| ------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Agent        | Claude Code headless, with the user's own settings loaded | One neutral agent loop over each provider's API, nothing else loaded                      |
-| Models       | Claude Haiku 4.5, Claude Opus 5                           | Small and mid tiers from Anthropic, OpenAI and Google; frontier tier optional             |
-| Repositories | 1 (vercel/chatbot)                                        | 5 from `corpus/`, pinned, installed with scripts off                                      |
-| Tasks        | 10                                                        | 20 (4 per repository), fixed prompts                                                      |
-| Conditions   | base, plugin                                              | none, skill, mcp, hook, all                                                               |
-| Repeats      | 1                                                         | 1 to 3 per cell                                                                           |
+|              | v1 (2026-10-08)                                           | v2                                                                                           |
+| ------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Agent        | Claude Code headless, with the user's own settings loaded | One neutral agent loop over each provider's API, nothing else loaded                         |
+| Models       | Claude Haiku 4.5, Claude Opus 5                           | Small and mid tiers from Anthropic, OpenAI and Google; frontier tier optional                |
+| Repositories | 1 (vercel/chatbot)                                        | 5 from `corpus/`, pinned, installed with scripts off                                         |
+| Tasks        | 10                                                        | 20 (4 per repository), fixed prompts                                                         |
+| Conditions   | base, plugin                                              | none, skill, mcp, hook, all                                                                  |
+| Repeats      | 1                                                         | 1 to 3 per cell                                                                              |
 | Scoring      | `onsystem check`                                          | `tsc` in each project's own setup, `onsystem check`, and blind labels on a stratified sample |
-| Statistics   | counts                                                    | Wilson intervals for rates, cluster bootstrap for means and paired differences            |
+| Statistics   | counts                                                    | Wilson intervals for rates, cluster bootstrap for means and paired differences               |
 
 ## Method
 
