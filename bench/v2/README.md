@@ -16,7 +16,7 @@ Does onsystem make coding agents write UI that fits a project's design system, a
 | Tasks        | 10                                                        | 20 (4 per repository), fixed prompts                                                      |
 | Conditions   | base, plugin                                              | none, skill, mcp, hook, all                                                               |
 | Repeats      | 1                                                         | 1 to 3 per cell                                                                           |
-| Scoring      | `onsystem check`                                          | `tsc` in each project's own setup, `onsystem check`, and human labels on a blinded sample |
+| Scoring      | `onsystem check`                                          | `tsc` in each project's own setup, `onsystem check`, and blind labels on a stratified sample |
 | Statistics   | counts                                                    | Wilson intervals for rates, cluster bootstrap for means and paired differences            |
 
 ## Method
@@ -113,7 +113,7 @@ Outcomes, fixed before any run:
 - **Primary, independent:** `tsc` pass rate per model and arm.
 - **Primary, onsystem's own:** onsystem-clean rate per model and arm.
 - **Composite:** accepted = file created, type-checks and onsystem-clean.
-- **Human:** would-merge rate, files without violations, violations per file, and the share of onsystem's findings the labeller judges correct.
+- **Blind labels:** would-merge rate, files without violations, violations per file, and the share of onsystem's findings the labeller judges correct.
 - **Secondary:** onsystem errors per run, cost, requests, tokens, hook blocks, MCP calls, skill loads.
 
 Rates get 95% [Wilson score intervals](https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval#Wilson_score_interval). Means and every difference between arms get 95% percentile intervals from a cluster bootstrap that resamples tasks (10,000 draws, seed 1): runs of the same task are not independent, since a hard task is hard in every arm. Each arm is compared with `none` on the same model, task and repeat. There are no p-values. The tables pool the models of each tier, and all models together. The headline is the comparison pooled over a tier's models for each arm (4 per tier and outcome); per-model comparisons (up to 36) are reported too, and about 1 in 20 of those intervals would exclude zero by chance alone. The tables are computed by `lib/stats.ts`, which `test/bench-v2.test.ts` covers.
@@ -123,7 +123,7 @@ Rates get 95% [Wilson score intervals](https://en.wikipedia.org/wiki/Binomial_pr
 - **Not a product test.** The loop is not Claude Code, Codex or Gemini CLI. Real clients add their own prompts and tools, which can change how much onsystem helps.
 - **One reasoning level.** `medium` means different things to different providers; other levels may change the picture.
 - **The prompt asks for the design system.** Every arm is told to use the project's components and tokens. A prompt that does not ask would likely show larger effects; this one is the conservative case, and the same as v1.
-- **The scorers' blind spots.** `tsc` sees invented APIs, not hardcoded values. onsystem sees both but is the tool under test; its precision on the corpus is in `corpus/labels.json`. Neither judges whether the UI does what was asked; only the human sample does, and only on a sample.
+- **The scorers' blind spots.** `tsc` sees invented APIs, not hardcoded values. onsystem sees both but is the tool under test; its precision on the corpus is in `corpus/labels.json`. Neither judges whether the UI does what was asked; only the blind labels do, and only on a sample.
 - **Repositories and tasks.** Five open-source React and Tailwind projects and twenty single-file tasks. Editing existing screens, other frameworks and multi-file work are not covered. The repositories and their tasks may be in some models' training data.
 - **The skill and hook arms mention the MCP tools** they do not include, as shipped.
 - **Prices and models change.** The cost table is for 2026-10-12. Gemini 3.8 Flash's price doubles on 2027-01-01, and Gemini 3.1 Pro is a preview.
