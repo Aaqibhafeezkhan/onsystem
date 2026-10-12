@@ -388,7 +388,7 @@ write('bench.json', {
 
 // ─── The corpus: how often the rules are wrong ──────────────────────────────
 
-// The numbers `pnpm corpus` prints, from the files it writes: the hand labels in the random
+// The numbers `pnpm corpus` prints, from the files it writes: the labels in the random
 // sample that the snapshot says are still reported, and the findings per run and rule.
 const corpusDir = path.join(repo, 'corpus');
 const readCorpus = (file) => JSON.parse(fs.readFileSync(path.join(corpusDir, file), 'utf8'));

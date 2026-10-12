@@ -233,7 +233,7 @@ function RealCodebases() {
           <TextLink href={repoLink('corpus', 'tree')}>corpus</TextLink> runs{' '}
           <InlineCode>check</InlineCode> on {corpus.repos} public repositories pinned by commit (
           {corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct findings) and
-          compares the findings with hand labels. In a random sample of {corpus.sample},{' '}
+          compares the findings with labels. In a random sample of {corpus.sample},{' '}
           {corpus.truePositives} are clearly right, {corpus.debatable} debatable and{' '}
           {corpus.falsePositives} false positives (
           {((corpus.falsePositives / corpus.sample) * 100).toFixed(1)}%); weighted by run and rule,
