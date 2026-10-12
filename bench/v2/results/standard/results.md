@@ -90,3 +90,19 @@ Each arm against `none`, paired on model, task and repeat (percentage points; er
 | all models | mcp | 240 | -2 [-5, +2] | +30 [+15, +45] | +28 [+14, +42] | -0.83 [-1.35, -0.40] |
 | all models | hook | 240 | -1 [-4, +2] | +29 [+16, +44] | +27 [+14, +41] | -0.80 [-1.29, -0.38] |
 | all models | all | 240 | 0 [-4, +3] | +32 [+17, +48] | +29 [+15, +44] | -0.85 [-1.38, -0.40] |
+
+
+## Blind labels
+
+Who labelled, and what they could see: [labels/LABELLER.md](labels/LABELLER.md).
+
+| Arm | Files labelled | Would merge | No violations (human) | Violations / file (human) |
+| --- | --: | --: | --: | --: |
+| none | 12 | 11/12 92% [65%, 99%] | 10/12 83% [55%, 95%] | 0.42 [0.00, 1.20] |
+| skill | 12 | 12/12 100% [76%, 100%] | 12/12 100% [76%, 100%] | 0.00 [0.00, 0.00] |
+| mcp | 12 | 12/12 100% [76%, 100%] | 12/12 100% [76%, 100%] | 0.00 [0.00, 0.00] |
+| hook | 12 | 12/12 100% [76%, 100%] | 10/12 83% [55%, 95%] | 0.67 [0.00, 2.15] |
+| all | 12 | 11/12 92% [65%, 99%] | 10/12 83% [55%, 95%] | 0.92 [0.00, 2.54] |
+
+onsystem against the labeller, per file: both found a problem in 1, only onsystem in 3, only the labeller in 5, neither in 51.
+onsystem's findings judged correct: 3/3 100% [44%, 100%] (19 debatable, left out).

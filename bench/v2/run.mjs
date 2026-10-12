@@ -520,7 +520,11 @@ function report(out) {
       fs.existsSync(findingsFile) ? parseCsv(fs.readFileSync(findingsFile, 'utf8')) : [],
       results,
     );
-    lines.push('', '## Human labels', '', renderLabelSummary(summary));
+    // Who labelled (a person or an AI reviewer) is stated in labels/LABELLER.md, not assumed here.
+    const labeller = fs.existsSync(path.join(out, 'labels', 'LABELLER.md'))
+      ? 'Who labelled, and what they could see: [labels/LABELLER.md](labels/LABELLER.md).'
+      : 'Who labelled is not recorded: add labels/LABELLER.md.';
+    lines.push('', '## Blind labels', '', labeller, '', renderLabelSummary(summary));
   }
   fs.writeFileSync(path.join(out, 'results.md'), `${lines.join('\n').trimEnd()}\n`);
   fs.writeFileSync(
