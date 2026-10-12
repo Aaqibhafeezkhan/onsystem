@@ -1,5 +1,5 @@
 // Real-world regression corpus: public repositories pinned by commit, checked with the built CLI
-// and compared with corpus/snapshot.json and the hand-labelled findings in corpus/labels.json.
+// and compared with corpus/snapshot.json and the labelled findings in corpus/labels.json.
 //
 //   node scripts/corpus.mjs                  fetch what is missing, check every run, compare
 //   node scripts/corpus.mjs --update         the same, then record the new counts in the snapshot
