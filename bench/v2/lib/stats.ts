@@ -1,6 +1,6 @@
 // Statistics and aggregation behind bench/v2/run.mjs: Wilson intervals for rates, a seeded
 // cluster bootstrap for means and paired differences, the results table and the sample drawn
-// for human labelling. Pure functions, so test/bench-v2.test.ts covers them.
+// for blind labelling. Pure functions, so test/bench-v2.test.ts covers them.
 //
 // Runs of the same task are not independent (a hard task is hard in every arm), so every
 // bootstrap here resamples tasks, not runs: a cluster is one repository task, and all the runs
@@ -413,10 +413,10 @@ export function renderMarkdown(rows: readonly Row[], diffs: readonly Delta[]): s
   return `${lines.join('\n')}\n`;
 }
 
-// ─── Human labels ─────────────────────────────────────────────────────────────
+// ─── Blind labels ─────────────────────────────────────────────────────────────
 
 /**
- * A stratified random sample for human labelling: up to `perCell` scored runs that created
+ * A stratified random sample for blind labelling: up to `perCell` scored runs that created
  * their file, per model and arm, drawn with a seeded shuffle. Each gets a blind id that does not
  * reveal the model or the arm; the key that maps it back is written separately.
  */
@@ -569,7 +569,7 @@ export function labelSummary(
 
 export function renderLabelSummary(s: LabelSummary): string {
   const lines = [
-    '| Arm | Files labelled | Would merge | No violations (human) | Violations / file (human) |',
+    '| Arm | Files labelled | Would merge | No violations (labeller) | Violations / file (labeller) |',
     '| --- | --: | --: | --: | --: |',
     ...s.arms.map(
       (a) =>

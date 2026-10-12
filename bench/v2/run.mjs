@@ -1,6 +1,6 @@
 // onsystem benchmark v2: coding agents from three providers write UI in five real repositories,
 // with no help, the skill, the MCP server, the hook, or all three, scored by tsc, onsystem and
-// a blinded human sample. Method and threats to validity: bench/v2/README.md.
+// a blind-labelled sample. Method and threats to validity: bench/v2/README.md.
 //
 //   node bench/v2/run.mjs plan    [--matrix standard] [--usage-from <out>]
 //   node bench/v2/run.mjs prepare [--repos a,b] [--work <dir>] [--force]

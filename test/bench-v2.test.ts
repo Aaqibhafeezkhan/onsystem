@@ -230,7 +230,7 @@ describe('aggregate and deltas', () => {
   });
 });
 
-describe('human labels', () => {
+describe('blind labels', () => {
   const results = ['none', 'skill', 'mcp', 'hook', 'all'].flatMap((arm) =>
     ['t1', 't2', 't3'].map((task) =>
       result({ id: `${arm}-${task}`, arm, task, onsystemErrors: arm === 'none' ? 1 : 0 }),

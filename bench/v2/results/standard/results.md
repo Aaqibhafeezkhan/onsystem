@@ -96,7 +96,7 @@ Each arm against `none`, paired on model, task and repeat (percentage points; er
 
 Who labelled, and what they could see: [labels/LABELLER.md](labels/LABELLER.md).
 
-| Arm | Files labelled | Would merge | No violations (human) | Violations / file (human) |
+| Arm | Files labelled | Would merge | No violations (labeller) | Violations / file (labeller) |
 | --- | --: | --: | --: | --: |
 | none | 12 | 11/12 92% [65%, 99%] | 10/12 83% [55%, 95%] | 0.42 [0.00, 1.20] |
 | skill | 12 | 12/12 100% [76%, 100%] | 12/12 100% [76%, 100%] | 0.00 [0.00, 0.00] |
