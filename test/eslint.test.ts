@@ -184,6 +184,37 @@ describe('the ESLint plugin', () => {
     ]);
   });
 
+  it('takes on the config a design-system package declares, as check does', async () => {
+    const root = fixture({
+      'package.json': JSON.stringify({
+        name: 'repo',
+        private: true,
+        workspaces: ['apps/*', 'packages/*'],
+      }),
+      'packages/kit/package.json': JSON.stringify({
+        name: '@acme/kit',
+        onsystem: './onsystem.config.json',
+      }),
+      'packages/kit/onsystem.config.json': JSON.stringify({
+        components: ['src/*.tsx'],
+        tokens: ['src/theme.css'],
+        rules: { 'no-hardcoded-color': 'off' },
+      }),
+      'packages/kit/src/button.tsx': BUTTON,
+      'packages/kit/src/theme.css': TOKENS,
+      'apps/web/package.json': JSON.stringify({ name: 'web', dependencies: { '@acme/kit': '*' } }),
+      'apps/web/app/page.tsx':
+        'export default () => <button className="bg-[#ff0000]">Go</button>\n',
+    });
+    const web = path.join(root, 'apps/web');
+    // <button> is flagged for the package's Button; its config turns the color rule off.
+    const expected = ['app/page.tsx:1:23 onsystem/prefer-design-system-component error'];
+    expect(keys(await lint(web, ['app']), web)).toEqual(expected);
+    expect(await checkJson(web, ['app'])).toEqual(expected);
+    // From the monorepo root, the same.
+    expect(keys(await lint(root, ['apps']), root)).toEqual(expected.map((k) => `apps/web/${k}`));
+  });
+
   it('takes the project root and config from settings.onsystem', async () => {
     const root = fixture({
       'ui/kit/button.tsx': BUTTON,

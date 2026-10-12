@@ -745,7 +745,7 @@ async function inspect(
   }
   const lines: string[] = [
     `root     ${model.root}`,
-    `config   ${config.configFile ? displayPath(io.cwd, config.configFile) : '(defaults)'}`,
+    `config   ${config.configFile ? `${displayPath(io.cwd, config.configFile)}${declaredBy(config)}` : '(defaults)'}`,
     ...(config.detected ? [`detected ${config.detected}`] : []),
     ...describeLibraries(config, model, io.cwd).map((line) => `library  ${line}`),
     `files    ${plural(model.stats.files.components, 'component file')}, ${plural(model.stats.files.tokens, 'token file')}, ${plural(model.stats.files.docs, 'doc')}`,
@@ -914,7 +914,7 @@ async function inspectWorkspace(
     const tokens = [...tokenCounts(model)].map(([category, n]) => `${category} ${n}`);
     const own =
       project.config.configFile && project.config.configFile !== workspace.configFile
-        ? displayPath(workspace.root, project.config.configFile)
+        ? `${displayPath(workspace.root, project.config.configFile)}${declaredBy(project.config)}`
         : undefined;
     lines.push(
       '',
@@ -973,6 +973,11 @@ function explainWorkspace(
     );
   }
   return lines;
+}
+
+/** ` (declared by @acme/ui)` after a config a design-system package declares; empty otherwise. */
+function declaredBy(config: ResolvedConfig): string {
+  return config.designSystemPackage ? ` (declared by ${config.designSystemPackage.name})` : '';
 }
 
 /** `A, B, C` up to a dozen names, then `and 40 more`. */

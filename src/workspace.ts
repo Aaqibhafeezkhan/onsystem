@@ -4,13 +4,19 @@ import path from 'node:path';
 
 import {
   CONFIG_FILES,
+  hasOwnConfig,
   LEGACY_CONFIG_FILES,
   loadConfig,
   type LoadConfigOptions,
   type ResolvedConfig,
 } from './config.js';
 import { componentFiles } from './design-system.js';
-import { isWorkspaceRoot, workspacePackageDirs, workspacePatterns } from './detect.js';
+import {
+  findDesignSystemPackage,
+  isWorkspaceRoot,
+  workspacePackageDirs,
+  workspacePatterns,
+} from './detect.js';
 import { isInside, relativePath } from './util/paths.js';
 
 /**
@@ -166,8 +172,10 @@ async function discoverWorkspace(
 }
 
 /**
- * A project's config: its own config file, or the workspace root's, with paths relative to
- * the workspace root, or zero config. CLI flags that apply to every project carry over.
+ * A project's config: its own config file, else the config its design-system package declares
+ * (a dependency with `"onsystem"` in its package.json), else the workspace root's, with paths
+ * relative to the workspace root, else zero config. `loadConfig` from the project's folder finds
+ * the first two the same way. CLI flags that apply to every project carry over.
  */
 function loadProjectConfig(
   dir: string,
@@ -180,10 +188,10 @@ function loadProjectConfig(
     includeDesignSystem: options.includeDesignSystem,
     jsonConfigOnly: options.jsonConfigOnly,
   };
-  const own = [...CONFIG_FILES, ...LEGACY_CONFIG_FILES].some((name) =>
-    fs.existsSync(path.join(dir, name)),
-  );
-  if (own || !rootConfigFile) return loadConfig({ ...shared, root: dir });
+  if (!rootConfigFile || hasOwnConfig(dir)) return loadConfig({ ...shared, root: dir });
+  // A declaration that cannot be read is reported from the project's own load.
+  const declared = findDesignSystemPackage(dir);
+  if (declared?.found || declared?.problems.length) return loadConfig({ ...shared, root: dir });
   return loadConfig({ ...shared, root: dir, config: rootConfigFile, base: workspaceRoot });
 }
 

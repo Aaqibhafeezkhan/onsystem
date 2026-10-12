@@ -4,7 +4,16 @@ import { pathToFileURL } from 'node:url';
 
 import * as z from 'zod';
 
-import { detectProject, type DesignSystemSource, type ImportMapping } from './detect.js';
+import {
+  declaredConfig,
+  detectProject,
+  findDesignSystemPackage,
+  packageImports,
+  PACKAGE_FIELD,
+  type DesignSystemPackage,
+  type DesignSystemSource,
+  type ImportMapping,
+} from './detect.js';
 import {
   detectLibraries,
   LIBRARY_IDS,
@@ -234,6 +243,13 @@ export interface ResolvedConfig {
    * root, for a project that takes its settings from a config there.
    */
   base?: string | undefined;
+  /**
+   * The design-system package whose config this is: a dependency whose package.json declares it
+   * (`"onsystem": "./onsystem.config.json"`), taken on by a project with no config of its own.
+   * Its paths are rebased from the package; its `tsconfig`, `overrides` and
+   * `includeDesignSystem` stay with it.
+   */
+  designSystemPackage?: DesignSystemPackage | undefined;
   /** `components` comes from the config file or `--components`, not from detection or the defaults. */
   configured?: boolean | undefined;
   /**
@@ -339,6 +355,8 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
   const searchDir = options.root ? path.resolve(cwd, options.root) : cwd;
   const deprecations: string[] = [];
   let configFile: string | undefined;
+  /** The design-system package whose config this project takes on, having none of its own. */
+  let declared: DesignSystemPackage | undefined;
   if (options.config) {
     configFile = path.resolve(cwd, options.config);
   } else {
@@ -347,7 +365,11 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     configFile = find(CONFIG_FILES);
     const legacy = find(LEGACY_CONFIG_FILES);
     if (legacy) deprecations.push(legacyConfigNotice(legacy, configFile));
-    configFile ??= legacy;
+    configFile ??= legacy ?? ownDeclaredConfig(searchDir);
+    if (!configFile) {
+      declared = designSystemPackage(searchDir);
+      configFile = declared?.config;
+    }
   }
 
   let raw: unknown = {};
@@ -367,22 +389,26 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     );
   }
   const config = parsed.data;
+  // An explicit --config sets the root by its folder; one found by name is in the folder searched.
   const root = options.root
     ? path.resolve(cwd, options.root)
-    : configFile
+    : options.config && configFile
       ? path.dirname(configFile)
-      : cwd;
+      : searchDir;
   if (!isDirectory(root)) throw new ConfigError(`Project root not found: ${root}`);
   // A workspace root's config, taken on by a project in it: its paths are relative to the
   // workspace root. Files and token globs are rebased onto the project's folder; `exclude`
   // keeps the patterns that can match in it; `overrides` are matched from the workspace root.
-  const base = options.base ? path.resolve(cwd, options.base) : root;
+  // A design-system package's config, taken on by an app that depends on it: its paths are
+  // relative to the package, and `exclude` keeps every pattern, rebased onto the package.
+  const base = declared ? declared.dir : options.base ? path.resolve(cwd, options.base) : root;
   const inherited = base !== root;
   const fromBase = (p: string) =>
     inherited ? toPosix(path.relative(root, path.resolve(base, slashGlob(p)))) || '.' : p;
   const toProject = toPosix(path.relative(base, root));
   const excludeFromBase = (e: string): string | undefined => {
     if (!inherited || e.startsWith('**/')) return e;
+    if (declared) return fromBase(e);
     return e.startsWith(`${toProject}/`) ? e.slice(toProject.length + 1) : undefined;
   };
 
@@ -394,16 +420,22 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
         ? { severity: DEFAULT_SEVERITY[id], options: {} }
         : resolveRule(setting);
   }
-  const overrides: ResolvedOverride[] = (config.overrides ?? []).map((override) => ({
-    files: toArray(override.files).map(slashGlob),
-    rules: Object.fromEntries(
-      Object.entries(override.rules).map(([id, setting]) => [id, resolveRule(setting)]),
-    ),
-  }));
+  // A package's `overrides` are about its own files, which an app does not check.
+  const overrides: ResolvedOverride[] = (declared ? [] : (config.overrides ?? [])).map(
+    (override) => ({
+      files: toArray(override.files).map(slashGlob),
+      rules: Object.fromEntries(
+        Object.entries(override.rules).map(([id, setting]) => [id, resolveRule(setting)]),
+      ),
+    }),
+  );
 
-  // Paths may be written Windows-style; globs and POSIX need forward slashes.
+  // Paths may be written Windows-style; globs and POSIX need forward slashes. An app keeps its
+  // own tsconfig over a design-system package's, which resolves the package's aliases, not its.
   const tsconfig =
-    config.tsconfig === undefined ? undefined : fromBase(config.tsconfig.replaceAll('\\', '/'));
+    config.tsconfig === undefined || declared
+      ? undefined
+      : fromBase(config.tsconfig.replaceAll('\\', '/'));
   if (tsconfig !== undefined && !fs.existsSync(path.resolve(root, tsconfig))) {
     // Without it, path aliases do not resolve and most checks go quiet.
     throw new ConfigError(
@@ -413,12 +445,14 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
 
   // Without component globs, look for components.json or a design-system package.
   const componentsSet = Boolean(options.components?.length) || config.components !== undefined;
-  const detection = componentsSet ? undefined : detectProject(root, tsconfig);
+  const detection = componentsSet ? undefined : detectProject(root, tsconfig, undefined, declared);
 
   // A token file named outright (not a glob) that does not exist is a typo, not "no tokens".
+  // Not in a design-system package's config, whose own checks catch it: a package installed
+  // from a registry ships only some of its files.
   const explicitTokens = options.tokens?.length
     ? { paths: options.tokens, from: '--tokens' }
-    : config.tokens !== undefined
+    : config.tokens !== undefined && !declared
       ? {
           paths: toArray(config.tokens).map((t) => fromBase(typeof t === 'string' ? t : t.path)),
           from: `"tokens" in ${configFile ?? 'the config'}`,
@@ -454,7 +488,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     components: (options.components?.length
       ? options.components
       : config.components !== undefined
-        ? toArray(config.components)
+        ? toArray(config.components).map(fromBase)
         : detection
           ? [...(detection.withDefaults ? DEFAULT_COMPONENTS : []), ...detection.components]
           : DEFAULT_COMPONENTS
@@ -472,7 +506,9 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     ).map(slashGlob),
     tsconfig,
     importPath: config.importPath,
-    imports: detection?.imports ?? [],
+    // Components a package's config names are imported by its exports, as detection reads them.
+    imports:
+      detection?.imports ?? (declared && componentsSet ? packageImports(root, declared.dir) : []),
     detected: detection?.source,
     ...(detection?.designSystems ? { designSystems: detection.designSystems } : {}),
     tailwindConfig: findTailwindConfig(root),
@@ -480,13 +516,48 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     libraryIds: config.libraries,
     librariesOff: libraries.off,
     elements: config.elements ?? {},
-    includeDesignSystem: options.includeDesignSystem ?? config.includeDesignSystem ?? false,
+    includeDesignSystem:
+      options.includeDesignSystem ?? (declared ? undefined : config.includeDesignSystem) ?? false,
     rules,
     overrides,
-    ...(inherited ? { base } : {}),
+    ...(inherited && !declared ? { base } : {}),
+    ...(declared ? { designSystemPackage: declared } : {}),
     configured: componentsSet,
     ...(deprecations.length ? { deprecations } : {}),
   };
+}
+
+/**
+ * Whether `dir` has a config of its own: a config file under its current or old name, or one its
+ * package.json names in its `onsystem` field. Without one, a project takes on its design-system
+ * package's config, else the workspace root's.
+ */
+export function hasOwnConfig(dir: string): boolean {
+  if ([...CONFIG_FILES, ...LEGACY_CONFIG_FILES].some((name) => fs.existsSync(path.join(dir, name))))
+    return true;
+  return declaredConfig(dir) !== undefined;
+}
+
+/** The config `dir`'s own package.json names in its `onsystem` field, as a design-system package does. */
+function ownDeclaredConfig(dir: string): string | undefined {
+  const declared = declaredConfig(dir);
+  if (declared && 'problem' in declared) throw new ConfigError(declared.problem);
+  return declared?.file;
+}
+
+/**
+ * The design-system package `dir` takes its config from: the dependency whose package.json
+ * declares one (`"onsystem": "./onsystem.config.json"`). A declaration that cannot be read is an
+ * error, rather than a design system silently not found.
+ */
+function designSystemPackage(dir: string): DesignSystemPackage | undefined {
+  const lookup = findDesignSystemPackage(dir);
+  if (lookup?.problems.length) {
+    throw new ConfigError(
+      `${lookup.problems.join('\n')}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
+    );
+  }
+  return lookup?.found;
 }
 
 /** What to say about a config file under its old name, with or without a new one next to it. */

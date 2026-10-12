@@ -54,6 +54,22 @@ export interface DetectionStep {
 type Note = (reason: string) => void;
 const ignore: Note = () => undefined;
 
+/**
+ * A dependency whose package.json declares its onsystem config
+ * (`"onsystem": "./onsystem.config.json"`): a design-system package set up for the apps that
+ * use it.
+ */
+export interface DesignSystemPackage {
+  /** Its package name: `@acme/ui`. */
+  name: string;
+  /** Its folder, absolute: the workspace package's sources, or where it is installed. */
+  dir: string;
+  /** The JSON config its package.json names, absolute. */
+  config: string;
+  /** Installed from a registry into `node_modules`, rather than a workspace package. */
+  installed: boolean;
+}
+
 /** One of several design systems an app uses, and how often its code imports it. */
 export interface DesignSystemSource {
   source: string;
@@ -103,11 +119,16 @@ const STYLESHEETS = [
  * With more than one design system, the one the root's code imports most comes first
  * (`designSystems`). A candidate whose globs match no file is skipped. Returns undefined
  * when nothing applies, so the shadcn defaults stay in force.
+ *
+ * `declared` is the dependency whose config the root takes on ({@link findDesignSystemPackage}):
+ * it is read first among the dependencies in step 3, whatever its name, and also when it is
+ * installed from a registry rather than a workspace package.
  */
 export function detectProject(
   root: string,
   tsconfig?: string,
   trace?: DetectionStep[],
+  declared?: Pick<DesignSystemPackage, 'name' | 'dir' | 'installed'>,
 ): Detection | undefined {
   const step = (candidate: string, accepted: boolean, reason: string) =>
     trace?.push({ candidate, accepted, reason });
@@ -168,7 +189,10 @@ export function detectProject(
     ...asRecord(own?.dependencies),
     ...asRecord(own?.devDependencies),
   });
-  const names = dependencies.filter(isDesignSystemName);
+  const names = unique([
+    ...(declared ? [declared.name] : []),
+    ...dependencies.filter(isDesignSystemName),
+  ]);
   if (!names.length) {
     step(
       'workspace design-system packages',
@@ -178,14 +202,17 @@ export function detectProject(
   }
   let imported: Map<string, Set<string>> | undefined;
   for (const name of names) {
-    const candidate = `workspace package ${name}`;
+    // The package whose config the root takes on is read where it is, installed or not.
+    const own = name === declared?.name ? declared : undefined;
+    const kind = own?.installed ? 'installed' : 'workspace';
+    const candidate = `${kind} package ${name}`;
     // What components.json already points into.
     if (found.some((f) => f.package === name)) {
       step(candidate, false, 'not added twice: components.json points into it');
       continue;
     }
     // Only workspace sources: a package installed from the registry is compiled.
-    const dir = packages.find(name);
+    const dir = own ? own.dir : packages.find(name);
     const pkg = dir ? readJson(path.join(dir, 'package.json')) : undefined;
     if (!dir || !pkg) {
       step(
@@ -204,7 +231,7 @@ export function detectProject(
     if (result && matchesAny(root, result)) {
       found.push({
         ...result,
-        source: `workspace package ${result.source}`,
+        source: `${kind} package ${result.source}`,
         package: name,
         prefixes: [name],
       });
@@ -265,12 +292,21 @@ export function detectProject(
 
 /** `12 component files`, for the trace. */
 function countFiles(root: string, found: Found): string {
-  const files = globSync(found.components, {
-    cwd: root,
-    ignore: ['**/node_modules/**'],
-    expandDirectories: false,
-  }).length;
-  return plural(files, 'component file');
+  return plural(componentGlob(root, found.components).length, 'component file');
+}
+
+/**
+ * The files `patterns` match, outside `node_modules` unless a pattern points into it: the
+ * sources of a design-system package installed there.
+ */
+function componentGlob(root: string, patterns: string[]): string[] {
+  const named = patterns.filter((p) => p.includes('node_modules'));
+  const rest = patterns.filter((p) => !p.includes('node_modules'));
+  const options = { cwd: root, expandDirectories: false };
+  return [
+    ...(rest.length ? globSync(rest, { ...options, ignore: ['**/node_modules/**'] }) : []),
+    ...(named.length ? globSync(named, options) : []),
+  ];
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -386,13 +422,7 @@ function detection(root: string, found: Found[], withDefaults: boolean, source: 
 }
 
 function matchesAny(root: string, found: Found): boolean {
-  return (
-    globSync(found.components, {
-      cwd: root,
-      ignore: ['**/node_modules/**'],
-      expandDirectories: false,
-    }).length > 0
-  );
+  return componentGlob(root, found.components).length > 0;
 }
 
 /** `components.json` read from `dir` (the root, or a workspace package's directory). */
@@ -607,7 +637,7 @@ function fromImports(
   const stylesheets: string[] = [];
   const seen = new Set<string>();
   for (const subpath of [...(subpaths ?? [])].sort()) {
-    const file = moduleFile(path.join(dir, subpath));
+    const file = moduleFile(path.join(dir, subpath), undefined, dir);
     if (!file || seen.has(file)) continue;
     seen.add(file);
     const specifier = `${name}/${subpath}`;
@@ -878,6 +908,107 @@ export function workspaceModule(
     });
     return declared ? {} : undefined;
   };
+}
+
+/** The package.json field a design-system package names its onsystem config with. */
+export const PACKAGE_FIELD = 'onsystem';
+
+/**
+ * The config the package.json in `dir` declares: its `onsystem` field, a JSON file in the
+ * package (`"./onsystem.config.json"`). Undefined without the field; a problem when the field
+ * names something that cannot be read. Only JSON: a config in code would run a dependency's code.
+ */
+export function declaredConfig(
+  dir: string,
+  pkg: Record<string, unknown> | undefined = readJson(path.join(dir, 'package.json')),
+): { file: string } | { problem: string } | undefined {
+  const value = pkg?.[PACKAGE_FIELD];
+  if (value === undefined) return undefined;
+  const field = `"${PACKAGE_FIELD}" in ${path.join(dir, 'package.json')}`;
+  if (typeof value !== 'string' || !value.endsWith('.json')) {
+    return {
+      problem: `${field} is ${JSON.stringify(value)}: it names a JSON config file in the package, such as "./onsystem.config.json".`,
+    };
+  }
+  const file = path.resolve(dir, value);
+  if (!isInside(dir, file) || file === path.resolve(dir)) {
+    return { problem: `${field} names ${value}, which is outside the package.` };
+  }
+  if (!isFile(file)) return { problem: `${field} names ${value}, which does not exist.` };
+  return { file };
+}
+
+/**
+ * The dependency of `root` (in `dependencies` or `devDependencies`) whose package.json declares
+ * its onsystem config, as a workspace package or installed from a registry: the design system
+ * the root uses, set up in its own package. With several, the one the root's code imports
+ * most, then the first listed; `others` names the rest. `problems` lists declarations that
+ * cannot be read. Undefined at a workspace root, whose projects each find their own, and
+ * without a package.json.
+ */
+export function findDesignSystemPackage(root: string):
+  | {
+      found?: DesignSystemPackage | undefined;
+      others: string[];
+      problems: string[];
+      /** How many dependencies were looked at, for the trace. */
+      dependencies: number;
+    }
+  | undefined {
+  const own = readJson(path.join(root, 'package.json'));
+  if (!own || isWorkspaceRoot(root)) return undefined;
+  const names = Object.keys({
+    ...asRecord(own.dependencies),
+    ...asRecord(own.devDependencies),
+  });
+  const packages = new PackageFinder(root);
+  const declaring: DesignSystemPackage[] = [];
+  const problems: string[] = [];
+  for (const name of names) {
+    const workspace = packages.find(name);
+    const dir = workspace ?? installedPackageDir(root, name);
+    if (!dir) continue;
+    const declared = declaredConfig(dir);
+    if (!declared) continue;
+    if ('problem' in declared) problems.push(`${name}: ${declared.problem}`);
+    else declaring.push({ name, dir, config: declared.file, installed: !workspace });
+  }
+  let ranked = declaring;
+  if (declaring.length > 1) {
+    const counts = importCounts(
+      root,
+      declaring.map((p) => [p.name]),
+    );
+    ranked = declaring
+      .map((p, i) => ({ p, imports: counts[i] ?? 0, i }))
+      .sort((a, b) => b.imports - a.imports || a.i - b.i)
+      .map((r) => r.p);
+  }
+  const [found, ...others] = ranked;
+  return { found, others: others.map((p) => p.name), problems, dependencies: names.length };
+}
+
+/**
+ * Import specifiers for the component files a package's `exports` lead to, through barrels and
+ * from `dist/` back to the sources: what apps import its components by.
+ */
+export function packageImports(root: string, dir: string): ImportMapping[] {
+  const pkg = readJson(path.join(dir, 'package.json'));
+  return pkg ? (fromPackage(root, dir, pkg)?.imports ?? []) : [];
+}
+
+/**
+ * Where `name` is installed for code in `root`, in `node_modules` there or in a folder above,
+ * as Node.js finds it: its real folder, expressed from the root as given.
+ */
+function installedPackageDir(root: string, name: string): string | undefined {
+  for (let dir = path.resolve(root); ; dir = path.dirname(dir)) {
+    const candidate = path.join(dir, 'node_modules', ...name.split('/'));
+    if (fs.existsSync(path.join(candidate, 'package.json'))) {
+      return path.resolve(root, path.relative(fs.realpathSync(root), fs.realpathSync(candidate)));
+    }
+    if (dir === path.dirname(dir)) return undefined;
+  }
 }
 
 /** `@acme/ui`, `@acme/ui-kit`, `@acme/design-system`, `acme-ui`; not `@acme/email-components`. */

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { DEFAULT_SEVERITY, RULE_IDS, type ResolvedConfig } from './config.js';
 import type { DesignSystem } from './design-system.js';
-import { detectProject, type DetectionStep } from './detect.js';
+import { detectProject, findDesignSystemPackage, type DetectionStep } from './detect.js';
 import { LIBRARY_IDS, type LibrarySource } from './libraries/index.js';
 import { relativePath } from './util/paths.js';
 
@@ -18,13 +18,16 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
   const out = (line = '') => lines.push(line ? `${indent}${line}` : '');
 
   out('How the design system was found');
+  for (const step of packageSteps(config, cwd)) {
+    out(`  ${(step.accepted ? 'found' : 'no').padEnd(6)} ${step.candidate}: ${step.reason}`);
+  }
   if (config.configured) {
     out(
       `  components come from ${config.configFile ? display(cwd, config.configFile) : '--components'}, so zero config did not look`,
     );
   } else {
     const steps: DetectionStep[] = [];
-    detectProject(config.root, config.tsconfig, steps);
+    detectProject(config.root, config.tsconfig, steps, config.designSystemPackage);
     for (const step of steps) {
       out(`  ${(step.accepted ? 'found' : 'no').padEnd(6)} ${step.candidate}: ${step.reason}`);
     }
@@ -54,7 +57,12 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
   out('Resolved config');
   const field = (name: string, value: string) => out(`  ${name.padEnd(12)} ${value}`);
   field('root', config.root);
-  field('config', config.configFile ? display(cwd, config.configFile) : '(none)');
+  field(
+    'config',
+    config.configFile
+      ? `${display(cwd, config.configFile)}${config.designSystemPackage ? ` (declared by ${config.designSystemPackage.name})` : ''}`
+      : '(none)',
+  );
   field('components', listOf(config.components) || '(none)');
   field('exclude', listOf(config.exclude));
   field(
@@ -205,4 +213,33 @@ function nodeModulesFor(dir: string): string | undefined {
 function display(cwd: string, file: string): string {
   const rel = relativePath(cwd, file);
   return rel && !rel.startsWith('..') ? rel : file;
+}
+
+/**
+ * Whether a dependency's declared config was taken on, for a project without a config of its
+ * own: the package it came from and the others that declare one, or that none does.
+ */
+function packageSteps(config: ResolvedConfig, cwd: string): DetectionStep[] {
+  const declared = config.designSystemPackage;
+  // A config of its own (or --config) is read first; the dependencies are not looked at.
+  if (config.configFile && !declared) return [];
+  const lookup = findDesignSystemPackage(config.root);
+  if (!lookup) return [];
+  const candidate = "a design-system package's config";
+  if (!declared) {
+    return [
+      {
+        candidate,
+        accepted: false,
+        reason: `no dependency declares one ("onsystem" in its package.json) among ${lookup.dependencies} ${lookup.dependencies === 1 ? 'dependency' : 'dependencies'}`,
+      },
+    ];
+  }
+  return [
+    {
+      candidate,
+      accepted: true,
+      reason: `${declared.name} (${declared.installed ? 'installed' : 'a workspace package'}) declares ${display(cwd, declared.config)}, which this project takes on, with its paths from ${display(cwd, declared.dir)}${lookup.others.length ? `; ${lookup.others.join(', ')} also declare one, not read: one config is taken on, from the package the code imports most` : ''}`,
+    },
+  ];
 }
