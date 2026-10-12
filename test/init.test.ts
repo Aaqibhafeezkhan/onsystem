@@ -62,6 +62,10 @@ describe('onsystem inspect --explain', () => {
     expect(stdout).toContain('Resolved config');
     expect(stdout).toContain('  components   components/ui/**/*.{tsx,jsx}');
     expect(stdout).toContain('  tokens       app/globals.css, **/*.tokens.json');
+    // components.json's folder is also a default docs folder: listed once.
+    expect(stdout).toContain(
+      '  docs         docs/components/**/*.{md,mdx}, components/ui/**/*.{md,mdx}, src/components/ui/**/*.{md,mdx}\n',
+    );
     expect(stdout).toMatch(
       / {2}rules {8}no-hardcoded-color error, .*icon-button-accessible-name error/,
     );

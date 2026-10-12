@@ -415,7 +415,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<Resol
     docs: (options.docs?.length
       ? options.docs
       : config.docs === undefined
-        ? [...DEFAULT_DOCS, ...(detection?.docs ?? [])]
+        ? [...new Set([...DEFAULT_DOCS, ...(detection?.docs ?? [])])]
         : toArray(config.docs).map(fromBase)
     ).map(slashGlob),
     tsconfig,
