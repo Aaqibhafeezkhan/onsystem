@@ -36,7 +36,7 @@ import type {
 } from './types.js';
 import { silentLogger, type Logger } from './util/log.js';
 import { globBase, isInside, relativePath } from './util/paths.js';
-import { closest, unique } from './util/strings.js';
+import { closest, plural, unique } from './util/strings.js';
 import { COLOR_UTILITY, parseUtility } from './lint/tailwind.js';
 import { VERSION } from './version.js';
 
@@ -672,8 +672,11 @@ export class DesignSystemHost {
     this.dependencies = dependencies ?? [];
     if (this.watchers.length) this.watchConfigFiles();
     const { stats } = model;
+    // Counted as inspect and list_components count them: `4 components (+6 parts)`.
+    const roots = ds.roots().length;
+    const parts = ds.components.length - roots;
     logger.info(
-      `${incremental ? 'reloaded' : 'loaded'} ${model.components.length} components, ${model.tokens.length} tokens` +
+      `${incremental ? 'reloaded' : 'loaded'} ${plural(roots, 'component')}${parts ? ` (+${plural(parts, 'part')})` : ''}, ${plural(model.tokens.length, 'token')}` +
         ` from ${relativePath(process.cwd(), config.root) || '.'} in ${stats.durationMs}ms${stats.fromCache ? ' (cache)' : ''}`,
     );
     for (const warning of model.warnings) logger.warn(warning);
