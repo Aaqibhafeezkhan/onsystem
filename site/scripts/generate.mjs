@@ -559,6 +559,26 @@ write('readme.json', {
 const { ruleDocs } = await import('./rule-docs.mjs');
 const ruleTable = table(docs.rules);
 const EXAMPLE_FILE = 'app/example.tsx';
+
+/**
+ * The example with its first finding suppressed by a comment on the line before: `//` at the
+ * top level, `{/* … *\/}` inside JSX. Checked: that line's findings go, the others stay.
+ */
+function suppressedExample(id, bad, own) {
+  const line = own[0].line;
+  const lines = bad.split('\n');
+  const indent = /^\s*/.exec(lines[line - 1])[0];
+  const text = `onsystem-disable-next-line ${id} -- why this one is intended`;
+  lines.splice(line - 1, 0, line === 1 ? `// ${text}` : `${indent}{/* ${text} */}`);
+  const code = lines.join('\n');
+  const after = ds.check(code, EXAMPLE_FILE).diagnostics;
+  assert.deepEqual(
+    after.map((d) => [d.ruleId, d.line - 1]),
+    own.filter((d) => d.line !== line).map((d) => [d.ruleId, d.line]),
+    `the suppressed ${id} example should keep only the findings on other lines`,
+  );
+  return { code, line };
+}
 const rules = RULES.map((rule) => {
   const docs = ruleDocs[rule.id];
   assert.ok(docs, `scripts/rule-docs.mjs has no entry for ${rule.id}`);
@@ -572,6 +592,12 @@ const rules = RULES.map((rule) => {
     before.diagnostics.length,
     `the ${rule.id} example should trip only that rule: ${JSON.stringify(before.diagnostics.map((d) => d.ruleId))}`,
   );
+  for (const related of docs.related) {
+    assert.ok(
+      related !== rule.id && RULES.some((r) => r.id === related),
+      `scripts/rule-docs.mjs: ${rule.id} lists an unknown related rule ${related}`,
+    );
+  }
   const good = docs.good ?? applyFixes(docs.bad, own);
   const after = ds.check(good, EXAMPLE_FILE);
   assert.equal(
@@ -590,6 +616,8 @@ const rules = RULES.map((rule) => {
     bad: docs.bad,
     good,
     fixedBy: docs.good ? 'hand' : 'rule',
+    related: docs.related,
+    suppressed: suppressedExample(rule.id, docs.bad, own),
     changes: changedSpans(docs.bad, good),
     findings: own.map((d) => ({
       severity: d.severity,
@@ -603,12 +631,20 @@ const rules = RULES.map((rule) => {
     })),
   };
 });
+const suppression = section(docs.rules, '## Suppressing findings', 'docs/rules.md');
+// The paragraph after the examples: what each comment covers, and overrides for whole folders.
+const suppressionScope = suppression.split('\n\n').at(-1);
+assert.ok(
+  suppressionScope.startsWith('`onsystem-disable-next-line` covers'),
+  'docs/rules.md: the suppression section should end with what each comment covers',
+);
 write('rules.json', {
   version: VERSION,
   rules,
   // How colors, spacing and radius fixes are chosen, and how to suppress a finding.
   details: section(docs.rules, '## How fixes are chosen', 'docs/rules.md'),
-  suppression: section(docs.rules, '## Suppressing findings', 'docs/rules.md'),
+  suppression,
+  suppressionScope,
 });
 
 // ─── Docs ───────────────────────────────────────────────────────────────────
