@@ -36,7 +36,8 @@ function utilities(namespace: string, key: string): string[] {
     case '--spacing':
       return key ? [`p-${key}`, `gap-${key}`, `m-${key}`] : ['p-4', 'gap-2', 'm-1'];
     case '--radius':
-      return [`rounded-${key}`];
+      // A Tailwind v3 `borderRadius.DEFAULT` is the bare `rounded`.
+      return [key === 'DEFAULT' ? 'rounded' : `rounded-${key}`];
     case '--font':
       return [`font-${key}`];
     case '--font-weight':

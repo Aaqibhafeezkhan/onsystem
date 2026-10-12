@@ -12,6 +12,7 @@ import {
   TokenIndex,
 } from '../src/tokens/index.js';
 import { evaluateLength, lengthToPx } from '../src/tokens/units.js';
+import { usageFor } from '../src/tokens/usage.js';
 import type { Token } from '../src/types.js';
 import { ACME_ROOT, DEMO_ROOT, fixture } from './helpers.js';
 
@@ -388,6 +389,19 @@ describe('CSS custom-property tokens', () => {
       'border-primary',
       'var(--color-primary)',
     ]);
+  });
+
+  it('suggests the bare utility for a Tailwind v3 DEFAULT radius', () => {
+    const token: Token = {
+      name: 'radius-DEFAULT',
+      category: 'radius',
+      value: '8px',
+      tailwind: 'DEFAULT',
+      usage: [],
+      source: { file: 'tailwind.config.js', line: 1 },
+    };
+    expect(usageFor(token, '--radius')).toEqual(['rounded']);
+    expect(usageFor({ ...token, tailwind: 'sm' }, '--radius')).toEqual(['rounded-sm']);
   });
 });
 
