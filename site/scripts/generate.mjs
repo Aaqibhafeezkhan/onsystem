@@ -229,7 +229,7 @@ const presets = [
     id: 'danger-zone',
     label: 'Agent draft',
     file: 'danger-zone.tsx',
-    description: 'The settings card from the demo above: one problem per rule.',
+    description: 'The settings card from the home page demo: one problem per rule.',
     code: draft,
   },
   {

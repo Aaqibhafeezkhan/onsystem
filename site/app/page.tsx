@@ -1,4 +1,6 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Fragment } from 'react';
 
 import { Benchmark } from '@/components/benchmark';
 import { Code } from '@/components/code';
@@ -9,6 +11,9 @@ import { InlineMarkdown } from '@/components/markdown';
 import { Eyebrow, InlineCode, Section, TextLink } from '@/components/section';
 import { bench, corpus, demo, readme, rules, tools } from '@/lib/data';
 import { AUTHOR, docsHref, NPM, REPO, repoLink, SITE_URL } from '@/lib/site';
+
+// The home page's own canonical URL; the root layout's would apply to every page without one.
+export const metadata: Metadata = { alternates: { canonical: '/' } };
 
 /** What search engines get as structured data. */
 const jsonLd = {
@@ -52,6 +57,19 @@ export default function Home() {
 
 // ─── Hero and the loop ──────────────────────────────────────────────────────
 
+/** The primary call to action: the quickstart. */
+function GetStarted() {
+  return (
+    <Link
+      href="/docs"
+      className="group inline-flex items-center gap-1.5 rounded-lg border border-cyan bg-cyan px-3.5 py-2 text-sm font-semibold text-ink transition-colors hover:border-cyan-bright hover:bg-cyan-bright"
+    >
+      Get started
+      <ArrowRightIcon className="size-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
 function Hero() {
   const [first] = bench.models;
   return (
@@ -64,7 +82,15 @@ function Hero() {
       <div className="relative mx-auto w-full max-w-6xl px-4 pt-14 pb-12 sm:px-6 sm:pt-20 lg:pt-24">
         <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_28.5rem] lg:gap-14">
           <div>
-            <Eyebrow>Claude Code hook · CI check · MCP server · MIT</Eyebrow>
+            {/* Lines break only after a separator, and balance so the last item is not alone. */}
+            <Eyebrow className="text-balance">
+              {['Claude Code hook', 'CI check', 'MCP server', 'MIT'].map((item, i) => (
+                <Fragment key={item}>
+                  {i > 0 && '\u00a0· '}
+                  <span className="whitespace-nowrap">{item}</span>
+                </Fragment>
+              ))}
+            </Eyebrow>
             <h1 className="mt-5 text-[2.15rem] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-fg sm:text-5xl lg:text-[3.15rem]">
               Keeps coding agents on your design system.
             </h1>
@@ -82,6 +108,7 @@ function Hero() {
               package; a shadcn/ui app works with no config at all.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <GetStarted />
               <StarButton />
               <a
                 href="#benchmark"
@@ -350,8 +377,10 @@ function HowItWorks() {
         <Card step="02" title="Checks every edit and every pull request">
           <p>
             In Claude Code, the plugin&apos;s hook runs these rules right after each file is written
-            and hands the errors back for Claude to fix. In CI, <InlineCode>check</InlineCode> runs
-            them on every pull request.
+            and hands the errors back for Claude to fix. In CI, <InlineCode>check</InlineCode> or
+            the <TextLink href={docsHref('required-check')}>GitHub Action</TextLink> runs them on
+            every pull request, and the <TextLink href={docsHref('eslint')}>ESLint plugin</TextLink>{' '}
+            runs them wherever ESLint 9 or 10 runs.
           </p>
           <ul className="mt-3 grid gap-1.5">
             {rules.map((rule) => (
@@ -522,6 +551,7 @@ function ShadcnLint() {
               Flag arbitrary values (<InlineCode>p-[13px]</InlineCode>,{' '}
               <InlineCode>rounded-[7px]</InlineCode>)
             </>,
+            'Run as ESLint rules: onsystem in ESLint 9 and 10, @shadcn/lint in 9.30+',
           ]}
         />
         <Column
@@ -551,7 +581,7 @@ function ShadcnLint() {
             'Unknown and dynamic classes',
             'Per-component contracts you write',
             'Svelte and Vue, as well as React',
-            'Runs as ESLint 9.30+ or Oxlint rules',
+            'Runs as Oxlint rules',
           ]}
         />
       </div>
@@ -617,6 +647,9 @@ function WorksWith() {
           </ul>
           <p className="mt-4 text-[14px] text-muted">
             Configs for each are in the <TextLink href={docsHref('setup')}>setup guide</TextLink>.
+            The same rules run in ESLint 9 and 10 with the{' '}
+            <TextLink href={docsHref('eslint')}>ESLint plugin</TextLink>, and on pull requests with
+            the <TextLink href={docsHref('required-check')}>GitHub Action</TextLink>.
           </p>
         </div>
         <div>
@@ -714,6 +747,7 @@ function FinalCta() {
             the most useful thing you can send.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
+            <GetStarted />
             <StarButton />
             <a
               href={`${REPO}/issues/new/choose`}

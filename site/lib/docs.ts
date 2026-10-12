@@ -20,7 +20,7 @@ export const DOCS_PAGES = [
   },
   {
     href: '/docs/required-check',
-    title: 'Make it a required check on agent pull requests',
+    title: 'GitHub Action',
     description:
       'The GitHub Action that annotates the lines a pull request changed, making it a required check, and what to know for pull requests from Copilot, Codex and Claude.',
   },

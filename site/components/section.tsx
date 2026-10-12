@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 
-export function Eyebrow({ children }: { children: ReactNode }) {
+export function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <p className="font-mono text-[11.5px] font-medium tracking-[0.16em] text-cyan uppercase">
+    <p
+      className={`font-mono text-[11.5px] font-medium tracking-[0.16em] text-cyan uppercase ${className}`}
+    >
       {children}
     </p>
   );
@@ -48,9 +50,20 @@ export function Section({
   );
 }
 
+/**
+ * How inline code wraps: up to 30 characters stays on one line, which fits the narrowest text
+ * column on a phone; longer code wraps with the text, inside a long token too, so it never
+ * runs past the column.
+ */
+export function codeWrap(text: string): string {
+  return text.length <= 30 ? 'whitespace-nowrap' : 'break-words';
+}
+
 export function InlineCode({ children }: { children: ReactNode }) {
   return (
-    <code className="rounded bg-white/[0.06] px-1 py-px font-mono text-[0.88em] text-fg-soft">
+    <code
+      className={`rounded bg-white/[0.06] px-1 py-px font-mono text-[0.88em] text-fg-soft ${codeWrap(typeof children === 'string' ? children : '')}`}
+    >
       {children}
     </code>
   );

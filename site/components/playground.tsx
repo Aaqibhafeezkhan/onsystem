@@ -75,11 +75,17 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   const preset = presets.find((p) => p.id === presetId);
   const bytes = useMemo(() => new TextEncoder().encode(code).length, [code]);
   const current = checked?.code === code ? checked : undefined;
+  const empty = !code.trim();
 
   const run = useCallback(
     async (text: string) => {
       clearTimeout(timer.current);
       request.current?.abort();
+      if (!text.trim()) {
+        setPending(false);
+        setProblem(undefined);
+        return;
+      }
       if (new TextEncoder().encode(text).length > maxBytes) {
         setPending(false);
         setProblem({
@@ -154,8 +160,9 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   // The list keeps the last result while the edited code is checked again; its offsets only
   // line up with the code it was checked on, so marks and fixes wait for the new result.
   const stale = !current;
-  // After a failed check, the previous findings describe code that is gone: leave them out.
-  const shown = problem && stale ? undefined : checked;
+  // After a failed check, or with nothing to check, the previous findings describe code that is
+  // gone: leave them out.
+  const shown = empty || (problem && stale) ? undefined : checked;
   const diagnostics = shown?.result.diagnostics ?? [];
   const fixable = stale ? [] : diagnostics.filter((d) => d.fix?.length);
   const syntax = diagnostics.some((d) => d.ruleId === 'syntax');
@@ -197,13 +204,15 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
       ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
 
-  const status = problem
-    ? 'Not checked'
-    : pending || !current
-      ? 'Checking…'
-      : current.result.errorCount + current.result.warningCount === 0
-        ? 'No design-system problems'
-        : `${plural(current.result.errorCount, 'error')} · ${plural(current.result.warningCount, 'warning')}`;
+  const status = empty
+    ? 'Nothing to check'
+    : problem
+      ? 'Not checked'
+      : pending || !current
+        ? 'Checking…'
+        : current.result.errorCount + current.result.warningCount === 0
+          ? 'No design-system problems'
+          : `${plural(current.result.errorCount, 'error')} · ${plural(current.result.warningCount, 'warning')}`;
 
   return (
     <div>
@@ -238,7 +247,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
       </div>
       {preset && <p className="mt-3 text-[14px] text-muted">{preset.description}</p>}
 
-      <div className="mt-5 grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+      <div className="mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         {/* Editor */}
         <div className="min-w-0 overflow-hidden rounded-2xl border border-line bg-[#101317] transition-colors focus-within:border-cyan/60 focus-within:shadow-[0_0_0_1px_rgb(34_211_238/0.35)]">
           <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
@@ -246,7 +255,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               {preset && code === preset.code ? preset.file : 'Your code'}
             </label>
             <span
-              className={`shrink-0 font-mono text-[11px] ${pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-magenta-soft' : 'text-cyan'}`}
+              className={`shrink-0 font-mono text-[11px] ${empty || pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-magenta-soft' : 'text-cyan'}`}
             >
               {status}
             </span>
@@ -327,7 +336,8 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                 <>
                   Findings
                   {shown && (
-                    <span className="ml-2 font-mono text-xs font-normal">
+                    <span className="font-mono text-xs font-normal">
+                      {' '}
                       <span className="text-magenta-soft">
                         {plural(shown.result.errorCount, 'error')}
                       </span>
@@ -391,6 +401,12 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               <span className="font-medium text-fg">The code does not parse yet.</span> The rules
               still ran on what TypeScript could read, so some findings may be missing until the
               syntax error is fixed.
+            </p>
+          )}
+
+          {empty && (
+            <p className="px-4 py-4 text-[14px] leading-relaxed text-muted">
+              Nothing to check yet. Paste a component or a fragment of TSX, or pick a draft above.
             </p>
           )}
 

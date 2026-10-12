@@ -35,7 +35,7 @@ export default function PluginPage() {
         :
       </p>
       <div className="mt-6 rounded-2xl border border-line bg-raised p-5 sm:p-6">
-        <MarkdownBlocks markdown={skill} shift={0} />
+        <MarkdownBlocks markdown={skill} shift={-1} />
       </div>
     </DocPage>
   );

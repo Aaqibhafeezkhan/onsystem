@@ -3,8 +3,12 @@ import Link from 'next/link';
 
 import { Eyebrow } from '@/components/section';
 
-// The tab and search results say what happened, rather than repeating the home page's title.
-export const metadata: Metadata = { title: 'Page not found' };
+// The tab and search results say what happened, rather than repeating the home page's title
+// and description. Next.js marks the page noindex itself.
+export const metadata: Metadata = {
+  title: 'Page not found',
+  description: 'This page does not exist. Try the docs, the rules or the playground.',
+};
 
 export default function NotFound() {
   return (

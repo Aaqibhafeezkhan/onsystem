@@ -113,7 +113,9 @@ function ModelCard({ model, maxErrors }: { model: BenchModel; maxErrors: number 
         </div>
         <div>
           <dt className="text-muted">Tool calls</dt>
-          <dd className="mt-1 font-mono text-fg tabular-nums">{plugin.toolCalls} per task</dd>
+          <dd className="mt-1 font-mono whitespace-nowrap text-fg tabular-nums">
+            {plugin.toolCalls} per task
+          </dd>
         </div>
       </dl>
     </figure>
