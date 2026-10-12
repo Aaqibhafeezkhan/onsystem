@@ -14,6 +14,7 @@ Built for design-system and platform teams with a React design-system package; a
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_server-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_server-007ACC?style=flat-square)](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22onsystem%22%2C%22--root%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D)
 [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-Install_plugin-b4532a?style=flat-square&logo=claude&logoColor=white)](https://onsystem.vercel.app/docs/plugin)
+[![GitHub Action](https://img.shields.io/badge/GitHub_Action-Marketplace-0d0f12?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/marketplace/actions/onsystem-design-system-check)
 
 **Website and docs:** [onsystem.vercel.app](https://onsystem.vercel.app), with a [playground](https://onsystem.vercel.app/playground) that checks your own code.
 
