@@ -1,0 +1,179 @@
+{
+  "id": "gemini-3.5-flash-lite--skill--shadcn-website--release-badges--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "shadcn-website",
+  "task": "release-badges",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/release-badges.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 12,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 12
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-50` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is surface (ΔE 0.018), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 41,
+      "column": 20,
+      "endLine": 41,
+      "endColumn": 31,
+      "source": "bg-green-50"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-700` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.157), a gray. Pick the semantic token that fits. <Badge> already sets text-* through `variant`; prefer a variant over overriding it.",
+      "line": 41,
+      "column": 32,
+      "endLine": 41,
+      "endColumn": 46,
+      "source": "text-green-700"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:bg-green-950` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted in dark mode (ΔE 0.065, same value as secondary), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 41,
+      "column": 47,
+      "endLine": 41,
+      "endColumn": 64,
+      "source": "dark:bg-green-950"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-green-300` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is primary in dark mode (ΔE 0.158), a gray. Pick the semantic token that fits.",
+      "line": 41,
+      "column": 65,
+      "endLine": 41,
+      "endColumn": 84,
+      "source": "dark:text-green-300"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-blue-50` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted (ΔE 0.014, same value as secondary, accent), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 43,
+      "column": 20,
+      "endLine": 43,
+      "endColumn": 30,
+      "source": "bg-blue-50"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-blue-700` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.252), a gray. Pick the semantic token that fits. <Badge> already sets text-* through `variant`; prefer a variant over overriding it.",
+      "line": 43,
+      "column": 31,
+      "endLine": 43,
+      "endColumn": 44,
+      "source": "text-blue-700"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:bg-blue-950` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted in dark mode (ΔE 0.092, same value as secondary), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 43,
+      "column": 45,
+      "endLine": 43,
+      "endColumn": 61,
+      "source": "dark:bg-blue-950"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-blue-300` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground in dark mode (ΔE 0.146, same value as surface-foreground), a gray. Pick the semantic token that fits. <Badge> already sets text-* through `variant`; prefer a variant over overriding it.",
+      "line": 43,
+      "column": 62,
+      "endLine": 43,
+      "endColumn": 80,
+      "source": "dark:text-blue-300"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-amber-50` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is surface (ΔE 0.023), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 45,
+      "column": 20,
+      "endLine": 45,
+      "endColumn": 31,
+      "source": "bg-amber-50"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-amber-700` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is destructive (ΔE 0.113), another hue. Pick the semantic token that fits. <Badge> already sets text-* through `variant`; prefer a variant over overriding it.",
+      "line": 45,
+      "column": 32,
+      "endLine": 45,
+      "endColumn": 46,
+      "source": "text-amber-700"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:bg-amber-950` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted in dark mode (ΔE 0.078, same value as secondary), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 45,
+      "column": 47,
+      "endLine": 45,
+      "endColumn": 64,
+      "source": "dark:bg-amber-950"
+    },
+    {
+      "file": "components/release-badges.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-amber-300` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is primary in dark mode (ΔE 0.174), a gray. Pick the semantic token that fits.",
+      "line": 45,
+      "column": 65,
+      "endLine": 45,
+      "endColumn": 84,
+      "source": "dark:text-amber-300"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/release-badges.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.05755381,
+  "calls": 20,
+  "toolCalls": 19,
+  "toolErrors": 0,
+  "inputTokens": 460897,
+  "cacheReadTokens": 362177,
+  "cacheWriteTokens": 0,
+  "outputTokens": 6829,
+  "seconds": 37,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:20:54.418Z"
+}

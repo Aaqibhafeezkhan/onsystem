@@ -1,0 +1,52 @@
+{
+  "id": "claude-sonnet-5-5--mcp--dub--copy-short-link--r1",
+  "provider": "anthropic",
+  "model": "claude-sonnet-5-5",
+  "tier": "mid",
+  "arm": "mcp",
+  "repo": "dub",
+  "task": "copy-short-link",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/links/copy-short-link.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "line": 9,
+      "column": 19,
+      "code": "TS2554",
+      "message": "Expected 1 arguments, but got 0."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/links/copy-short-link.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0382544,
+  "calls": 6,
+  "toolCalls": 8,
+  "toolErrors": 0,
+  "inputTokens": 33154,
+  "cacheReadTokens": 25239,
+  "cacheWriteTokens": 7901,
+  "outputTokens": 1595,
+  "seconds": 29,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 5,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:36:36.608Z"
+}

@@ -1,0 +1,80 @@
+{
+  "id": "gpt-6-luna--skill--chatbot--settings-card--r2",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 3,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 3
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-600/10` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.232), a gray. Pick the semantic token that fits. <Badge> already sets bg-* through `variant`; prefer a variant over overriding it.",
+      "line": 36,
+      "column": 36,
+      "endLine": 36,
+      "endColumn": 51,
+      "source": "bg-green-600/10"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.200), a gray. Pick the semantic token that fits. <Badge> already sets text-* through `variant`; prefer a variant over overriding it.",
+      "line": 36,
+      "column": 52,
+      "endLine": 36,
+      "endColumn": 66,
+      "source": "text-green-600"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring (ΔE 0.232), a gray. Pick the semantic token that fits.",
+      "line": 37,
+      "column": 69,
+      "endLine": 37,
+      "endColumn": 81,
+      "source": "bg-green-600"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0025509850000000004,
+  "calls": 6,
+  "toolCalls": 11,
+  "toolErrors": 1,
+  "inputTokens": 35921,
+  "cacheReadTokens": 23561,
+  "cacheWriteTokens": 11675,
+  "outputTokens": 1575,
+  "seconds": 28,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:19:20.887Z"
+}

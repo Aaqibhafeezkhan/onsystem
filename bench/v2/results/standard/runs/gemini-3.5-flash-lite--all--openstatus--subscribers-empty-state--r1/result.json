@@ -1,0 +1,52 @@
+{
+  "id": "gemini-3.5-flash-lite--all--openstatus--subscribers-empty-state--r1",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "all",
+  "repo": "openstatus",
+  "task": "subscribers-empty-state",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/dashboard/src/components/status-pages/subscribers-empty-state.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "src/components/status-pages/subscribers-empty-state.tsx",
+      "line": 41,
+      "column": 9,
+      "code": "TS2322",
+      "message": "Type 'MouseEventHandler<HTMLButtonElement> | MouseEventHandler<HTMLDivElement> | undefined' is not assignable to type 'MouseEventHandler<HTMLButtonElement> | undefined'.\nType 'MouseEventHandler<HTMLDivElement>' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.\nType 'HTMLDivElement' is missing the following properties from type 'HTMLButtonElement': command, commandForElement, disabled, form, and 17 more."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/dashboard/src/components/status-pages/subscribers-empty-state.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.06980650999999999,
+  "calls": 26,
+  "toolCalls": 25,
+  "toolErrors": 0,
+  "inputTokens": 832340,
+  "cacheReadTokens": 730687,
+  "cacheWriteTokens": 0,
+  "outputTokens": 6956,
+  "seconds": 46,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 2,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:37:00.161Z"
+}

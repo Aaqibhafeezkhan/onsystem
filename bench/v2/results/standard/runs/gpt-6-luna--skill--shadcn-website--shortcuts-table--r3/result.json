@@ -1,0 +1,52 @@
+{
+  "id": "gpt-6-luna--skill--shadcn-website--shortcuts-table--r3",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "shadcn-website",
+  "task": "shortcuts-table",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/shortcuts-table.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "components/shortcuts-table.tsx",
+      "line": 1,
+      "column": 31,
+      "code": "TS2307",
+      "message": "Cannot find module '@/styles/base-nova/ui/kbd' or its corresponding type declarations."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/shortcuts-table.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.003056805,
+  "calls": 7,
+  "toolCalls": 12,
+  "toolErrors": 0,
+  "inputTokens": 59632,
+  "cacheReadTokens": 42708,
+  "cacheWriteTokens": 16213,
+  "outputTokens": 1064,
+  "seconds": 23,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:59:55.587Z"
+}

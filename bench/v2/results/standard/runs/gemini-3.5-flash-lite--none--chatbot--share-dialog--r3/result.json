@@ -1,0 +1,66 @@
+{
+  "id": "gemini-3.5-flash-lite--none--chatbot--share-dialog--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "none",
+  "repo": "chatbot",
+  "task": "share-dialog",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/share-chat-dialog.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "components/chat/share-chat-dialog.tsx",
+      "line": 85,
+      "column": 36,
+      "code": "TS2322",
+      "message": "Type '{ className: string; }' is not assignable to type 'IntrinsicAttributes & { size?: number | undefined; }'.\nProperty 'className' does not exist on type 'IntrinsicAttributes & { size?: number | undefined; }'."
+    }
+  ],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/share-chat-dialog.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.262), a gray. Pick the semantic token that fits.",
+      "line": 85,
+      "column": 47,
+      "endLine": 85,
+      "endColumn": 61,
+      "source": "text-green-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/share-chat-dialog.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.052313420000000006,
+  "calls": 22,
+  "toolCalls": 21,
+  "toolErrors": 0,
+  "inputTokens": 377069,
+  "cacheReadTokens": 304564,
+  "cacheWriteTokens": 0,
+  "outputTokens": 8570,
+  "seconds": 44,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T13:55:42.390Z"
+}

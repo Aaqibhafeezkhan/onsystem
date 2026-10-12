@@ -1,0 +1,75 @@
+{
+  "id": "claude-haiku-5-5--none--dub--link-expiry-banner--r2",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "link-expiry-banner",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/links/link-expiry-banner.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/links/link-expiry-banner.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <button> where the design system has <Button>. Use <Button> (import { Button } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 64,
+      "column": 8,
+      "endLine": 64,
+      "endColumn": 14,
+      "source": "button",
+      "suggestion": "<Button>",
+      "fix": [
+        {
+          "range": [
+            1952,
+            1958
+          ],
+          "text": "Button"
+        },
+        {
+          "range": [
+            2285,
+            2291
+          ],
+          "text": "Button"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/links/link-expiry-banner.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.008759320000000001,
+  "calls": 10,
+  "toolCalls": 21,
+  "toolErrors": 0,
+  "inputTokens": 229728,
+  "cacheReadTokens": 196062,
+  "cacheWriteTokens": 33644,
+  "outputTokens": 5182,
+  "seconds": 40,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:59:47.628Z"
+}

@@ -1,0 +1,13 @@
+id,provider,model,arm,repo,task,repeat,status,created,tsc_pass,tsc_errors,onsystem_errors,onsystem_warnings,out_of_scope,cost_usd,calls,input_tokens,output_tokens,seconds,hook_blocks,mcp_calls,skill_loads
+claude-haiku-5-5--all--chatbot--settings-card--r1,anthropic,claude-haiku-5-5,all,chatbot,settings-card,1,done,true,true,0,0,0,0,0.004274,7,82836,3103,26,1,10,1
+claude-haiku-5-5--none--chatbot--settings-card--r1,anthropic,claude-haiku-5-5,none,chatbot,settings-card,1,done,true,true,0,2,0,0,0.003153,5,42591,2097,16,0,0,0
+claude-sonnet-5-5--all--chatbot--settings-card--r1,anthropic,claude-sonnet-5-5,all,chatbot,settings-card,1,done,true,true,0,0,0,0,0.039407,4,30214,1139,17,0,3,1
+claude-sonnet-5-5--none--chatbot--settings-card--r1,anthropic,claude-sonnet-5-5,none,chatbot,settings-card,1,done,true,true,0,1,0,0,0.023746,5,13958,1194,19,0,0,0
+gemini-3.5-flash-lite--all--chatbot--settings-card--r1,google,gemini-3.5-flash-lite,all,chatbot,settings-card,1,done,true,true,0,0,0,0,0.054881,26,509433,6371,40,1,10,1
+gemini-3.5-flash-lite--none--chatbot--settings-card--r1,google,gemini-3.5-flash-lite,none,chatbot,settings-card,1,done,true,true,0,4,0,0,0.026571,15,129177,3862,24,0,0,0
+gemini-3.8-flash--all--chatbot--settings-card--r1,google,gemini-3.8-flash,all,chatbot,settings-card,1,max-calls,false,,0,0,0,0,0.226985,40,708310,5953,223,0,17,1
+gemini-3.8-flash--none--chatbot--settings-card--r1,google,gemini-3.8-flash,none,chatbot,settings-card,1,done,true,true,0,7,0,0,0.253201,35,748594,17141,419,0,0,0
+gpt-6-luna--all--chatbot--settings-card--r1,openai,gpt-6-luna,all,chatbot,settings-card,1,done,true,true,0,0,0,0,0.002686,8,59207,1660,31,0,11,1
+gpt-6-luna--none--chatbot--settings-card--r1,openai,gpt-6-luna,none,chatbot,settings-card,1,done,true,true,0,4,0,0,0.001687,5,21331,1191,31,0,0,0
+gpt-6.1-sol--all--chatbot--settings-card--r1,openai,gpt-6.1-sol,all,chatbot,settings-card,1,done,true,true,0,0,0,0,0.035719,5,32329,1051,41,0,7,1
+gpt-6.1-sol--none--chatbot--settings-card--r1,openai,gpt-6.1-sol,none,chatbot,settings-card,1,done,true,true,0,2,0,0,0.031099,4,17572,898,30,0,0,0

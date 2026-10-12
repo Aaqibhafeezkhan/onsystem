@@ -1,0 +1,52 @@
+{
+  "id": "gemini-3.5-flash-lite--skill--saas-starter--user-menu--r2",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "saas-starter",
+  "task": "user-menu",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/user-menu.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "components/user-menu.tsx",
+      "line": 58,
+      "column": 3,
+      "code": "TS2339",
+      "message": "Property 'className' does not exist on type 'UserMenuProps'."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/user-menu.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.03842783,
+  "calls": 15,
+  "toolCalls": 14,
+  "toolErrors": 0,
+  "inputTokens": 141848,
+  "cacheReadTokens": 97191,
+  "cacheWriteTokens": 0,
+  "outputTokens": 8846,
+  "seconds": 32,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:07:46.155Z"
+}

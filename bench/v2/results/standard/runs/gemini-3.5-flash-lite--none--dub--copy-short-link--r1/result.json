@@ -1,0 +1,96 @@
+{
+  "id": "gemini-3.5-flash-lite--none--dub--copy-short-link--r1",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "copy-short-link",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/links/copy-short-link.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <input> where the design system has <Input>. Use <Input> (import { Input } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 47,
+      "column": 10,
+      "endLine": 47,
+      "endColumn": 15,
+      "source": "input",
+      "suggestion": "<Input>",
+      "fix": [
+        {
+          "range": [
+            1113,
+            1118
+          ],
+          "text": "Input"
+        }
+      ]
+    },
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <button> where the design system has <Button>. Use <Button> (import { Button } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 57,
+      "column": 12,
+      "endLine": 57,
+      "endColumn": 18,
+      "source": "button",
+      "suggestion": "<Button>",
+      "fix": [
+        {
+          "range": [
+            1523,
+            1529
+          ],
+          "text": "Button"
+        },
+        {
+          "range": [
+            2112,
+            2118
+          ],
+          "text": "Button"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/links/copy-short-link.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.10242885,
+  "calls": 32,
+  "toolCalls": 31,
+  "toolErrors": 0,
+  "inputTokens": 1117420,
+  "cacheReadTokens": 1009795,
+  "cacheWriteTokens": 0,
+  "outputTokens": 15939,
+  "seconds": 77,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:33:56.980Z"
+}

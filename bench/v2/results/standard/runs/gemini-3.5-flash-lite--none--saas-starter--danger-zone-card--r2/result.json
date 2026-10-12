@@ -1,0 +1,100 @@
+{
+  "id": "gemini-3.5-flash-lite--none--saas-starter--danger-zone-card--r2",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "none",
+  "repo": "saas-starter",
+  "task": "danger-zone-card",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/settings/danger-zone-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 3,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 3
+  },
+  "onsystemFindings": [
+    {
+      "file": "app/(dashboard)/dashboard/settings/danger-zone-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-red-600` is Tailwind's default palette, not a design-system color. Nearest token destructive (ΔE 0.071) → `text-destructive`.",
+      "line": 24,
+      "column": 31,
+      "endLine": 24,
+      "endColumn": 43,
+      "source": "text-red-600",
+      "suggestion": "text-destructive",
+      "fix": [
+        {
+          "range": [
+            526,
+            538
+          ],
+          "text": "text-destructive"
+        }
+      ]
+    },
+    {
+      "file": "app/(dashboard)/dashboard/settings/danger-zone-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-red-600` is Tailwind's default palette, not a design-system color. Nearest token destructive (ΔE 0.071) → `bg-destructive`, or use variant=\"destructive\".",
+      "line": 33,
+      "column": 22,
+      "endLine": 33,
+      "endColumn": 32,
+      "source": "bg-red-600",
+      "suggestion": "variant=\"destructive\"",
+      "fix": [
+        {
+          "range": [
+            819,
+            829
+          ],
+          "text": "bg-destructive"
+        }
+      ]
+    },
+    {
+      "file": "app/(dashboard)/dashboard/settings/danger-zone-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`hover:bg-red-700` is Tailwind's default palette, not a design-system color. No close token; nearest is destructive (ΔE 0.132). Pick the semantic token that fits.",
+      "line": 33,
+      "column": 33,
+      "endLine": 33,
+      "endColumn": 49,
+      "source": "hover:bg-red-700"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/settings/danger-zone-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.04593477000000001,
+  "calls": 16,
+  "toolCalls": 15,
+  "toolErrors": 0,
+  "inputTokens": 177966,
+  "cacheReadTokens": 119639,
+  "cacheWriteTokens": 0,
+  "outputTokens": 9939,
+  "seconds": 37,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:40:18.645Z"
+}

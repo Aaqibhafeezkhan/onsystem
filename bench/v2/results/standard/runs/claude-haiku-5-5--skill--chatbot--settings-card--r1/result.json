@@ -1,0 +1,58 @@
+{
+  "id": "claude-haiku-5-5--skill--chatbot--settings-card--r1",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-emerald-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.206), a gray. Pick the semantic token that fits.",
+      "line": 32,
+      "column": 46,
+      "endLine": 32,
+      "endColumn": 62,
+      "source": "text-emerald-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.0033080500000000003,
+  "calls": 8,
+  "toolCalls": 14,
+  "toolErrors": 3,
+  "inputTokens": 51643,
+  "cacheReadTokens": 38625,
+  "cacheWriteTokens": 13000,
+  "outputTokens": 2590,
+  "seconds": 22,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:05:11.098Z"
+}

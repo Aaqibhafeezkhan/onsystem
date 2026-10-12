@@ -2,7 +2,7 @@
 
 Does onsystem make coding agents write UI that fits a project's design system, and which part does the work: the skill, the MCP server or the hook? v2 asks this across models from three providers, in five real repositories, and scores the output with tools other than onsystem as well.
 
-**Status: harness only, no results yet.** Nothing here has called a paid model. The results table, with confidence intervals and its size, lands in `bench/v2/results/` once a run is approved ([#55](https://github.com/dgesteves/onsystem/issues/55)).
+**Status: first run done, human labels pending.** The `standard` matrix ran on 2026-10-12 against onsystem 0.5.0: 1,200 runs, 6 models from 3 providers, $57.08. Tables with confidence intervals: [results/standard/results.md](results/standard/results.md); per-run data: `results/standard/runs/` and `runs.csv`. The blinded labelling sample is in `results/standard/labels/`; its key is added once the labels are done. The transcripts are attached to the [bench-v2-2026-10-12 release](https://github.com/dgesteves/onsystem/releases/tag/bench-v2-2026-10-12). The `canary` run (12 runs) checked the provider adapters first ([#55](https://github.com/dgesteves/onsystem/issues/55)).
 
 ## What changes from v1
 

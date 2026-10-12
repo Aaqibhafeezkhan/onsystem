@@ -1,0 +1,102 @@
+{
+  "id": "gemini-3.5-flash-lite--none--chatbot--settings-card--r3",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "none",
+  "repo": "chatbot",
+  "task": "settings-card",
+  "repeat": 3,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "components/chat/model-settings-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 5,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 5
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`border-green-500/20` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.282, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 55,
+      "column": 73,
+      "endLine": 55,
+      "endColumn": 92,
+      "source": "border-green-500/20"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-500/10` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.282, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 55,
+      "column": 93,
+      "endLine": 55,
+      "endColumn": 108,
+      "source": "bg-green-500/10"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.200), a gray. Pick the semantic token that fits.",
+      "line": 55,
+      "column": 141,
+      "endLine": 55,
+      "endColumn": 155,
+      "source": "text-green-600"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-green-400` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is secondary-foreground in dark mode (ΔE 0.213), a gray. Pick the semantic token that fits.",
+      "line": 55,
+      "column": 156,
+      "endLine": 55,
+      "endColumn": 175,
+      "source": "dark:text-green-400"
+    },
+    {
+      "file": "components/chat/model-settings-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.282, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 56,
+      "column": 52,
+      "endLine": 56,
+      "endColumn": 64,
+      "source": "bg-green-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "components/chat/model-settings-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.03217208,
+  "calls": 16,
+  "toolCalls": 15,
+  "toolErrors": 0,
+  "inputTokens": 191982,
+  "cacheReadTokens": 137926,
+  "cacheWriteTokens": 0,
+  "outputTokens": 4727,
+  "seconds": 27,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T13:53:05.253Z"
+}

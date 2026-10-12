@@ -1,0 +1,113 @@
+{
+  "id": "gemini-3.8-flash--none--saas-starter--plan-summary-card--r1",
+  "provider": "google",
+  "model": "gemini-3.8-flash",
+  "tier": "mid",
+  "arm": "none",
+  "repo": "saas-starter",
+  "task": "plan-summary-card",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 6,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 6
+  },
+  "onsystemFindings": [
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-100` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted (ΔE 0.045, same value as secondary, accent), a gray. Pick the semantic token that fits.",
+      "line": 64,
+      "column": 66,
+      "endLine": 64,
+      "endColumn": 78,
+      "source": "bg-green-100"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-800` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.166), a gray. Pick the semantic token that fits.",
+      "line": 64,
+      "column": 113,
+      "endLine": 64,
+      "endColumn": 127,
+      "source": "text-green-800"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:bg-green-900/30` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted in dark mode (ΔE 0.155, same value as secondary, accent, border, input), a gray. Pick the semantic token that fits.",
+      "line": 64,
+      "column": 128,
+      "endLine": 64,
+      "endColumn": 148,
+      "source": "dark:bg-green-900/30"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-green-400` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground in dark mode (ΔE 0.232), a gray. Pick the semantic token that fits.",
+      "line": 64,
+      "column": 149,
+      "endLine": 64,
+      "endColumn": 168,
+      "source": "dark:text-green-400"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`border-green-200` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.087, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 64,
+      "column": 176,
+      "endLine": 64,
+      "endColumn": 192,
+      "source": "border-green-200"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:border-green-800` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border in dark mode (ΔE 0.213, same value as secondary, muted, accent, input), a gray. Pick the semantic token that fits.",
+      "line": 64,
+      "column": 193,
+      "endLine": 64,
+      "endColumn": 214,
+      "source": "dark:border-green-800"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/billing/plan-summary-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.28180237499999994,
+  "calls": 30,
+  "toolCalls": 29,
+  "toolErrors": 0,
+  "inputTokens": 500111,
+  "cacheReadTokens": 267455,
+  "cacheWriteTokens": 0,
+  "outputTokens": 23267,
+  "seconds": 181,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:56:16.057Z"
+}

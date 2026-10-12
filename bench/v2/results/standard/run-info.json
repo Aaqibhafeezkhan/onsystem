@@ -1,0 +1,173 @@
+{
+  "matrix": "standard",
+  "seed": 1,
+  "onsystem": "0.5.0",
+  "node": "v24.18.0",
+  "startedAt": "2026-10-12T13:51:31.359Z",
+  "lastStartedAt": "2026-10-12T13:51:31.359Z",
+  "cap": 60,
+  "pricesVerified": "2026-10-12",
+  "repos": {
+    "chatbot": {
+      "name": "chatbot",
+      "url": "https://github.com/vercel/chatbot",
+      "sha": "c2f8235e1f3ea903ad8b7f61447c4f74164b5c58",
+      "preparedAt": "2026-10-12T12:56:15.173Z",
+      "typescript": "5.8.2",
+      "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/chatbot/src\nconfig   (defaults)\ndetected components.json (ui: @/components/ui → components/ui)\nfiles    22 component files, 1 token file, 0 docs\ntime     1431ms\n\nComponents (23 + 97 parts)\n  AlertDialog        4 props · 11 parts · 0 examples",
+      "controls": {
+        "valid": {
+          "tscErrors": 0,
+          "tscFirst": null,
+          "onsystemErrors": 0,
+          "rules": {}
+        },
+        "invalid": {
+          "tscErrors": 1,
+          "tscFirst": "Type '\"warning\"' is not assignable to type '\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined'.",
+          "onsystemErrors": 1,
+          "rules": {
+            "no-unknown-variant": 1
+          }
+        },
+        "reference": {
+          "files": [
+            "components/chat/suggestion.tsx",
+            "components/chat/sidebar-user-nav.tsx"
+          ],
+          "tscErrors": 0,
+          "first": null
+        }
+      }
+    },
+    "dub": {
+      "name": "dub",
+      "url": "https://github.com/dubinc/dub",
+      "sha": "70c96f90701451358bc9438f8b7fdf4b3b46a6f4",
+      "preparedAt": "2026-10-12T13:50:30.981Z",
+      "typescript": "5.4.4",
+      "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/dub/src/apps/web\nconfig   (defaults)\ndetected workspace package @dub/ui\nfiles    430 component files, 1 token file, 1 doc\ntime     1624ms\n\nComponents (430 + 17 parts)\n  Accordion          9 props · 3 parts · 0 examples",
+      "controls": {
+        "valid": {
+          "tscErrors": 0,
+          "tscFirst": null,
+          "onsystemErrors": 0,
+          "rules": {}
+        },
+        "invalid": {
+          "tscErrors": 1,
+          "tscFirst": "Type '\"warning\"' is not assignable to type '\"success\" | \"outline\" | \"primary\" | \"secondary\" | \"danger\" | \"danger-outline\" | null | undefined'.",
+          "onsystemErrors": 1,
+          "rules": {
+            "no-unknown-variant": 1
+          }
+        },
+        "reference": {
+          "files": [
+            "ui/token-avatar.tsx",
+            "ui/dub-partners-logo.tsx",
+            "ui/shared/back-link.tsx"
+          ],
+          "tscErrors": 0,
+          "first": null
+        }
+      }
+    },
+    "saas-starter": {
+      "name": "saas-starter",
+      "url": "https://github.com/nextjs/saas-starter",
+      "sha": "6e33e58b1e553a41fe22e6b941a7229a002de361",
+      "preparedAt": "2026-10-12T13:50:41.245Z",
+      "typescript": "5.8.3",
+      "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/saas-starter/src\nconfig   (defaults)\ndetected components.json (ui: @/components/ui → components/ui)\nfiles    7 component files, 1 token file, 0 docs\ntime     552ms\n\nComponents (7 + 23 parts)\n  Avatar             1 prop · 2 parts · 0 examples",
+      "controls": {
+        "valid": {
+          "tscErrors": 0,
+          "tscFirst": null,
+          "onsystemErrors": 0,
+          "rules": {}
+        },
+        "invalid": {
+          "tscErrors": 1,
+          "tscFirst": "Type '\"warning\"' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | \"ghost\" | \"link\" | null | undefined'.",
+          "onsystemErrors": 1,
+          "rules": {
+            "no-unknown-variant": 1
+          }
+        },
+        "reference": {
+          "files": [
+            "app/(dashboard)/pricing/submit-button.tsx",
+            "app/(dashboard)/dashboard/general/page.tsx"
+          ],
+          "tscErrors": 0,
+          "first": null
+        }
+      }
+    },
+    "openstatus": {
+      "name": "openstatus",
+      "url": "https://github.com/openstatusHQ/openstatus",
+      "sha": "e36446dc7d6980c16959f07d683f6261bc9c37d0",
+      "preparedAt": "2026-10-12T13:51:00.147Z",
+      "typescript": "7.0.2",
+      "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/openstatus/src/apps/dashboard\nconfig   (defaults)\ndetected primary: workspace package @openstatus/ui (718 imports); also: components.json (ui: @/components/ui → src/components/ui) (69 imports)\nfiles    112 component files, 2 token files, 1 doc\ntime     1366ms\n\nComponents (132 + 246 parts)\n  CheckboxTree       <div> · 4 props · 0 examples",
+      "controls": {
+        "valid": {
+          "tscErrors": 0,
+          "tscFirst": null,
+          "onsystemErrors": 0,
+          "rules": {}
+        },
+        "invalid": {
+          "tscErrors": 1,
+          "tscFirst": "Type '\"warning\"' is not assignable to type '\"default\" | \"destructive\" | \"ghost\" | \"link\" | \"outline\" | \"secondary\" | null | undefined'.",
+          "onsystemErrors": 1,
+          "rules": {
+            "no-unknown-variant": 1
+          }
+        },
+        "reference": {
+          "files": [
+            "src/components/theme-toggle.tsx",
+            "src/components/date-picker.tsx"
+          ],
+          "tscErrors": 0,
+          "first": null
+        }
+      }
+    },
+    "shadcn-website": {
+      "name": "shadcn-website",
+      "url": "https://github.com/shadcn-ui/ui",
+      "sha": "0132174664c07d41262fb51012d0cc782e458e6c",
+      "preparedAt": "2026-10-12T13:51:31.359Z",
+      "typescript": "5.9.2",
+      "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/shadcn-website/src/apps/v4\nconfig   (defaults)\ndetected components.json (ui: @/registry/new-york-v4/ui → registry/new-york-v4/ui)\nfiles    61 component files, 1 token file, 0 docs\ntime     1385ms\n\nComponents (68 + 263 parts)\n  Accordion          9 props · 3 parts · 0 examples",
+      "controls": {
+        "valid": {
+          "tscErrors": 0,
+          "tscFirst": null,
+          "onsystemErrors": 0,
+          "rules": {}
+        },
+        "invalid": {
+          "tscErrors": 1,
+          "tscFirst": "Type '\"warning\"' is not assignable to type '\"default\" | \"destructive\" | \"outline\" | \"secondary\" | \"ghost\" | \"link\" | null | undefined'.",
+          "onsystemErrors": 1,
+          "rules": {
+            "no-unknown-variant": 1
+          }
+        },
+        "reference": {
+          "files": [
+            "components/copy-button.tsx",
+            "components/announcement.tsx"
+          ],
+          "tscErrors": 0,
+          "first": null
+        }
+      }
+    }
+  }
+}

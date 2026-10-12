@@ -1,0 +1,75 @@
+{
+  "id": "gpt-6-luna--skill--shadcn-website--feedback-widget--r1",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "shadcn-website",
+  "task": "feedback-widget",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/feedback-widget.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/feedback-widget.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@/registry/new-york-v4/ui/label\"); its variants replace the custom classes.",
+      "line": 63,
+      "column": 18,
+      "endLine": 63,
+      "endColumn": 23,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            2057,
+            2062
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            2158,
+            2163
+          ],
+          "text": "Label"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/feedback-widget.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.003072885,
+  "calls": 6,
+  "toolCalls": 14,
+  "toolErrors": 0,
+  "inputTokens": 45786,
+  "cacheReadTokens": 30191,
+  "cacheWriteTokens": 14899,
+  "outputTokens": 1678,
+  "seconds": 24,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:04:21.834Z"
+}

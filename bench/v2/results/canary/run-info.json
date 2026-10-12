@@ -1,0 +1,44 @@
+{
+  "matrix": "canary",
+  "seed": 1,
+  "onsystem": "0.5.0",
+  "node": "v24.18.0",
+  "startedAt": "2026-10-12T12:56:15.174Z",
+  "lastStartedAt": "2026-10-12T13:08:57.068Z",
+  "cap": 5,
+  "pricesVerified": "2026-10-12",
+  "repos": {
+    "chatbot": {
+      "name": "chatbot",
+      "url": "https://github.com/vercel/chatbot",
+      "sha": "c2f8235e1f3ea903ad8b7f61447c4f74164b5c58",
+      "preparedAt": "2026-10-12T12:56:15.173Z",
+      "typescript": "5.8.2",
+      "inspect": "root     /private/var/folders/hm/gm1lz52d5pz_0v0hpxdxp5n80000gn/T/onsystem-bench-v2/repos/chatbot/src\nconfig   (defaults)\ndetected components.json (ui: @/components/ui → components/ui)\nfiles    22 component files, 1 token file, 0 docs\ntime     1431ms\n\nComponents (23 + 97 parts)\n  AlertDialog        4 props · 11 parts · 0 examples",
+      "controls": {
+        "valid": {
+          "tscErrors": 0,
+          "tscFirst": null,
+          "onsystemErrors": 0,
+          "rules": {}
+        },
+        "invalid": {
+          "tscErrors": 1,
+          "tscFirst": "Type '\"warning\"' is not assignable to type '\"link\" | \"default\" | \"outline\" | \"secondary\" | \"ghost\" | \"destructive\" | null | undefined'.",
+          "onsystemErrors": 1,
+          "rules": {
+            "no-unknown-variant": 1
+          }
+        },
+        "reference": {
+          "files": [
+            "components/chat/suggestion.tsx",
+            "components/chat/sidebar-user-nav.tsx"
+          ],
+          "tscErrors": 0,
+          "first": null
+        }
+      }
+    }
+  }
+}

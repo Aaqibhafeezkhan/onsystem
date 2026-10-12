@@ -1,0 +1,83 @@
+{
+  "id": "claude-haiku-5-5--none--shadcn-website--feedback-widget--r1",
+  "provider": "anthropic",
+  "model": "claude-haiku-5-5",
+  "tier": "small",
+  "arm": "none",
+  "repo": "shadcn-website",
+  "task": "feedback-widget",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/v4/components/feedback-widget.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "components/feedback-widget.tsx",
+      "line": 13,
+      "column": 18,
+      "code": "TS2430",
+      "message": "Interface 'FeedbackWidgetProps' incorrectly extends interface 'ClassAttributes<HTMLDivElement> & HTMLAttributes<HTMLDivElement>'.\nType 'FeedbackWidgetProps' is not assignable to type 'HTMLAttributes<HTMLDivElement>'.\nTypes of property 'onSubmit' are incompatible.\nType '((feedback: { vote: Vote; comment: string; }) => void) | undefined' is not assignable to type 'FormEventHandler<HTMLDivElement> | undefined'.\nType '(feedback: { vote: Vote; comment: string; }) => void' is not assignable to type 'FormEventHandler<HTMLDivElement>'.\nTypes of parameters 'feedback' and 'event' are incompatible.\nType 'FormEvent<HTMLDivElement>' is missing the following properties from type '{ vote: Vote; comment: string; }': vote, comment"
+    }
+  ],
+  "onsystemErrors": 1,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 1
+  },
+  "onsystemFindings": [
+    {
+      "file": "components/feedback-widget.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <label> where the design system has <Label>. Use <Label> (import { Label } from \"@/registry/new-york-v4/ui/label\"); its variants replace the custom classes.",
+      "line": 79,
+      "column": 14,
+      "endLine": 79,
+      "endColumn": 19,
+      "source": "label",
+      "suggestion": "<Label>",
+      "fix": [
+        {
+          "range": [
+            2557,
+            2562
+          ],
+          "text": "Label"
+        },
+        {
+          "range": [
+            2725,
+            2730
+          ],
+          "text": "Label"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/v4/components/feedback-widget.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.00493987,
+  "calls": 7,
+  "toolCalls": 12,
+  "toolErrors": 0,
+  "inputTokens": 101353,
+  "cacheReadTokens": 80077,
+  "cacheWriteTokens": 21260,
+  "outputTokens": 2960,
+  "seconds": 22,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T14:41:46.916Z"
+}

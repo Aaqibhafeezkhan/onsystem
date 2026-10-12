@@ -1,0 +1,96 @@
+{
+  "id": "gpt-6-luna--none--dub--copy-short-link--r2",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "tier": "small",
+  "arm": "none",
+  "repo": "dub",
+  "task": "copy-short-link",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "apps/web/ui/links/copy-short-link.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 2,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "prefer-design-system-component": 2
+  },
+  "onsystemFindings": [
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <input> where the design system has <Input>. Use <Input> (import { Input } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 10,
+      "column": 8,
+      "endLine": 10,
+      "endColumn": 13,
+      "source": "input",
+      "suggestion": "<Input>",
+      "fix": [
+        {
+          "range": [
+            272,
+            277
+          ],
+          "text": "Input"
+        }
+      ]
+    },
+    {
+      "file": "ui/links/copy-short-link.tsx",
+      "ruleId": "prefer-design-system-component",
+      "severity": "error",
+      "message": "Native <button> where the design system has <Button>. Use <Button> (import { Button } from \"@dub/ui\"); its variants replace the custom classes.",
+      "line": 16,
+      "column": 8,
+      "endLine": 16,
+      "endColumn": 14,
+      "source": "button",
+      "suggestion": "<Button>",
+      "fix": [
+        {
+          "range": [
+            568,
+            574
+          ],
+          "text": "Button"
+        },
+        {
+          "range": [
+            1193,
+            1199
+          ],
+          "text": "Button"
+        }
+      ]
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "apps/web/ui/links/copy-short-link.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.005297659999999999,
+  "calls": 11,
+  "toolCalls": 22,
+  "toolErrors": 0,
+  "inputTokens": 176237,
+  "cacheReadTokens": 152926,
+  "cacheWriteTokens": 22732,
+  "outputTokens": 1738,
+  "seconds": 42,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:38:34.332Z"
+}

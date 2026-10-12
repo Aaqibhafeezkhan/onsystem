@@ -1,0 +1,52 @@
+{
+  "id": "gemini-3.5-flash-lite--hook--saas-starter--invite-member-form--r1",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "hook",
+  "repo": "saas-starter",
+  "task": "invite-member-form",
+  "repeat": 1,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+  "tscPass": false,
+  "tscErrors": 1,
+  "tscDiagnostics": [
+    {
+      "file": "app/(dashboard)/dashboard/team/invite-member-form.tsx",
+      "line": 39,
+      "column": 11,
+      "code": "TS2322",
+      "message": "Type '((state: ActionState, payload: FormData) => void | Promise<ActionState>) | ((payload: FormData) => void)' is not assignable to type 'string | ((formData: FormData) => void | Promise<void>) | undefined'.\nType '(state: ActionState, payload: FormData) => void | Promise<ActionState>' is not assignable to type 'string | ((formData: FormData) => void | Promise<void>) | undefined'.\nType '(state: ActionState, payload: FormData) => void | Promise<ActionState>' is not assignable to type '(formData: FormData) => void | Promise<void>'.\nTarget signature provides too few arguments. Expected 2 or more, but got 1."
+    }
+  ],
+  "onsystemErrors": 0,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {},
+  "onsystemFindings": [],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/team/invite-member-form.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.046615710000000005,
+  "calls": 17,
+  "toolCalls": 16,
+  "toolErrors": 0,
+  "inputTokens": 163199,
+  "cacheReadTokens": 88987,
+  "cacheWriteTokens": 0,
+  "outputTokens": 8673,
+  "seconds": 38,
+  "hookBlocks": 1,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 0,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:10:25.142Z"
+}

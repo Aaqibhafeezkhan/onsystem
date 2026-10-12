@@ -1,0 +1,102 @@
+{
+  "id": "gemini-3.5-flash-lite--skill--saas-starter--plan-summary-card--r2",
+  "provider": "google",
+  "model": "gemini-3.5-flash-lite",
+  "tier": "small",
+  "arm": "skill",
+  "repo": "saas-starter",
+  "task": "plan-summary-card",
+  "repeat": 2,
+  "status": "done",
+  "detail": "",
+  "created": true,
+  "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+  "tscPass": true,
+  "tscErrors": 0,
+  "tscDiagnostics": [],
+  "onsystemErrors": 5,
+  "onsystemWarnings": 0,
+  "onsystemByRule": {
+    "no-hardcoded-color": 5
+  },
+  "onsystemFindings": [
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-500/10` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.297, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 28,
+      "column": 106,
+      "endLine": 28,
+      "endColumn": 121,
+      "source": "bg-green-500/10"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`text-green-600` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground (ΔE 0.218), a gray. Pick the semantic token that fits.",
+      "line": 28,
+      "column": 122,
+      "endLine": 28,
+      "endColumn": 136,
+      "source": "text-green-600"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:bg-green-500/20` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is ring in dark mode (ΔE 0.268), a gray. Pick the semantic token that fits.",
+      "line": 28,
+      "column": 137,
+      "endLine": 28,
+      "endColumn": 157,
+      "source": "dark:bg-green-500/20"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`dark:text-green-400` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is muted-foreground in dark mode (ΔE 0.232), a gray. Pick the semantic token that fits.",
+      "line": 28,
+      "column": 158,
+      "endLine": 28,
+      "endColumn": 177,
+      "source": "dark:text-green-400"
+    },
+    {
+      "file": "app/(dashboard)/dashboard/billing/plan-summary-card.tsx",
+      "ruleId": "no-hardcoded-color",
+      "severity": "error",
+      "message": "`bg-green-500` is Tailwind's default palette, not a design-system color. No token has this hue; nearest is border (ΔE 0.297, same value as input), a gray. Pick the semantic token that fits.",
+      "line": 29,
+      "column": 53,
+      "endLine": 29,
+      "endColumn": 65,
+      "source": "bg-green-500"
+    }
+  ],
+  "outOfScope": 0,
+  "changes": {
+    "added": [
+      "app/(dashboard)/dashboard/billing/plan-summary-card.tsx"
+    ],
+    "modified": [],
+    "deleted": []
+  },
+  "cost": 0.03165016,
+  "calls": 17,
+  "toolCalls": 16,
+  "toolErrors": 0,
+  "inputTokens": 134972,
+  "cacheReadTokens": 84672,
+  "cacheWriteTokens": 0,
+  "outputTokens": 5608,
+  "seconds": 28,
+  "hookBlocks": 0,
+  "hookNotes": 0,
+  "mcpCalls": 0,
+  "skillLoads": 1,
+  "effort": "medium",
+  "finishedAt": "2026-10-12T15:29:16.633Z"
+}
