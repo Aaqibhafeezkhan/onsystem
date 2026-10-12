@@ -48,7 +48,7 @@ export function llmsTxt(): string {
     '## Docs',
     '',
     ...DOCS_PAGES.map((page) => `- [${page.title}](${SITE_URL}${page.href}): ${page.description}`),
-    `- [Rules](${SITE_URL}/rules): every rule, each with a page on what it catches, why it matters, an example and its fix`,
+    `- [Rules](${SITE_URL}/rules): every rule with what it catches, why it matters, an example and its fix`,
     `- [Playground](${SITE_URL}/playground): run check_ui on code in the browser, against a demo design system`,
     '',
     '## Tools',
