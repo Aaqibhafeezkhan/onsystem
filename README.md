@@ -55,7 +55,7 @@ npx -y onsystem check .   # the same check the agent and CI run
 npx -y onsystem init      # write the config, and offer a baseline
 ```
 
-At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system.
+At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system. In a [design-system package](https://onsystem.vercel.app/docs/design-system-packages), `init` sets it up for every app that depends on it, workspace or npm, with no config in the apps.
 
 **Claude Code.** The plugin brings the hook, the MCP server and a skill:
 
