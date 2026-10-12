@@ -36,6 +36,30 @@ describe('the README', () => {
     expect(top).toContain(`](https://registry.modelcontextprotocol.io/?q=${encoded})`);
   });
 
+  it('links each client badge to a section of docs/clients.md', () => {
+    const top = readme.slice(0, readme.indexOf('<!-- npm-readme:video -->'));
+    // The site's ids: a heading's or a <details> summary's text, as site/components/markdown-blocks.tsx slugs it.
+    const slug = (text: string) =>
+      text
+        .toLowerCase()
+        .replace(/<[^>]+>|`/g, '')
+        .replace(/[^\w\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-');
+    const clients = read('docs/clients.md');
+    const ids = new Set([
+      ...[...clients.matchAll(/^#{1,4} (.+)$/gm)].map((m) => slug(m[1] ?? '')),
+      ...[...clients.matchAll(/<summary>(?:<strong>)?(.*?)(?:<\/strong>)?<\/summary>/g)].map((m) =>
+        slug(m[1] ?? ''),
+      ),
+    ]);
+    const anchors = [
+      ...top.matchAll(/\]\(https:\/\/onsystem\.vercel\.app\/docs\/clients#([\w-]+)\)/g),
+    ].map((m) => m[1]);
+    expect(anchors.length).toBeGreaterThan(5);
+    for (const anchor of anchors) expect(ids, anchor).toContain(anchor);
+  });
+
   it('lists every rule with its default severity', async () => {
     const { rules } = await loadConfig({ cwd: fs.mkdtempSync(path.join(os.tmpdir(), 'readme-')) });
     const rows = readme.split('\n').filter((line) => /^\| `[\w-]+` +\|/.test(line));
