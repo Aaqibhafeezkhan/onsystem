@@ -386,6 +386,227 @@ write('bench.json', {
   models,
 });
 
+// ─── The benchmark, v2 ──────────────────────────────────────────────────────
+
+// /benchmark renders bench/v2's standard run from the files `run.mjs report` writes: the tables
+// from results.json, the blind labels from results.md (report renders them there and nowhere
+// else), time and cost from the ledger and runs.csv, and the method from the README and config.
+const v2 = path.join(repo, 'bench/v2');
+const readV2 = (file) => fs.readFileSync(path.join(v2, file), 'utf8');
+const v2Results = JSON.parse(readV2('results/standard/results.json'));
+const v2Info = v2Results.info;
+const v2Readme = readV2('README.md');
+const v2Report = readV2('results/standard/results.md');
+const v2Models = JSON.parse(readV2('config/models.json')).models;
+const v2Repos = JSON.parse(readV2('config/repos.json')).repos;
+const v2Tasks = JSON.parse(readV2('config/tasks.json')).tasks;
+
+/** Links in bench/v2/README.md, relative to bench/v2, made relative to the repository root. */
+function benchLinks(markdown) {
+  return markdown.replace(/\]\(([^)]+)\)/g, (match, href) =>
+    /^(?:https?:|#|\/)/.test(href) ? match : `](${path.posix.join('bench/v2', href)})`,
+  );
+}
+
+const ARM_NAMES = ['none', 'skill', 'mcp', 'hook', 'all'];
+const PROVIDER_NAMES = { anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google' };
+const modelRows = v2Results.rows.filter((r) => !r.model.endsWith(' models'));
+const runModels = [...new Set(modelRows.map((r) => r.model))].map((id) => {
+  const model = v2Models.find((m) => m.id === id);
+  assert.ok(model, `bench/v2/config/models.json has no model ${id}`);
+  const runs = modelRows.filter((r) => r.model === id).reduce((n, r) => n + r.runs, 0);
+  return { id, name: model.name, provider: model.provider, tier: model.tier, runs };
+});
+const pooled = (model, arm) => {
+  const row = v2Results.rows.find((r) => r.model === model && r.arm === arm);
+  assert.ok(row, `results.json has no row for ${model}, ${arm}`);
+  return row;
+};
+for (const arm of ARM_NAMES) pooled('all models', arm);
+const v2RunCount = ARM_NAMES.reduce((n, arm) => n + pooled('all models', arm).runs, 0);
+
+// The headline, checked here so the page cannot state it once the results stop saying it:
+// fewer errors with all three parts, no change in tsc passes (the paired difference's interval
+// holds 0), and the same cost per run (inside the interval of the run without onsystem).
+const none = pooled('all models', 'none');
+const all = pooled('all models', 'all');
+const allDelta = v2Results.deltas.find((d) => d.model === 'all models' && d.arm === 'all');
+assert.ok(allDelta, 'results.json has no paired difference for all models, all');
+assert.ok(all.onsystemErrors.value < none.onsystemErrors.value, 'all should have fewer errors');
+assert.ok(
+  allDelta.tscPass.low <= 0 && allDelta.tscPass.high >= 0,
+  'the tsc pass rate should not change with all three parts',
+);
+assert.ok(
+  all.cost.value >= none.cost.low && all.cost.value <= none.cost.high,
+  'the cost per run should not change with all three parts',
+);
+
+// Wall-clock time from the first start to the last finished attempt; seconds per run.
+const ledger = readV2('results/standard/ledger.jsonl')
+  .split('\n')
+  .filter(Boolean)
+  .map((line) => JSON.parse(line));
+const [csvHeader, ...csvLines] = readV2('results/standard/runs.csv').trim().split('\n');
+const csvColumns = csvHeader.split(',');
+const runsCsv = csvLines.map((line) => {
+  const cells = line.split(',');
+  assert.equal(cells.length, csvColumns.length, `runs.csv: unexpected row ${line}`);
+  return Object.fromEntries(csvColumns.map((c, i) => [c, cells[i]]));
+});
+assert.equal(runsCsv.length, v2RunCount, 'runs.csv and results.json should count the same runs');
+const seconds = runsCsv.map((r) => Number(r.seconds)).sort((a, b) => a - b);
+const statuses = {};
+for (const r of runsCsv) statuses[r.status] = (statuses[r.status] ?? 0) + 1;
+const lastAt = Math.max(...ledger.map((entry) => Date.parse(entry.at)));
+
+// The blind labels: report writes them to results.md only, so they are read from there.
+const labelSection = section(v2Report, '## Blind labels', 'results.md');
+const labelTable = table(labelSection);
+assert.deepEqual(
+  labelTable.header,
+  [
+    'Arm',
+    'Files labelled',
+    'Would merge',
+    'No violations (labeller)',
+    'Violations / file (labeller)',
+  ],
+  'results.md: unexpected blind-labels table',
+);
+function parseRate(text) {
+  const m = /^(\d+)\/(\d+) (\d+)% \[(\d+)%, (\d+)%\]$/.exec(text);
+  assert.ok(m, `results.md: "${text}" is not a rate`);
+  const [successes, n, percent, low, high] = m.slice(1).map(Number);
+  return { successes, n, percent, low, high };
+}
+function parseMean(text) {
+  const m = /^(\d+\.\d+) \[(\d+\.\d+), (\d+\.\d+)\]$/.exec(text);
+  assert.ok(m, `results.md: "${text}" is not a mean with an interval`);
+  const [value, low, high] = m.slice(1).map(Number);
+  return { value, low, high };
+}
+const agreement =
+  /per file: both found a problem in (\d+), only onsystem in (\d+), only the labeller in (\d+), neither in (\d+)\./.exec(
+    labelSection,
+  );
+assert.ok(agreement, 'results.md: the agreement line is missing');
+const precision = /findings judged correct: (.+?)(?: \((\d+) debatable, left out\))?\.$/m.exec(
+  labelSection,
+);
+assert.ok(precision, 'results.md: the precision line is missing');
+const labelRows = readV2('results/standard/labels/labels.csv')
+  .trim()
+  .split('\n')
+  .slice(1)
+  .filter((line) => /^S\d+,/.test(line));
+const findingRows = readV2('results/standard/labels/findings.csv')
+  .trim()
+  .split('\n')
+  .filter((line) => /^S\d+,/.test(line));
+
+const labelArms = labelTable.rows.map(([arm, labelled, wouldMerge, clean, violations]) => ({
+  arm,
+  labelled: Number(labelled),
+  wouldMerge: parseRate(wouldMerge),
+  clean: parseRate(clean),
+  violations: parseMean(violations),
+}));
+const labelPrecision = { ...parseRate(precision[1]), debatable: Number(precision[2] ?? 0) };
+assert.equal(
+  labelArms.reduce((n, a) => n + a.labelled, 0),
+  labelRows.length,
+  'results.md should count every row of labels.csv',
+);
+assert.equal(
+  labelPrecision.n + labelPrecision.debatable,
+  findingRows.length,
+  'results.md should count every row of findings.csv',
+);
+
+// Who labelled: LABELLER.md says it, and the page must too.
+const labeller = readV2('results/standard/labels/LABELLER.md');
+const who = section(labeller, '## Who', 'LABELLER.md');
+assert.ok(/AI reviewer/.test(who), 'LABELLER.md: the page says the labeller is an AI reviewer');
+const labellerModel = v2Models.find((m) => who.includes(m.name));
+assert.ok(labellerModel, 'LABELLER.md should name the labeller model as config/models.json does');
+const sameFamily = runModels.filter((m) => m.provider === labellerModel.provider);
+
+const release = /\((https:\/\/github\.com\/[^)]+\/releases\/tag\/(bench-v2-[\w-]+))\)/.exec(
+  v2Readme,
+);
+assert.ok(release, 'bench/v2/README.md should link the transcripts release');
+const running = section(v2Readme, '## Running it', 'bench/v2/README.md').split('\n### ')[0];
+
+write('benchmark.json', {
+  matrix: v2Info.matrix,
+  date: v2Info.startedAt.slice(0, 10),
+  onsystem: v2Info.onsystem,
+  runs: v2RunCount,
+  statuses,
+  models: runModels,
+  providers: [...new Set(runModels.map((m) => m.provider))].map((id) => ({
+    id,
+    name: PROVIDER_NAMES[id] ?? id,
+  })),
+  arms: ARM_NAMES,
+  repos: Object.values(v2Info.repos).map((r) => {
+    const config = v2Repos.find((c) => c.name === r.name);
+    assert.ok(config, `bench/v2/config/repos.json has no repository ${r.name}`);
+    return {
+      name: r.name,
+      url: r.url,
+      sha: r.sha,
+      project: config.project,
+      typescript: r.typescript,
+      designSystem: config.designSystem,
+    };
+  }),
+  tasks: v2Tasks
+    .filter((t) => t.repo in v2Info.repos)
+    .map((t) => ({ id: t.id, repo: t.repo, prompt: t.prompt })),
+  rows: v2Results.rows,
+  deltas: v2Results.deltas,
+  cost: {
+    total: ledger.reduce((sum, entry) => sum + entry.cost, 0),
+    cap: v2Info.cap,
+    pricesVerified: v2Info.pricesVerified,
+  },
+  time: {
+    wallMinutes: Math.round((lastAt - Date.parse(v2Info.startedAt)) / 60_000),
+    medianSeconds: seconds[Math.floor(seconds.length / 2)],
+    minSeconds: seconds[0],
+    maxSeconds: seconds.at(-1),
+  },
+  labels: {
+    files: labelRows.length,
+    findings: findingRows.length,
+    labeller: {
+      kind: 'AI reviewer',
+      model: labellerModel.name,
+      provider: PROVIDER_NAMES[labellerModel.provider] ?? labellerModel.provider,
+      sameFamily: sameFamily.map((m) => m.id),
+    },
+    arms: labelArms,
+    agreement: {
+      both: Number(agreement[1]),
+      onsystemOnly: Number(agreement[2]),
+      labellerOnly: Number(agreement[3]),
+      neither: Number(agreement[4]),
+    },
+    precision: labelPrecision,
+  },
+  method: {
+    v1: benchLinks(section(v2Readme, '## What changes from v1', 'bench/v2/README.md')),
+    arms: benchLinks(section(v2Readme, '### Arms', 'bench/v2/README.md')),
+    scoring: benchLinks(section(v2Readme, '### Scoring', 'bench/v2/README.md')),
+    statistics: benchLinks(section(v2Readme, '### Statistics', 'bench/v2/README.md')),
+    threats: benchLinks(section(v2Readme, '### Threats to validity', 'bench/v2/README.md')),
+    running: benchLinks(running),
+  },
+  release: { url: release[1], tag: release[2] },
+});
+
 // ─── The corpus: how often the rules are wrong ──────────────────────────────
 
 // The numbers `pnpm corpus` prints, from the files it writes: the labels in the random

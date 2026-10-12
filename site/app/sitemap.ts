@@ -8,6 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
   const pages: { path: string; priority: number }[] = [
     { path: '/', priority: 1 },
+    { path: '/benchmark', priority: 0.8 },
     { path: '/playground', priority: 0.8 },
     { path: '/rules', priority: 0.8 },
     ...DOCS_PAGES.map((page) => ({ path: page.href, priority: page.href === '/docs' ? 0.8 : 0.6 })),

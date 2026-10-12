@@ -1,0 +1,61 @@
+import { ImageResponse } from 'next/og';
+
+import { ARM_LABELS, count, perRun, row } from '@/lib/benchmark';
+import { benchmark } from '@/lib/data';
+import { C, ogFonts, PageCard, Panel } from '@/lib/og';
+
+const none = row(benchmark, 'all models', 'none');
+const all = row(benchmark, 'all models', 'all');
+
+export const alt = `The onsystem benchmark: design-system rule violations per run went from ${perRun(none.onsystemErrors.value)} to ${perRun(all.onsystemErrors.value)} with onsystem's skill, MCP server and hook, over ${count(benchmark.runs)} runs.`;
+export const size = { width: 1200, height: 630 };
+export const contentType = 'image/png';
+
+export default async function Image() {
+  const max = Math.max(
+    ...benchmark.arms.map((arm) => row(benchmark, 'all models', arm).onsystemErrors.value),
+  );
+  return new ImageResponse(
+    <PageCard
+      {...size}
+      eyebrow={`Benchmark · ${benchmark.date}`}
+      title={`Rule violations per run: ${perRun(none.onsystemErrors.value)} → ${perRun(all.onsystemErrors.value)}`}
+      lead={`With onsystem's skill, MCP server and hook. No change in tsc pass rate or cost per run. ${count(benchmark.runs)} runs, ${String(benchmark.models.length)} models, ${String(benchmark.providers.length)} providers, ${String(benchmark.repos.length)} repositories.`}
+      aside={
+        <Panel>
+          <span style={{ color: C.subtle, fontSize: 14 }}>rule violations per run, all models</span>
+          {benchmark.arms.map((arm) => {
+            const value = row(benchmark, 'all models', arm).onsystemErrors.value;
+            return (
+              <div key={arm} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: C.fgSoft }}>{ARM_LABELS[arm] ?? arm}</span>
+                  <span style={{ color: arm === 'none' ? C.muted : C.cyanBright }}>
+                    {perRun(value)}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${String(max === 0 ? 0 : Math.max((value / max) * 100, value > 0 ? 2 : 0))}%`,
+                      borderRadius: 4,
+                      backgroundColor: arm === 'none' ? '#5d6875' : C.cyan,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </Panel>
+      }
+    />,
+    { ...size, fonts: await ogFonts() },
+  );
+}

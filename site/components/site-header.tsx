@@ -11,7 +11,7 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { href: '/#benchmark', label: 'Benchmark' },
+  { href: '/benchmark', label: 'Benchmark' },
   { href: '/playground', label: 'Playground' },
   { href: '/rules', label: 'Rules' },
   { href: '/docs', label: 'Docs' },
