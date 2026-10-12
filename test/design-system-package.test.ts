@@ -179,6 +179,27 @@ describe('init in a design-system package', () => {
     );
   });
 
+  it('keeps a package config that is already there, and says how to share it', async () => {
+    const root = fixture({
+      ...MONOREPO,
+      'packages/kit/package.json': json({ name: '@acme/ui', files: ['dist'] }),
+      'packages/kit/onsystem.config.json': json({ components: ['src/*.tsx'] }),
+      'apps/web/onsystem.config.json': json({}),
+    });
+    const kit = path.join(root, 'packages/kit');
+    const init = await run(['init', '--yes', '--no-cache'], kit);
+    expect(init.code).toBe(2);
+    expect(init.stderr).toContain(
+      'To share it with the apps that depend on @acme/ui, add "onsystem": "./onsystem.config.json" to package.json, and to "files" when it lists them',
+    );
+    expect(read(path.join(kit, 'package.json'))).toEqual({ name: '@acme/ui', files: ['dist'] });
+    expect(read(path.join(kit, 'onsystem.config.json'))).toEqual({ components: ['src/*.tsx'] });
+    // An app's config is not shared.
+    const app = await run(['init', '--yes', '--no-cache'], path.join(root, 'apps/web'));
+    expect(app.code).toBe(2);
+    expect(app.stderr).not.toContain('To share it');
+  });
+
   it('leaves an app alone: only a package read through its exports or named like one is set up', async () => {
     const root = fixture({
       'package.json': json({ name: 'shop' }),

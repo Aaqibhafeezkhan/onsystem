@@ -19,7 +19,7 @@ npx -y onsystem init
 
 Then it checks the package once and offers a baseline, as in any project. When `files` leaves out the component or token files (a package that publishes only `dist/`), `init` says so: apps that install the package from a registry will not find them. Commit what it wrote.
 
-To declare the config by hand, add the field. It names a JSON file in the package:
+In a package that already has a config, `init` leaves it as it is (`--force` would replace it) and says to add the field by hand. The field names a JSON file in the package:
 
 ```json
 {

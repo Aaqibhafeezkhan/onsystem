@@ -70,9 +70,23 @@ export async function init(
       .map((name) => path.join(root, name))
       .find((file) => fs.existsSync(file)) ??
     (declared && 'file' in declared ? declared.file : undefined);
+  const manifest = readManifest(root);
+  const name = typeof manifest?.json.name === 'string' ? manifest.json.name : undefined;
+  // A package apps depend on for its components: what zero config reads in it through its
+  // exports, or a name like the ones apps' zero config looks for.
+  const designSystem =
+    !workspace &&
+    !config.designSystemPackage &&
+    name !== undefined &&
+    (config.detected?.startsWith('package.json exports of') === true || isDesignSystemName(name));
   if (existing && !options.force) {
+    // --force would replace a design-system package's config; declaring it keeps it.
+    const share =
+      designSystem && !declared && existing.endsWith('.json')
+        ? ` To share it with the apps that depend on ${name}, add "${PACKAGE_FIELD}": "./${path.basename(existing)}" to package.json, and to "files" when it lists them (https://onsystem.vercel.app/docs/design-system-packages).`
+        : '';
     io.stderr(
-      `init: ${relativePath(io.cwd, existing) || existing} already exists. Run \`${NAME} inspect --explain\` to see what it resolves to, or pass --force to write a new onsystem.config.json.`,
+      `init: ${relativePath(io.cwd, existing) || existing} already exists. Run \`${NAME} inspect --explain\` to see what it resolves to, or pass --force to write a new onsystem.config.json.${share}`,
     );
     return 2;
   }
@@ -81,17 +95,8 @@ export async function init(
   const file: Record<string, unknown> = { $schema: SCHEMA };
   const notes: string[] = [];
   const relative = (abs: string) => relativePath(root, abs);
-  const manifest = readManifest(root);
-  const name = typeof manifest?.json.name === 'string' ? manifest.json.name : undefined;
   // An app on a design-system package that declares its config needs none of its own.
   const inherited = options.force ? undefined : config.designSystemPackage;
-  // A package apps depend on for its components: what zero config reads in it through its
-  // exports, or a name like the ones apps' zero config looks for.
-  const designSystem =
-    !workspace &&
-    !config.designSystemPackage &&
-    name !== undefined &&
-    (config.detected?.startsWith('package.json exports of') === true || isDesignSystemName(name));
   if (inherited) {
     notes.push(
       `This project takes on the config ${inherited.name} declares in its package.json (${relativePath(io.cwd, inherited.config) || inherited.config}), so it needs none of its own; nothing was written. Pass --force to write one, which is read instead.`,
