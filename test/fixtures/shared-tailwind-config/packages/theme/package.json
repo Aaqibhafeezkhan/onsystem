@@ -1,0 +1,10 @@
+{
+  "name": "@acme/theme",
+  "private": true,
+  "exports": {
+    ".": {
+      "style": "./theme.css"
+    },
+    "./colors": "./colors.css"
+  }
+}

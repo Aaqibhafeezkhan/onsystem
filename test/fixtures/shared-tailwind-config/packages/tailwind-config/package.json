@@ -1,0 +1,9 @@
+{
+  "name": "@acme/tailwind-config",
+  "private": true,
+  "exports": {
+    ".": "./tailwind.config.ts",
+    "./tailwind.config": "./tailwind.config.ts",
+    "./themes.css": "./themes.css"
+  }
+}

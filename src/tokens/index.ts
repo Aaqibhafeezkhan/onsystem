@@ -195,6 +195,9 @@ const ROUNDED_FULL: Token = {
   source: { file: '', line: 0 },
 };
 
+/** A color token's value: bare HSL or RGB channels are its color (Tailwind v3). */
+const TOKEN_COLOR = { bareHsl: true, bareRgb: true };
+
 /** Query helpers over the token list: lookups and nearest-token search. */
 export class TokenIndex {
   readonly colors: ColorCandidate[] = [];
@@ -228,7 +231,7 @@ export class TokenIndex {
     let unit: number | undefined;
     for (const token of tokens) {
       if (token.category === 'color') {
-        const color = parseColor(token.value, { bareHsl: true });
+        const color = parseColor(token.value, TOKEN_COLOR);
         if (color) this.colors.push({ token, color, ...colorModes(token) });
         if (token.tailwind) this.colorKeys.add(token.tailwind);
       } else if (
@@ -413,7 +416,7 @@ export class TokenIndex {
 function colorModes(token: Token): { modes?: Record<string, Oklch> } {
   const modes: Record<string, Oklch> = {};
   for (const [mode, value] of Object.entries(token.modes ?? {})) {
-    const color = parseColor(value, { bareHsl: true });
+    const color = parseColor(value, TOKEN_COLOR);
     if (color) modes[mode] = color;
   }
   return Object.keys(modes).length ? { modes } : {};

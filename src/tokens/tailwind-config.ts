@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { globSync } from 'tinyglobby';
 import ts from 'typescript';
 
 import { propertyName } from '../extract/cva.js';
 import type { Token } from '../types.js';
+import { isInside } from '../util/paths.js';
+import { isBareRgb } from './color.js';
 import { evaluateLength } from './units.js';
 import { usageFor } from './usage.js';
 
@@ -14,6 +17,8 @@ export type ModuleResolver = (specifier: string, fromFile: string) => string | u
 export interface TailwindColors {
   /** Custom property → color key: `--primary` → `primary`, `--sidebar-background` → `sidebar`. */
   colors: Map<string, string>;
+  /** Custom properties the config reads as RGB channels: `rgb(var(--success) / <alpha-value>)`. */
+  rgb: Set<string>;
   /** The files read: the config and the project modules it imports. */
   files: string[];
 }
@@ -29,6 +34,7 @@ const MAX_FILES = 12;
  */
 export function readTailwindColors(file: string, resolve: ModuleResolver): TailwindColors {
   const colors = new Map<string, string>();
+  const rgb = new Set<string>();
   const files: string[] = [];
   const queue = [file];
   while (queue.length && files.length < MAX_FILES) {
@@ -54,7 +60,7 @@ export function readTailwindColors(file: string, resolve: ModuleResolver): Tailw
         propertyName(node.name) === 'colors' &&
         ts.isObjectLiteralExpression(node.initializer)
       ) {
-        collect(node.initializer, [], colors);
+        collect(node.initializer, [], colors, rgb);
         return;
       }
       const specifier = importedSpecifier(node);
@@ -64,7 +70,7 @@ export function readTailwindColors(file: string, resolve: ModuleResolver): Tailw
     };
     visit(source);
   }
-  return { colors, files };
+  return { colors, rgb, files };
 }
 
 /** `primary: { DEFAULT: "hsl(var(--primary))", foreground: … }` → `--primary` → `primary`, `--primary-foreground` → `primary-foreground`. */
@@ -72,6 +78,7 @@ function collect(
   object: ts.ObjectLiteralExpression,
   keys: string[],
   colors: Map<string, string>,
+  rgb: Set<string>,
 ): void {
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
@@ -80,13 +87,15 @@ function collect(
     const value = property.initializer;
     const nested = [...keys, key];
     if (ts.isObjectLiteralExpression(value)) {
-      collect(value, nested, colors);
+      collect(value, nested, colors, rgb);
       continue;
     }
     if (!ts.isStringLiteralLike(value)) continue;
     const variable = /var\(\s*(--[\w-]+)/.exec(value.text)?.[1];
     const name = nested.filter((k) => k !== 'DEFAULT').join('-');
-    if (variable && name && !colors.has(variable)) colors.set(variable, name);
+    if (!variable || !name || colors.has(variable)) continue;
+    colors.set(variable, name);
+    if (/^\s*rgba?\(\s*var\(/.test(value.text)) rgb.add(variable);
   }
 }
 
@@ -212,9 +221,13 @@ export function applyTailwindRadii(
   }
 }
 
-/** The specifier of `require("x")`, `import x from "x"` or `import("x")`. */
+/** The specifier of `require("x")`, `import x from "x"`, `export { default } from "x"` or `import("x")`. */
 function importedSpecifier(node: ts.Node): string | undefined {
-  if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+  if (
+    (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+    node.moduleSpecifier &&
+    ts.isStringLiteral(node.moduleSpecifier)
+  ) {
     return node.moduleSpecifier.text;
   }
   if (
@@ -277,9 +290,24 @@ const SHADCN_COLORS = new Set([
  * Gives color tokens their Tailwind v3 class names: the key the config maps
  * the custom property to, or, when the config has no colors we can read,
  * shadcn/ui's convention. Tokens that already have a key (`@theme`) keep it.
+ * A property the config reads as RGB channels (`rgb(var(--success) / <alpha-value>)`)
+ * is a color token when its values are such channels (`22 163 74`), which the
+ * stylesheet alone leaves undecided.
  */
-export function applyTailwindColors(tokens: Token[], colors: Map<string, string>): void {
+export function applyTailwindColors(
+  tokens: Token[],
+  colors: Map<string, string>,
+  rgb: ReadonlySet<string> = new Set(),
+): void {
   for (const token of tokens) {
+    if (
+      token.category === 'other' &&
+      token.cssVar &&
+      rgb.has(token.cssVar) &&
+      [token.value, ...Object.values(token.modes ?? {})].every(isBareRgb)
+    ) {
+      token.category = 'color';
+    }
     if (token.category !== 'color' || token.tailwind !== undefined || !token.cssVar) continue;
     const name = token.cssVar.slice(2);
     const key = colors.size
@@ -290,6 +318,57 @@ export function applyTailwindColors(tokens: Token[], colors: Map<string, string>
     if (key === undefined) continue;
     token.tailwind = key;
     token.usage = usageFor(token, '--color');
+  }
+}
+
+/** Enough of a package's stylesheets to find its theme, without reading a whole design system. */
+const MAX_PRESET_STYLESHEETS = 200;
+
+/**
+ * The stylesheets that set the custom properties a Tailwind v3 config maps to colors, when
+ * they sit in a workspace package the config reads its presets from rather than in the
+ * project: Dub's `@dub/tailwind-config`, whose `themes.css` sets `--content-error` for the
+ * `content-error` its config maps. Each CSS file of such a package (outside `node_modules`
+ * and build output) that declares one of them, in path order. The project's own folder, and
+ * a folder that holds it (a preset at the workspace root), are not searched.
+ */
+export function presetStylesheets(read: TailwindColors, root: string): string[] {
+  if (!read.colors.size) return [];
+  const packages = new Set<string>();
+  for (const file of read.files) {
+    const dir = packageDir(path.dirname(file));
+    if (dir && !isInside(dir, root)) packages.add(dir);
+  }
+  const out: string[] = [];
+  for (const dir of packages) {
+    const sheets = globSync('**/*.css', {
+      cwd: dir,
+      absolute: true,
+      ignore: ['**/node_modules/**', '**/{dist,build,out,.next,.turbo,coverage}/**'],
+    })
+      .sort()
+      .slice(0, MAX_PRESET_STYLESHEETS);
+    for (const sheet of sheets) {
+      let text: string;
+      try {
+        text = fs.readFileSync(sheet, 'utf8');
+      } catch {
+        continue;
+      }
+      const declares = [...text.matchAll(/(--[\w-]+)\s*:/g)].some((m) =>
+        read.colors.has(m[1] ?? ''),
+      );
+      if (declares) out.push(path.resolve(sheet));
+    }
+  }
+  return out;
+}
+
+/** The nearest folder at or above `dir` with a package.json. */
+function packageDir(dir: string): string | undefined {
+  for (let current = dir; ; current = path.dirname(current)) {
+    if (fs.existsSync(path.join(current, 'package.json'))) return current;
+    if (current === path.dirname(current)) return undefined;
   }
 }
 

@@ -1,0 +1,8 @@
+{
+  "name": "@acme/app-v4",
+  "private": true,
+  "dependencies": {
+    "@acme/theme": "workspace:*",
+    "@acme/ui": "workspace:*"
+  }
+}

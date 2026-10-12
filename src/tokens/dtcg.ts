@@ -34,9 +34,10 @@ export interface OnsystemExtension {
   tailwind?: string;
   /**
    * `hsl` when the custom property holds bare HSL channels (Tailwind v3, shadcn/ui before
-   * v4), so code reads it as `hsl(var(--border))`.
+   * v4), so code reads it as `hsl(var(--border))`; `rgb` for bare RGB channels, read as
+   * `rgb(var(--success))`.
    */
-  channels?: 'hsl';
+  channels?: 'hsl' | 'rgb';
   /** Values in other theme modes, in the form of `$value`: `{ "dark": { "colorSpace": … } }`. */
   modes?: Record<string, Json>;
 }
@@ -146,7 +147,11 @@ export function parseDtcgTokens(
     const type = typeOf(t);
     const format = (value: Json) => {
       const resolved = resolve(value, new Set([path]));
-      return (t.own?.channels === 'hsl' && hslChannels(resolved)) || formatValue(resolved, type);
+      return (
+        (t.own?.channels === 'hsl' && hslChannels(resolved)) ||
+        (t.own?.channels === 'rgb' && rgbChannels(resolved)) ||
+        formatValue(resolved, type)
+      );
     };
     // `color.accent.$root` is the group's own value: `--color-accent`.
     const segments = [options.prefix, ...t.path.filter((p) => p !== '$root')].filter(Boolean);
@@ -324,7 +329,7 @@ function onsystemExtension(extensions: Json | undefined): OnsystemExtension | un
   if (typeof own.tailwind === 'string' && themeVariable(own.tailwind)) {
     out.tailwind = own.tailwind;
   }
-  if (own.channels === 'hsl') out.channels = 'hsl';
+  if (own.channels === 'hsl' || own.channels === 'rgb') out.channels = own.channels;
   if (isObject(own.modes)) out.modes = own.modes;
   return out;
 }
@@ -375,6 +380,20 @@ function hslChannels(value: Json): string | undefined {
   if (h === undefined || s === undefined || l === undefined) return undefined;
   const alpha = typeof value.alpha === 'number' && value.alpha < 1 ? ` / ${value.alpha}` : '';
   return `${h} ${s}% ${l}%${alpha}`;
+}
+
+/** `22 163 74`: an sRGB color as the bare channels a Tailwind v3 custom property holds. */
+function rgbChannels(value: Json): string | undefined {
+  if (!isObject(value) || value.colorSpace !== 'srgb' || !Array.isArray(value.components)) {
+    return undefined;
+  }
+  const channels = value.components.map((c) =>
+    typeof c === 'number' ? String(Math.round(c * 255)) : undefined,
+  );
+  const [r, g, b] = channels;
+  if (r === undefined || g === undefined || b === undefined) return undefined;
+  const alpha = typeof value.alpha === 'number' && value.alpha < 1 ? ` / ${value.alpha}` : '';
+  return `${r} ${g} ${b}${alpha}`;
 }
 
 function formatValue(value: Json, type: string | undefined): string {
