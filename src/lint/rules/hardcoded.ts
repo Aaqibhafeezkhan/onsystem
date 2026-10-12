@@ -260,6 +260,10 @@ function reportColor(
     replacement = cls ? `className="${cls}"` : cssVar;
     advice = cls ? `\`${cls}\` in className` : undefined;
   }
+  // Neither a class nor a custom property (a color of an MUI theme): how the token says to use it.
+  if (!cls && !cssVar && token.usage.length) {
+    advice = token.usage.map((usage) => `\`${usage}\``).join(' or ');
+  }
 
   const same = sameValue.length ? `, same value as ${sameValue.map((t) => t.name).join(', ')}` : '';
   const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';
@@ -429,7 +433,7 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
           const negative = utility.negative !== px < 0;
           if (negative && !NEGATIVE_PREFIXES.has(utility.prefix)) continue;
           const replacement = lengthReplacement(context, spec.category, px, utility.prefix);
-          if (!replacement) continue;
+          if (!replacement || unnamed(replacement)) continue;
           const fixed = withBase({ ...utility, negative }, replacement.cls);
           const message = replacement.exact
             ? `\`${token.value}\` is ${formatPx(px)}, which is on the ${spec.category} scale: use \`${fixed}\`.`
@@ -468,6 +472,7 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
               values.length === 1
                 ? lengthReplacement(context, spec.category, px, prefix)
                 : undefined;
+            if (replacement && unnamed(replacement)) continue;
             const cls = replacement && `${negative ? '-' : ''}${replacement.cls}`;
             const cssVar =
               replacement?.cssVar &&
@@ -494,6 +499,14 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
       }
     },
   };
+}
+
+/**
+ * A value on the scale whose token code cannot name, with neither a Tailwind class nor a
+ * custom property (a DESIGN.md's `spacing.md`): there is nothing better to write.
+ */
+function unnamed(replacement: { exact: boolean; tailwind: boolean; cssVar?: string | undefined }) {
+  return replacement.exact && !replacement.tailwind && !replacement.cssVar;
 }
 
 /** The nearest step is "far" when it is off by more than half the value and more than 4px. */

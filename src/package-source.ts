@@ -20,14 +20,26 @@ const BUILD_DIR = /^(?:dist|build|lib|out|esm|cjs|es|module|types)\//;
 /** `index.mjs`, `index.d.ts`, `button.cjs`: an output file, by its extension. */
 const OUTPUT_EXTENSION = /(?:\.d)?\.[cm]?[jt]sx?$/;
 
-/** `base` as a file, with an extension added, or as a directory's index. */
-export function moduleFile(base: string, extensions = MODULE_EXTENSIONS): string | undefined {
+/**
+ * `base` as a file, with an extension added, or as a directory's index, never in an installed
+ * package: in `node_modules`, or with `within` (a package's own folder, which may be installed
+ * itself), in a `node_modules` below it.
+ */
+export function moduleFile(
+  base: string,
+  extensions = MODULE_EXTENSIONS,
+  within?: string,
+): string | undefined {
   const candidates = [
     base,
     ...extensions.map((ext) => `${base}${ext}`),
     ...extensions.map((ext) => path.join(base, `index${ext}`)),
   ];
-  return candidates.find((file) => isFile(file) && !/[\\/]node_modules[\\/]/.test(file));
+  return candidates.find(
+    (file) =>
+      isFile(file) &&
+      !/(?:^|[\\/])node_modules[\\/]/.test(within ? path.relative(within, file) : file),
+  );
 }
 
 /** Where a build tool's config says each output comes from: `icons/index` → `src/icons/index.tsx`. */
@@ -177,7 +189,7 @@ export function sourceTarget(
   ];
   for (const candidate of candidates) {
     if (candidate === undefined) continue;
-    const file = moduleFile(path.join(dir, candidate), SOURCE_EXTENSIONS);
+    const file = moduleFile(path.join(dir, candidate), SOURCE_EXTENSIONS, dir);
     if (file && isInside(dir, file)) return toPosix(path.relative(dir, file));
   }
   return undefined;
@@ -209,7 +221,11 @@ export function exportedFiles(file: string, packageDir: string): string[] {
     if (!barrel) found.push(current);
     for (const specifier of from) {
       if (!specifier.startsWith('.')) continue;
-      const next = moduleFile(path.resolve(path.dirname(current), specifier));
+      const next = moduleFile(
+        path.resolve(path.dirname(current), specifier),
+        undefined,
+        packageDir,
+      );
       if (next && isInside(packageDir, next)) visit(next, depth + 1);
     }
   };

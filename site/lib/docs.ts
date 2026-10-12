@@ -37,6 +37,18 @@ export const DOCS_PAGES = [
       'How the design system is found with zero config, and the config file for other layouts.',
   },
   {
+    href: '/docs/design-system-packages',
+    title: 'Design-system packages',
+    description:
+      'Set onsystem up once in a design-system package, and every app that depends on it finds the design system with no config of its own.',
+  },
+  {
+    href: '/docs/tokens',
+    title: 'Design tokens',
+    description:
+      'Tokens from stylesheets, DTCG 2025.10 files and a DESIGN.md, and onsystem export to write them as DTCG or DESIGN.md.',
+  },
+  {
     href: '/docs/eslint',
     title: 'ESLint plugin',
     description:

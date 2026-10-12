@@ -18,6 +18,24 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const readme = read('README.md');
 
 describe('the README', () => {
+  // test/install.test.ts checks what each install link installs.
+  it('opens with one-click installs for Cursor, VS Code and Claude Code', () => {
+    const top = readme.slice(0, readme.indexOf('<!-- npm-readme:video -->'));
+    expect(top).toContain('](https://cursor.com/en/install-mcp?name=onsystem&config=');
+    expect(top).toContain(
+      '](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=',
+    );
+    expect(top).toContain('](https://onsystem.vercel.app/docs/plugin)');
+  });
+
+  it('links the MCP Registry badge to the server.json name, and reads the version from there', () => {
+    const top = readme.slice(0, readme.indexOf('<!-- npm-readme:video -->'));
+    const { name } = JSON.parse(read('server.json')) as { name: string };
+    const encoded = encodeURIComponent(name);
+    expect(top).toContain(`search%3D${encoded}%26version%3Dlatest`);
+    expect(top).toContain(`](https://registry.modelcontextprotocol.io/?q=${encoded})`);
+  });
+
   it('lists every rule with its default severity', async () => {
     const { rules } = await loadConfig({ cwd: fs.mkdtempSync(path.join(os.tmpdir(), 'readme-')) });
     const rows = readme.split('\n').filter((line) => /^\| `[\w-]+` +\|/.test(line));
@@ -46,12 +64,16 @@ describe('the README', () => {
     let covered = 0;
     let weighted = 0;
     let unknown = 0;
+    let unknownInFlowise = 0;
     // A run from a monorepo root counts only the findings it adds to the runs from its projects.
     for (const [run, { rules, added }] of Object.entries(snapshot.runs)) {
       for (const [rule, counts] of Object.entries(added ?? rules)) {
         const n = counts.errors + counts.warnings;
         if (!rechecks.has(run)) distinct += n;
-        if (/^no-unknown-(component|prop|variant)$/.test(rule)) unknown += n;
+        if (/^no-unknown-(component|prop|variant)$/.test(rule)) {
+          unknown += n;
+          if (run === 'flowise-ui') unknownInFlowise += n;
+        }
         const stratum = sample.filter((l) => l.run === run && l.rule === rule);
         if (!stratum.length) continue;
         covered += n;
@@ -68,10 +90,13 @@ describe('the README', () => {
       `In a random sample of ${String(sample.length)} findings, ${String(right)} are clearly right (${pct(right / sample.length)}), ${String(debatable)} are debatable and ${String(fp)} are false positives (${pct(fp / sample.length)})`,
     );
     expect(text).toContain(`about ${pct(weighted / covered)} are false positives`);
+    // Invented components, props and variants: MUI's Flowise has most of them.
+    const unknownSample = sample.filter((l) => /^no-unknown-/.test(l.rule));
     expect(text).toContain(
-      `those three rules have ${String(unknown)} ${unknown === 1 ? 'finding' : 'findings'} in the corpus`,
+      `those three rules have ${String(unknown)} findings in the corpus, ${String(unknownInFlowise)} of them in Flowise, an MUI app`,
     );
-    expect(sample.some((l) => /^no-unknown-/.test(l.rule))).toBe(false);
+    expect(text).toContain(`the ${String(unknownSample.length)} in the sample are all right`);
+    expect(unknownSample.every((l) => l.verdict === 'TP')).toBe(true);
   });
 
   it('quotes the benchmark results in bench/agents', () => {

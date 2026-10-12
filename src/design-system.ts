@@ -7,11 +7,12 @@ import path from 'node:path';
 import { glob } from 'tinyglobby';
 import type ts from 'typescript';
 
-import { loadConfig, rulesFor, type ResolvedConfig } from './config.js';
+import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } from './config.js';
 import { moduleResolver } from './detect.js';
 import { extractComponents } from './extract/components.js';
 import { attachDocs, parseDoc, type ParsedDoc } from './extract/docs.js';
 import { isProjectFile, projectFiles, readProjectConfig } from './extract/program.js';
+import { loadLibraries } from './libraries/load.js';
 import { checkSource, LintTarget } from './lint/index.js';
 import { ModuleResolver } from './modules.js';
 import {
@@ -44,13 +45,25 @@ import { VERSION } from './version.js';
 export class DesignSystem {
   readonly lint: LintTarget;
   private readonly searchIndex: Bm25Index<ComponentInfo>;
+  /**
+   * The components the tools offer: all of them, except a library's (MUI's) where the project
+   * has its own of that name, a wrapper the team means to be used. The rules still check code
+   * that imports the library's directly against the library's.
+   */
+  private readonly offered: ComponentInfo[];
 
   constructor(
     readonly model: DesignSystemModel,
     readonly config: ResolvedConfig,
   ) {
     this.lint = new LintTarget(model, config, new ModuleResolver(config));
-    this.searchIndex = buildSearchIndex(model.components);
+    const own = new Set(
+      model.components.filter((c) => !c.library).flatMap((c) => [c.name, ...c.aliases]),
+    );
+    this.offered = model.components.filter(
+      (c) => !c.library || !(own.has(c.name) || (c.parent !== undefined && own.has(c.parent))),
+    );
+    this.searchIndex = buildSearchIndex(this.offered);
   }
 
   get root(): string {
@@ -58,7 +71,7 @@ export class DesignSystem {
   }
 
   get components(): ComponentInfo[] {
-    return this.model.components;
+    return this.offered;
   }
 
   get tokens(): Token[] {
@@ -71,7 +84,7 @@ export class DesignSystem {
 
   /** Top-level components, i.e. not parts of another component. */
   roots(): ComponentInfo[] {
-    return this.model.components.filter((c) => !c.parent);
+    return this.offered.filter((c) => !c.parent);
   }
 
   /** Looks a component up by name, alias, `Card.Header`/`CardHeader` or case-insensitively. */
@@ -80,7 +93,7 @@ export class DesignSystem {
     if (exact) return exact;
     const key = (n: string) => n.replace(/\./g, '').toLowerCase();
     const wanted = key(name);
-    return this.model.components.find(
+    return this.offered.find(
       (c) => key(c.name) === wanted || c.aliases.some((a) => key(a) === wanted),
     );
   }
@@ -133,6 +146,17 @@ export class DesignSystem {
       if (token) found.set(token.name, token);
     }
     return [...found.values()];
+  }
+
+  /**
+   * Whether `check --require-design-system` (and the GitHub Action, where it is on by default)
+   * finds a design system to check against: components and color tokens, or components from a
+   * published library (MUI). A library is the design system whatever its theme: when the theme's
+   * colors cannot be read (a palette from Sass variables), the check still runs and `notice()`
+   * says that no-hardcoded-color did not.
+   */
+  hasDesignSystem(): boolean {
+    return !this.notice() || this.model.components.some((c) => c.library !== undefined);
   }
 
   /**
@@ -195,17 +219,21 @@ interface ResolvedFiles {
  */
 async function find(config: ResolvedConfig, patterns: string[]): Promise<string[]> {
   const options = { cwd: config.root, absolute: true, dot: false };
+  // A design-system package's own excludes, when an app's `exclude` adds the defaults to them.
+  const exclude = config.designSystemExclude ?? config.exclude;
   const named = patterns.filter((p) => p.includes('node_modules'));
   const outside = patterns.filter((p) => !p.includes('node_modules') && p.startsWith('../'));
   const rest = patterns.filter((p) => !p.includes('node_modules') && !p.startsWith('../'));
   const found = await Promise.all([
     rest.length
-      ? glob(rest, { ...options, ignore: unique(['**/node_modules/**', ...config.exclude]) })
+      ? glob(rest, { ...options, ignore: unique(['**/node_modules/**', ...exclude]) })
       : [],
+    // Without the excludes that leave out all of node_modules (`**/node_modules/**`), keeping
+    // those that name files in it: a design-system package's, rebased onto where it is installed.
     named.length
       ? glob(named, {
           ...options,
-          ignore: config.exclude.filter((e) => !e.includes('node_modules')),
+          ignore: exclude.filter((e) => !/^(?:\*\*\/)?node_modules(?:\/\*\*)?\/?$/.test(e)),
         })
       : [],
     // A workspace package next to the root (`../../packages/ui/...`): `**/` ignore
@@ -219,8 +247,8 @@ async function find(config: ResolvedConfig, patterns: string[]): Promise<string[
         cwd: path.resolve(config.root, base),
         ignore: unique([
           '**/node_modules/**',
-          ...config.exclude.filter((e) => e.startsWith('**/')),
-          ...config.exclude.filter((e) => e.startsWith(prefix)).map((e) => e.slice(prefix.length)),
+          ...exclude.filter((e) => e.startsWith('**/')),
+          ...exclude.filter((e) => e.startsWith(prefix)).map((e) => e.slice(prefix.length)),
         ]),
       });
     }),
@@ -243,13 +271,18 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
   const docs = await find(config, config.docs);
   const tokens: ResolvedFiles['tokens'] = [];
   const seen = new Set<string>();
-  for (const source of config.tokens) {
-    for (const file of await find(config, [source.path])) {
-      if (seen.has(file)) continue;
-      seen.add(file);
-      tokens.push({ file, prefix: source.prefix });
+  const add = async (sources: TokenSourceConfig[]) => {
+    for (const source of sources) {
+      for (const file of await find(config, [source.path])) {
+        if (seen.has(file)) continue;
+        seen.add(file);
+        tokens.push({ file, prefix: source.prefix });
+      }
     }
-  }
+  };
+  await add(config.tokens.filter((t) => !t.fallback));
+  // A DESIGN.md stands in only when no stylesheet or DTCG file was found.
+  if (!tokens.length) await add(config.tokens.filter((t) => t.fallback));
   return { components, tokens, docs };
 }
 
@@ -392,6 +425,11 @@ export async function buildModel(
   warnings.push(...attachDocs(extracted.components, docs));
   const tokens = await loadTokens(config.root, files.tokens);
   warnings.push(...tokens.warnings);
+  // Published libraries the project uses (MUI), from their type declarations, after the
+  // project's own components, and the tokens of the theme it gives them.
+  const libraries = await loadLibraries(config);
+  warnings.push(...libraries.warnings);
+  tokens.tokens.push(...libraries.tokens);
   // Tailwind v3 maps color classes in its config rather than in `@theme`.
   const tailwind = config.tailwindConfig
     ? readTailwindColors(config.tailwindConfig, moduleResolver(config.root))
@@ -405,20 +443,22 @@ export async function buildModel(
     radiiFiles = radii.files;
   }
 
-  if (!files.components.length) {
+  if (!files.components.length && !libraries.components.length) {
     warnings.push(
       `No component files matched ${config.components.join(', ')} under ${config.root}`,
     );
   }
-  if (!files.tokens.length) warnings.push('No token files found; token rules are disabled.');
+  if (!files.tokens.length && !libraries.tokens.length) {
+    warnings.push('No token files found; token rules are disabled.');
+  }
 
   const model: DesignSystemModel = {
     version: 1,
     root: config.root,
-    components: extracted.components,
+    components: [...extracted.components, ...libraries.components],
     tokens: tokens.tokens,
-    propSets: extracted.propSets,
-    exports: extracted.exports,
+    propSets: { ...extracted.propSets, ...libraries.propSets },
+    exports: unique([...extracted.exports, ...libraries.exports]).sort(),
     warnings,
     sources: files.components.map((file) => relativePath(config.root, file)),
     stats: {
@@ -436,6 +476,7 @@ export async function buildModel(
     ...extracted.dependencies,
     ...(tailwind?.files ?? []),
     ...radiiFiles,
+    ...libraries.dependencies,
   ]);
   const key = await cacheKey(config, files, dependencies, stats);
   if (useCache) {
@@ -553,9 +594,11 @@ export class DesignSystemHost {
    * `extends` target is picked up.
    */
   private watchConfigFiles(): void {
-    const { root, configFile, tsconfig } = this.config;
+    const { root, configFile, tsconfig, designSystemPackage } = this.config;
     const files = [
       configFile,
+      // The design-system package's package.json, which names its config.
+      designSystemPackage && path.join(designSystemPackage.dir, 'package.json'),
       // Zero-config detection reads these; a change re-runs it.
       ...DETECTION_FILES.map((f) => path.join(root, f)),
       path.resolve(root, tsconfig ?? 'tsconfig.json'),
@@ -579,10 +622,11 @@ export class DesignSystemHost {
   private changed(file: string | undefined): void {
     // Without component globs in the config, the design system was detected from
     // components.json, package.json and tsconfig paths: re-read the config so detection runs again.
-    const { root, configFile, detected } = this.config;
+    const { root, configFile, detected, designSystemPackage } = this.config;
     if (
       file === undefined ||
       file === configFile ||
+      (designSystemPackage !== undefined && this.watchedFiles.has(file)) ||
       (path.dirname(file) === root && DETECTION_FILES.includes(path.basename(file))) ||
       (detected !== undefined && this.watchedFiles.has(file))
     ) {
@@ -638,8 +682,11 @@ export class DesignSystemHost {
 
   /** Re-reads the config, re-watches what it points at and rebuilds. */
   private async reloadConfig(): Promise<void> {
-    const { root, configFile } = this.config;
-    const load = this.options.loadConfig ?? (() => loadConfig({ root, config: configFile }));
+    const { root, configFile, designSystemPackage, warnings } = this.config;
+    // A design-system package's config is found again from the project, so it is rebased again.
+    const load =
+      this.options.loadConfig ??
+      (() => loadConfig({ root, config: designSystemPackage ? undefined : configFile }));
     try {
       this.config = await load();
     } catch (error) {
@@ -647,6 +694,10 @@ export class DesignSystemHost {
         `config reload failed: ${(error as Error).message}`,
       );
       return;
+    }
+    // Said when the project loaded; only what the new config adds is said again.
+    for (const text of this.config.warnings ?? []) {
+      if (!warnings?.includes(text)) (this.options.logger ?? silentLogger).warn(text);
     }
     if (this.watchers.length) {
       this.close();

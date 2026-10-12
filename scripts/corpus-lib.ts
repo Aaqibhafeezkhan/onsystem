@@ -1,6 +1,7 @@
 // The comparison behind scripts/corpus.mjs: fingerprints, per-rule counts, the snapshot diff,
 // label checks and the false-positive rate. Pure functions, so test/corpus.test.ts covers them.
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 
 export interface CheckDiagnostic {
   ruleId: string;
@@ -331,14 +332,16 @@ function sameness(f: Finding, file: string): string {
 /**
  * Where a run from a workspace root differs from a run from one of its projects, for the
  * files under `folder`: root mode routes each file to its own project, so both must report
- * the same files and findings. Lines name each difference; none means they agree.
+ * the same files and findings. `.` compares every file: a run of the same folder another way
+ * (after `init` set up its design-system package). Lines name each difference; none means
+ * they agree.
  */
 export function rootDifferences(
   root: { files: readonly string[]; findings: readonly Finding[] },
   folder: string,
   project: { files: readonly string[]; findings: readonly Finding[] },
 ): string[] {
-  const prefix = `${folder.replace(/\/+$/, '')}/`;
+  const prefix = folderPrefix(folder);
   const differences: string[] = [];
   const rootFiles = new Set(root.files.filter((f) => f.startsWith(prefix)));
   const projectFiles = new Set(project.files.map((f) => `${prefix}${f}`));
@@ -377,10 +380,16 @@ export function rootDifferences(
   return differences;
 }
 
-/** Findings outside the given folders: what a root run adds to the runs from its projects. */
+/** Findings outside the given folders (`.` holds them all): what a root run adds to the runs from its projects. */
 export function outside(found: readonly Finding[], folders: readonly string[]): Finding[] {
-  const prefixes = folders.map((f) => `${f.replace(/\/+$/, '')}/`);
+  const prefixes = folders.map(folderPrefix);
   return found.filter((f) => !prefixes.some((prefix) => f.file.startsWith(prefix)));
+}
+
+/** `apps/web/` for `apps/web`, and nothing for `.`, the run's whole folder. */
+function folderPrefix(folder: string): string {
+  const trimmed = folder.replace(/\/+$/, '');
+  return trimmed === '.' ? '' : `${trimmed}/`;
 }
 
 export function percent(rate: number | undefined): string {
@@ -408,4 +417,73 @@ export function random(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * A repository's `install` in corpus/repos.json: for each folder of the checkout, the npm
+ * packages the CLI needs to read the app as the app's own editor does (a component library's
+ * type declarations, its peers and React's types), each at an exact version, and the date that
+ * pins what they depend on: npm takes the newest versions published by then.
+ */
+export interface InstallSpec {
+  before: string;
+  /** Folder of the checkout (`.` for its root) → package → exact version. */
+  folders: Record<string, Record<string, string>>;
+}
+
+export interface Install {
+  folder: string;
+  /** Where the packages are installed: beside the checkouts, never in one. */
+  dir: string;
+  /** The folder's node_modules in the checkout, a link to `dir`'s. */
+  link: string;
+  /** The package.json written into `dir`: the repository's own is not used. */
+  manifest: { private: true; dependencies: Record<string, string> };
+  /** npm's arguments: no package's install scripts run. */
+  args: string[];
+}
+
+/** `5.15.0`, `7.0.0-beta.13`: one version, not a range or a tag. */
+const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/;
+
+/** What `corpus.mjs fetch` installs for `repo`, under the corpus folder `corpus`. */
+export function installs(
+  repo: { name: string; install?: InstallSpec | undefined },
+  corpus: string,
+): Install[] {
+  if (!repo.install) return [];
+  const { before, folders } = repo.install;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(before)) {
+    throw new Error(
+      `${repo.name}: install.before must be a date (2026-08-13), not ${JSON.stringify(before)}.`,
+    );
+  }
+  return Object.entries(folders).map(([folder, packages]) => {
+    const parts = folder.split('/').filter((part) => part && part !== '.');
+    if (parts.includes('..') || path.isAbsolute(folder)) {
+      throw new Error(`${repo.name}: install folder ${folder} is not inside the checkout.`);
+    }
+    for (const [name, version] of Object.entries(packages)) {
+      if (!EXACT_VERSION.test(version)) {
+        throw new Error(
+          `${repo.name}: install ${name}@${version} in ${folder}: pin an exact version.`,
+        );
+      }
+    }
+    return {
+      folder,
+      dir: path.join(corpus, '.installs', repo.name, ...(parts.length ? parts : ['.root'])),
+      link: path.join(corpus, repo.name, ...parts, 'node_modules'),
+      manifest: { private: true, dependencies: packages },
+      args: [
+        'install',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--update-notifier=false',
+        '--loglevel=error',
+        `--before=${before}`,
+      ],
+    };
+  });
 }

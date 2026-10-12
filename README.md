@@ -6,13 +6,20 @@ Built for design-system and platform teams with a React design-system package; a
 
 [![CI](https://img.shields.io/github/actions/workflow/status/dgesteves/onsystem/ci.yml?branch=main&style=flat-square&label=CI&labelColor=0d0f12)](https://github.com/dgesteves/onsystem/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](https://www.npmjs.com/package/onsystem)
+[![Downloads](https://img.shields.io/npm/dw/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](https://www.npmjs.com/package/onsystem)
+[![MCP Registry](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.modelcontextprotocol.io%2Fv0%2Fservers%3Fsearch%3Dio.github.dgesteves%2Fonsystem%26version%3Dlatest&query=%24.servers%5B0%5D.server.version&prefix=v&label=MCP%20Registry&style=flat-square&labelColor=0d0f12&color=22d3ee&logo=modelcontextprotocol&logoColor=white)](https://registry.modelcontextprotocol.io/?q=io.github.dgesteves%2Fonsystem)
+[![Cursor Directory](https://img.shields.io/badge/Cursor_Directory-Listed-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.directory/plugins/design-system-mcp)
 [![License: MIT](https://img.shields.io/github/license/dgesteves/onsystem?style=flat-square&labelColor=0d0f12&color=22d3ee)](LICENSE)
+
+[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_server-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.com/en/install-mcp?name=onsystem&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIm9uc3lzdGVtIiwiLS1yb290IiwiJHt3b3Jrc3BhY2VGb2xkZXJ9Il19)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat-square)](https://insiders.vscode.dev/redirect/mcp/install?name=onsystem&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22onsystem%22%2C%22--root%22%2C%22%24%7BworkspaceFolder%7D%22%5D%7D)
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-Install_plugin-d97757?style=flat-square&logo=claude&logoColor=white)](https://onsystem.vercel.app/docs/plugin)
 
 **Website and docs:** [onsystem.vercel.app](https://onsystem.vercel.app), with a [playground](https://onsystem.vercel.app/playground) that checks your own code.
 
 <!-- npm-readme:video -->
 
-https://github.com/user-attachments/assets/ebfa176b-a66a-4ab7-bc3b-a4787540647f
+https://github.com/user-attachments/assets/8ca1c640-94c2-4003-b59e-2b0d819c492d
 
 <sub>On the <a href="https://onsystem.vercel.app">website</a>, an agent drafts a settings card, <code>check_ui</code> finds 11 problems with a fix each, and the agent applies them. Then a real Claude Code session with the plugin: Claude looks the components up before writing, and <code>check_ui</code> passes. Last, the benchmark.</sub>
 
@@ -30,7 +37,7 @@ Coding agents write UI from their training data, not from your design system. As
 
 ## What it checks
 
-onsystem reads your components, `cva` and `tv` variants, parts and tokens from source with the TypeScript compiler, and checks `.tsx` and `.jsx` against them. Every finding has a rule id, a location and the fix.
+onsystem reads your components, `cva` and `tv` variants, parts and tokens from source with the TypeScript compiler, and checks `.tsx` and `.jsx` against them. Every finding has a rule id, a location and the fix. Tokens come from your stylesheets, [DTCG 2025.10 files or a DESIGN.md](https://onsystem.vercel.app/docs/tokens), and `onsystem export` writes them out as either.
 
 | Rule                             | Default | Catches                                                                         |
 | -------------------------------- | ------- | ------------------------------------------------------------------------------- |
@@ -43,7 +50,7 @@ onsystem reads your components, `cva` and `tv` variants, parts and tokens from s
 | `no-hardcoded-spacing`           | warn    | Arbitrary padding, margin and gap (`p-[13px]` → `p-3`)                          |
 | `no-hardcoded-radius`            | warn    | Arbitrary radius (`rounded-[7px]` → `rounded-sm`)                               |
 
-**How often it is wrong.** The [corpus](corpus) job runs `check` on 10 public repositories pinned by commit (Documenso, Dub, Cal.com, midday and others, the four monorepos also from their root and Dub's app also with a config: 21 runs, 3,702 distinct findings) and compares the findings with hand labels. In a random sample of 126 findings, 67 are clearly right (53.2%), 55 are debatable and 4 are false positives (3.2%); weighted by each run's and rule's share of all findings, about 1.0% are false positives. Shipped code rarely invents components, props or variants, so those three rules have 1 finding in the corpus and none in the sample; their precision comes from the test suite. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
+**How often it is wrong.** The [corpus](corpus) job runs `check` on 12 public repositories pinned by commit (Documenso, Dub, Cal.com, midday, Flowise and others, the four monorepos also from their root, and Dub's app also with a config and with `@dub/ui` set up by `init`: 24 runs, 4,076 distinct findings) and compares the findings with hand labels. In a random sample of 149 findings, 88 are clearly right (59.1%), 56 are debatable and 5 are false positives (3.4%); weighted by each run's and rule's share of all findings, about 1.0% are false positives. Shipped code rarely invents components, props or variants: those three rules have 56 findings in the corpus, 55 of them in Flowise, an MUI app that passes props and values MUI's components do not take, and the 10 in the sample are all right. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
 
 ## Quickstart
 
@@ -55,7 +62,7 @@ npx -y onsystem check .   # the same check the agent and CI run
 npx -y onsystem init      # write the config, and offer a baseline
 ```
 
-At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system.
+At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system. In a [design-system package](https://onsystem.vercel.app/docs/design-system-packages), `init` sets it up for every app that depends on it, workspace or npm, with no config in the apps.
 
 In a new create-next-app, the template page's hardcoded colors already make the first `check .` fail; `init` offers to record them as a baseline, so only new findings fail.
 

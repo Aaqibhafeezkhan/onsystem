@@ -127,6 +127,8 @@ export interface Docs {
   requiredCheck: string;
   clients: string;
   configuration: string;
+  designSystemPackages: string;
+  tokens: string;
   eslint: string;
   rules: string;
   tools: string;

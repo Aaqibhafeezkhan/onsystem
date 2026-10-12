@@ -27,7 +27,8 @@ describe('the install links', () => {
     'in %s start the server with the workspace folder as its root, in every client',
     (file) => {
       const found = configs(read(file));
-      expect(found.map((f) => f.client).sort()).toEqual(['Cursor', 'VS Code']);
+      // The README links each client twice: in the badges at the top and in the quickstart.
+      expect([...new Set(found.map((f) => f.client))].sort()).toEqual(['Cursor', 'VS Code']);
       for (const { client, config } of found) {
         expect(config, `${file}: ${client}`).toEqual({
           command: 'npx',
