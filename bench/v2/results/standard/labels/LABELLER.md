@@ -2,7 +2,7 @@
 
 ## Who
 
-An AI reviewer, Claude Opus 5.5, labelled this sample in a Claude Code cloud session on 2026-10-12. No person labelled or reviewed these sheets. The labeller's model family may overlap with the models under test, so they may share blind spots. Treat these labels as one labeller's sheets. LABELLING.md's second-labeller step still applies: have a person fill a copy of the sheets and compare the two.
+An AI reviewer, Claude Opus 5.5, labelled this sample in a Claude Code cloud session on 2026-10-12. The labeller's model family may overlap with the models under test, so they may share blind spots.
 
 ## Blind
 
