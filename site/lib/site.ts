@@ -13,8 +13,8 @@ export const PLUGIN_COMMANDS = readme.install.plugin;
 export const CURSOR_INSTALL = readme.install.cursor;
 export const VSCODE_INSTALL = readme.install.vscode;
 
-/** A file or folder in the repository on GitHub. */
-export function repoLink(file: string, kind: 'blob' | 'tree' = 'blob'): string {
+/** A file or folder in the repository on GitHub, or the editor for a file. */
+export function repoLink(file: string, kind: 'blob' | 'tree' | 'edit' = 'blob'): string {
   return `${REPO}/${kind}/main/${file}`;
 }
 
@@ -68,6 +68,8 @@ const SECTIONS: Record<string, string> = {
   'zero-config': '/docs/configuration#zero-config',
   'config-file': '/docs/configuration#config-file',
   ci: '/docs/ci',
+  'required-check': '/docs/required-check',
+  eslint: '/docs/eslint',
   'adopting-it-in-an-existing-codebase': '/docs/ci#adopting-it-in-an-existing-codebase',
   troubleshooting: '/docs/troubleshooting',
   'how-it-works': '/docs/how-it-works',

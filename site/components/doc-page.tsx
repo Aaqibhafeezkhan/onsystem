@@ -37,14 +37,12 @@ export function DocPage({
 
       {file && (
         <p className="mt-12 max-w-3xl border-t border-line pt-5 text-[13px] text-subtle">
-          Generated from{' '}
           <a
-            href={repoLink(file)}
+            href={repoLink(file, 'edit')}
             className="text-muted underline decoration-line-strong underline-offset-4 hover:text-fg"
           >
-            {file}
-          </a>{' '}
-          when the site is built.
+            Edit this page on GitHub
+          </a>
         </p>
       )}
 

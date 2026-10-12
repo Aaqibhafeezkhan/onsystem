@@ -1,7 +1,8 @@
 import localFont from 'next/font/local';
 
 // Geist, from the `geist` package, declared here rather than through `geist/font` so the mono
-// face is not preloaded: the largest paint is the headline, which is set in the sans.
+// face is not preloaded: the largest paint is the headline, which is set in the sans. Until it
+// loads, code is set in a fallback sized to its metrics, so the swap does not move the layout.
 export const sans = localFont({
   src: '../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2',
   variable: '--font-geist-sans',
@@ -13,6 +14,6 @@ export const mono = localFont({
   variable: '--font-geist-mono',
   weight: '100 900',
   preload: false,
-  adjustFontFallback: false,
+  adjustFontFallback: 'Arial',
   fallback: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Liberation Mono', 'monospace'],
 });

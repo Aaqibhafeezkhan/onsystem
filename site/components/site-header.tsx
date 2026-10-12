@@ -18,7 +18,7 @@ export const NAV: NavItem[] = [
 ];
 
 /** Shown on small screens too; the rest from md up. */
-const ALWAYS = new Set(['Playground', 'Docs']);
+const ALWAYS = new Set(['Playground', 'Rules', 'Docs']);
 
 export function SiteHeader() {
   return (
