@@ -160,7 +160,7 @@
         "tokens": {
           "color": 102,
           "other": 1,
-          "radius": 1
+          "radius": 6
         },
         "warnings": 0
       },
@@ -180,7 +180,7 @@
         "no-hardcoded-radius": {
           "errors": 0,
           "warnings": 7,
-          "fixes": 1
+          "fixes": 4
         },
         "prefer-design-system-component": {
           "errors": 124,
@@ -201,7 +201,7 @@
             "tokens": {
               "color": 102,
               "other": 1,
-              "radius": 1
+              "radius": 6
             },
             "warnings": 0
           }
@@ -224,7 +224,7 @@
         "no-hardcoded-radius": {
           "errors": 0,
           "warnings": 7,
-          "fixes": 1
+          "fixes": 4
         },
         "prefer-design-system-component": {
           "errors": 124,
@@ -919,7 +919,7 @@
     "9245343b22d0": true,
     "32cdac44a8e9": false,
     "4de9ff833cb9": true,
-    "7d66bc35128a@var(--radius)": true,
+    "7d66bc35128a@rounded-sm": true,
     "022d89932328": false,
     "00b1c9afadda": true,
     "c8f17a7bf964": true,
@@ -970,7 +970,7 @@
     "e9443840c75b": true,
     "45b34afb80f3": true,
     "aa3c685f5c59": true,
-    "6022001aed51@var(--radius)": true,
+    "6022001aed51@rounded-sm": true,
     "eec23647b927": true,
     "fa2f799ffc9d": true,
     "8bfd295ade59": true,
