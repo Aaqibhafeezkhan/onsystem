@@ -55,7 +55,7 @@ A few things stay with the CLI. The [baseline](ci.md#adopting-it-in-an-existing-
 
 ## With @shadcn/lint
 
-[@shadcn/lint](https://github.com/shadcn-ui/lint) checks the Tailwind classes written against a component and the theme: restyling a component (`no-restyle`), classes Tailwind cannot generate (`no-unknown-classes`), class names it cannot read (`require-static-classes`), inline styles, raw colors and arbitrary values. onsystem checks that the components, props and variant values exist, flags native elements the design system has a component for and icon-only buttons without a name, and suggests the nearest token for a hardcoded color, spacing or radius. They overlap on raw colors and arbitrary values, so turn one side off there, or `p-[13px]` is reported twice:
+[@shadcn/lint](https://github.com/shadcn-ui/lint) checks the Tailwind classes written against a component and the theme: restyling a component (`no-restyle`), classes Tailwind cannot generate (`no-unknown-classes`), class names it cannot read (`require-static-classes`), inline styles, raw colors and arbitrary values. onsystem checks that the components, props and variant values exist, flags native elements the design system has a component for and icon-only buttons without a name, and suggests the nearest token for a hardcoded color, spacing or radius. They overlap on raw colors and arbitrary values, so turn one side off there, or `p-[13px]` is reported twice. `shadcn/no-restyle` overlaps too: it reports any class that restyles a component, hardcoded or not, so `<Card className="p-[13px]">` gets its error and onsystem's. This config leaves it out:
 
 ```js
 import { plugin as shadcn } from '@shadcn/lint';
@@ -72,7 +72,6 @@ export default defineConfig([
     },
     plugins: { shadcn },
     rules: {
-      'shadcn/no-restyle': 'error',
       'shadcn/no-unknown-classes': 'error',
       'shadcn/require-static-classes': 'error',
     },
@@ -82,4 +81,4 @@ export default defineConfig([
 ]);
 ```
 
-To keep @shadcn/lint's `no-raw-colors` and `no-arbitrary-values` instead, turn off `onsystem/no-hardcoded-color`, `onsystem/no-hardcoded-spacing` and `onsystem/no-hardcoded-radius`. @shadcn/lint needs Tailwind v4; onsystem's rules also run on Tailwind v3.
+To keep @shadcn/lint's `no-raw-colors` and `no-arbitrary-values` instead, turn off `onsystem/no-hardcoded-color`, `onsystem/no-hardcoded-spacing` and `onsystem/no-hardcoded-radius`. Add `shadcn/no-restyle` when you also want token classes on a component reported, such as `p-4` on a `<Button>`; a hardcoded value on a component is then reported twice. @shadcn/lint needs Tailwind v4; onsystem's rules also run on Tailwind v3.
