@@ -16,6 +16,16 @@ Built for design-system and platform teams with a React design-system package; a
 [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-Install_plugin-b4532a?style=flat-square&logo=claude&logoColor=white)](https://onsystem.vercel.app/docs/plugin)
 [![GitHub Action](https://img.shields.io/badge/GitHub_Action-Marketplace-0d0f12?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/marketplace/actions/onsystem-design-system-check)
 
+**Also works with**
+[![Codex CLI](https://img.shields.io/badge/Codex_CLI-0d0f12?style=flat-square)](https://onsystem.vercel.app/docs/clients#codex-cli)
+[![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-0d0f12?style=flat-square&logo=googlegemini&logoColor=white)](https://onsystem.vercel.app/docs/clients#gemini-cli)
+[![Grok Build](https://img.shields.io/badge/Grok_Build-0d0f12?style=flat-square)](https://onsystem.vercel.app/docs/clients#grok-build)
+[![GitHub Copilot CLI](https://img.shields.io/badge/GitHub_Copilot_CLI-0d0f12?style=flat-square&logo=githubcopilot&logoColor=white)](https://onsystem.vercel.app/docs/clients#github-copilot-cli)
+[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-0d0f12?style=flat-square&logo=claude&logoColor=white)](https://onsystem.vercel.app/docs/clients#claude-desktop)
+[![Windsurf](https://img.shields.io/badge/Windsurf-0d0f12?style=flat-square&logo=windsurf&logoColor=white)](https://onsystem.vercel.app/docs/clients#windsurf-devin-desktop)
+[![JetBrains](https://img.shields.io/badge/JetBrains-0d0f12?style=flat-square&logo=jetbrains&logoColor=white)](https://onsystem.vercel.app/docs/clients#jetbrains-ides-ai-assistant-and-junie)
+[![Zed](https://img.shields.io/badge/Zed-0d0f12?style=flat-square&logo=zedindustries&logoColor=white)](https://onsystem.vercel.app/docs/clients#zed)
+
 **Website and docs:** [onsystem.vercel.app](https://onsystem.vercel.app), with a [playground](https://onsystem.vercel.app/playground) that checks your own code.
 
 <!-- npm-readme:video -->
