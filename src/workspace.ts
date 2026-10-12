@@ -4,13 +4,21 @@ import path from 'node:path';
 
 import {
   CONFIG_FILES,
+  hasOwnConfig,
   LEGACY_CONFIG_FILES,
   loadConfig,
+  loadConfigWith,
   type LoadConfigOptions,
   type ResolvedConfig,
 } from './config.js';
 import { componentFiles } from './design-system.js';
-import { isWorkspaceRoot, workspacePackageDirs, workspacePatterns } from './detect.js';
+import {
+  findDesignSystemPackage,
+  isWorkspaceRoot,
+  PackageFinder,
+  workspacePackageDirs,
+  workspacePatterns,
+} from './detect.js';
 import { isInside, relativePath } from './util/paths.js';
 
 /**
@@ -67,7 +75,18 @@ export class Workspace {
     private readonly options: LoadConfigOptions,
     /** The root's own config, with nothing found in it. */
     readonly rootConfig: ResolvedConfig,
+    /** The configs of the packages without a design system, for their warnings. */
+    private readonly otherConfigs: ResolvedConfig[] = [],
   ) {}
+
+  /**
+   * What the configs of the workspace's packages have to say ({@link ResolvedConfig.warnings}),
+   * each once, as they were read when the workspace was found.
+   */
+  get warnings(): string[] {
+    const configs = [this.rootConfig, ...this.projects.map((p) => p.config), ...this.otherConfigs];
+    return [...new Set(configs.flatMap((c) => c.warnings ?? []))];
+  }
 
   /**
    * The project `target` (a file or a folder) belongs to: the nearest folder at or above
@@ -144,6 +163,7 @@ async function discoverWorkspace(
     .join(', ');
   const projects: DiscoveredProject[] = [];
   const others: string[] = [];
+  const otherConfigs: ResolvedConfig[] = [];
   for (const dir of workspacePackageDirs(root)) {
     const config = await loadProjectConfig(dir, root, rootConfig.configFile, options);
     const files = (await componentFiles(config)).length;
@@ -160,14 +180,26 @@ async function discoverWorkspace(
       });
     } else {
       others.push(relativePath(root, dir));
+      if (config.warnings) otherConfigs.push(config);
     }
   }
-  return new Workspace(root, source, projects, others, rootConfig.configFile, options, rootConfig);
+  return new Workspace(
+    root,
+    source,
+    projects,
+    others,
+    rootConfig.configFile,
+    options,
+    rootConfig,
+    otherConfigs,
+  );
 }
 
 /**
- * A project's config: its own config file, or the workspace root's, with paths relative to
- * the workspace root, or zero config. CLI flags that apply to every project carry over.
+ * A project's config: its own config file, else the config its design-system package declares
+ * (a dependency with `"onsystem"` in its package.json), else the workspace root's, with paths
+ * relative to the workspace root, else zero config. `loadConfig` from the project's folder finds
+ * the first two the same way. CLI flags that apply to every project carry over.
  */
 function loadProjectConfig(
   dir: string,
@@ -180,11 +212,20 @@ function loadProjectConfig(
     includeDesignSystem: options.includeDesignSystem,
     jsonConfigOnly: options.jsonConfigOnly,
   };
-  const own = [...CONFIG_FILES, ...LEGACY_CONFIG_FILES].some((name) =>
-    fs.existsSync(path.join(dir, name)),
+  // One finder and one look through the dependencies, shared with the load.
+  const packages = new PackageFinder(dir);
+  if (!rootConfigFile || hasOwnConfig(dir)) {
+    return loadConfigWith({ ...shared, root: dir }, { packages });
+  }
+  const lookup = findDesignSystemPackage(dir, packages);
+  // A declaration that cannot be read is reported from the project's own load.
+  if (lookup?.found || lookup?.problems.length) {
+    return loadConfigWith({ ...shared, root: dir }, { packages, lookup });
+  }
+  return loadConfigWith(
+    { ...shared, root: dir, config: rootConfigFile, base: workspaceRoot },
+    { packages, lookup },
   );
-  if (own || !rootConfigFile) return loadConfig({ ...shared, root: dir });
-  return loadConfig({ ...shared, root: dir, config: rootConfigFile, base: workspaceRoot });
 }
 
 /** The nearest folder at or above `target` (a file or folder) with a project marker, up to `root`. */

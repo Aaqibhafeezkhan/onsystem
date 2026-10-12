@@ -89,6 +89,7 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
     const { config, workspace } = target;
     // Once per project, as it loads: a reload of the config does not repeat them.
     for (const text of config.deprecations ?? []) logger.warn(text);
+    for (const text of (workspace ? workspace.warnings : config.warnings) ?? []) logger.warn(text);
     if (workspace) {
       const projects = new WorkspaceProjects(workspace, {
         cache: options.cache,

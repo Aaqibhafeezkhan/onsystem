@@ -50,7 +50,7 @@ onsystem reads your components, `cva` and `tv` variants, parts and tokens from s
 | `no-hardcoded-spacing`           | warn    | Arbitrary padding, margin and gap (`p-[13px]` → `p-3`)                          |
 | `no-hardcoded-radius`            | warn    | Arbitrary radius (`rounded-[7px]` → `rounded-sm`)                               |
 
-**How often it is wrong.** The [corpus](corpus) job runs `check` on 12 public repositories pinned by commit (Documenso, Dub, Cal.com, midday, Flowise and others, the four monorepos also from their root and Dub's app also with a config: 23 runs, 4,076 distinct findings) and compares the findings with hand labels. In a random sample of 149 findings, 88 are clearly right (59.1%), 56 are debatable and 5 are false positives (3.4%); weighted by each run's and rule's share of all findings, about 1.0% are false positives. Shipped code rarely invents components, props or variants: those three rules have 56 findings in the corpus, 55 of them in Flowise, an MUI app that passes props and values MUI's components do not take, and the 10 in the sample are all right. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
+**How often it is wrong.** The [corpus](corpus) job runs `check` on 12 public repositories pinned by commit (Documenso, Dub, Cal.com, midday, Flowise and others, the four monorepos also from their root, and Dub's app also with a config and with `@dub/ui` set up by `init`: 24 runs, 4,076 distinct findings) and compares the findings with hand labels. In a random sample of 149 findings, 88 are clearly right (59.1%), 56 are debatable and 5 are false positives (3.4%); weighted by each run's and rule's share of all findings, about 1.0% are false positives. Shipped code rarely invents components, props or variants: those three rules have 56 findings in the corpus, 55 of them in Flowise, an MUI app that passes props and values MUI's components do not take, and the 10 in the sample are all right. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
 
 ## Quickstart
 
@@ -62,7 +62,7 @@ npx -y onsystem check .   # the same check the agent and CI run
 npx -y onsystem init      # write the config, and offer a baseline
 ```
 
-At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system.
+At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system. In a [design-system package](https://onsystem.vercel.app/docs/design-system-packages), `init` sets it up for every app that depends on it, workspace or npm, with no config in the apps.
 
 **Claude Code.** The plugin brings the hook, the MCP server and a skill:
 

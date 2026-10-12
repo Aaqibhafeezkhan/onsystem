@@ -332,14 +332,16 @@ function sameness(f: Finding, file: string): string {
 /**
  * Where a run from a workspace root differs from a run from one of its projects, for the
  * files under `folder`: root mode routes each file to its own project, so both must report
- * the same files and findings. Lines name each difference; none means they agree.
+ * the same files and findings. `.` compares every file: a run of the same folder another way
+ * (after `init` set up its design-system package). Lines name each difference; none means
+ * they agree.
  */
 export function rootDifferences(
   root: { files: readonly string[]; findings: readonly Finding[] },
   folder: string,
   project: { files: readonly string[]; findings: readonly Finding[] },
 ): string[] {
-  const prefix = `${folder.replace(/\/+$/, '')}/`;
+  const prefix = folderPrefix(folder);
   const differences: string[] = [];
   const rootFiles = new Set(root.files.filter((f) => f.startsWith(prefix)));
   const projectFiles = new Set(project.files.map((f) => `${prefix}${f}`));
@@ -378,10 +380,16 @@ export function rootDifferences(
   return differences;
 }
 
-/** Findings outside the given folders: what a root run adds to the runs from its projects. */
+/** Findings outside the given folders (`.` holds them all): what a root run adds to the runs from its projects. */
 export function outside(found: readonly Finding[], folders: readonly string[]): Finding[] {
-  const prefixes = folders.map((f) => `${f.replace(/\/+$/, '')}/`);
+  const prefixes = folders.map(folderPrefix);
   return found.filter((f) => !prefixes.some((prefix) => f.file.startsWith(prefix)));
+}
+
+/** `apps/web/` for `apps/web`, and nothing for `.`, the run's whole folder. */
+function folderPrefix(folder: string): string {
+  const trimmed = folder.replace(/\/+$/, '');
+  return trimmed === '.' ? '' : `${trimmed}/`;
 }
 
 export function percent(rate: number | undefined): string {

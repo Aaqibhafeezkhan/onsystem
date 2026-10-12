@@ -54,7 +54,7 @@ describe('onsystem inspect --explain', () => {
     const { code, stdout } = await run(['inspect', '--explain', '--no-cache'], root);
     expect(code).toBe(0);
     expect(stdout).toContain(
-      'How the design system was found\n  found  components.json: ui: @/components/ui → components/ui, 2 component files\n  no     package.json exports of app: not read: components.json found the components',
+      'How the design system was found\n  no     a design-system package\'s config: no dependency declares one ("onsystem" in its package.json) among 0 dependencies\n  found  components.json: ui: @/components/ui → components/ui, 2 component files\n  no     package.json exports of app: not read: components.json found the components',
     );
     expect(stdout).toContain(
       'no     workspace design-system packages: no dependency is named like one (@acme/ui, acme-ui, @acme/design-system) among 0 dependencies',
@@ -119,7 +119,7 @@ describe('onsystem inspect --explain', () => {
       'Why this is read as a monorepo root: it declares workspace packages (pnpm-workspace.yaml), no config there sets components, and zero config finds no design system in the root itself:',
     );
     expect(stdout).toContain(
-      'apps/web (app)\n  How the design system was found\n    found  components.json',
+      'apps/web (app)\n  How the design system was found\n    no     a design-system package\'s config: no dependency declares one ("onsystem" in its package.json) among 0 dependencies\n    found  components.json',
     );
   });
 });

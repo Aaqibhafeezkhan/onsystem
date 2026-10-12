@@ -314,6 +314,32 @@
         }
       }
     },
+    "dub-web-package": {
+      "inspect": {
+        "config": "declared by @dub/ui",
+        "detected": "workspace package @dub/ui",
+        "files": "430 component files, 1 token file, 1 doc",
+        "components": 430,
+        "parts": 23,
+        "tokens": {},
+        "warnings": 1
+      },
+      "files": 1484,
+      "flagged": 411,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 52,
+          "warnings": 0,
+          "fixes": 43
+        },
+        "prefer-design-system-component": {
+          "errors": 1000,
+          "warnings": 0,
+          "fixes": 589
+        }
+      },
+      "added": {}
+    },
     "dub-root": {
       "inspect": {
         "workspace": "11 packages (pnpm-workspace.yaml, turbo.json), 3 projects with a design system",

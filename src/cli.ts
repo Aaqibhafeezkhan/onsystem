@@ -326,6 +326,7 @@ async function check(
 
   const target = await loadTarget(configOptions);
   warnDeprecated(target.config.deprecations, format, io);
+  warnDeprecated(configWarnings(target), format, io);
   const selection = target.workspace
     ? await selectInWorkspace(target.workspace, patterns, values, format, io)
     : await selectInProject(target.config, patterns, values, format, io);
@@ -736,6 +737,7 @@ async function inspect(
   const target = await loadTarget(configOptions);
   const { config } = target;
   warnDeprecated(config.deprecations, 'pretty', io);
+  warnDeprecated(configWarnings(target), 'pretty', io);
   if (target.workspace) return inspectWorkspace(target.workspace, values, io);
   const ds = await loadDesignSystem(config, { cache: values.cache, logger: silentLogger });
   const { model } = ds;
@@ -745,7 +747,7 @@ async function inspect(
   }
   const lines: string[] = [
     `root     ${model.root}`,
-    `config   ${config.configFile ? displayPath(io.cwd, config.configFile) : '(defaults)'}`,
+    `config   ${config.configFile ? `${displayPath(io.cwd, config.configFile)}${declaredBy(config)}` : '(defaults)'}`,
     ...(config.detected ? [`detected ${config.detected}`] : []),
     ...describeLibraries(config, model, io.cwd).map((line) => `library  ${line}`),
     `files    ${plural(model.stats.files.components, 'component file')}, ${plural(model.stats.files.tokens, 'token file')}, ${plural(model.stats.files.docs, 'doc')}`,
@@ -817,6 +819,7 @@ async function exportTokens(
   }
   const target = await loadTarget(configOptions);
   warnDeprecated(target.config.deprecations, 'pretty', io);
+  warnDeprecated(configWarnings(target), 'pretty', io);
   if (target.workspace) {
     const dirs = target.workspace.projects.map((p) => p.dir);
     io.stderr(
@@ -914,7 +917,7 @@ async function inspectWorkspace(
     const tokens = [...tokenCounts(model)].map(([category, n]) => `${category} ${n}`);
     const own =
       project.config.configFile && project.config.configFile !== workspace.configFile
-        ? displayPath(workspace.root, project.config.configFile)
+        ? `${displayPath(workspace.root, project.config.configFile)}${declaredBy(project.config)}`
         : undefined;
     lines.push(
       '',
@@ -975,6 +978,11 @@ function explainWorkspace(
   return lines;
 }
 
+/** ` (declared by @acme/ui)` after a config a design-system package declares; empty otherwise. */
+function declaredBy(config: ResolvedConfig): string {
+  return config.designSystemPackage ? ` (declared by ${config.designSystemPackage.name})` : '';
+}
+
 /** `A, B, C` up to a dozen names, then `and 40 more`. */
 function listNames(names: readonly string[], max = 12): string {
   const shown = names.slice(0, max).join(', ');
@@ -985,6 +993,14 @@ function listNames(names: readonly string[], max = 12): string {
  * Says once what a file's old name means: on stderr, or as a workflow warning with
  * `--format github` so it shows on the run. Never on stdout otherwise, which JSON output owns.
  */
+/** What the configs read have to say: the project's, or every package's at a monorepo root. */
+function configWarnings(target: {
+  config: ResolvedConfig;
+  workspace?: Workspace | undefined;
+}): string[] | undefined {
+  return target.workspace ? target.workspace.warnings : target.config.warnings;
+}
+
 function warnDeprecated(messages: string[] | undefined, format: string, io: Io): void {
   for (const text of messages ?? []) {
     if (format === 'github') io.stdout(`::warning title=${NAME}::${text}`);

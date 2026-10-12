@@ -47,6 +47,9 @@ export interface Call {
   port: MessagePort;
 }
 
+/** What the configs said (a design-system package's skipped, or its paths ignored), each said once. */
+const warned = new Set<string>();
+
 /** How long a loaded design system is trusted before its files are looked at again. */
 const FRESH_MS = 2000;
 
@@ -90,6 +93,13 @@ export async function load(request: LoadRequest): Promise<LoadResponse> {
   const config = target.workspace
     ? (await target.workspace.projectFor(request.file)).config
     : target.config;
+
+  // On stderr, once per process: ESLint has no place for a warning that is about no one file.
+  for (const text of config.warnings ?? []) {
+    if (warned.has(text)) continue;
+    warned.add(text);
+    process.stderr.write(`onsystem: ${text}\n`);
+  }
 
   let project = projects.get(config.root);
   if (!project || Date.now() - project.at >= FRESH_MS) {

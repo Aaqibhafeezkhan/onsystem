@@ -219,17 +219,21 @@ interface ResolvedFiles {
  */
 async function find(config: ResolvedConfig, patterns: string[]): Promise<string[]> {
   const options = { cwd: config.root, absolute: true, dot: false };
+  // A design-system package's own excludes, when an app's `exclude` adds the defaults to them.
+  const exclude = config.designSystemExclude ?? config.exclude;
   const named = patterns.filter((p) => p.includes('node_modules'));
   const outside = patterns.filter((p) => !p.includes('node_modules') && p.startsWith('../'));
   const rest = patterns.filter((p) => !p.includes('node_modules') && !p.startsWith('../'));
   const found = await Promise.all([
     rest.length
-      ? glob(rest, { ...options, ignore: unique(['**/node_modules/**', ...config.exclude]) })
+      ? glob(rest, { ...options, ignore: unique(['**/node_modules/**', ...exclude]) })
       : [],
+    // Without the excludes that leave out all of node_modules (`**/node_modules/**`), keeping
+    // those that name files in it: a design-system package's, rebased onto where it is installed.
     named.length
       ? glob(named, {
           ...options,
-          ignore: config.exclude.filter((e) => !e.includes('node_modules')),
+          ignore: exclude.filter((e) => !/^(?:\*\*\/)?node_modules(?:\/\*\*)?\/?$/.test(e)),
         })
       : [],
     // A workspace package next to the root (`../../packages/ui/...`): `**/` ignore
@@ -243,8 +247,8 @@ async function find(config: ResolvedConfig, patterns: string[]): Promise<string[
         cwd: path.resolve(config.root, base),
         ignore: unique([
           '**/node_modules/**',
-          ...config.exclude.filter((e) => e.startsWith('**/')),
-          ...config.exclude.filter((e) => e.startsWith(prefix)).map((e) => e.slice(prefix.length)),
+          ...exclude.filter((e) => e.startsWith('**/')),
+          ...exclude.filter((e) => e.startsWith(prefix)).map((e) => e.slice(prefix.length)),
         ]),
       });
     }),
@@ -590,9 +594,11 @@ export class DesignSystemHost {
    * `extends` target is picked up.
    */
   private watchConfigFiles(): void {
-    const { root, configFile, tsconfig } = this.config;
+    const { root, configFile, tsconfig, designSystemPackage } = this.config;
     const files = [
       configFile,
+      // The design-system package's package.json, which names its config.
+      designSystemPackage && path.join(designSystemPackage.dir, 'package.json'),
       // Zero-config detection reads these; a change re-runs it.
       ...DETECTION_FILES.map((f) => path.join(root, f)),
       path.resolve(root, tsconfig ?? 'tsconfig.json'),
@@ -616,10 +622,11 @@ export class DesignSystemHost {
   private changed(file: string | undefined): void {
     // Without component globs in the config, the design system was detected from
     // components.json, package.json and tsconfig paths: re-read the config so detection runs again.
-    const { root, configFile, detected } = this.config;
+    const { root, configFile, detected, designSystemPackage } = this.config;
     if (
       file === undefined ||
       file === configFile ||
+      (designSystemPackage !== undefined && this.watchedFiles.has(file)) ||
       (path.dirname(file) === root && DETECTION_FILES.includes(path.basename(file))) ||
       (detected !== undefined && this.watchedFiles.has(file))
     ) {
@@ -675,8 +682,11 @@ export class DesignSystemHost {
 
   /** Re-reads the config, re-watches what it points at and rebuilds. */
   private async reloadConfig(): Promise<void> {
-    const { root, configFile } = this.config;
-    const load = this.options.loadConfig ?? (() => loadConfig({ root, config: configFile }));
+    const { root, configFile, designSystemPackage, warnings } = this.config;
+    // A design-system package's config is found again from the project, so it is rebased again.
+    const load =
+      this.options.loadConfig ??
+      (() => loadConfig({ root, config: designSystemPackage ? undefined : configFile }));
     try {
       this.config = await load();
     } catch (error) {
@@ -684,6 +694,10 @@ export class DesignSystemHost {
         `config reload failed: ${(error as Error).message}`,
       );
       return;
+    }
+    // Said when the project loaded; only what the new config adds is said again.
+    for (const text of this.config.warnings ?? []) {
+      if (!warnings?.includes(text)) (this.options.logger ?? silentLogger).warn(text);
     }
     if (this.watchers.length) {
       this.close();
