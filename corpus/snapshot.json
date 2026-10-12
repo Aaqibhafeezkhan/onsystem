@@ -122,7 +122,7 @@
         "parts": 224,
         "tokens": {
           "color": 33,
-          "radius": 1
+          "radius": 3
         },
         "warnings": 0
       },
