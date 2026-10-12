@@ -99,7 +99,10 @@ describe('color tokens in a shared Tailwind config package (issue #94)', () => {
   it('reads only the token files a config names', async () => {
     const root = path.join(ROOT, 'apps/web');
     const config = await loadConfig({ root, tokens: ['styles/globals.css'] });
-    expect(await tokenFiles(config)).toEqual([path.join(root, 'styles/globals.css')]);
+    // Found by glob: forward slashes, on Windows too.
+    expect(await tokenFiles(config)).toEqual([
+      path.join(root, 'styles/globals.css').split(path.sep).join('/'),
+    ]);
   });
 });
 
