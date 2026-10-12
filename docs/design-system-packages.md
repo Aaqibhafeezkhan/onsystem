@@ -41,7 +41,8 @@ detected workspace package @acme/ui
 
 `inspect --explain` names the package first among what zero config looked at.
 
-- **Paths come from the package.** `components`, `exclude`, `tokens` and `docs` are relative to the package's folder, wherever the app finds it: `../../packages/ui`, or `node_modules/@acme/ui`.
+- **Paths come from the package.** `components`, `exclude`, `tokens` and `docs` are relative to the package's folder, wherever the app finds it: `../../packages/ui`, or `node_modules/@acme/ui`. They stay in the package when it is installed, and in the workspace when it is a workspace package, so `../tokens/theme.css` in a sibling package works. A path that leaves them is ignored, with a warning.
+- **`exclude` adds to the app's defaults.** The app still leaves out `node_modules`, `.d.ts` files, tests and stories, and the package's patterns are added. The package's components are found with its own list, as in the package.
 - **Components.** When the config leaves `components` to zero config, the app reads the package as zero config reads a design-system package (step 3 of [zero config](configuration.md#zero-config)), whatever the package's name, and also when it is installed. When the config sets `components`, they are imported by `importPath` when it is set, else by the package's `exports`.
 - **What applies to the app:** the rules' severities and options, `elements`, `importPath` and `libraries`.
 - **What stays with the package:** `tsconfig` (the app keeps its own), `overrides` (their globs are about the package's files) and `includeDesignSystem`.
@@ -56,7 +57,9 @@ The config a project reads is the first of these that it has:
 
 `check` from a monorepo root and from the app's folder read the same config. The root itself reads no dependency's config: each project in it finds its own.
 
-The declared config is read as JSON and never run, so a dependency cannot make an app run its code. A field that names a `.js` or `.ts` config, a file outside the package, or a file that does not exist is an error that names the package. An app with a config of its own reads that instead.
+The declared config is read as JSON and never run, so a dependency cannot make an app run its code. A field that names a `.js` or `.ts` config, a file outside the package, or a file that does not exist is an error that names the package when it is a workspace package, which its team can fix. In a package installed in `node_modules`, the declaration is skipped with a warning, and the app is read as if the package declared none. An app with a config of its own reads that instead.
+
+`check` and `inspect` print each warning once, on stderr (`::warning` with `--format github`). The MCP server logs it once, and the ESLint plugin writes it once to stderr.
 
 ## Installed from a registry
 
