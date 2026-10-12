@@ -1,0 +1,23 @@
+{
+  "$comment": "What `plan` estimates token use from. The profiles are means over the v1 benchmark's runs (bench/agents, 2026-10-08), measured from their Claude Code stream-json transcripts: per run, the number of API requests (`calls`), the growth of the context from the first request to the last (`growth`), the sum over requests of each request's context minus the first's (`work`, the tokens a run adds by reading and writing, re-sent on every later request), and output tokens with thinking (`output`). Claude Code's own fixed prompt (about 34,000 tokens per request in v1) is left out: this harness's fixed prompt is computed from its own text (lib/prompt.ts, lib/tools.ts) at 4 characters per token, plus the onsystem MCP server's tools and instructions as measured from tools/list. `small` comes from Claude Haiku 4.5's 20 runs, `large` from Claude Opus 5's 20 runs; `none` is v1's base condition, `treated` its plugin condition. Applied to v1's own setup (Claude Code's fixed prompt, Haiku 4.5 prices with 1-hour cache writes), the expected-cost formula gives about $0.17 per run where v1 measured $0.13: it errs high, because it ignores cache hits shared between runs.",
+  "measured": "2026-10-12",
+  "profiles": {
+    "small": {
+      "none": { "calls": 12.3, "work": 109977, "growth": 17493, "output": 3292 },
+      "treated": { "calls": 11.7, "work": 106458, "growth": 14372, "output": 3224 }
+    },
+    "large": {
+      "none": { "calls": 10, "work": 149824, "growth": 26526, "output": 6620 },
+      "treated": { "calls": 13.5, "work": 208680, "growth": 25781, "output": 6623 }
+    }
+  },
+  "mcpOverhead": {
+    "tokens": 1569,
+    "basis": "onsystem 0.5.0 tools/list: 5 tools, 5,457 characters of names, descriptions and input schemas, plus 810 characters of server instructions, at 4 characters per token."
+  },
+  "pessimistic": {
+    "prompt": 1.5,
+    "output": 1.5,
+    "basis": "No prompt-cache hits at all, 50% more requests and context than v1, and 50% more output (other providers' reasoning tokens may run longer than Claude's thinking did)."
+  }
+}

@@ -9,3 +9,6 @@ coverage
 
 # Original README while `npm pack` swaps in the npm version (scripts/npm-readme.mjs)
 .npm-readme-backup.md
+
+# bench/v2 transcripts hold whole tool outputs: attached to a release, not committed
+bench/v2/results/*/transcripts/

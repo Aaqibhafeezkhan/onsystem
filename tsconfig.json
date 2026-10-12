@@ -16,6 +16,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "test", "scripts/*.ts", "*.ts"],
+  "include": ["src", "test", "scripts/*.ts", "bench/v2/lib/*.ts", "*.ts"],
   "exclude": ["dist", "examples", "test/fixtures"]
 }
