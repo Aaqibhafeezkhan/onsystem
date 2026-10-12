@@ -1,5 +1,5 @@
 import type { Token } from '../types.js';
-import { isBareHsl } from './color.js';
+import { isBareHsl, isBareRgb } from './color.js';
 
 /**
  * Ready-to-paste ways to use a token, most idiomatic first. With a Tailwind
@@ -16,14 +16,15 @@ export function usageFor(token: Token, tailwindNamespace?: string): string[] {
 
 /**
  * The CSS value that uses the token: `var(--primary)`, or `hsl(var(--primary))`
- * when the property holds bare HSL channels (Tailwind v3), which are no color
- * on their own.
+ * (`rgb(var(--success))`) when the property holds bare HSL (RGB) channels
+ * (Tailwind v3), which are no color on their own.
  */
 export function cssReference(token: Token): string | undefined {
   if (!token.cssVar) return undefined;
-  return token.category === 'color' && isBareHsl(token.value)
-    ? `hsl(var(${token.cssVar}))`
-    : `var(${token.cssVar})`;
+  if (token.category !== 'color') return `var(${token.cssVar})`;
+  if (isBareHsl(token.value)) return `hsl(var(${token.cssVar}))`;
+  if (isBareRgb(token.value)) return `rgb(var(${token.cssVar}))`;
+  return `var(${token.cssVar})`;
 }
 
 function utilities(namespace: string, key: string): string[] {

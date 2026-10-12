@@ -53,7 +53,7 @@ These tools work at different layers, and several combine well:
 
 - React only (`.tsx` and `.jsx`): no Vue, Svelte or Angular yet.
 - Styling is checked in Tailwind classes, `style` objects (including style functions and each branch of a conditional value) and color attributes. CSS-in-JS (styled-components, Emotion), CSS Modules and plain stylesheets are not.
-- Fix suggestions are Tailwind classes when a Tailwind theme maps the token (`@theme`, or a v3 `tailwind.config`), otherwise `var(--token)` (`hsl(var(--token))` for v3 channels). A v3 config is read without running it, so colors computed in code are not seen.
+- Fix suggestions are Tailwind classes when a Tailwind theme maps the token (`@theme`, or a v3 `tailwind.config`), otherwise `var(--token)` (`hsl(var(--token))` or `rgb(var(--token))` for v3 channels). A v3 config is read without running it, so colors computed in code are not seen.
 - Colors are compared in the base theme and, for `dark:` classes, the dark mode. Other modes (`[data-theme="brand"]`) are listed by `get_tokens` but not used to match.
 - Linting is per file and syntactic. Class names built at runtime (`` `bg-${color}-500` ``) are not checked, and spread props are trusted.
 - `no-unknown-prop` is skipped for components whose props type does not fully resolve (dependencies not installed).

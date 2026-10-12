@@ -2,7 +2,7 @@ import { converter, formatHex, parse, type Color } from 'culori';
 import { stringify } from 'yaml';
 
 import { TOKEN_CATEGORIES, type Token, type TokenCategory } from '../types.js';
-import { isBareHsl, parseColor } from './color.js';
+import { isBareHsl, isBareRgb, parseColor } from './color.js';
 import { ONSYSTEM_EXTENSION, type Json, type JsonObject, type OnsystemExtension } from './dtcg.js';
 import { evaluateLength } from './units.js';
 import { cssReference } from './usage.js';
@@ -64,7 +64,7 @@ export function toDtcg(tokens: readonly Token[]): Exported {
       if (token.cssVar) extension.cssVar = token.cssVar;
       const tailwind = tailwindVariable(token);
       if (tailwind) extension.tailwind = tailwind;
-      if (own.channels) extension.channels = 'hsl';
+      if (own.channels) extension.channels = own.channels;
       if (token.modes && Object.keys(token.modes).length) {
         extension.modes = Object.fromEntries(
           Object.entries(token.modes).map(([mode, value]) => [
@@ -195,8 +195,8 @@ function tailwindVariable(token: Token): string | undefined {
 interface Typed {
   type?: string;
   value: Json;
-  /** The CSS value is bare HSL channels (Tailwind v3). */
-  channels?: boolean;
+  /** The CSS value is bare HSL or RGB channels (Tailwind v3). */
+  channels?: 'hsl' | 'rgb';
 }
 
 type Lookup = (name: string) => string | undefined;
@@ -232,11 +232,11 @@ function typed(value: string, token: Token, lookup: Lookup): Typed {
 
 function colorValue(value: string): Typed {
   // Keywords (`transparent`, `currentColor`) and `var()` are no color onsystem compares with.
-  if (!parseColor(value, { bareHsl: true })) return { value };
-  const bare = isBareHsl(value);
-  const color = colorObject(bare ? `hsl(${value.replace(/,/g, ' ')})` : value);
+  if (!parseColor(value, { bareHsl: true, bareRgb: true })) return { value };
+  const channels = isBareHsl(value) ? 'hsl' : isBareRgb(value) ? 'rgb' : undefined;
+  const color = colorObject(channels ? `${channels}(${value.replace(/,/g, ' ')})` : value);
   if (!color) return { value };
-  return bare ? { type: 'color', value: color, channels: true } : { type: 'color', value: color };
+  return channels ? { type: 'color', value: color, channels } : { type: 'color', value: color };
 }
 
 /** culori mode → DTCG color space, its channels, and the factor from culori's range to DTCG's. */
@@ -559,8 +559,8 @@ function frontMatterValue(
   const value = token.value.trim();
   switch (key) {
     case 'colors':
-      if (!parseColor(value, { bareHsl: true })) return undefined;
-      return isBareHsl(value) ? `hsl(${value})` : value;
+      if (!parseColor(value, { bareHsl: true, bareRgb: true })) return undefined;
+      return isBareHsl(value) ? `hsl(${value})` : isBareRgb(value) ? `rgb(${value})` : value;
     case 'rounded':
     case 'spacing': {
       if (DESIGN_DIMENSION.test(value) || value === '0') return value;

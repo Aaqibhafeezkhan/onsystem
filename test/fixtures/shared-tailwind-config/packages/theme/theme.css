@@ -1,0 +1,9 @@
+@import "./colors.css";
+
+@theme inline {
+  --color-bg-default: var(--bg-default);
+  --color-border-default: var(--border-default);
+  --color-content-default: var(--content-default);
+  --color-content-subtle: var(--content-subtle);
+  --color-content-error: var(--content-error);
+}

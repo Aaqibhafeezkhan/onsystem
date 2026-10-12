@@ -1,6 +1,6 @@
 {
   "$comment": "Written by `node scripts/corpus.mjs --update`. Counts per run and rule; `labels` records which labelled findings were reported.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "runs": {
     "saas-starter": {
       "inspect": {
@@ -73,7 +73,7 @@
     "shadcn-website": {
       "inspect": {
         "detected": "components.json (ui: @/registry/new-york-v4/ui → registry/new-york-v4/ui)",
-        "files": "61 component files, 1 token file, 0 docs",
+        "files": "61 component files, 2 token files, 0 docs",
         "components": 68,
         "parts": 263,
         "tokens": {
@@ -243,19 +243,26 @@
     "dub-web": {
       "inspect": {
         "detected": "workspace package @dub/ui",
-        "files": "430 component files, 1 token file, 1 doc",
+        "files": "430 component files, 2 token files, 1 doc",
         "components": 430,
         "parts": 23,
-        "tokens": {},
+        "tokens": {
+          "color": 24
+        },
         "warnings": 1
       },
       "files": 1484,
-      "flagged": 411,
+      "flagged": 996,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 52,
           "warnings": 0,
           "fixes": 43
+        },
+        "no-hardcoded-color": {
+          "errors": 10188,
+          "warnings": 0,
+          "fixes": 8180
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -267,19 +274,26 @@
     "dub-ui": {
       "inspect": {
         "detected": "package.json exports of @dub/ui",
-        "files": "430 component files, 0 token files, 1 doc",
+        "files": "430 component files, 1 token file, 1 doc",
         "components": 430,
         "parts": 23,
-        "tokens": {},
-        "warnings": 2
+        "tokens": {
+          "color": 24
+        },
+        "warnings": 1
       },
       "files": 27,
-      "flagged": 5,
+      "flagged": 18,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 2,
           "warnings": 0,
           "fixes": 2
+        },
+        "no-hardcoded-color": {
+          "errors": 282,
+          "warnings": 0,
+          "fixes": 156
         },
         "prefer-design-system-component": {
           "errors": 15,
@@ -295,17 +309,22 @@
         "components": 108,
         "parts": 23,
         "tokens": {
-          "other": 24
+          "color": 24
         },
         "warnings": 0
       },
       "files": 1422,
-      "flagged": 409,
+      "flagged": 976,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 56,
           "warnings": 0,
           "fixes": 47
+        },
+        "no-hardcoded-color": {
+          "errors": 10101,
+          "warnings": 0,
+          "fixes": 8180
         },
         "prefer-design-system-component": {
           "errors": 973,
@@ -321,16 +340,23 @@
         "files": "430 component files, 1 token file, 1 doc",
         "components": 430,
         "parts": 23,
-        "tokens": {},
+        "tokens": {
+          "color": 24
+        },
         "warnings": 1
       },
       "files": 1484,
-      "flagged": 411,
+      "flagged": 996,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 52,
           "warnings": 0,
           "fixes": 43
+        },
+        "no-hardcoded-color": {
+          "errors": 10188,
+          "warnings": 0,
+          "fixes": 8180
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -346,10 +372,12 @@
         "projects": {
           "apps/web": {
             "detected": "workspace package @dub/ui",
-            "files": "430 component files, 1 token file, 1 doc",
+            "files": "430 component files, 2 token files, 1 doc",
             "components": 430,
             "parts": 23,
-            "tokens": {},
+            "tokens": {
+              "color": 24
+            },
             "warnings": 1
           },
           "packages/email": {
@@ -362,22 +390,29 @@
           },
           "packages/ui": {
             "detected": "package.json exports of @dub/ui",
-            "files": "430 component files, 0 token files, 1 doc",
+            "files": "430 component files, 1 token file, 1 doc",
             "components": 430,
             "parts": 23,
-            "tokens": {},
-            "warnings": 2
+            "tokens": {
+              "color": 24
+            },
+            "warnings": 1
           }
         },
         "others": 8
       },
       "files": 1521,
-      "flagged": 416,
+      "flagged": 1014,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 54,
           "warnings": 0,
           "fixes": 45
+        },
+        "no-hardcoded-color": {
+          "errors": 10470,
+          "warnings": 0,
+          "fixes": 8336
         },
         "prefer-design-system-component": {
           "errors": 1015,
@@ -893,7 +928,7 @@
     "twenty-front": {
       "inspect": {
         "detected": "workspace package twenty-ui",
-        "files": "130 component files, 1 token file, 0 docs",
+        "files": "130 component files, 2 token files, 0 docs",
         "components": 115,
         "parts": 20,
         "tokens": {

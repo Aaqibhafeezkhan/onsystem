@@ -1,0 +1,15 @@
+:root {
+  --bg-default: oklch(100% 0 0);
+  --border-default: oklch(87% 0 0);
+  --content-default: oklch(37.1% 0 0);
+  --content-subtle: oklch(55.6% 0 0);
+  --content-error: oklch(57.7% 0.245 27.325);
+}
+
+.dark {
+  --bg-default: oklch(0% 0 0);
+  --border-default: oklch(43.9% 0 0);
+  --content-default: oklch(87% 0 0);
+  --content-subtle: oklch(70.8% 0 0);
+  --content-error: oklch(80.8% 0.114 19.571);
+}

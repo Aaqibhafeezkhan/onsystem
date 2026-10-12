@@ -214,6 +214,12 @@ export interface ResolvedConfig {
    */
   designSystemExclude?: string[] | undefined;
   tokens: TokenSourceConfig[];
+  /**
+   * `tokens` comes from zero config (detection or the default paths), not the config or
+   * `--tokens`: the stylesheets those files import are read too, and so are the ones in a
+   * shared Tailwind preset's workspace package that set the colors the config maps.
+   */
+  tokensDetected?: boolean | undefined;
   docs: string[];
   tsconfig?: string | undefined;
   importPath?: string | undefined;
@@ -574,6 +580,7 @@ export async function loadConfigWith(
     exclude: declared && config.exclude ? [...new Set([...DEFAULT_EXCLUDE, ...exclude])] : exclude,
     ...(declared && config.exclude ? { designSystemExclude: exclude } : {}),
     tokens: tokenSources.map((t) => ({ ...t, path: slashGlob(t.path) })),
+    ...(!options.tokens?.length && configTokens === undefined ? { tokensDetected: true } : {}),
     docs: (options.docs?.length
       ? options.docs
       : configDocs === undefined

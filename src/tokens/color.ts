@@ -41,11 +41,29 @@ export function isBareHsl(value: string): boolean {
 }
 
 /**
+ * RGB channels without the function, `22 163 74` (commas and `/ alpha` allowed): how
+ * Tailwind v3's docs store colors, to be used as `rgb(var(--success) / <alpha-value>)`.
+ * Three numbers alone are no sure color, so they count as one only in a token already
+ * known to be a color: one the Tailwind config reads with `rgb()`.
+ */
+const BARE_RGB =
+  /^(\d{1,3})(?:\s*,\s*|\s+)(\d{1,3})(?:\s*,\s*|\s+)(\d{1,3})(?:\s*\/\s*(\d*\.?\d+%?))?$/;
+
+export function isBareRgb(value: string): boolean {
+  const match = BARE_RGB.exec(value.trim());
+  return match !== null && match.slice(1, 4).every((channel) => Number(channel) <= 255);
+}
+
+/**
  * Parses any CSS color (hex, rgb(), hsl(), oklch(), named, ...) into OKLCH.
  * With `bareHsl`, for token values, HSL channels count too: in a stylesheet
  * they can only be a color, while in a class or style they are not one.
+ * With `bareRgb`, for the values of color tokens, RGB channels count too.
  */
-export function parseColor(value: string, options: { bareHsl?: boolean } = {}): Oklch | undefined {
+export function parseColor(
+  value: string,
+  options: { bareHsl?: boolean; bareRgb?: boolean } = {},
+): Oklch | undefined {
   const text = value.trim();
   if (!text || KEYWORDS.has(text.toLowerCase()) || text.includes('var(')) return undefined;
   let parsed = parse(text);
@@ -53,6 +71,11 @@ export function parseColor(value: string, options: { bareHsl?: boolean } = {}): 
   if (hsl) {
     const [, h, deg = '', s, l, alpha] = hsl;
     parsed = parse(`hsl(${h}${deg} ${s}% ${l}%${alpha ? ` / ${alpha}` : ''})`);
+  }
+  const rgb = !parsed && options.bareRgb && isBareRgb(text) ? BARE_RGB.exec(text) : null;
+  if (rgb) {
+    const [, r, g, b, alpha] = rgb;
+    parsed = parse(`rgb(${r} ${g} ${b}${alpha ? ` / ${alpha}` : ''})`);
   }
   return parsed ? toOklch(parsed) : undefined;
 }

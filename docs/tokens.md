@@ -4,11 +4,11 @@ onsystem reads design tokens from stylesheets, W3C DTCG 2025.10 files and a DESI
 
 ## Where tokens come from
 
-| Source                 | Zero config reads                                                                                     | In `tokens` |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- | ----------- |
-| CSS custom properties  | The stylesheet [zero config](configuration.md#zero-config) finds, else `app/globals.css` and the like | `*.css`     |
-| W3C DTCG 2025.10       | `**/*.tokens.json`                                                                                    | `*.json`    |
-| DESIGN.md front matter | `DESIGN.md` in the root, only when none of the files above exist                                      | `*.md`      |
+| Source                 | Zero config reads                                                                                                                       | In `tokens` |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| CSS custom properties  | The stylesheet [zero config](configuration.md#zero-config) finds, else `app/globals.css` and the like, and the stylesheets these import | `*.css`     |
+| W3C DTCG 2025.10       | `**/*.tokens.json`                                                                                                                      | `*.json`    |
+| DESIGN.md front matter | `DESIGN.md` in the root, only when none of the files above exist                                                                        | `*.md`      |
 
 `tokens` in the [config](configuration.md#config-file), or `--tokens`, replaces what zero config reads: a `DESIGN.md` listed there is read next to the other files. `inspect --explain` shows which files were read.
 
@@ -28,13 +28,13 @@ A token is named by its path (`color.brand.500`), unless onsystem's extension ke
 
 DTCG has no field for how code uses a token, so onsystem keeps it under `$extensions["com.github.dgesteves.onsystem"]`, which other tools ignore:
 
-| Field      | What it holds                                                                                                                       |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `name`     | The token's name where onsystem read it, when it is not its path: `destructive` for `color.destructive`. Findings use it            |
-| `cssVar`   | The custom property code reads: `--primary`. A token with the extension and no `cssVar` has none (a Tailwind `@theme inline` value) |
-| `tailwind` | The Tailwind theme variable that makes the class: `--color-primary` for `bg-primary`, `--spacing` for the spacing unit              |
-| `modes`    | Values in other themes, in the form of `$value`: `{ "dark": { "colorSpace": "oklch", "components": [0.922, 0, 0] } }`               |
-| `channels` | `"hsl"` when the custom property holds bare HSL channels (Tailwind v3), used as `hsl(var(--border))`                                |
+| Field      | What it holds                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`     | The token's name where onsystem read it, when it is not its path: `destructive` for `color.destructive`. Findings use it                                                 |
+| `cssVar`   | The custom property code reads: `--primary`. A token with the extension and no `cssVar` has none (a Tailwind `@theme inline` value)                                      |
+| `tailwind` | The Tailwind theme variable that makes the class: `--color-primary` for `bg-primary`, `--spacing` for the spacing unit                                                   |
+| `modes`    | Values in other themes, in the form of `$value`: `{ "dark": { "colorSpace": "oklch", "components": [0.922, 0, 0] } }`                                                    |
+| `channels` | `"hsl"` when the custom property holds bare HSL channels (Tailwind v3), used as `hsl(var(--border))`; `"rgb"` for bare RGB channels, used as `rgb(var(--content-error))` |
 
 ## DESIGN.md
 

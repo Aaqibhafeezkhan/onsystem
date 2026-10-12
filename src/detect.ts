@@ -903,6 +903,119 @@ export function moduleResolver(
 }
 
 /**
+ * {@link moduleResolver} for a Tailwind config's presets, then a workspace package's
+ * `exports` for what it leaves unresolved: `@repo/tailwind-config` through
+ * `"exports": { ".": "./tailwind.config.ts" }`, as Turborepo's template has it.
+ */
+export function presetResolver(
+  root: string,
+): (specifier: string, fromFile: string) => string | undefined {
+  const resolve = moduleResolver(root);
+  const packages = new PackageFinder(root);
+  return (specifier, fromFile) => {
+    const file = resolve(specifier, fromFile);
+    if (file || specifier.startsWith('.')) return file;
+    const name = packageName(specifier);
+    const dir = name ? packages.find(name) : undefined;
+    return name && dir
+      ? exportedFile(dir, `.${specifier.slice(name.length)}`, (f) => SCRIPT_FILE.test(f))
+      : undefined;
+  };
+}
+
+/**
+ * Resolves a stylesheet's `@import` to a project file: a path next to the stylesheet
+ * (`./theme.css`, or `theme.css` as plain CSS reads it), or a stylesheet of a workspace
+ * package (`@acme/theme/colors.css`, or `@acme/theme` through its `exports` or its `style`
+ * field). Installed packages (`tailwindcss`) and URLs resolve to nothing.
+ */
+export function stylesheetResolver(
+  root: string,
+): (specifier: string, fromFile: string) => string | undefined {
+  const packages = new PackageFinder(root);
+  const stylesheet = (file: string) =>
+    [file, `${file}.css`].find(
+      (f) => f.endsWith('.css') && !/[\\/]node_modules[\\/]/.test(f) && isFile(f),
+    );
+  return (specifier, fromFile) => {
+    if (/^(?:[a-z][\w+.-]*:|\/)/i.test(specifier)) return undefined;
+    const relative = stylesheet(path.resolve(path.dirname(fromFile), specifier));
+    if (relative || specifier.startsWith('.')) return relative;
+    const name = packageName(specifier);
+    const dir = name ? packages.find(name) : undefined;
+    if (!name || !dir) return undefined;
+    const subpath = specifier.slice(name.length + 1);
+    const style = readJson(path.join(dir, 'package.json'))?.style;
+    return (
+      exportedFile(dir, subpath ? `./${subpath}` : '.', (f) => f.endsWith('.css')) ??
+      (subpath
+        ? stylesheet(path.join(dir, subpath))
+        : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css')))
+    );
+  };
+}
+
+/**
+ * The file a package's `exports` map `subpath` (`.`, `./theme`) to, through any condition
+ * (`style`, `import`, `default`) and `*` patterns: the first target on disk, inside the
+ * package, that `accept` takes.
+ */
+function exportedFile(
+  dir: string,
+  subpath: string,
+  accept: (file: string) => boolean,
+): string | undefined {
+  const exports = readJson(path.join(dir, 'package.json'))?.exports;
+  const entries: [string, unknown][] =
+    exports && typeof exports === 'object' && !Array.isArray(exports)
+      ? Object.keys(exports).every((k) => k.startsWith('.'))
+        ? Object.entries(exports)
+        : [['.', exports]]
+      : exports === undefined
+        ? []
+        : [['.', exports]];
+  // An exact subpath first, then the most specific pattern, as Node.js picks them.
+  const matches: { middle: string; value: unknown; rank: number }[] = [];
+  for (const [key, value] of entries) {
+    const star = key.indexOf('*');
+    if (star === -1) {
+      if (key === subpath) matches.push({ middle: '', value, rank: Infinity });
+      continue;
+    }
+    const prefix = key.slice(0, star);
+    const suffix = key.slice(star + 1);
+    if (
+      subpath.startsWith(prefix) &&
+      subpath.endsWith(suffix) &&
+      subpath.length >= prefix.length + suffix.length
+    ) {
+      const middle = subpath.slice(prefix.length, subpath.length - suffix.length);
+      matches.push({ middle, value, rank: prefix.length });
+    }
+  }
+  matches.sort((a, b) => b.rank - a.rank);
+  for (const { middle, value } of matches) {
+    for (const target of exportTargets(value)) {
+      const file = path.resolve(dir, target.replaceAll('*', middle));
+      if (isInside(dir, file) && accept(file) && isFile(file)) return file;
+    }
+  }
+  return undefined;
+}
+
+/** Every target of an export condition map, in order, but its types. */
+function exportTargets(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(exportTargets);
+  if (value && typeof value === 'object') {
+    return Object.entries(value).flatMap(([condition, nested]) =>
+      condition === 'types' ? [] : exportTargets(nested),
+    );
+  }
+  return [];
+}
+
+/**
  * Where an import from a workspace package points: its file, or `{}` for a
  * subpath the package's `exports` declare but whose target is not on disk
  * (built to `dist/`). Undefined when no such module exists. The linter tells

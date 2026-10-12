@@ -1,0 +1,8 @@
+{
+  "name": "@acme/app-web",
+  "private": true,
+  "dependencies": {
+    "@acme/tailwind-config": "workspace:*",
+    "@acme/ui": "workspace:*"
+  }
+}

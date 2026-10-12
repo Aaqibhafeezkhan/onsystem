@@ -8,7 +8,7 @@ import { glob } from 'tinyglobby';
 import type ts from 'typescript';
 
 import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } from './config.js';
-import { moduleResolver } from './detect.js';
+import { presetResolver, stylesheetResolver } from './detect.js';
 import { extractComponents } from './extract/components.js';
 import { attachDocs, parseDoc, type ParsedDoc } from './extract/docs.js';
 import { isProjectFile, projectFiles, readProjectConfig } from './extract/program.js';
@@ -21,10 +21,12 @@ import {
   type Bm25Index,
   type SearchHit,
 } from './search/index.js';
+import { importedStylesheets } from './tokens/imports.js';
 import { loadTokens, type TokenIndex } from './tokens/index.js';
 import {
   applyTailwindColors,
   applyTailwindRadii,
+  presetStylesheets,
   readTailwindColors,
   readTailwindRadii,
 } from './tokens/tailwind-config.js';
@@ -274,16 +276,48 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
   const add = async (sources: TokenSourceConfig[]) => {
     for (const source of sources) {
       for (const file of await find(config, [source.path])) {
-        if (seen.has(file)) continue;
-        seen.add(file);
+        if (seen.has(path.resolve(file))) continue;
+        seen.add(path.resolve(file));
         tokens.push({ file, prefix: source.prefix });
       }
     }
   };
   await add(config.tokens.filter((t) => !t.fallback));
+  if (config.tokensDetected) {
+    const found = tokens.map((t) => path.resolve(t.file));
+    for (const file of linkedStylesheets(config, found)) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      tokens.push({ file });
+    }
+  }
   // A DESIGN.md stands in only when no stylesheet or DTCG file was found.
   if (!tokens.length) await add(config.tokens.filter((t) => t.fallback));
   return { components, tokens, docs };
+}
+
+/**
+ * The stylesheets zero config reads besides the ones it found: those they `@import` (by a
+ * path, or from a workspace package: `@import "@acme/theme"`), then those that set the colors
+ * a Tailwind v3 config maps, in the workspace package of a shared preset it reads (Dub's
+ * `@dub/tailwind-config` and its `themes.css`), with what they import. May repeat a file.
+ */
+function linkedStylesheets(config: ResolvedConfig, found: string[]): string[] {
+  const resolve = stylesheetResolver(config.root);
+  const preset = config.tailwindConfig
+    ? presetStylesheets(
+        readTailwindColors(config.tailwindConfig, presetResolver(config.root)),
+        config.root,
+      )
+    : [];
+  return [
+    ...importedStylesheets(
+      found.filter((f) => f.endsWith('.css')),
+      resolve,
+    ),
+    ...preset,
+    ...importedStylesheets(preset, resolve),
+  ];
 }
 
 /** Size and mtime of files, each read once per build. */
@@ -432,13 +466,13 @@ export async function buildModel(
   tokens.tokens.push(...libraries.tokens);
   // Tailwind v3 maps color classes in its config rather than in `@theme`.
   const tailwind = config.tailwindConfig
-    ? readTailwindColors(config.tailwindConfig, moduleResolver(config.root))
+    ? readTailwindColors(config.tailwindConfig, presetResolver(config.root))
     : undefined;
-  if (tailwind) applyTailwindColors(tokens.tokens, tailwind.colors);
+  if (tailwind) applyTailwindColors(tokens.tokens, tailwind.colors, tailwind.rgb);
   // Same for radius: v3 borderRadius entries (config, then presets) name the scale.
   let radiiFiles: string[] = [];
   if (config.tailwindConfig) {
-    const radii = readTailwindRadii(config.tailwindConfig, moduleResolver(config.root));
+    const radii = readTailwindRadii(config.tailwindConfig, presetResolver(config.root));
     applyTailwindRadii(tokens.tokens, radii.radii, config.tailwindConfig);
     radiiFiles = radii.files;
   }
