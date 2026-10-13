@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { Fragment } from 'react';
 
 import { Headline, HeadlineStats } from '@/components/benchmark-summary';
-import { Code } from '@/components/code';
+import { Code, CodeBody } from '@/components/code';
+import { CodeTabs } from '@/components/code-tabs';
 import { ArrowRightIcon, CheckIcon } from '@/components/icons';
 import { InstallPanel, StarButton } from '@/components/install';
 import { LoopDemo } from '@/components/loop-demo';
@@ -11,8 +12,10 @@ import { InlineMarkdown } from '@/components/markdown';
 import { Eyebrow, InlineCode, Section, TextLink } from '@/components/section';
 import { headline } from '@/lib/benchmark';
 import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
+import { formatJson, inline } from '@/lib/format-json';
 import { pageMetadata } from '@/lib/metadata';
 import { HOME_CARD } from '@/lib/og';
+import { highlight } from '@/lib/render-code';
 import { AUTHOR, docsHref, NPM, REPO, repoLink, SITE_URL } from '@/lib/site';
 
 const title = 'onsystem: keeps coding agents on your design system';
@@ -143,12 +146,24 @@ function Hero() {
           <LoopDemo
             prompt={demo.prompt}
             file={demo.file}
-            draftCode={demo.draft.trimEnd()}
-            fixedCode={demo.fixed.trimEnd()}
+            // Highlighted here, on the server, so the browser gets colours and no highlighter.
+            draft={
+              highlight(demo.draft.trimEnd(), 'tsx', {
+                marks: demo.findings.map((f, id) => ({
+                  start: f.start,
+                  end: f.end,
+                  kind: f.severity,
+                  id,
+                })),
+              }).lines
+            }
+            fixed={
+              highlight(demo.fixed.trimEnd(), 'tsx', {
+                marks: demo.changes.map((c) => ({ ...c, kind: 'changed' })),
+              }).lines
+            }
             findings={demo.findings.map((f) => ({
               ruleId: f.ruleId,
-              start: f.start,
-              end: f.end,
               severity: f.severity,
               line: f.line,
               column: f.column,
@@ -156,7 +171,6 @@ function Hero() {
               fix: f.fix,
               message: f.message,
             }))}
-            changes={demo.changes}
             errorCount={demo.errorCount}
             warningCount={demo.warningCount}
           />
@@ -390,7 +404,7 @@ function HowItWorks() {
               <li key={rule.id} className="flex items-baseline justify-between gap-3">
                 <span className="truncate font-mono text-[12.5px] text-fg-soft">{rule.id}</span>
                 <span
-                  className={`shrink-0 font-mono text-[11px] ${rule.severity === 'error' ? 'text-magenta-soft' : 'text-cyan'}`}
+                  className={`shrink-0 font-mono text-[11px] ${rule.severity === 'error' ? 'text-error' : 'text-warn'}`}
                 >
                   {rule.severity}
                 </span>
@@ -428,14 +442,9 @@ function HowItWorks() {
   );
 }
 
-/** `{ "name": "Badge" }`, with code arguments shown as code rather than an escaped string. */
-function formatCall(tool: string, args: Record<string, unknown>): string {
-  const parts = Object.entries(args).map(([key, value]) =>
-    typeof value === 'string' && key === 'code'
-      ? `${key}:\n${value}`
-      : `${key}: ${JSON.stringify(value)}`,
-  );
-  return `> ${tool} ${parts.join(', ')}`;
+/** A tool call as a prompt line: `> get_component { "name": "Badge" }`. */
+function callLine(tool: string, args: Record<string, unknown>): string {
+  return `> ${tool} ${inline(args)}`;
 }
 
 function AgentView() {
@@ -450,6 +459,7 @@ function AgentView() {
 ⏺ The hook flagged five issues. Looking up Button and the color tokens before fixing.
 ⏺ onsystem - get_component (MCP)(name: "Button")
 ⏺ Write(app/promo/page.tsx)   →   <Button variant="destructive"> on bg-muted, hook passes`;
+  const code = check?.args.code;
   return (
     <section
       aria-labelledby="agent-view-title"
@@ -468,21 +478,34 @@ function AgentView() {
       </p>
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
         {component && (
-          <div className="relative min-h-104 min-w-0 lg:row-span-2">
+          <div className="relative min-w-0 lg:row-span-2">
             <Code
-              code={`${formatCall('get_component', component.args)}\n\n${component.output}`}
+              code={`${callLine('get_component', component.args)}\n\n${component.output}`}
               lang="text"
               title="get_component"
-              className="flex h-full max-h-120 flex-col lg:absolute lg:inset-0 lg:max-h-none [&>div:last-child]:min-h-0 [&>div:last-child]:flex-1 [&_pre]:h-full [&_pre]:overflow-auto"
+              className="flex flex-col lg:absolute lg:inset-0"
+              bodyClassName="max-h-[30rem] min-h-0 flex-1 lg:max-h-none"
             />
           </div>
         )}
-        {check && (
-          <Code
-            code={`${formatCall('check_ui', check.args)}\n\n${check.output}`}
-            lang="text"
+        {check && typeof code === 'string' && (
+          <CodeTabs
             title="check_ui"
-          />
+            label="check_ui response"
+            labels={['Markdown', 'structuredContent']}
+          >
+            <CodeBody
+              parts={[
+                {
+                  code: '> check_ui code:',
+                  lang: 'text',
+                },
+                { code, lang: 'tsx' },
+                { code: `\n${check.output}`, lang: 'text' },
+              ]}
+            />
+            <CodeBody code={formatJson(check.structured)} lang="json" className="max-h-[26rem]" />
+          </CodeTabs>
         )}
         <Code code={hook} lang="text" title="Claude Code, with the plugin's hook" />
       </div>

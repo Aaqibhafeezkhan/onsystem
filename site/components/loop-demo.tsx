@@ -1,16 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { Line } from '@/components/code';
+import { Line } from '@/components/code-line';
 import { CheckIcon, PauseIcon, PlayIcon } from '@/components/icons';
-import { highlightLines } from '@/lib/highlight';
+import type { Segment } from '@/lib/segments';
 
 export interface LoopFinding {
   ruleId: string;
-  /** Offsets into the draft. */
-  start: number;
-  end: number;
   severity: 'error' | 'warning';
   line: number;
   column: number;
@@ -22,12 +19,13 @@ export interface LoopFinding {
 export interface LoopDemoProps {
   prompt: string;
   file: string;
-  /** The code as the agent wrote it, and after the fixes. */
-  draftCode: string;
-  fixedCode: string;
+  /**
+   * The code as the agent wrote it, with each finding marked (`id` is its index), and after the
+   * fixes, with what changed marked: highlighted by Shiki on the server.
+   */
+  draft: Segment[][];
+  fixed: Segment[][];
   findings: LoopFinding[];
-  /** What the agent changed, as offsets into `fixedCode`. */
-  changes: { start: number; end: number }[];
   errorCount: number;
   warningCount: number;
 }
@@ -58,32 +56,12 @@ const TIMING = { line: 55, finding: 150, hold: [900, 4200, 3400, 3800] };
 export function LoopDemo({
   prompt,
   file,
-  draftCode,
-  fixedCode,
+  draft,
+  fixed,
   findings,
-  changes,
   errorCount,
   warningCount,
 }: LoopDemoProps) {
-  // Highlighted the same way on the server and in the browser, from the plain code.
-  const draft = useMemo(
-    () =>
-      highlightLines(
-        draftCode,
-        'tsx',
-        findings.map((f, id) => ({ start: f.start, end: f.end, kind: f.severity, id })),
-      ),
-    [draftCode, findings],
-  );
-  const fixed = useMemo(
-    () =>
-      highlightLines(
-        fixedCode,
-        'tsx',
-        changes.map((c) => ({ ...c, kind: 'changed' })),
-      ),
-    [fixedCode, changes],
-  );
   // Server render and first paint: the draft as written, before the check.
   const [step, setStep] = useState<Step>(0);
   const [typed, setTyped] = useState(draft.length);
@@ -221,19 +199,20 @@ export function LoopDemo({
 
       <div className="grid lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         {/* Editor */}
-        <div className={`${paneClass('code')} lg:border-r lg:border-line`}>
-          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
-            <span className="truncate font-mono text-xs text-fg-soft">{file}</span>
+        <div className={`${paneClass('code')} bg-code lg:border-r lg:border-line`}>
+          {/* The shared code bar: the file, and the check's status where the copy button goes. */}
+          <div className="code-bar pr-4">
+            <span className="code-title">{file}</span>
             <span
-              className={`shrink-0 font-mono text-[11px] ${step === 1 ? 'text-magenta-soft' : step === 3 ? 'text-cyan' : 'text-subtle'}`}
+              className={`shrink-0 text-[11px] ${step === 1 ? 'text-error' : step === 3 ? 'text-success' : 'text-subtle'}`}
             >
               {status}
             </span>
           </div>
           <pre
             tabIndex={0}
-            className="code overflow-x-auto py-3 text-[11.5px] leading-[1.75] sm:text-[12.5px]"
-            style={{ minHeight: `calc(${String(lines)}lh + 1.5rem)` }}
+            className="code code-body pl-0 text-[12px] sm:text-[13px]"
+            style={{ minHeight: `calc(${String(lines)}lh + 1.75rem)` }}
           >
             <code className="block min-w-max">
               {code.map((segments, i) => {
@@ -254,7 +233,7 @@ export function LoopDemo({
                     >
                       {severity && (
                         <span
-                          className={`absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full ${severity === 'error' ? 'bg-magenta' : 'bg-cyan'}`}
+                          className={`absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full ${severity === 'error' ? 'bg-error' : 'bg-warn'}`}
                         />
                       )}
                       {i + 1}
@@ -276,22 +255,24 @@ export function LoopDemo({
         <div
           className={`${paneClass('agent')} p-4 font-mono text-[12px] leading-relaxed sm:p-5 sm:text-[12.5px]`}
         >
+          {/* The output grammar's colours (app/globals.css, .out-*), as in every transcript. */}
           <p className="flex gap-2.5 text-fg">
-            <span className="text-cyan" aria-hidden="true">
+            <span className="out-prompt" aria-hidden="true">
               ›
             </span>
             {prompt}
           </p>
           <ol className="mt-4 grid gap-3">
             <Event dot="muted">
-              <span className="text-muted">Write</span> <span className="text-fg-soft">{file}</span>{' '}
-              <span className="text-subtle">+{draft.length} lines</span>
+              <span className="out-strong">Write</span> <span className="out-dim">{file}</span>{' '}
+              <span className="out-success">+{draft.length} lines</span>
             </Event>
             <Event dot="cyan" hidden={step < 1}>
-              <span className="text-cyan-bright">onsystem</span>
-              <span className="text-subtle"> · </span>
-              <span className="text-cyan-bright">check_ui</span>{' '}
-              <span className="text-muted">(path: &quot;{file}&quot;)</span>
+              <span className="out-dim">onsystem · </span>
+              <span className="out-accent">check_ui</span>
+              <span className="out-dim">(path: </span>
+              <span className="out-string">&quot;{file}&quot;</span>
+              <span className="out-dim">)</span>
             </Event>
           </ol>
 
@@ -299,9 +280,9 @@ export function LoopDemo({
             className={`mt-3 rounded-xl border border-line bg-raised-2 transition-opacity duration-300 ${step < 1 ? 'invisible opacity-0' : ''}`}
           >
             <p className="flex flex-wrap items-baseline gap-x-2 border-b border-line px-3.5 py-2.5">
-              <span className="font-medium text-magenta-soft">{errorCount} errors</span>
+              <span className="font-medium text-error">{errorCount} errors</span>
               <span className="text-subtle">·</span>
-              <span className="font-medium text-cyan">{warningCount} warnings</span>
+              <span className="font-medium text-warn">{warningCount} warnings</span>
               <span className="text-subtle">each with a rule id, a location and a fix</span>
             </p>
             <ul className="grid gap-px py-1.5">
@@ -319,29 +300,33 @@ export function LoopDemo({
                 >
                   <span className="pt-[7px]" aria-hidden="true">
                     {step >= 2 ? (
-                      <CheckIcon className="-mt-[3px] -ml-[3px] size-3 text-cyan" />
+                      <CheckIcon className="-mt-[3px] -ml-[3px] size-3 text-success" />
                     ) : (
                       <span
-                        className={`block size-1.5 rounded-full ${f.severity === 'error' ? 'bg-magenta' : 'bg-cyan'}`}
+                        className={`block size-1.5 rounded-full ${f.severity === 'error' ? 'bg-error' : 'bg-warn'}`}
                       />
                     )}
                   </span>
                   <span className="min-w-0">
                     <span className="flex gap-2 text-[11.5px]">
-                      <span className="text-subtle">
+                      <span className="out-dim">
                         {f.line}:{f.column}
                       </span>
-                      <span className="truncate text-muted">{f.ruleId}</span>
-                      <span className="sr-only">{f.severity}</span>
+                      <span className={f.severity === 'error' ? 'out-error' : 'out-warn'}>
+                        {f.severity === 'error' ? 'error' : 'warn'}
+                      </span>
+                      <span className="truncate out-accent">{f.ruleId}</span>
                     </span>
-                    <span className="block break-words text-fg-soft">
+                    <span className="block break-words">
                       <span
-                        className={step >= 2 ? 'text-subtle line-through decoration-subtle/60' : ''}
+                        className={
+                          step >= 2 ? 'out-dim line-through decoration-subtle/60' : 'out-string'
+                        }
                       >
                         {f.found}
                       </span>
-                      <span className="text-subtle"> → </span>
-                      <span className="text-cyan-bright">{f.fix}</span>
+                      <span className="out-dim"> → </span>
+                      <span className="out-success">{f.fix}</span>
                     </span>
                   </span>
                 </li>
@@ -351,13 +336,14 @@ export function LoopDemo({
 
           <ol className="mt-4 grid gap-3">
             <Event dot="muted" hidden={step < 2}>
-              <span className="text-muted">Edit</span> <span className="text-fg-soft">{file}</span>{' '}
-              <span className="text-subtle">resolved all {findings.length} findings</span>
+              <span className="out-strong">Edit</span> <span className="out-dim">{file}</span>{' '}
+              <span className="text-muted">resolved all {findings.length} findings</span>
             </Event>
             <Event dot="cyan" hidden={step < 3}>
-              <span className="text-cyan-bright">check_ui</span>{' '}
-              <CheckIcon className="inline size-4 -translate-y-px text-cyan" />{' '}
-              <span className="text-fg-soft">No design-system problems</span>
+              <span className="out-accent">check_ui</span>{' '}
+              <span className="out-success">
+                <CheckIcon className="inline size-4 -translate-y-px" /> No design-system problems
+              </span>
             </Event>
           </ol>
         </div>

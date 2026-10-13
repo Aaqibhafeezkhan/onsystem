@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 
-import { Code } from '@/components/code';
+import { Code, CodeBody } from '@/components/code';
 import { AnchorHeading, plainLabel } from '@/components/heading';
 import { InlineMarkdown } from '@/components/markdown';
 import { TableScroll } from '@/components/table-scroll';
 import { Tabs } from '@/components/tabs';
-import type { Lang } from '@/lib/highlight';
 import { forPackageManager, PACKAGE_MANAGERS } from '@/lib/package-managers';
+import { langOf } from '@/lib/render-code';
 
 /**
  * Renders the Markdown the docs use: headings, paragraphs, fenced code, lists (with code inside
@@ -41,19 +41,6 @@ export type Block =
   | { type: 'quote'; blocks: Block[] }
   | { type: 'steps'; steps: { level: number; text: string; blocks: Block[] }[] }
   | { type: 'tabs'; label: string; group?: string | undefined; tabs: CodeBlock[] };
-
-const LANGS: Record<string, Lang> = {
-  tsx: 'tsx',
-  jsx: 'tsx',
-  ts: 'tsx',
-  js: 'tsx',
-  json: 'json',
-  sh: 'sh',
-  bash: 'sh',
-  toml: 'toml',
-  yaml: 'yaml',
-  yml: 'yaml',
-};
 
 /** GitHub's alert types, as the three callouts the docs use. */
 const CALLOUTS: Record<string, CalloutKind> = {
@@ -266,15 +253,12 @@ function Heading({ level, text, className }: { level: number; text: string; clas
   );
 }
 
-const LANG_TITLES: Record<string, string> = { js: 'JavaScript', ts: 'TypeScript', jsx: 'JSX' };
-
 function CodeFromMarkdown({ block, className }: { block: CodeBlock; className?: string }) {
-  const lang = LANGS[block.lang] ?? 'text';
   return (
     <Code
       code={block.code}
-      lang={lang}
-      title={block.title ?? LANG_TITLES[block.lang]}
+      lang={langOf(block.lang)}
+      title={block.title ?? (block.lang === 'jsx' ? 'JSX' : undefined)}
       className={className}
       copy={block.lang === 'tsx' ? undefined : 'Copy the code'}
     />
@@ -284,11 +268,7 @@ function CodeFromMarkdown({ block, className }: { block: CodeBlock; className?: 
 const CALLOUT_STYLES: Record<CalloutKind, { title: string; frame: string; label: string }> = {
   note: { title: 'Note', frame: 'border-line-strong bg-raised/70', label: 'text-fg-soft' },
   tip: { title: 'Tip', frame: 'border-cyan/40 bg-cyan/[0.06]', label: 'text-cyan-bright' },
-  warning: {
-    title: 'Warning',
-    frame: 'border-magenta/45 bg-magenta/[0.06]',
-    label: 'text-magenta-soft',
-  },
+  warning: { title: 'Warning', frame: 'border-warn/45 bg-warn/[0.06]', label: 'text-warn' },
 };
 
 /** A scrolling table's name: the heading it is under, as ondocs names its tables. */
@@ -317,9 +297,10 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
               label={block.label}
               group={block.group}
               labels={block.tabs.map((tab) => tab.tab ?? '')}
+              copies={block.tabs.map((tab) => tab.code)}
             >
               {block.tabs.map((tab) => (
-                <CodeFromMarkdown key={tab.tab} block={tab} />
+                <CodeBody key={tab.tab} code={tab.code} lang={langOf(tab.lang)} />
               ))}
             </Tabs>
           </div>

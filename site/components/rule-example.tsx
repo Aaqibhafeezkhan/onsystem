@@ -1,57 +1,50 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
-import { Line } from '@/components/code';
+import { CodeBody } from '@/components/code';
+import { CodeFrame } from '@/components/code-frame';
+import { FindingMessage } from '@/components/finding-message';
 import { CheckIcon } from '@/components/icons';
 import { InlineMarkdown } from '@/components/markdown';
 import type { RuleEntry } from '@/lib/data';
-import { highlightLines, type Mark } from '@/lib/highlight';
+import type { Mark } from '@/lib/segments';
 import { ruleHref } from '@/lib/site';
 
-/** A titled code panel, as the rules pages show examples and findings. */
+/** A titled panel in the shared code frame, as the rules pages show examples and findings. */
 export function Panel({
   title,
   note,
   children,
 }: {
   title: string;
-  note?: React.ReactNode;
-  children: React.ReactNode;
+  note?: ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-code">
-      <div className="flex items-baseline justify-between gap-3 border-b border-line px-4 py-2">
-        <span className="font-mono text-xs text-fg-soft">{title}</span>
-        {note && <span className="text-right font-mono text-[11px] text-subtle">{note}</span>}
-      </div>
+    <CodeFrame
+      title={title}
+      note={note && <span className="pr-2.5 text-right text-[11px] text-subtle">{note}</span>}
+    >
       {children}
-    </div>
+    </CodeFrame>
   );
 }
 
+/**
+ * TSX with findings or changes marked, highlighted by Shiki on the server. Source code scrolls,
+ * as every code block does, its right edge faded while more is out of view.
+ */
 export function MarkedCode({ code, marks }: { code: string; marks: Mark[] }) {
-  return (
-    <pre
-      tabIndex={0}
-      className="code overflow-x-auto px-4 py-3 text-[12.5px] leading-[1.7] whitespace-pre-wrap [overflow-wrap:anywhere]"
-    >
-      <code>
-        {highlightLines(code.trimEnd(), 'tsx', marks).map((segments, i) => (
-          <span key={i} className="block min-h-[1lh]">
-            <Line segments={segments} />
-          </span>
-        ))}
-      </code>
-    </pre>
-  );
+  return <CodeBody code={code.trimEnd()} lang="tsx" marks={marks} />;
 }
 
 export function Severity({ severity }: { severity: RuleEntry['severity'] }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] ${severity === 'error' ? 'border-magenta/40 text-magenta-soft' : 'border-cyan/40 text-cyan'}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] ${severity === 'error' ? 'border-error/40 text-error' : 'border-warn/40 text-warn'}`}
     >
       <span
-        className={`size-1.5 rounded-full ${severity === 'error' ? 'bg-magenta' : 'bg-cyan'}`}
+        className={`size-1.5 rounded-full ${severity === 'error' ? 'bg-error' : 'bg-warn'}`}
         aria-hidden="true"
       />
       {severity === 'error' ? 'error' : 'warning'} by default
@@ -87,21 +80,22 @@ export function RuleExample({ rule }: { rule: RuleEntry }) {
             {rule.findings.map((f, i) => (
               <li key={i} className="px-4 py-3 text-[14px] leading-relaxed">
                 <p className="flex flex-wrap items-baseline gap-x-2 font-mono text-[11.5px]">
-                  <span className={f.severity === 'error' ? 'text-magenta-soft' : 'text-cyan'}>
-                    {f.severity}
-                  </span>
-                  <span className="text-subtle">
+                  <span className="out-dim">
                     {f.line}:{f.column}
                   </span>
+                  <span className={f.severity === 'error' ? 'out-error' : 'out-warn'}>
+                    {f.severity}
+                  </span>
+                  <span className="out-accent">{rule.id}</span>
                   {f.fixable && (
-                    <span className="inline-flex items-center gap-1 text-subtle">
-                      <CheckIcon className="size-3 text-cyan" />
+                    <span className="inline-flex items-center gap-1 out-success">
+                      <CheckIcon className="size-3" />
                       fix included
                     </span>
                   )}
                 </p>
                 <p className="mt-1 text-fg-soft">
-                  <InlineMarkdown text={f.message} />
+                  <FindingMessage text={f.message} />
                 </p>
               </li>
             ))}

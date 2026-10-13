@@ -16,7 +16,7 @@ import { ruleCatalog } from '@/lib/data';
 import { DOCS_GROUPS, DOCS_NAV, DOCS_PAGES, docsPage } from '@/lib/docs';
 import { FAQ } from '@/lib/faq';
 import { lastModified } from '@/lib/git';
-import { tokenize } from '@/lib/highlight';
+import { outputLines } from '@/lib/output';
 import { llmsFullTxt } from '@/lib/llms';
 import { forPackageManager } from '@/lib/package-managers';
 import { markdownPath, pageMarkdown } from '@/lib/page-markdown';
@@ -116,7 +116,7 @@ describe('a docs page', () => {
       'try-it',
       'gate-your-pull-requests',
     ]);
-    expect(html.match(/marketplace add dgesteves\/onsystem/g)).toHaveLength(1);
+    expect(text(html).match(/marketplace add dgesteves\/onsystem/g)).toHaveLength(1);
   });
 
   it('puts the long title of the required-check page under its short one', () => {
@@ -309,7 +309,7 @@ describe('code blocks', () => {
 
   it('name themselves in a bar that holds the copy button, clear of the code', () => {
     const html = render(createElement(Code, { code: 'npx -y onsystem', lang: 'sh', copy: 'Copy' }));
-    const bar = /<div class="flex min-h-9[^"]*">([\s\S]*?)<\/div><div class="relative">/.exec(html);
+    const bar = /<div class="code-bar">([\s\S]*?)<\/div><pre/.exec(html);
     expect(bar?.[1]).toContain('Shell');
     expect(bar?.[1]).toContain('aria-label="Copy"');
     expect(html).not.toMatch(/absolute top-2\.5 right-2\.5/);
@@ -324,14 +324,17 @@ describe('code blocks', () => {
     expect(wrapsLines('<Button />', 'tsx')).toBe(false);
     expect(wrapsLines('{}', 'json')).toBe(false);
     const html = render(createElement(Code, { code: 'a long transcript', lang: 'text' }));
-    expect(html).toContain('whitespace-pre-wrap');
+    expect(html).toContain('code-wrap');
   });
 
   it('highlight a slash command the way the install panel does', () => {
-    expect(tokenize('/plugin install onsystem@dgesteves\nplain', 'text')).toEqual([
-      { text: '/plugin', kind: 'command' },
-      { text: ' install onsystem@dgesteves\n', kind: 'plain' },
-      { text: 'plain', kind: 'plain' },
+    const { lines } = outputLines('/plugin install onsystem@dgesteves\nplain');
+    expect(lines.map((line) => line.map((s) => [s.text, s.kind]))).toEqual([
+      [
+        ['/plugin', 'accent'],
+        [' install onsystem@dgesteves', undefined],
+      ],
+      [['plain', undefined]],
     ]);
   });
 });

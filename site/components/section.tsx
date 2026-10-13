@@ -78,13 +78,16 @@ export function CodeText({ text }: { text: string }) {
   );
 }
 
-/** The inline code style, shared with the Markdown renderer. */
+/**
+ * The one inline code style, shared with the Markdown renderer and the sibling sites: a hairline
+ * border on a raised fill, a little smaller than the text around it.
+ */
 export const INLINE_CODE =
-  'rounded bg-fg/[0.06] px-1 py-px font-mono text-fg-soft box-decoration-clone';
+  'rounded-[5px] border border-line bg-raised px-[0.35em] py-[0.05em] font-mono text-[0.86em] text-fg box-decoration-clone';
 
 export function InlineCode({ children }: { children: ReactNode }) {
   return (
-    <code className={`${INLINE_CODE} text-[0.88em]`}>
+    <code className={INLINE_CODE}>
       {typeof children === 'string' ? (
         <CodeText text={children} />
       ) : (
