@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { createElement } from 'react';
@@ -324,25 +325,73 @@ describe('the docs cards', () => {
 
 // ─── Sitemap ────────────────────────────────────────────────────────────────
 
-const repo = path.join(site, '..');
-const gitDate = (file: string) =>
-  execFileSync('git', ['log', '-1', '--format=%cI', '--', file], { cwd: repo, encoding: 'utf8' })
-    .trim()
-    .replace(/^$/, '');
+/** git in `cwd`, with fixed commit dates and an author, so the tests need no git config. */
+function git(cwd: string, args: string[], date = '2026-01-01T00:00:00Z'): string {
+  return execFileSync(
+    'git',
+    [
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'commit.gpgsign=false',
+      ...args,
+    ],
+    {
+      cwd,
+      encoding: 'utf8',
+      env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+    },
+  ).trim();
+}
 
-describe('the sitemap', () => {
-  it('dates each docs page by its file’s last commit, not by the build', () => {
-    const entries = new Map(sitemap().map((entry) => [entry.url, entry.lastModified]));
-    for (const page of DOCS_PAGES) {
-      const date = gitDate(page.source);
-      const modified = entries.get(`${SITE_URL}${page.href}`);
-      if (date) expect(modified, page.href).toEqual(new Date(date));
-      else expect(modified, page.href).toBeUndefined();
-    }
+/** A repository whose a.md, b.md and c.md were each added in a commit of their own. */
+function threeCommits(): string {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'site-git-'));
+  git(repo, ['init', '-q']);
+  for (const [file, date] of [
+    ['a.md', '2026-01-01T00:00:00Z'],
+    ['b.md', '2026-02-01T00:00:00Z'],
+    ['c.md', '2026-03-01T00:00:00Z'],
+  ] as const) {
+    fs.writeFileSync(path.join(repo, file), file);
+    git(repo, ['add', file], date);
+    git(repo, ['commit', '-q', '-m', file], date);
+  }
+  return repo;
+}
+
+describe('dates from git', () => {
+  it('are the date of the last commit that changed the files', () => {
+    const repo = threeCommits();
+    expect(lastModified(['a.md'], repo)).toEqual(new Date('2026-01-01T00:00:00Z'));
+    expect(lastModified(['a.md', 'b.md'], repo)).toEqual(new Date('2026-02-01T00:00:00Z'));
+    expect(lastModified(['no/such/file.md'], repo)).toBeNull();
+    expect(lastModified(['a.md'], path.join(repo, 'not-a-repository'))).toBeNull();
   });
 
-  it('leaves a date out when git has none', () => {
-    expect(lastModified(['no/such/file.md'])).toBeNull();
-    expect(lastModified(['docs/ci.md'])).toBeInstanceOf(Date);
+  it('are unknown in a shallow clone for files the fetched commits did not change', () => {
+    const repo = threeCommits();
+    const clone = fs.mkdtempSync(path.join(os.tmpdir(), 'site-git-shallow-'));
+    git(clone, ['clone', '-q', '--depth', '2', `file://${repo}`, '.']);
+    // The tip (c.md) has its parent; the clone's oldest commit (b.md) seems to add every file.
+    expect(lastModified(['c.md'], clone)).toEqual(new Date('2026-03-01T00:00:00Z'));
+    expect(lastModified(['b.md'], clone)).toBeNull();
+    expect(lastModified(['a.md'], clone)).toBeNull();
+  });
+});
+
+describe('the sitemap', () => {
+  it('dates each page by its files’ last commit, and leaves the date out when git has none', () => {
+    const entries = new Map(sitemap().map((entry) => [entry.url, entry]));
+    for (const page of DOCS_PAGES) {
+      const entry = entries.get(`${SITE_URL}${page.href}`);
+      expect(entry, page.href).toBeDefined();
+      expect(entry?.lastModified, page.href).toEqual(lastModified([page.source]) ?? undefined);
+      expect(entry && 'lastModified' in entry, page.href).toBe(
+        lastModified([page.source]) !== null,
+      );
+    }
   });
 });
