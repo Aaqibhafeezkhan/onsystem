@@ -1,3 +1,4 @@
+import { Analytics } from '@vercel/analytics/next';
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <SiteFooter />
         <Ask />
+        <Analytics />
       </body>
     </html>
   );
