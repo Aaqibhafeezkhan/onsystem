@@ -89,6 +89,11 @@ export function SiteFooter() {
               MCP server
             </a>
           </li>
+          <li>
+            <Link className={link} href="/docs#use-these-docs-from-your-agent">
+              Docs over MCP
+            </Link>
+          </li>
         </Column>
         <nav aria-label={`More by ${AUTHOR.name}`}>
           <h2 className="font-mono text-[11px] tracking-[0.14em] text-subtle uppercase">

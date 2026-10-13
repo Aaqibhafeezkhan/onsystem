@@ -69,6 +69,7 @@ export function llmsTxt(): string {
     '## Optional',
     '',
     `- [All the docs in one file](${SITE_URL}/llms-full.txt)`,
+    `- [These docs over MCP](${SITE_URL}/api/mcp): \`search\`, \`fetch\` and \`list_pages\` for agents, over Streamable HTTP`,
     `- [README](${REPO}#readme)`,
     `- [Benchmark method and per-run results](${repoLink('bench/v2', 'tree')})`,
     `- [npm](${NPM})`,
