@@ -31,7 +31,7 @@ export default function PlaygroundPage() {
             Try <span className="font-mono text-[0.9em] tracking-[-0.04em]">check_ui</span> on a
             real design system.
           </h1>
-          <p className="mt-4 text-base leading-relaxed text-muted sm:text-[17px]">
+          <p className="measure mt-4 text-base leading-relaxed text-muted sm:text-[17px]">
             Edit the code or pick a draft. It is checked against the{' '}
             <TextLink href={repoLink('examples/shadcn-demo', 'tree')}>demo design system</TextLink>{' '}
             by the same rules the MCP server and the CLI run, on a server that parses the code and
@@ -62,32 +62,53 @@ export default function PlaygroundPage() {
               resolve either way.
             </p>
           </div>
-          <ul className="grid gap-3 sm:grid-cols-2">
+          {/* One row per component, so no count of components leaves a card alone in a grid. */}
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-raised">
             {designSystem.components.map((c) => (
-              <li key={c.name} className="rounded-xl border border-line bg-raised p-4">
-                <p className="font-mono text-[13px] text-cyan-bright">
-                  {'<'}
-                  {c.name}
-                  {'>'}
-                  {c.element && <span className="text-subtle"> renders &lt;{c.element}&gt;</span>}
+              <li
+                key={c.name}
+                className="grid gap-x-6 gap-y-1.5 px-4 py-4 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:px-5"
+              >
+                <p className="font-mono text-[13px]">
+                  <span className="out-tag">&lt;{c.name}&gt;</span>
+                  {c.element && (
+                    <span className="block text-[12px] text-subtle">
+                      renders &lt;{c.element}&gt;
+                    </span>
+                  )}
                 </p>
-                {c.description && (
-                  <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">
-                    <InlineMarkdown text={c.description} />
-                  </p>
-                )}
-                {Object.entries(c.variants).map(([name, values]) => (
-                  <p key={name} className="mt-2 font-mono text-[12px] leading-relaxed text-fg-soft">
-                    <span className="text-subtle">{name}: </span>
-                    {values.join(' · ')}
-                  </p>
-                ))}
-                {c.parts.length > 0 && (
-                  <p className="mt-2 font-mono text-[12px] leading-relaxed text-fg-soft">
-                    <span className="text-subtle">parts: </span>
-                    {c.parts.join(', ')}
-                  </p>
-                )}
+                <div className="min-w-0">
+                  {c.description && (
+                    <p className="text-[14px] leading-relaxed text-muted">
+                      <InlineMarkdown text={c.description} />
+                    </p>
+                  )}
+                  {Object.entries(c.variants).map(([name, values]) => (
+                    <p
+                      key={name}
+                      className="mt-2 font-mono text-[12px] leading-relaxed text-fg-soft"
+                    >
+                      <span className="text-subtle">{name}: </span>
+                      {values.map((value, i) => (
+                        <span key={value}>
+                          {i > 0 && <span className="text-subtle"> · </span>}
+                          <span className="out-string">{value}</span>
+                        </span>
+                      ))}
+                    </p>
+                  ))}
+                  {c.parts.length > 0 && (
+                    <p className="mt-2 font-mono text-[12px] leading-relaxed text-fg-soft">
+                      <span className="text-subtle">parts: </span>
+                      {c.parts.map((part, i) => (
+                        <span key={part}>
+                          {i > 0 && <span className="text-subtle">, </span>}
+                          <span className="out-tag">{part}</span>
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

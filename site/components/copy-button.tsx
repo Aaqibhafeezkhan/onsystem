@@ -42,7 +42,7 @@ export function CopyButton({
             }, 1600);
           });
         }}
-        className={`inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:text-fg ${bare ? 'size-7 hover:bg-line' : 'size-8 border border-line bg-raised-2 hover:border-line-strong'} ${className}`}
+        className={`tap inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:text-fg ${bare ? 'size-7 hover:bg-line' : 'size-8 border border-line bg-raised-2 hover:border-line-strong'} ${className}`}
       >
         {copied ? <CheckIcon className="size-4 text-cyan" /> : <CopyIcon className="size-4" />}
       </button>

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { CodeBody } from '@/components/code';
 import { CodeFrame } from '@/components/code-frame';
 import { FindingMessage } from '@/components/finding-message';
-import { CheckIcon } from '@/components/icons';
+import { ArrowRightIcon, CheckIcon } from '@/components/icons';
 import { InlineMarkdown } from '@/components/markdown';
 import type { RuleEntry } from '@/lib/data';
 import type { Mark } from '@/lib/segments';
@@ -110,19 +110,26 @@ export function RuleExample({ rule }: { rule: RuleEntry }) {
 export function RuleCard({ rule, heading = 'h2' }: { rule: RuleEntry; heading?: 'h2' | 'h3' }) {
   const Heading = heading;
   return (
-    <div className="relative h-full rounded-xl border border-line bg-raised/60 p-4 transition-colors hover:border-line-strong">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <Heading className="font-mono text-[15px] font-medium tracking-tight text-fg">
+    // The same layout for every rule, whatever the length of its name: name, severity, one line.
+    <div className="group relative flex h-full flex-col rounded-xl border border-line bg-raised/60 p-4 transition-colors hover:border-line-strong sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <Heading className="min-w-0 font-mono text-[15px] font-medium tracking-tight break-words text-fg">
           <Link
             href={ruleHref(rule.id)}
-            className="after:absolute after:inset-0 after:rounded-xl hover:text-cyan-bright"
+            className="after:absolute after:inset-0 after:rounded-xl group-hover:text-cyan-bright"
           >
             {rule.id}
           </Link>
         </Heading>
+        <ArrowRightIcon
+          className="mt-0.5 size-4 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan"
+          aria-hidden="true"
+        />
+      </div>
+      <div className="mt-2.5">
         <Severity severity={rule.severity} />
       </div>
-      <p className="mt-2 text-[14.5px] leading-relaxed text-muted">
+      <p className="mt-3 text-[14.5px] leading-relaxed text-muted">
         <InlineMarkdown text={rule.description} />
       </p>
     </div>

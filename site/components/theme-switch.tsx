@@ -110,7 +110,7 @@ export function ThemeSwitch({ className = '' }: { className?: string }) {
             choose(next.value);
             group.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[index]?.focus();
           }}
-          className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:-outline-offset-2 aria-checked:bg-line aria-checked:text-fg"
+          className="tap inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:-outline-offset-2 aria-checked:bg-line aria-checked:text-fg"
         >
           <Icon className="size-3.5" />
         </button>

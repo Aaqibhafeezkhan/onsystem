@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { Code } from '@/components/code';
-import { InlineMarkdown } from '@/components/markdown';
 import { OnThisPageRail, type TocItem } from '@/components/on-this-page';
 import { MarkdownBlocks } from '@/components/markdown-blocks';
 import { RuleCard } from '@/components/rule-example';
 import { RuleHashRedirect } from '@/components/rule-hash-redirect';
+import { SentenceList } from '@/components/sentence-list';
 import { Eyebrow, InlineCode, TextLink } from '@/components/section';
 import { ruleCatalog } from '@/lib/data';
 import { pageMetadata } from '@/lib/metadata';
@@ -49,7 +49,7 @@ export default function RulesPage() {
           <h1 className="mt-3 text-[2rem] leading-[1.1] font-semibold tracking-[-0.025em] text-balance text-fg sm:text-[2.6rem]">
             Eight rules. Every finding says what to write instead.
           </h1>
-          <p className="mt-4 text-base leading-relaxed text-muted sm:text-[17px]">
+          <p className="measure mt-4 text-base leading-relaxed text-muted sm:text-[17px]">
             <InlineCode>check_ui</InlineCode> for the agent, and <InlineCode>check</InlineCode> for
             CI and the Claude Code hook, run the same rules against the design system read from your
             source. Each rule has a page with an example that went through the real linter on the{' '}
@@ -86,7 +86,7 @@ export default function RulesPage() {
                 <h2 id="configure-title" className="text-xl font-semibold tracking-tight text-fg">
                   Configuring the rules
                 </h2>
-                <p className="mt-3 text-[15px] leading-relaxed text-muted">
+                <p className="measure mt-3 text-[15px] leading-relaxed text-muted">
                   Set a rule to <InlineCode>&quot;off&quot;</InlineCode>,{' '}
                   <InlineCode>&quot;warn&quot;</InlineCode> or{' '}
                   <InlineCode>&quot;error&quot;</InlineCode>, or give it values to accept with{' '}
@@ -137,9 +137,10 @@ export default function RulesPage() {
                 <h2 id="fixes-title" className="text-xl font-semibold tracking-tight text-fg">
                   How fixes are chosen
                 </h2>
-                <p className="mt-3 text-[15px] leading-relaxed text-muted">
-                  <InlineMarkdown text={details} />
-                </p>
+                <SentenceList
+                  text={details}
+                  className="mt-4 text-[15px] leading-relaxed text-muted"
+                />
               </section>
             </div>
           </div>

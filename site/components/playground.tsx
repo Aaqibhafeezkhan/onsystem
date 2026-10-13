@@ -228,7 +228,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               onClick={() => {
                 choose(p);
               }}
-              className="cursor-pointer rounded-lg border border-line bg-raised px-3 py-1.5 text-sm text-muted transition-colors hover:border-line-strong hover:text-fg aria-pressed:border-cyan/50 aria-pressed:bg-cyan/10 aria-pressed:text-fg"
+              className="tap cursor-pointer rounded-lg border border-line bg-raised px-3 py-1.5 text-sm text-muted transition-colors hover:border-line-strong hover:text-fg aria-pressed:border-cyan/50 aria-pressed:bg-cyan/10 aria-pressed:text-fg"
             >
               {p.label}
             </button>
@@ -240,7 +240,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
           onClick={() => {
             if (preset) choose(preset);
           }}
-          className="ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg disabled:cursor-default disabled:opacity-50 disabled:hover:text-muted"
+          className="tap ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg disabled:cursor-default disabled:opacity-50 disabled:hover:text-muted"
         >
           <ReplayIcon className="size-4" />
           Reset
@@ -355,7 +355,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                 onClick={() => {
                   edit(applyFixes(code, fixable), { now: true });
                 }}
-                className="cursor-pointer rounded-md border border-cyan/40 bg-cyan/10 px-2.5 py-1 text-[13px] font-medium text-cyan-bright transition-colors hover:bg-cyan/20"
+                className="tap cursor-pointer rounded-md border border-cyan/40 bg-cyan/10 px-2.5 py-1 text-[13px] font-medium text-cyan-bright transition-colors hover:bg-cyan/20"
               >
                 Apply {fixable.length === 1 ? 'the fix' : `all ${String(fixable.length)} fixes`}
               </button>
@@ -472,7 +472,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                       onClick={() => {
                         edit(applyFixes(code, [d]), { now: true });
                       }}
-                      className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-raised-2 px-2 py-1 font-mono text-[12px] text-fg-soft transition-colors hover:border-cyan/50 hover:text-fg disabled:cursor-default disabled:hover:border-line"
+                      className="tap mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-raised-2 px-2 py-1 font-mono text-[12px] text-fg-soft transition-colors hover:border-cyan/50 hover:text-fg disabled:cursor-default disabled:hover:border-line"
                     >
                       Apply fix
                       {d.suggestion && <span className="out-success">{d.suggestion}</span>}

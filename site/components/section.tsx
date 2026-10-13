@@ -10,12 +10,18 @@ export function Eyebrow({ children, className = '' }: { children: ReactNode; cla
   );
 }
 
-/** A page section with an eyebrow, a heading and an optional lead paragraph. */
+/**
+ * A page section with an eyebrow, a heading and an optional lead paragraph. `aside` sits beside
+ * the heading and lead on wide screens (below them on phones), so a section of text still has
+ * something to look at. The home page's sections share this one spacing scale: 128 px between
+ * sections on wide screens, sub-sections (`SubSection`) 80 px below what comes before them.
+ */
 export function Section({
   id,
   eyebrow,
   title,
   lead,
+  aside,
   children,
   className = '',
 }: {
@@ -23,29 +29,68 @@ export function Section({
   eyebrow?: string;
   title: ReactNode;
   lead?: ReactNode;
+  aside?: ReactNode;
   children?: ReactNode;
   className?: string;
 }) {
   const headingId = id ? `${id}-title` : undefined;
+  const intro = (
+    <div className="max-w-3xl">
+      {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
+      <h2
+        id={headingId}
+        className="mt-3 text-[1.75rem] leading-[1.15] font-semibold tracking-[-0.02em] text-balance text-fg sm:text-4xl"
+      >
+        {title}
+      </h2>
+      {lead && (
+        <div className="measure mt-4 text-base leading-relaxed text-muted sm:text-[17px]">
+          {lead}
+        </div>
+      )}
+    </div>
+  );
   return (
     <section
       id={id}
       aria-labelledby={headingId}
-      className={`mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 ${className}`}
+      className={`mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16 ${className}`}
     >
-      <div className="max-w-3xl">
-        {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-        <h2
-          id={headingId}
-          className="mt-3 text-[1.75rem] leading-[1.15] font-semibold tracking-[-0.02em] text-balance text-fg sm:text-4xl"
-        >
-          {title}
-        </h2>
-        {lead && (
-          <div className="mt-4 text-base leading-relaxed text-muted sm:text-[17px]">{lead}</div>
-        )}
-      </div>
+      {aside ? (
+        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,27rem)] lg:gap-14">
+          {intro}
+          {aside}
+        </div>
+      ) : (
+        intro
+      )}
       {children && <div className="mt-10 sm:mt-12">{children}</div>}
+    </section>
+  );
+}
+
+/** A titled part of a section: an h3 and a lead, then its content. */
+export function SubSection({
+  id,
+  title,
+  lead,
+  children,
+}: {
+  id: string;
+  title: ReactNode;
+  lead: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} aria-labelledby={`${id}-title`} className="mt-16 sm:mt-20">
+      <h3
+        id={`${id}-title`}
+        className="text-xl font-semibold tracking-tight text-balance text-fg sm:text-2xl"
+      >
+        {title}
+      </h3>
+      <div className="measure mt-3 text-[15px] leading-relaxed text-muted">{lead}</div>
+      <div className="mt-8">{children}</div>
     </section>
   );
 }
