@@ -13,9 +13,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "onsystem": "workspace:*",
+    "@vercel/analytics": "^2.0.1",
     "geist": "^1.7.2",
     "next": "^16.4.0",
+    "onsystem": "workspace:*",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

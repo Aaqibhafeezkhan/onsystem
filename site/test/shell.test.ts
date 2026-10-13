@@ -242,6 +242,22 @@ describe('the footer', () => {
 
 // ─── Metadata ───────────────────────────────────────────────────────────────
 
+describe('Vercel Web Analytics', () => {
+  it('renders once, with no options, as the last thing in <body>', () => {
+    const layout = fs.readFileSync(path.join(site, 'app/layout.tsx'), 'utf8');
+    expect(layout).toContain("import { Analytics } from '@vercel/analytics/next';");
+    expect(layout.match(/<Analytics\b/g)).toHaveLength(1);
+    expect(layout).toMatch(/<Analytics \/>\s*<\/body>/);
+  });
+
+  it('is a dependency of the site at 2.0.1, pinned as the site pins the rest', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(site, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.dependencies['@vercel/analytics']).toBe('^2.0.1');
+  });
+});
+
 describe('page metadata', () => {
   it('sets no canonical URL, description or social card in the root layout', () => {
     const layout = fs.readFileSync(path.join(site, 'app/layout.tsx'), 'utf8');
