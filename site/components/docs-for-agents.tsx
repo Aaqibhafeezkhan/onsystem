@@ -1,7 +1,11 @@
 import { Code } from '@/components/code';
+import { AnchorHeading } from '@/components/heading';
 import { ArrowUpRightIcon } from '@/components/icons';
 import { InlineCode } from '@/components/section';
 import { DOCS_MCP } from '@/lib/docs-mcp';
+
+const ID = 'use-these-docs-from-your-agent';
+const TITLE = 'Use these docs from your agent';
 
 const button =
   'group inline-flex items-center gap-2 rounded-lg border border-line-strong bg-raised-2 px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:border-cyan/60';
@@ -11,16 +15,12 @@ const link = 'text-fg underline decoration-line-strong underline-offset-4 hover:
 export function DocsForAgents() {
   return (
     <section
-      id="use-these-docs-from-your-agent"
-      aria-labelledby="use-these-docs-from-your-agent-title"
-      className="mt-14 scroll-mt-20 rounded-2xl border border-line bg-raised p-5 sm:p-6"
+      aria-labelledby={ID}
+      className="mt-14 rounded-2xl border border-line bg-raised p-5 sm:p-6"
     >
-      <h2
-        id="use-these-docs-from-your-agent-title"
-        className="text-xl font-semibold tracking-tight text-fg"
-      >
-        Use these docs from your agent
-      </h2>
+      <AnchorHeading level={2} id={ID} label={TITLE}>
+        {TITLE}
+      </AnchorHeading>
       <p className="mt-3 text-[15px] leading-relaxed text-muted">
         These docs are an MCP server at <InlineCode>{DOCS_MCP.url}</InlineCode>, so your agent can
         search and read them. Its searches call no model. It is separate from onsystem&apos;s own

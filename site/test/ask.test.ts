@@ -9,6 +9,7 @@ import { GET as askStatusRoute, POST as askRoute } from '@/app/api/ask/route';
 import { DELETE as mcpDelete, GET as mcpGet, POST as mcpRoute } from '@/app/api/mcp/route';
 import { AskButton, askStatus, resetAskStatus } from '@/components/ask';
 import { DocsForAgents } from '@/components/docs-for-agents';
+import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import index from '@/generated/ask-index.json';
 import { askEnabled } from '@/lib/ask';
@@ -207,6 +208,15 @@ describe('the docs for agents', () => {
     );
     expect(html).toContain('href="/llms.txt"');
     expect(html).toContain('href="/llms-full.txt"');
+  });
+
+  it('is a section of the docs home, in "On this page", where the footer links', () => {
+    const html = renderToStaticMarkup(createElement(DocsForAgents));
+    expect(html).toMatch(
+      /<h2 id="use-these-docs-from-your-agent" data-toc="Use these docs from your agent" data-level="2" class="[^"]*scroll-mt-28[^"]*lg:scroll-mt-20/,
+    );
+    const footer = renderToStaticMarkup(createElement(SiteFooter));
+    expect(footer).toContain('href="/docs#use-these-docs-from-your-agent"');
   });
 
   it('lists the MCP endpoint in llms.txt', () => {
