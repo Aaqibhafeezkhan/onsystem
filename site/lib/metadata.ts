@@ -10,15 +10,21 @@ export function pageMetadata({
   description,
   path,
   image,
+  imageAlt,
+  imageSize = { width: 1200, height: 630 },
 }: {
   title: string;
   socialTitle?: string;
   description: string;
   path: string;
-  /** An image route from a parent segment; a segment's own opengraph-image is picked up anyway. */
+  /** An image route, such as a docs card from app/og; a segment's own image is used anyway. */
   image?: string | undefined;
+  imageAlt?: string | undefined;
+  imageSize?: { width: number; height: number };
 }): Metadata {
-  const images = image ? [{ url: image, width: 1200, height: 630 }] : undefined;
+  const images = image
+    ? [{ url: image, ...imageSize, ...(imageAlt ? { alt: imageAlt } : {}) }]
+    : undefined;
   return {
     title,
     description,

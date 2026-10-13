@@ -3,30 +3,71 @@
 /*
  * Shared with ondocs and signoff-ui: ink, raised surfaces and hairline borders, cyan as
  * the accent, magenta only for errors. Text colours keep at least 4.5:1 on every surface.
+ * Two themes: dark, and light from signoff-ui's palette. The theme is a `.light` or `.dark`
+ * class on <html>, set before paint by the script in app/layout.tsx; without one it follows
+ * the OS.
  */
-@theme {
-  --color-ink: #0d0f12;
-  --color-raised: #14181d;
-  --color-raised-2: #181c22;
-  --color-line: #262b33;
-  --color-line-strong: #353c47;
-  --color-fg: #f5f7fa;
-  --color-fg-soft: #dfe6ee;
-  --color-muted: #9aa6b4;
-  --color-subtle: #808b99;
-  --color-cyan: #22d3ee;
-  --color-cyan-bright: #67e8f9;
-  --color-magenta: #f0468a;
-  --color-magenta-soft: #ff7eb0;
+@theme inline {
+  --color-ink: var(--site-ink);
+  --color-raised: var(--site-raised);
+  --color-raised-2: var(--site-raised-2);
+  --color-raised-3: var(--site-raised-3);
+  --color-chrome: var(--site-chrome);
+  --color-code: var(--site-code);
+  --color-line: var(--site-line);
+  --color-line-strong: var(--site-line-strong);
+  --color-fg: var(--site-fg);
+  --color-fg-soft: var(--site-fg-soft);
+  --color-muted: var(--site-muted);
+  --color-subtle: var(--site-subtle);
+  --color-cyan: var(--site-cyan);
+  --color-cyan-bright: var(--site-cyan-bright);
+  --color-magenta: var(--site-magenta);
+  --color-magenta-soft: var(--site-magenta-soft);
+}
 
+@theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+:root {
+  color-scheme: light dark;
+  --site-ink: light-dark(#ffffff, #0d0f12);
+  --site-raised: light-dark(#f6f7f9, #14181d);
+  --site-raised-2: light-dark(#eef0f3, #181c22);
+  --site-raised-3: light-dark(#e6e9ed, #1c2229);
+  /* Title bars of the terminal and editor frames. */
+  --site-chrome: light-dark(#eef0f3, #11151a);
+  --site-code: light-dark(#f6f7f9, #101317);
+  --site-line: light-dark(#e2e5ea, #262b33);
+  --site-line-strong: light-dark(#cdd2d9, #353c47);
+  --site-fg: light-dark(#0d0f12, #f5f7fa);
+  --site-fg-soft: light-dark(#1f2937, #dfe6ee);
+  --site-muted: light-dark(#4b5563, #9aa6b4);
+  --site-subtle: light-dark(#5f6875, #808b99);
+  --site-cyan: light-dark(#0e7490, #22d3ee);
+  --site-cyan-bright: light-dark(#155e75, #67e8f9);
+  --site-magenta: light-dark(#be185d, #f0468a);
+  --site-magenta-soft: light-dark(#9d174d, #ff7eb0);
+  --site-glow-cyan: light-dark(rgb(14 116 144 / 0.07), rgb(34 211 238 / 0.09));
+  --site-glow-magenta: light-dark(rgb(190 24 93 / 0.03), rgb(240 70 138 / 0.04));
+  --site-grid: light-dark(rgb(13 15 18 / 0.045), rgb(255 255 255 / 0.028));
+  --site-shadow: light-dark(rgb(13 15 18 / 0.14), rgb(0 0 0 / 0.8));
+  --site-scrollbar: light-dark(#cdd2d9, #2b313a);
+}
+
+.light {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
 html {
   background: var(--color-ink);
-  color-scheme: dark;
-  scrollbar-color: #2b313a transparent;
+  scrollbar-color: var(--site-scrollbar) transparent;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -41,7 +82,7 @@ body {
 }
 
 ::selection {
-  background: rgb(34 211 238 / 0.28);
+  background: color-mix(in oklab, var(--color-cyan) 28%, transparent);
 }
 
 :focus-visible {
@@ -58,19 +99,21 @@ section[id] {
 /* Soft glows behind the hero, faded into the ink. */
 .glow {
   background:
-    radial-gradient(800px 380px at 18% -6%, rgb(34 211 238 / 0.09), transparent 70%),
-    radial-gradient(640px 320px at 90% 2%, rgb(240 70 138 / 0.04), transparent 70%);
+    radial-gradient(800px 380px at 18% -6%, var(--site-glow-cyan), transparent 70%),
+    radial-gradient(640px 320px at 90% 2%, var(--site-glow-magenta), transparent 70%);
 }
 
 .grid-lines {
   background-image:
-    linear-gradient(to right, rgb(255 255 255 / 0.028) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.028) 1px, transparent 1px);
+    linear-gradient(to right, var(--site-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--site-grid) 1px, transparent 1px);
   background-size: 32px 32px;
   mask-image: radial-gradient(ellipse 75% 65% at 50% 0%, #000 25%, transparent 75%);
 }
 
 /* ─── Code ──────────────────────────────────────────────────────────────── */
+
+/* Token colours in both themes; the light ones keep 4.5:1 on the code background. */
 
 .code {
   font-family: var(--font-mono);
@@ -78,39 +121,39 @@ section[id] {
   tab-size: 2;
 }
 .tok-plain {
-  color: #dfe6ee;
+  color: light-dark(#1f2937, #dfe6ee);
 }
 .tok-comment {
-  color: #808b99;
+  color: light-dark(#5f6875, #808b99);
   font-style: italic;
 }
 .tok-string {
-  color: #e9d9ae;
+  color: light-dark(#8a4b08, #e9d9ae);
 }
 .tok-keyword {
-  color: #a3b1c2;
+  color: light-dark(#4b5563, #a3b1c2);
 }
 .tok-number {
-  color: #e9d9ae;
+  color: light-dark(#8a4b08, #e9d9ae);
 }
 .tok-tag {
-  color: #8fb8ff;
+  color: light-dark(#1d4ed8, #8fb8ff);
 }
 .tok-component {
-  color: #67e8f9;
+  color: light-dark(#0e7490, #67e8f9);
 }
 .tok-attr {
-  color: #b9c3d0;
+  color: light-dark(#374151, #b9c3d0);
 }
 .tok-punct {
-  color: #8a96a5;
+  color: light-dark(#5f6875, #8a96a5);
 }
 .tok-prompt {
-  color: #808b99;
+  color: light-dark(#5f6875, #808b99);
   user-select: none;
 }
 .tok-key {
-  color: #a6e3f0;
+  color: light-dark(#155e75, #a6e3f0);
 }
 
 /* Findings, underlined the way editors do. */
@@ -119,22 +162,22 @@ section[id] {
   text-decoration-thickness: 1.5px;
   text-underline-offset: 4px;
   text-decoration-skip-ink: none;
-  background: rgb(240 70 138 / 0.1);
+  background: color-mix(in oklab, var(--color-magenta) 10%, transparent);
 }
 .mark-warning {
   text-decoration: underline wavy var(--color-cyan);
   text-decoration-thickness: 1.5px;
   text-underline-offset: 4px;
   text-decoration-skip-ink: none;
-  background: rgb(34 211 238 / 0.08);
+  background: color-mix(in oklab, var(--color-cyan) 8%, transparent);
 }
 .mark-changed {
-  background: rgb(34 211 238 / 0.14);
-  box-shadow: inset 0 -1.5px 0 rgb(34 211 238 / 0.55);
+  background: color-mix(in oklab, var(--color-cyan) 14%, transparent);
+  box-shadow: inset 0 -1.5px 0 color-mix(in oklab, var(--color-cyan) 55%, transparent);
   border-radius: 2px;
 }
 .mark-active {
-  background: rgb(240 70 138 / 0.24);
+  background: color-mix(in oklab, var(--color-magenta) 24%, transparent);
 }
 
 @keyframes rise {

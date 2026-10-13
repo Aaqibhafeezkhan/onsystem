@@ -23,6 +23,13 @@ function findRule(id: string): RuleEntry | undefined {
   return ruleCatalog.rules.find((rule) => rule.id === id);
 }
 
+/** The rule's description, and its default and example when that still fits a search result. */
+function ruleDescription(rule: { description: string; severity: string }): string {
+  const description = plainText(rule.description);
+  const more = `${description} ${rule.severity === 'error' ? 'An error' : 'A warning'} by default, with an example and its fix.`;
+  return more.length <= 160 ? more : description;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -33,7 +40,7 @@ export async function generateMetadata({
   return pageMetadata({
     title: rule.id,
     socialTitle: `${rule.id} · onsystem rules`,
-    description: `${plainText(rule.description)} ${rule.severity === 'error' ? 'An error' : 'A warning'} by default in onsystem's check_ui, check and ESLint plugin, with an example and its fix.`,
+    description: ruleDescription(rule),
     path: ruleHref(rule.id),
   });
 }

@@ -23,7 +23,7 @@ export function InlineMarkdown({ text }: { text: string }): ReactNode {
       parts.push(
         <code
           key={key}
-          className={`rounded bg-white/[0.06] px-1 py-px font-mono text-[0.9em] text-fg-soft ${codeWrap(code)}`}
+          className={`rounded bg-fg/[0.06] px-1 py-px font-mono text-[0.9em] text-fg-soft ${codeWrap(code)}`}
         >
           {code}
         </code>,

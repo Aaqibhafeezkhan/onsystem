@@ -138,7 +138,11 @@ describe('/benchmark', () => {
     const lead = /<p data-headline[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '';
     expect(text(lead)).toBe(`In the run of ${json.info.startedAt.slice(0, 10)}, ${sentence}.`);
     expect(lead).toContain('<code');
-    expect(metadata.description).toContain(sentence);
+    // The description is the same result, short enough for a search result.
+    expect(metadata.description).toBe(
+      `Coding agents with and without onsystem, ${json.info.startedAt.slice(0, 10)}: rule violations per run went from 0.85 to 0.00 over 1,200 runs, 6 models and 5 repositories.`,
+    );
+    expect(metadata.description?.length).toBeLessThanOrEqual(160);
   });
 
   it('shows the headline figures from the pooled rows', () => {

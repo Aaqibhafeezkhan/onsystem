@@ -22,7 +22,7 @@ export default function PluginPage() {
       </h2>
       <p className="mt-4 leading-relaxed text-muted">
         Claude loads it by itself for UI work, or with{' '}
-        <code className="rounded bg-white/[0.06] px-1 py-px font-mono text-[0.88em] text-fg-soft">
+        <code className="rounded bg-fg/[0.06] px-1 py-px font-mono text-[0.88em] text-fg-soft">
           /onsystem:onsystem
         </code>
         . This is its text, from{' '}

@@ -11,27 +11,43 @@ import { InlineMarkdown } from '@/components/markdown';
 import { Eyebrow, InlineCode, Section, TextLink } from '@/components/section';
 import { headline } from '@/lib/benchmark';
 import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
+import { pageMetadata } from '@/lib/metadata';
+import { HOME_CARD } from '@/lib/og';
 import { AUTHOR, docsHref, NPM, REPO, repoLink, SITE_URL } from '@/lib/site';
 
-// The home page's own canonical URL; the root layout's would apply to every page without one.
-export const metadata: Metadata = { alternates: { canonical: '/' } };
+const title = 'onsystem: keeps coding agents on your design system';
+// 160 characters at most: search results cut longer descriptions off.
+const description =
+  'Keeps coding agents on your design system: catches invented components, props, variants and tokens, has the agent fix them, and gates PRs. Local, zero config.';
+
+// The home page's own title, canonical URL and cards; the root layout sets none of them.
+export const metadata: Metadata = {
+  ...pageMetadata({
+    title,
+    socialTitle: title,
+    description,
+    path: '/',
+    image: HOME_CARD.path,
+    imageAlt: HOME_CARD.alt,
+    imageSize: HOME_CARD.size,
+  }),
+  title: { absolute: title },
+};
 
 /** What search engines get as structured data. */
 const jsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
+  '@type': 'SoftwareSourceCode',
   name: 'onsystem',
-  description:
-    'Keeps coding agents on your design system: it knows your real components, props, variants and tokens, catches the moment an agent invents one and has it fix it, and the same check gates your PRs. Local, zero config, works alongside @shadcn/lint.',
-  applicationCategory: 'DeveloperApplication',
-  operatingSystem: 'macOS, Linux, Windows',
-  softwareVersion: tools.version,
-  license: 'https://opensource.org/licenses/MIT',
+  description,
   url: SITE_URL,
-  downloadUrl: NPM,
+  codeRepository: REPO,
+  programmingLanguage: 'TypeScript',
+  runtimePlatform: 'Node.js',
+  version: tools.version,
+  license: 'https://opensource.org/licenses/MIT',
   sameAs: [REPO, NPM],
   author: { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url },
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
 };
 
 export default function Home() {

@@ -1,4 +1,4 @@
-import { readme, tools } from '@/lib/data';
+import { readme, social, tools } from '@/lib/data';
 
 export const SITE_URL = 'https://onsystem.vercel.app';
 export const REPO = 'https://github.com/dgesteves/onsystem';
@@ -8,6 +8,25 @@ export const REGISTRY =
 export const AUTHOR = { name: 'Diogo Esteves', url: 'https://github.com/dgesteves' };
 
 export const VERSION = tools.version;
+
+/** The repository's stars are shown from this many on; below it, just the GitHub icon. */
+export const STARS_SHOWN_FROM = 10;
+
+/** A count fetched at build time, or null when it failed or is too small to show. */
+export function shownCount(count: number | null, from = 1): number | null {
+  return count !== null && count >= from ? count : null;
+}
+
+export const STARS = shownCount(social.stars, STARS_SHOWN_FROM);
+export const WEEKLY_DOWNLOADS = shownCount(social.weeklyDownloads);
+
+/** 950, 1.2k, 12k: short enough for a header. */
+export function compactNumber(value: number): string {
+  if (value < 1000) return String(value);
+  const thousands = value / 1000;
+  return `${thousands < 10 ? thousands.toFixed(1).replace(/\.0$/, '') : String(Math.round(thousands))}k`;
+}
+
 export const NPX = 'npx -y onsystem';
 export const PLUGIN_COMMANDS = readme.install.plugin;
 export const CURSOR_INSTALL = readme.install.cursor;
