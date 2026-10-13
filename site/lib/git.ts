@@ -10,10 +10,10 @@ import path from 'node:path';
 // The site builds from site/; the repository is its parent.
 const REPO_ROOT = path.resolve(process.cwd(), '..');
 
-function git(args: string[]): string | null {
+function git(root: string, args: string[]): string | null {
   try {
     const out = execFileSync('git', ['--literal-pathspecs', ...args], {
-      cwd: REPO_ROOT,
+      cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -23,25 +23,32 @@ function git(args: string[]): string | null {
   }
 }
 
-let shallow: boolean | undefined;
+const shallow = new Map<string, boolean>();
 
 /** A shallow clone, whose oldest fetched commits have no parents and seem to add every file. */
-function isShallow(): boolean {
-  shallow ??= git(['rev-parse', '--is-shallow-repository']) === 'true';
-  return shallow;
+function isShallow(root: string): boolean {
+  let known = shallow.get(root);
+  if (known === undefined) {
+    known = git(root, ['rev-parse', '--is-shallow-repository']) === 'true';
+    shallow.set(root, known);
+  }
+  return known;
 }
 
 const cache = new Map<string, Date | null>();
 
-/** The date of the last commit that changed any of `paths` (relative to the repository root). */
-export function lastModified(paths: readonly string[]): Date | null {
-  const key = paths.join('\0');
+/**
+ * The date of the last commit that changed any of `paths`, relative to the repository root
+ * (`root`, this repository by default).
+ */
+export function lastModified(paths: readonly string[], root = REPO_ROOT): Date | null {
+  const key = [root, ...paths].join('\0');
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
   // The commit's date and its parents: none for a root commit, or a shallow clone's oldest one.
-  const out = git(['log', '-1', '--format=%cI %P', '--', ...paths]);
+  const out = git(root, ['log', '-1', '--format=%cI %P', '--', ...paths]);
   const [date = '', ...parents] = out?.split(' ') ?? [];
-  const known = date && (parents.length > 0 || !isShallow()) ? new Date(date) : null;
+  const known = date && (parents.length > 0 || !isShallow(root)) ? new Date(date) : null;
   const result = known && !Number.isNaN(known.getTime()) ? known : null;
   cache.set(key, result);
   return result;
