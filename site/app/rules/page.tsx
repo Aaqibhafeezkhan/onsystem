@@ -13,7 +13,7 @@ import { pageMetadata } from '@/lib/metadata';
 import { repoLink } from '@/lib/site';
 
 const description =
-  'Every check_ui and check rule, generated from the source, with its default severity. Each rule has a page: what it catches, why it matters, the fix it suggests, and a real example run on a demo design system.';
+  'Every check_ui and check rule, with its default severity. Each rule has a page: what it catches, why it matters, the fix it suggests, and a real example.';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Rules',
@@ -89,7 +89,7 @@ export default function RulesPage() {
               </p>
               <pre
                 tabIndex={0}
-                className="code mt-4 overflow-x-auto rounded-xl border border-line bg-[#101317] px-4 py-3 text-[12.5px] leading-[1.7]"
+                className="code mt-4 overflow-x-auto rounded-xl border border-line bg-code px-4 py-3 text-[12.5px] leading-[1.7]"
               >
                 <code>
                   {highlightLines(

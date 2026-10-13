@@ -9,7 +9,7 @@ import { pageMetadata } from '@/lib/metadata';
 import { repoLink } from '@/lib/site';
 
 const description =
-  'Run check_ui in the browser: edit a component or pick an agent draft, and see the findings and fixes against a shadcn/ui-style demo design system. The code is parsed, never run.';
+  'Run check_ui in the browser: edit a component or pick an agent draft, and see the findings and fixes against a demo design system. Parsed, never run.';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Playground: try check_ui',

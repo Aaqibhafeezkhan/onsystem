@@ -10,6 +10,7 @@ import designSystemJson from '@/generated/design-system.json';
 import docsJson from '@/generated/docs.json';
 import readmeJson from '@/generated/readme.json';
 import rulesJson from '@/generated/rules.json';
+import socialJson from '@/generated/social.json';
 import toolsJson from '@/generated/tools.json';
 
 export interface Finding {
@@ -291,6 +292,12 @@ export interface DesignSystemSummary {
   tokens: Record<string, number>;
 }
 
+/** Fetched at build time; null when the request failed. */
+export interface Social {
+  stars: number | null;
+  weeklyDownloads: number | null;
+}
+
 /** The generated files are checked by scripts/generate.mjs; here they get their types. */
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- the point: a typed view of JSON
 function typed<T>(json: unknown): T {
@@ -307,3 +314,4 @@ export const rules: Rule[] = ruleCatalog.rules;
 export const docs = typed<Docs>(docsJson);
 export const readme = typed<Readme>(readmeJson);
 export const designSystem = typed<DesignSystemSummary>(designSystemJson);
+export const social = typed<Social>(socialJson);

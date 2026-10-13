@@ -880,3 +880,29 @@ write('docs.json', {
   limits: section(docs.howItWorks, '## Limits', 'docs/how-it-works.md'),
   skill,
 });
+
+// ─── Social proof ───────────────────────────────────────────────────────────
+
+// The repository's stars and the package's downloads last week, fetched once per build without
+// a token. Either is null when the request fails (no network, a rate limit), and the site then
+// leaves it out rather than showing a stale or made-up number.
+async function fetchJson(url) {
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json', 'user-agent': 'onsystem-site-build' },
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
+const [repoInfo, downloads] = await Promise.all([
+  fetchJson('https://api.github.com/repos/dgesteves/onsystem'),
+  fetchJson('https://api.npmjs.org/downloads/point/last-week/onsystem'),
+]);
+const count = (value) => (Number.isInteger(value) && value >= 0 ? value : null);
+write('social.json', {
+  stars: count(repoInfo?.stargazers_count),
+  weeklyDownloads: count(downloads?.downloads),
+});

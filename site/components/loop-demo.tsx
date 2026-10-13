@@ -184,10 +184,10 @@ export function LoopDemo({
   return (
     <div
       ref={root}
-      className="overflow-hidden rounded-2xl border border-line bg-raised shadow-[0_40px_120px_-40px_rgb(0_0_0/0.9)]"
+      className="overflow-hidden rounded-2xl border border-line bg-raised shadow-[0_40px_120px_-40px_var(--site-shadow)]"
     >
       {/* Window chrome, with the pane switch on small screens */}
-      <div className="flex items-center gap-3 border-b border-line bg-[#11151a] px-4 py-2">
+      <div className="flex items-center gap-3 border-b border-line bg-chrome px-4 py-2">
         <div className="flex gap-1.5" aria-hidden="true">
           <span className="size-2.5 rounded-full bg-line-strong" />
           <span className="size-2.5 rounded-full bg-line-strong" />
@@ -315,7 +315,7 @@ export function LoopDemo({
                     setActive(undefined);
                   }}
                   title={f.message}
-                  className={`grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 px-3.5 py-0.5 leading-[1.55] sm:py-1 ${i >= listed ? 'invisible' : step === 1 && playing ? 'rise' : ''} ${active === i && step === 1 ? 'bg-white/[0.04]' : ''}`}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 px-3.5 py-0.5 leading-[1.55] sm:py-1 ${i >= listed ? 'invisible' : step === 1 && playing ? 'rise' : ''} ${active === i && step === 1 ? 'bg-fg/[0.04]' : ''}`}
                 >
                   <span className="pt-[7px]" aria-hidden="true">
                     {step >= 2 ? (
@@ -364,7 +364,7 @@ export function LoopDemo({
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line bg-[#11151a] px-3 py-3 sm:px-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-t border-line bg-chrome px-3 py-3 sm:px-4">
         <button
           type="button"
           onClick={() => {

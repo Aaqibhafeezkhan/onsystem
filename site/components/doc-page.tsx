@@ -4,9 +4,10 @@ import type { ReactNode } from 'react';
 
 import { ArrowRightIcon } from '@/components/icons';
 import { Eyebrow } from '@/components/section';
-import { docsPage, type DocsHref } from '@/lib/docs';
+import { docsPage, docsSlug, type DocsHref, type DocsPage } from '@/lib/docs';
 import { pageMetadata } from '@/lib/metadata';
-import { repoLink } from '@/lib/site';
+import { lastModified } from '@/lib/git';
+import { AUTHOR, repoLink, SITE_URL } from '@/lib/site';
 
 /** The frame of a docs page: title, lead, content, where it comes from, and the next page. */
 export function DocPage({
@@ -24,6 +25,13 @@ export function DocPage({
   const { page, previous, next } = docsPage(href);
   return (
     <main id="main" className="min-w-0">
+      <script
+        type="application/ld+json"
+        // Static data from lib/docs.ts; nothing user-supplied.
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(docsJsonLd(page)).replace(/</g, '\\u003c'),
+        }}
+      />
       <Eyebrow>Docs</Eyebrow>
       <h1 className="mt-3 text-[2rem] leading-[1.1] font-semibold tracking-[-0.025em] text-balance text-fg sm:text-[2.4rem]">
         {page.title}
@@ -75,13 +83,47 @@ export function DocPage({
   );
 }
 
+/** Structured data for search engines: the page as an article, and where it sits in the docs. */
+export function docsJsonLd(page: DocsPage) {
+  const url = `${SITE_URL}${page.href}`;
+  const modified = lastModified([page.source]);
+  const crumbs = [
+    { name: 'Docs', url: `${SITE_URL}/docs` },
+    ...(page.href === '/docs' ? [] : [{ name: page.title, url }]),
+  ];
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'TechArticle',
+        headline: page.title,
+        description: page.description,
+        url,
+        ...(modified ? { dateModified: modified.toISOString() } : {}),
+        author: { '@type': 'Person', name: AUTHOR.name, url: AUTHOR.url },
+        isPartOf: { '@type': 'WebSite', name: 'onsystem', url: SITE_URL },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((crumb, i) => ({
+          '@type': 'ListItem',
+          position: i + 1,
+          name: crumb.name,
+          item: crumb.url,
+        })),
+      },
+    ],
+  };
+}
+
 export function docsMetadata(href: DocsHref): Metadata {
   const { page } = docsPage(href);
   return pageMetadata({
     title: page.href === '/docs' ? 'Docs: quickstart' : page.title,
     description: page.description,
     path: page.href,
-    // app/docs/opengraph-image.tsx covers /docs; the pages under it point at the same card.
-    image: page.href === '/docs' ? undefined : '/docs/opengraph-image',
+    // Each page's own card, from app/og/docs/[slug]/route.tsx.
+    image: `/og/docs/${docsSlug(page.href)}`,
+    imageAlt: `onsystem docs: ${page.title}. ${page.description}`,
   });
 }

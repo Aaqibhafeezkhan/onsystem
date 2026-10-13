@@ -9,7 +9,7 @@ import {
   ARM_LABELS,
   count,
   delta,
-  headlineText,
+  headline,
   labellerFamily,
   modelName,
   perRun,
@@ -36,11 +36,12 @@ import { pageMetadata } from '@/lib/metadata';
 import { docsHref, repoLink } from '@/lib/site';
 
 const RESULTS = 'bench/v2/results/standard';
+const top = headline(benchmark);
 
 export const metadata: Metadata = pageMetadata({
   title: 'Benchmark',
   socialTitle: 'onsystem benchmark',
-  description: `Coding agents with and without onsystem, ${benchmark.date}: ${headlineText(benchmark)}.`,
+  description: `Coding agents with and without onsystem, ${benchmark.date}: rule violations per run went from ${top.from} to ${top.to} over ${top.runs} runs, ${top.models} models and ${top.repos} repositories.`,
   path: '/benchmark',
 });
 

@@ -280,6 +280,13 @@ export function SessionPanel({ width }: { width: number }) {
   );
 }
 
+/** The home page's card: app/og/home/route.tsx draws it. */
+export const HOME_CARD = {
+  path: '/og/home',
+  size: { width: 1280, height: 640 },
+  alt: 'onsystem keeps coding agents on your design system. An agent session where check_ui lists 8 errors and 3 warnings, each with a fix, and the corrected file comes back clean; 10/10 clean components with the plugin, 6/10 without.',
+};
+
 /** The home card, also the GitHub social preview: the claim, the benchmark and the loop. */
 export function HomeCard({
   width,
@@ -350,7 +357,8 @@ export function PageCard({
   eyebrow: string;
   title: string;
   lead: string;
-  aside: ReactNode;
+  /** Without it, the title and lead take the whole width. */
+  aside?: ReactNode;
 }) {
   return (
     <Frame width={width} height={height} footer="onsystem.vercel.app">
@@ -372,7 +380,7 @@ export function PageCard({
             {lead}
           </div>
         </div>
-        <div style={{ display: 'flex', width: Math.round(width * 0.4) }}>{aside}</div>
+        {aside && <div style={{ display: 'flex', width: Math.round(width * 0.4) }}>{aside}</div>}
       </div>
     </Frame>
   );

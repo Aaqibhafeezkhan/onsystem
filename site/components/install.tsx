@@ -8,7 +8,7 @@ const label = 'font-mono text-[11px] tracking-[0.14em] text-subtle uppercase';
 export function InstallPanel({ className = '' }: { className?: string }) {
   return (
     <div
-      className={`overflow-hidden rounded-2xl border border-line bg-raised/90 shadow-[0_24px_80px_-32px_rgb(0_0_0/0.8)] ${className}`}
+      className={`overflow-hidden rounded-2xl border border-line bg-raised/90 shadow-[0_24px_80px_-32px_var(--site-shadow)] ${className}`}
     >
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
@@ -43,14 +43,14 @@ export function InstallPanel({ className = '' }: { className?: string }) {
       <div className="grid grid-cols-2 border-y border-line">
         <a
           href={CURSOR_INSTALL}
-          className="group flex items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-fg transition-colors hover:bg-white/[0.03] sm:px-5"
+          className="group flex items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-fg transition-colors hover:bg-fg/[0.03] sm:px-5"
         >
           Install in Cursor
           <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-colors group-hover:text-cyan" />
         </a>
         <a
           href={VSCODE_INSTALL}
-          className="group flex items-center justify-between gap-2 border-l border-line px-4 py-3 text-sm font-medium text-fg transition-colors hover:bg-white/[0.03] sm:px-5"
+          className="group flex items-center justify-between gap-2 border-l border-line px-4 py-3 text-sm font-medium text-fg transition-colors hover:bg-fg/[0.03] sm:px-5"
         >
           Install in VS Code
           <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-colors group-hover:text-cyan" />
@@ -74,7 +74,7 @@ export function StarButton({ className = '' }: { className?: string }) {
   return (
     <a
       href={REPO}
-      className={`inline-flex items-center gap-2 rounded-lg border border-line-strong bg-raised-2 px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:border-cyan/60 hover:bg-[#1c2229] ${className}`}
+      className={`inline-flex items-center gap-2 rounded-lg border border-line-strong bg-raised-2 px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:border-cyan/60 hover:bg-raised-3 ${className}`}
     >
       <StarIcon className="size-4 text-cyan" />
       Star on GitHub

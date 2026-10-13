@@ -78,8 +78,10 @@ describe('/rules/<id>', () => {
       const metadata = await generateMetadata(params(id));
       expect(metadata.title).toBe(id);
       expect(metadata.alternates?.canonical).toBe(`/rules/${id}`);
-      expect(metadata.description).toMatch(/by default in onsystem's check_ui, check and ESLint/);
+      const rule = ruleCatalog.rules.find((r) => r.id === id);
+      expect(metadata.description?.startsWith(plain(rule?.description ?? '-'))).toBe(true);
       expect(metadata.description).not.toContain('`');
+      expect(metadata.description?.length).toBeLessThanOrEqual(160);
     }
   });
 

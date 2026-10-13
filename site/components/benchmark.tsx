@@ -35,7 +35,7 @@ function Bar({
   return (
     <div className="grid grid-cols-[4.75rem_minmax(0,1fr)_4.5rem] items-center gap-3 text-[13px]">
       <span className="text-muted">{label}</span>
-      <span className="relative h-2.5 rounded-full bg-white/[0.05]">
+      <span className="relative h-2.5 rounded-full bg-fg/[0.05]">
         <span
           className="absolute inset-y-0 left-0 rounded-full"
           style={{ width: `${width}%`, background: color, minWidth: value > 0 ? 6 : 0 }}

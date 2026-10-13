@@ -249,7 +249,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
 
       <div className="mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         {/* Editor */}
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-line bg-[#101317] transition-colors focus-within:border-cyan/60 focus-within:shadow-[0_0_0_1px_rgb(34_211_238/0.35)]">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-line bg-code transition-colors focus-within:border-cyan/60 focus-within:ring-1 focus-within:ring-cyan/35">
           <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
             <label htmlFor={`${ids}-code`} className="truncate font-mono text-xs text-fg-soft">
               {preset && code === preset.code ? preset.file : 'Your code'}
@@ -427,7 +427,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               {diagnostics.map((d, i) => (
                 <li
                   key={`${String(i)}-${d.ruleId}-${String(d.line)}-${String(d.column)}`}
-                  className={`px-4 py-3 ${selected === i ? 'bg-white/[0.03]' : ''}`}
+                  className={`px-4 py-3 ${selected === i ? 'bg-fg/[0.03]' : ''}`}
                 >
                   <div className="flex items-baseline gap-2 font-mono text-[11.5px]">
                     <span

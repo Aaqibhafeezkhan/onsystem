@@ -36,9 +36,7 @@ export function Code({
 }) {
   const lines = highlightLines(code, lang);
   return (
-    <div
-      className={`min-w-0 overflow-hidden rounded-xl border border-line bg-[#101317] ${className}`}
-    >
+    <div className={`min-w-0 overflow-hidden rounded-xl border border-line bg-code ${className}`}>
       {title && (
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
           <span className="truncate font-mono text-xs text-muted">{title}</span>

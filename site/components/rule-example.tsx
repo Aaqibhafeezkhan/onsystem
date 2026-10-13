@@ -18,7 +18,7 @@ export function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-[#101317]">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-code">
       <div className="flex items-baseline justify-between gap-3 border-b border-line px-4 py-2">
         <span className="font-mono text-xs text-fg-soft">{title}</span>
         {note && <span className="text-right font-mono text-[11px] text-subtle">{note}</span>}

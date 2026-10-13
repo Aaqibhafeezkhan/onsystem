@@ -3,11 +3,14 @@ import Link from 'next/link';
 
 import { Eyebrow } from '@/components/section';
 
-// The tab and search results say what happened, rather than repeating the home page's title
-// and description. Next.js marks the page noindex itself.
+// The tab says what happened, rather than repeating the home page's title and description. It
+// is never indexed and has no canonical URL or social card of its own to share.
 export const metadata: Metadata = {
   title: 'Page not found',
   description: 'This page does not exist. Try the docs, the rules or the playground.',
+  robots: { index: false },
+  openGraph: null,
+  twitter: null,
 };
 
 export default function NotFound() {
