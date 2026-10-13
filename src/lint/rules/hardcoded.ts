@@ -36,6 +36,77 @@ import {
 
 // ─── Colors ─────────────────────────────────────────────────────────────────
 
+/** Luminance values, not design colors: `white`/`black` (and hex twins). */
+const MASK_LUMINANCE = new Set(['white', 'black', '#fff', '#ffffff', '#000', '#000000']);
+
+/**
+ * Whether the element sits inside an SVG `<mask>`: a stop's luminance sets
+ * opacity there, so `white`/`black` stops are not design-system colors (#59).
+ */
+function isInsideMask(element: JsxNode): boolean {
+  const sourceFile = element.node.getSourceFile();
+  const mask = ts.findAncestor(element.node, (node) => {
+    if (!ts.isJsxElement(node) && !ts.isJsxSelfClosingElement(node)) {
+      return false;
+    }
+    const opening = ts.isJsxElement(node) ? node.openingElement : node;
+    return opening.tagName.getText(sourceFile) === 'mask';
+  });
+  return mask !== undefined;
+}
+
+/** `id` of the wrapping gradient, if the stop sits directly in one. */
+function gradientIdOfStop(element: JsxNode): string | undefined {
+  const gradient = ts.findAncestor(
+    element.node.parent,
+    (node) => ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node),
+  );
+  if (gradient === undefined) return undefined;
+  const opening = ts.isJsxElement(gradient) ? gradient.openingElement : gradient;
+  const tag = opening.tagName.getText(element.node.getSourceFile());
+  if (tag !== 'linearGradient' && tag !== 'radialGradient') {
+    return undefined;
+  }
+  const idAttr = opening.attributes.properties
+    .filter(ts.isJsxAttribute)
+    .find((a) => attributeName(a) === 'id');
+  return idAttr?.initializer && ts.isStringLiteralLike(idAttr.initializer)
+    ? idAttr.initializer.text
+    : undefined;
+}
+
+const URL_REF = /url\(\s*#([^)\s]+)\s*\)/g;
+
+/**
+ * Gradient ids referenced via `fill="url(#id)"` (or `stroke`) from inside a
+ * `<mask>` subtree: stops of those gradients paint mask luminance, not
+ * colors (#59, cal.com gridFade/gridMask shape).
+ */
+function maskReferencedGradientIds(elements: JsxNode[]): Set<string> {
+  const ids = new Set<string>();
+  const refsFrom = (node: ts.Node): void => {
+    if (ts.isJsxAttribute(node)) {
+      const name = attributeName(node);
+      if (
+        (name === 'fill' || name === 'stroke') &&
+        node.initializer &&
+        ts.isStringLiteralLike(node.initializer)
+      ) {
+        URL_REF.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        while ((match = URL_REF.exec(node.initializer.text)) !== null) {
+          if (match[1]) ids.add(match[1]);
+        }
+      }
+    }
+    ts.forEachChild(node, refsFrom);
+  };
+  for (const element of elements) {
+    if (element.tag === 'mask') refsFrom(element.node);
+  }
+  return ids;
+}
+
 export const noHardcodedColor: Rule = {
   id: 'no-hardcoded-color',
   description:
@@ -44,6 +115,7 @@ export const noHardcodedColor: Rule = {
     const { tokens } = context.target;
     if (!tokens.has('color')) return;
     const allow = new Set((context.options.allow ?? []).map((v) => v.toLowerCase()));
+    const maskGradients = maskReferencedGradientIds(context.analysis.elements);
 
     for (const classString of context.analysis.classStrings) {
       for (const token of splitClasses(classString.text, classString.start)) {
@@ -151,6 +223,14 @@ export const noHardcodedColor: Rule = {
         }
         const prefix = name === 'fill' || name === 'stroke' ? name : 'text';
         for (const literal of literalValues(attribute)) {
+          if (
+            (name === 'stopColor' || name === 'stop-color') &&
+            element.tag === 'stop' &&
+            MASK_LUMINANCE.has(literal.text.toLowerCase()) &&
+            (isInsideMask(element) || maskGradients.has(gradientIdOfStop(element) ?? ''))
+          ) {
+            continue;
+          }
           reportLiteralColors(context, literal, element, {
             where: `${name}="…"`,
             prefix,
