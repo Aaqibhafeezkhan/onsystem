@@ -2,7 +2,9 @@
 
 /*
  * Shared with ondocs and signoff-ui: ink, raised surfaces and hairline borders, cyan as
- * the accent, magenta only for errors. Text colours keep at least 4.5:1 on every surface.
+ * the accent, magenta only for errors, amber for warnings and green for success (signoff-ui's
+ * --signoff-warn-fg, and the one green the output grammar needs). Text colours keep at least
+ * 4.5:1 on every surface.
  * Two themes: dark, and light from signoff-ui's palette. The theme is a `.light` or `.dark`
  * class on <html>, set before paint by the script in app/layout.tsx; without one it follows
  * the OS.
@@ -24,6 +26,8 @@
   --color-cyan-bright: var(--site-cyan-bright);
   --color-magenta: var(--site-magenta);
   --color-magenta-soft: var(--site-magenta-soft);
+  --color-warn: var(--site-warn);
+  --color-success: var(--site-success);
 }
 
 @theme {
@@ -50,6 +54,8 @@
   --site-cyan-bright: light-dark(#155e75, #67e8f9);
   --site-magenta: light-dark(#be185d, #f0468a);
   --site-magenta-soft: light-dark(#9d174d, #ff7eb0);
+  --site-warn: light-dark(#92400e, #fbbf24);
+  --site-success: light-dark(#166534, #4ade80);
   --site-glow-cyan: light-dark(rgb(14 116 144 / 0.07), rgb(34 211 238 / 0.09));
   --site-glow-magenta: light-dark(rgb(190 24 93 / 0.03), rgb(240 70 138 / 0.04));
   --site-grid: light-dark(rgb(13 15 18 / 0.045), rgb(255 255 255 / 0.028));
@@ -116,57 +122,130 @@ body {
 /* ─── Code ──────────────────────────────────────────────────────────────── */
 
 /*
- * Token colours in both themes: each keeps 4.5:1 on the code background, and on every finding
- * highlight below, the selected one included.
+ * Every code surface shares one frame (components/code-frame.tsx): a bordered block, a slim bar
+ * with the file name or the language and the copy button, then the code. Shiki's colours arrive
+ * as --shiki-light and --shiki-dark on each token (.sk), picked here by the page's colour scheme,
+ * so there is no flash and nothing to hydrate. Terminal and agent output is coloured by kind
+ * (.out-*), from lib/output.ts. Every colour keeps 4.5:1 on the code background and inside every
+ * finding highlight below (test/shell.test.ts).
  */
 
-.code {
-  font-family: var(--font-mono);
-  font-variant-ligatures: none;
-  tab-size: 2;
-}
-.tok-plain {
-  color: light-dark(#1f2937, #dfe6ee);
-}
-.tok-comment {
-  color: light-dark(#5b6370, #808b99);
-  font-style: italic;
-}
-.tok-string {
-  color: light-dark(#8a4b08, #e9d9ae);
-}
-.tok-keyword {
-  color: light-dark(#4b5563, #a3b1c2);
-}
-.tok-number {
-  color: light-dark(#8a4b08, #e9d9ae);
-}
-.tok-tag {
-  color: light-dark(#1d4ed8, #8fb8ff);
-}
-.tok-component {
-  color: light-dark(#006b87, #67e8f9);
-}
-.tok-attr {
-  color: light-dark(#374151, #b9c3d0);
-}
-.tok-punct {
-  color: light-dark(#5b6370, #8a96a5);
-}
-.tok-prompt {
-  color: light-dark(#5b6370, #808b99);
-  user-select: none;
-}
-.tok-command {
-  color: var(--color-cyan-bright);
-}
-.tok-key {
-  color: light-dark(#155e75, #a6e3f0);
+@layer components {
+  /* In the components layer, so a utility wins: the playground's textarea is .code and transparent. */
+  .code {
+    color: light-dark(#0d0f12, #e8eaed);
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+    tab-size: 2;
+  }
+  .code-block {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--color-line);
+    border-radius: 0.75rem;
+    background: var(--color-code);
+  }
+  .code-bar {
+    display: flex;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.25rem 0.375rem 0.25rem 1rem;
+    border-bottom: 1px solid var(--color-line);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .code-title {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .code-title-language {
+    color: var(--color-subtle);
+  }
+  .code-body {
+    overflow: auto;
+    padding: 0.875rem 1rem;
+    font-size: 13px;
+    line-height: 1.7;
+    scrollbar-width: thin;
+  }
+  .code-body:focus-visible {
+    outline-offset: -2px;
+  }
+  .code-wrap {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }
 
-/* A code block that scrolls sideways fades at its right edge while more is out of view. */
-pre[data-more] {
-  mask-image: linear-gradient(to left, transparent, #000 2.5rem);
+.sk {
+  color: light-dark(var(--shiki-light), var(--shiki-dark));
+}
+
+/* Output: prompts and structure quiet, severities in their colours, names in the accent. */
+.out-prompt {
+  color: var(--color-subtle);
+  user-select: none;
+}
+.out-command,
+.out-heading,
+.out-strong {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+.out-error {
+  color: var(--color-magenta-soft);
+}
+.out-warn {
+  color: var(--color-warn);
+}
+.out-success {
+  color: var(--color-success);
+}
+.out-accent {
+  color: var(--color-cyan-bright);
+}
+.out-info,
+.out-dim {
+  color: var(--color-subtle);
+}
+.out-string {
+  color: light-dark(#9a3412, #f5c27a);
+}
+.out-tag {
+  color: light-dark(#155e75, #67e8f9);
+}
+
+/* A block that scrolls fades the edge with more out of view (components/code-scroll.tsx). */
+pre[data-more]:not(:focus-visible) {
+  mask-image: linear-gradient(to left, transparent, black 2.5rem);
+}
+pre[data-more-below]:not(:focus-visible) {
+  mask-image: linear-gradient(to top, transparent, black 2.5rem);
+}
+pre[data-more][data-more-below]:not(:focus-visible) {
+  mask-image:
+    linear-gradient(to left, transparent, black 2.5rem),
+    linear-gradient(to top, transparent, black 2.5rem);
+  mask-composite: intersect;
+}
+
+/* A diff's added and removed lines, edge to edge, in the add and del tints. */
+.line-add,
+.line-del {
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+}
+.line-add {
+  background: color-mix(in oklab, var(--color-cyan) 9%, transparent);
+}
+.line-del {
+  background: color-mix(in oklab, var(--color-magenta) 8%, transparent);
 }
 
 /* Findings, underlined the way editors do. The fills stay light, so the tokens keep 4.5:1. */
@@ -178,11 +257,11 @@ pre[data-more] {
   background: color-mix(in oklab, var(--color-magenta) 6%, transparent);
 }
 .mark-warning {
-  text-decoration: underline wavy var(--color-cyan);
+  text-decoration: underline wavy var(--color-warn);
   text-decoration-thickness: 1.5px;
   text-underline-offset: 4px;
   text-decoration-skip-ink: none;
-  background: color-mix(in oklab, var(--color-cyan) 6%, transparent);
+  background: color-mix(in oklab, var(--color-warn) 6%, transparent);
 }
 .mark-changed {
   background: color-mix(in oklab, var(--color-cyan) 6%, transparent);

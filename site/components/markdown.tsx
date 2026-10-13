@@ -21,7 +21,7 @@ export function InlineMarkdown({ text }: { text: string }): ReactNode {
     const key = parts.length;
     if (code !== undefined) {
       parts.push(
-        <code key={key} className={`${INLINE_CODE} text-[0.9em]`}>
+        <code key={key} className={INLINE_CODE}>
           <CodeText text={code} />
         </code>,
       );

@@ -186,7 +186,13 @@ export interface Tools {
   tools: { name: string; title: string; description: string }[];
   prompts: { name: string; title: string; description: string }[];
   resources: string[];
-  samples: { tool: string; args: Record<string, unknown>; output: string }[];
+  samples: {
+    tool: string;
+    args: Record<string, unknown>;
+    output: string;
+    /** The response's `structuredContent`. */
+    structured: unknown;
+  }[];
 }
 
 export interface Rule {

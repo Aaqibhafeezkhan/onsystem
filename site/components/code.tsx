@@ -1,50 +1,29 @@
+import { BlockLine } from '@/components/code-line';
+import { CodeFrame } from '@/components/code-frame';
 import { CodeScroll } from '@/components/code-scroll';
-import { CopyButton } from '@/components/copy-button';
-import { highlightLines, type Lang, type Segment } from '@/lib/highlight';
+import { ruleCatalog } from '@/lib/data';
+import { highlight, isSession, labelFor, wrapsLines, type Lang } from '@/lib/render-code';
+import type { Mark } from '@/lib/segments';
 
-/** One line of highlighted segments. */
-export function Line({ segments }: { segments: Segment[] }) {
-  return (
-    <>
-      {segments.map((segment, i) => (
-        <span
-          key={i}
-          className={`tok-${segment.kind}${segment.mark ? ` mark-${segment.mark.kind}` : ''}`}
-        >
-          {segment.text}
-        </span>
-      ))}
-    </>
-  );
-}
+export { wrapsLines };
 
-const LANG_LABELS: Record<Lang, string> = {
-  tsx: 'TSX',
-  json: 'JSON',
-  sh: 'Shell',
-  toml: 'TOML',
-  yaml: 'YAML',
-  text: 'Text',
-};
+/** The rule ids, coloured wherever output names them. */
+const RULE_IDS = ruleCatalog.rules.map((rule) => rule.id);
 
 /**
- * The one rule for long lines: transcripts and prose-like output (text, and shell sessions
- * with `$ ` prompts and their output) wrap; source code and commands scroll.
- */
-export function wrapsLines(code: string, lang: Lang): boolean {
-  return lang === 'text' || (lang === 'sh' && /^\$ /m.test(code));
-}
-
-/**
- * A highlighted block of code under a slim bar that names it (a file name, or the language)
- * and holds the copy button, so the button never covers the code.
+ * Highlighted code in the shared frame, rendered on the server: source code through Shiki,
+ * terminal and agent output (`text`) through the output grammar. Output and shell sessions wrap,
+ * each wrapped line under its own text; source code scrolls, its right edge faded while more of
+ * it is out of view.
  */
 export function Code({
   code,
   lang,
   title,
   copy,
+  marks,
   className = '',
+  bodyClassName = '',
 }: {
   code: string;
   lang: Lang;
@@ -52,43 +31,82 @@ export function Code({
   title?: string | undefined;
   /** Accessible name of the copy button; no button without it. */
   copy?: string | undefined;
+  /** Findings or changes to mark in the code. */
+  marks?: Mark[] | undefined;
   className?: string;
+  /** Extra classes for the scrolling area, such as a maximum height. */
+  bodyClassName?: string;
 }) {
-  const lines = highlightLines(code, lang);
-  const wrap = wrapsLines(code, lang);
   return (
-    <div
-      data-code-block=""
-      className={`min-w-0 overflow-hidden rounded-xl border border-line bg-code ${className}`}
+    <CodeFrame
+      title={title}
+      label={labelFor(code, lang)}
+      copy={copy ? { text: copyText(code, lang), label: copy } : undefined}
+      className={className}
     >
-      <div className="flex min-h-9 items-center justify-between gap-3 border-b border-line py-1 pr-1.5 pl-4">
-        <span
-          className={`truncate font-mono text-xs ${title ? 'text-muted' : 'text-subtle uppercase'}`}
-        >
-          {title ?? LANG_LABELS[lang]}
-        </span>
-        {copy && <CopyButton text={stripPrompts(code, lang)} label={copy} className="size-7" />}
-      </div>
-      <div className="relative">
-        <CodeScroll
-          className={`code overflow-x-auto px-4 py-3.5 text-[12.5px] leading-[1.7] ${wrap ? 'whitespace-pre-wrap' : ''}`}
-        >
-          <code>
-            {lines.map((segments, i) => (
-              <span key={i} className="block min-h-[1lh]">
-                <Line segments={segments} />
-              </span>
-            ))}
-          </code>
-        </CodeScroll>
-      </div>
-    </div>
+      <CodeBody code={code} lang={lang} marks={marks} className={bodyClassName} />
+    </CodeFrame>
   );
 }
 
-/** What to copy from a shell transcript: the commands, without prompts or output. */
-function stripPrompts(code: string, lang: Lang): string {
-  if (lang !== 'sh' || !code.includes('$ ')) return code;
+/** A run of one language, for a block that mixes them, such as a tool call and its output. */
+export interface CodePart {
+  code: string;
+  lang: Lang;
+}
+
+/**
+ * The scrolling, highlighted part of a code block, for frames that hold more than code: one
+ * language, or `parts` in several (a call in output, its code argument in TSX, then its output).
+ */
+export function CodeBody({
+  code = '',
+  lang = 'text',
+  parts,
+  marks,
+  wrap: wraps,
+  className = '',
+}: {
+  code?: string;
+  lang?: Lang;
+  parts?: CodePart[] | undefined;
+  marks?: Mark[] | undefined;
+  /** Wrap long lines; by default output and shell sessions wrap and source code scrolls. */
+  wrap?: boolean | undefined;
+  className?: string;
+}) {
+  const runs = parts ?? [{ code, lang }];
+  const wrap = wraps ?? runs.some((run) => wrapsLines(run.code, run.lang));
+  const rows = runs.flatMap((run) => {
+    const { lines, hangs } = highlight(run.code, run.lang, { marks, ruleIds: RULE_IDS });
+    const source = run.code.split('\n');
+    return lines.map((segments, i) => ({
+      segments,
+      // Output knows where its text starts; wrapped code continues two columns in.
+      hang: hangs?.[i] ?? (/^\s*/.exec(source[i] ?? '')?.[0].length ?? 0) + 2,
+      tone: run.lang === 'diff' ? diffTone(source[i]) : undefined,
+    }));
+  });
+  return (
+    <CodeScroll className={`code code-body ${wrap ? 'code-wrap' : ''} ${className}`}>
+      <code>
+        {rows.map((row, i) => (
+          <BlockLine key={i} segments={row.segments} hang={wrap ? row.hang : 0} tone={row.tone} />
+        ))}
+      </code>
+    </CodeScroll>
+  );
+}
+
+function diffTone(line = ''): 'add' | 'del' | undefined {
+  if (line.startsWith('+') && !line.startsWith('+++')) return 'add';
+  if (line.startsWith('-') && !line.startsWith('---')) return 'del';
+  return undefined;
+}
+
+/** What to copy from a shell session: the commands, without prompts or output. */
+function copyText(code: string, lang: Lang): string {
+  if (!isSession(code, lang)) return code;
   return code
     .split('\n')
     .filter((line) => line.startsWith('$ '))

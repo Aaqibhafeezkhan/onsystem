@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { Line } from '@/components/code';
+import { Line } from '@/components/code-line';
+import { FindingMessage } from '@/components/finding-message';
 import { ArrowUpRightIcon, CheckIcon, ReplayIcon } from '@/components/icons';
-import { InlineMarkdown } from '@/components/markdown';
 import type { CheckError, CheckResponse } from '@/lib/check-service';
-import { highlightLines, type Mark } from '@/lib/highlight';
+import { highlightLines } from '@/lib/highlight';
+import type { Mark } from '@/lib/segments';
 import type { Preset, PresetResult } from '@/lib/playground';
 import { ruleHref } from '@/lib/site';
 
@@ -185,7 +186,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
     for (const d of current?.result.diagnostics ?? []) {
       if (severity.get(d.line) !== 'error') severity.set(d.line, d.severity);
     }
-    return { lines: highlightLines(code, 'tsx', marks), gutter: severity };
+    return { lines: highlightLines(code, marks), gutter: severity };
   }, [code, current, selected]);
 
   const focusFinding = (index: number) => {
@@ -249,13 +250,13 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
 
       <div className="mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         {/* Editor */}
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-line bg-code transition-colors focus-within:border-cyan/60 focus-within:ring-1 focus-within:ring-cyan/35">
-          <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
-            <label htmlFor={`${ids}-code`} className="truncate font-mono text-xs text-fg-soft">
+        <div className="code-block transition-colors focus-within:border-cyan/60 focus-within:ring-1 focus-within:ring-cyan/35">
+          <div className="code-bar pr-4">
+            <label htmlFor={`${ids}-code`} className="code-title">
               {preset && code === preset.code ? preset.file : 'Your code'}
             </label>
             <span
-              className={`shrink-0 font-mono text-[11px] ${empty || pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-magenta-soft' : 'text-cyan'}`}
+              className={`shrink-0 text-[11px] ${empty || pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-magenta-soft' : current.result.warningCount > 0 ? 'text-warn' : 'text-success'}`}
             >
               {status}
             </span>
@@ -275,7 +276,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                     <span className="relative w-9 shrink-0 pr-2.5 text-right text-[11px] text-subtle select-none sm:w-11 sm:pr-3">
                       {severity && (
                         <span
-                          className={`absolute top-[0.7em] left-1 size-1.5 rounded-full sm:left-1.5 ${severity === 'error' ? 'bg-magenta' : 'bg-cyan'}`}
+                          className={`absolute top-[0.7em] left-1 size-1.5 rounded-full sm:left-1.5 ${severity === 'error' ? 'bg-magenta' : 'bg-warn'}`}
                         />
                       )}
                       {i + 1}
@@ -323,13 +324,13 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
         {/* Findings */}
         <section
           aria-labelledby={`${ids}-findings`}
-          className="min-w-0 rounded-2xl border border-line bg-raised lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto"
+          className="min-w-0 rounded-xl border border-line bg-raised lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto"
         >
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
             <h2 id={`${ids}-findings`} className="text-sm font-semibold text-fg">
               {shown && diagnostics.length === 0 ? (
                 <span className="inline-flex items-center gap-2">
-                  <CheckIcon className="size-4 text-cyan" />
+                  <CheckIcon className="size-4 text-success" />
                   No design-system problems
                 </span>
               ) : (
@@ -342,7 +343,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                         {plural(shown.result.errorCount, 'error')}
                       </span>
                       <span className="text-subtle"> · </span>
-                      <span className="text-cyan">
+                      <span className="text-warn">
                         {plural(shown.result.warningCount, 'warning')}
                       </span>
                     </span>
@@ -431,14 +432,12 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                   key={`${String(i)}-${d.ruleId}-${String(d.line)}-${String(d.column)}`}
                   className={`px-4 py-3 ${selected === i ? 'bg-fg/[0.03]' : ''}`}
                 >
+                  {/* The output grammar's order and colours: position, severity, rule id. */}
                   <div className="flex items-baseline gap-2 font-mono text-[11.5px]">
                     <span
-                      className={`size-1.5 shrink-0 translate-y-[-1px] rounded-full ${d.severity === 'error' ? 'bg-magenta' : 'bg-cyan'}`}
+                      className={`size-1.5 shrink-0 translate-y-[-1px] rounded-full ${d.severity === 'error' ? 'bg-magenta' : 'bg-warn'}`}
                       aria-hidden="true"
                     />
-                    <span className={d.severity === 'error' ? 'text-magenta-soft' : 'text-cyan'}>
-                      {d.severity}
-                    </span>
                     <button
                       type="button"
                       disabled={stale}
@@ -450,12 +449,15 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                       {d.line}:{d.column}
                       <span className="sr-only"> (show in the editor)</span>
                     </button>
+                    <span className={d.severity === 'error' ? 'out-error' : 'out-warn'}>
+                      {d.severity}
+                    </span>
                     {d.ruleId === 'syntax' ? (
-                      <span className="truncate text-muted">syntax</span>
+                      <span className="truncate out-accent">syntax</span>
                     ) : (
                       <a
                         href={ruleHref(d.ruleId)}
-                        className="inline-flex min-w-0 items-center gap-0.5 text-muted hover:text-fg"
+                        className="inline-flex min-w-0 items-center gap-0.5 out-accent hover:underline"
                       >
                         <span className="truncate">{d.ruleId}</span>
                         <ArrowUpRightIcon className="size-3 shrink-0" />
@@ -463,7 +465,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                     )}
                   </div>
                   <p className="mt-1.5 text-[13.5px] leading-relaxed text-fg-soft">
-                    <InlineMarkdown text={d.message} />
+                    <FindingMessage text={d.message} />
                   </p>
                   {d.fix?.length ? (
                     <button
@@ -475,12 +477,12 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                       className="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-raised-2 px-2 py-1 font-mono text-[12px] text-fg-soft transition-colors hover:border-cyan/50 hover:text-fg disabled:cursor-default disabled:hover:border-line"
                     >
                       Apply fix
-                      {d.suggestion && <span className="text-cyan-bright">{d.suggestion}</span>}
+                      {d.suggestion && <span className="out-success">{d.suggestion}</span>}
                     </button>
                   ) : d.suggestion ? (
                     <p className="mt-2 font-mono text-[12px] text-subtle">
-                      Suggests <span className="text-cyan-bright">{d.suggestion}</span>; the change
-                      needs a decision, so there is no automatic fix.
+                      Suggests <span className="out-string">{d.suggestion}</span>; the change needs
+                      a decision, so there is no automatic fix.
                     </p>
                   ) : null}
                 </li>

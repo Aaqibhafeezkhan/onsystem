@@ -45,7 +45,18 @@ function contrast(a: string, b: string): number {
   return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
 }
 
-const TEXT = ['fg', 'fg-soft', 'muted', 'subtle', 'cyan', 'cyan-bright', 'magenta', 'magenta-soft'];
+const TEXT = [
+  'fg',
+  'fg-soft',
+  'muted',
+  'subtle',
+  'cyan',
+  'cyan-bright',
+  'magenta',
+  'magenta-soft',
+  'warn',
+  'success',
+];
 const SURFACES = ['ink', 'raised', 'raised-2', 'code', 'chrome'];
 
 describe('the theme', () => {
@@ -72,57 +83,7 @@ describe('the theme', () => {
     }
   });
 
-  it.each([0, 1])('keeps highlighted code at 4.5:1 or more on the code background', (t) => {
-    const code = t === 0 ? tokens.code?.light : tokens.code?.dark;
-    const colours = [...css.matchAll(/\.tok-(\w+) \{\n {2}color: light-dark\((#\w+), (#\w+)\)/g)];
-    expect(colours.length).toBe(11);
-    for (const [, kind, light = '', dark = ''] of colours) {
-      expect(contrast(t === 0 ? light : dark, code ?? ''), kind).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  it.each(['light', 'dark'] as const)(
-    'keeps highlighted code at 4.5:1 or more inside every finding highlight, %s',
-    (t) => {
-      // A highlight is its colour at a few per cent over the block: the code background, or the
-      // raised panel of the home page's demo.
-      const over = (hex: string, percent: number, base: string) =>
-        `#${[1, 3, 5]
-          .map((i) => {
-            const [a, b] = [hex, base].map((c) => parseInt(c.slice(i, i + 2), 16));
-            const mixed = Math.round(((a ?? 0) * percent + (b ?? 0) * (100 - percent)) / 100);
-            return mixed.toString(16).padStart(2, '0');
-          })
-          .join('')}`;
-      const marks = [
-        ...css.matchAll(
-          /\.mark-(\w+) \{[^}]*?background: color-mix\(in oklab, var\(--color-([\w-]+)\) (\d+)%, transparent\);/g,
-        ),
-      ];
-      expect(marks.map(([, kind]) => kind).sort()).toEqual([
-        'active',
-        'changed',
-        'error',
-        'warning',
-      ]);
-      const colours = [...css.matchAll(/\.tok-(\w+) \{\n {2}color: light-dark\((#\w+), (#\w+)\)/g)];
-      for (const [, mark, colour = '', percent = ''] of marks) {
-        for (const surface of ['code', 'raised']) {
-          const background = over(
-            tokens[colour]?.[t] ?? '',
-            Number(percent),
-            tokens[surface]?.[t] ?? '',
-          );
-          for (const [, kind, light = '', dark = ''] of colours) {
-            const ratio = contrast(t === 'light' ? light : dark, background);
-            expect(ratio, `${kind} in .mark-${mark ?? ''} on ${surface}`).toBeGreaterThanOrEqual(
-              4.5,
-            );
-          }
-        }
-      }
-    },
-  );
+  // Code and output colours: test/code.test.ts.
 
   it('follows the OS until a theme is picked, and .light or .dark on <html> force one', () => {
     expect(css).toMatch(/:root \{\n {2}color-scheme: light dark;/);

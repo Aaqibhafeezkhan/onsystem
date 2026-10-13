@@ -300,7 +300,13 @@ for (const [name, args] of [
 ]) {
   const response = await client.callTool({ name, arguments: args });
   assert.ok(!response.isError, `${name} failed: ${text(response)}`);
-  samples.push({ tool: name, args, output: text(response) });
+  // The Markdown the model reads, and the JSON programs get beside it.
+  samples.push({
+    tool: name,
+    args,
+    output: text(response),
+    structured: response.structuredContent ?? null,
+  });
 }
 await client.close();
 

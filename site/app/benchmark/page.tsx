@@ -459,6 +459,22 @@ const SECTIONS = [
   ['v1', 'The earlier benchmark'],
 ] as const;
 
+/** A task's prompt, with the file it names and the component it exports set as code. */
+function Prompt({ text }: { text: string }) {
+  const match = /^(Create )(\S+)( exporting )(\w+)(.*)$/s.exec(text);
+  if (!match) return text;
+  const [, create, file = '', exporting, name = '', rest] = match;
+  return (
+    <>
+      {create}
+      <InlineCode>{file}</InlineCode>
+      {exporting}
+      <InlineCode>{name}</InlineCode>
+      {rest}
+    </>
+  );
+}
+
 export default function BenchmarkPage() {
   const { labels, time, cost } = benchmark;
   const family = labellerFamily(benchmark);
@@ -617,7 +633,9 @@ export default function BenchmarkPage() {
                         {benchmark.tasks
                           .filter((task) => task.repo === repo.name)
                           .map((task) => (
-                            <li key={task.id}>{task.prompt}</li>
+                            <li key={task.id}>
+                              <Prompt text={task.prompt} />
+                            </li>
                           ))}
                       </ul>
                     </li>
