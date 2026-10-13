@@ -651,7 +651,7 @@
         "warnings": 1
       },
       "files": 576,
-      "flagged": 132,
+      "flagged": 131,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 17,
@@ -659,7 +659,7 @@
           "fixes": 13
         },
         "no-hardcoded-color": {
-          "errors": 219,
+          "errors": 214,
           "warnings": 0,
           "fixes": 109
         },
@@ -850,7 +850,7 @@
         "others": 102
       },
       "files": 928,
-      "flagged": 152,
+      "flagged": 151,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 18,
@@ -858,7 +858,7 @@
           "fixes": 14
         },
         "no-hardcoded-color": {
-          "errors": 402,
+          "errors": 397,
           "warnings": 0,
           "fixes": 122
         },
@@ -1159,9 +1159,9 @@
     "aac95d361de8": true,
     "4d73900c3b63": true,
     "2b6c6d35ba0a": true,
-    "b54e3e6b091a": true,
+    "b54e3e6b091a": false,
     "9e7bab3e5b1f": true,
-    "5b7a4161dab0": true,
+    "5b7a4161dab0": false,
     "f28349d00ba3": true,
     "2486e9215cee@<FileUpload>": false,
     "7663bf4ae926@<FileUpload>": false,
