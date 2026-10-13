@@ -1,6 +1,3 @@
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
-
 import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -18,6 +15,7 @@ import { assistantLinks } from '@/components/page-actions';
 import { ruleCatalog } from '@/lib/data';
 import { DOCS_GROUPS, DOCS_NAV, DOCS_PAGES, docsPage } from '@/lib/docs';
 import { FAQ } from '@/lib/faq';
+import { lastModified } from '@/lib/git';
 import { tokenize } from '@/lib/highlight';
 import { llmsFullTxt } from '@/lib/llms';
 import { forPackageManager } from '@/lib/package-managers';
@@ -71,12 +69,6 @@ describe('the docs sidebar', () => {
 
 // ─── The page frame ─────────────────────────────────────────────────────────
 
-const gitDate = (file: string) =>
-  execFileSync('git', ['log', '-1', '--format=%cI', '--', file], {
-    cwd: path.join(import.meta.dirname, '../..'),
-    encoding: 'utf8',
-  }).trim();
-
 describe('a docs page', () => {
   const html = render(createElement(QuickstartPage));
 
@@ -91,8 +83,29 @@ describe('a docs page', () => {
     expect(html).toContain(
       'href="https://github.com/dgesteves/onsystem/edit/main/docs/quickstart.md"',
     );
-    const date = gitDate('docs/quickstart.md');
-    if (date) expect(html).toContain(`<time dateTime="${new Date(date).toISOString()}">`);
+    const date = lastModified(['docs/quickstart.md']);
+    if (date) expect(html).toContain(`Last updated <time dateTime="${date.toISOString()}">`);
+    else expect(html).not.toContain('Last updated');
+  });
+
+  it('says when the page last changed, and nothing when git cannot tell', async () => {
+    for (const date of [new Date('2026-10-12T22:28:15Z'), null]) {
+      // A fresh module graph, React included, with git answering `date`.
+      vi.resetModules();
+      vi.doMock('@/lib/git', () => ({ lastModified: () => date }));
+      const { createElement: create } = await import('react');
+      const { renderToStaticMarkup: toHtml } = await import('react-dom/server');
+      const { default: Page } = await import('@/app/docs/page');
+      const page = toHtml(create(Page));
+      if (date) {
+        expect(page).toContain(
+          'Last updated <time dateTime="2026-10-12T22:28:15.000Z">Oct 12, 2026</time>',
+        );
+      } else {
+        expect(page).not.toContain('Last updated');
+      }
+      vi.doUnmock('@/lib/git');
+    }
   });
 
   it('shows the quickstart as four numbered steps, with no install panel repeating them', () => {
