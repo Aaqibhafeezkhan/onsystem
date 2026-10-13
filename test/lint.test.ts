@@ -69,6 +69,42 @@ describe('no-hardcoded-color', () => {
     expect(check(`<p style={{ color: tone === "#fff" ? token : other }} />`, rule)).toEqual([]);
   });
 
+  it('ignores white/black stops inside SVG masks (luminance, not color)', () => {
+    const mask = (stops: string) =>
+      `<svg><mask><linearGradient>${stops}</linearGradient></mask></svg>`;
+    expect(
+      check(
+        mask('<stop offset="0" stopColor="white" /><stop offset="1" stop-color="black" />'),
+        rule,
+      ),
+    ).toEqual([]);
+    // Other colors in a mask are still colors.
+    expect(check(mask('<stop offset="0" stopColor="red" />'), rule)).toHaveLength(1);
+    // White outside a mask is still a color.
+    expect(check('<stop offset="0" stopColor="white" />', rule)).toHaveLength(1);
+    expect(check('<rect fill="white" />', rule)).toHaveLength(1);
+  });
+
+  it('ignores stops of gradients referenced by a mask (cal.com shape)', () => {
+    const code = `<svg><defs>
+      <radialGradient id="gridFade">
+        <stop offset="20%" stopColor="white" stopOpacity="1" />
+        <stop offset="100%" stopColor="white" stopOpacity="0" />
+      </radialGradient>
+      <mask id="gridMask"><rect fill="url(#gridFade)" /></mask>
+    </defs></svg>`;
+    expect(check(code, rule)).toEqual([]);
+    // Same gradient without the mask reference is still flagged.
+    expect(
+      check(
+        `<svg><defs><radialGradient id="gridFade">
+          <stop offset="20%" stopColor="white" />
+        </radialGradient></defs></svg>`,
+        rule,
+      ),
+    ).toHaveLength(1);
+  });
+
   it('flags arbitrary Tailwind colors with the nearest token and a fix', () => {
     const code = `<div className="p-4 border-[#ef4444]" />`;
     const [d] = check(code, rule);
