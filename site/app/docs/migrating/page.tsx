@@ -8,7 +8,7 @@ export const metadata: Metadata = docsMetadata('/docs/migrating');
 
 export default function MigratingPage() {
   return (
-    <DocPage href="/docs/migrating" file="docs/migrating.md">
+    <DocPage href="/docs/migrating">
       <MarkdownBlocks markdown={docs.migrating} />
     </DocPage>
   );

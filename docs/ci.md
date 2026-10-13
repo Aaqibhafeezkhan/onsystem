@@ -6,13 +6,13 @@ In folders and globs, `check` also leaves out tests and stories (`*.test.tsx`, `
 
 Pin it as a dev dependency, so CI, the plugin's hook and everyone on the team run the same version:
 
-```sh
+```sh pm
 npm install --save-dev onsystem
 ```
 
 A GitHub Actions job, `.github/workflows/onsystem.yml`:
 
-```yaml
+```yaml title=".github/workflows/onsystem.yml"
 name: Design system
 on: pull_request
 jobs:

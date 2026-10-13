@@ -6,7 +6,7 @@ Coding agents open pull requests on their own now: GitHub Copilot's cloud agent,
 
 `.github/workflows/onsystem.yml`:
 
-```yaml
+```yaml title=".github/workflows/onsystem.yml"
 name: Design system
 on:
   pull_request:

@@ -90,10 +90,12 @@ body {
   outline-offset: 2px;
 }
 
-/* Anchored sections clear the sticky header. */
-:target,
-section[id] {
-  scroll-margin-top: 5rem;
+/* Anchored sections clear the sticky header; a heading's own scroll-mt-* takes precedence. */
+@layer base {
+  :target,
+  section[id] {
+    scroll-margin-top: 5rem;
+  }
 }
 
 /* Soft glows behind the hero, faded into the ink. */
@@ -152,8 +154,16 @@ section[id] {
   color: light-dark(#5f6875, #808b99);
   user-select: none;
 }
+.tok-command {
+  color: var(--color-cyan-bright);
+}
 .tok-key {
   color: light-dark(#155e75, #a6e3f0);
+}
+
+/* A code block that scrolls sideways fades at its right edge while more is out of view. */
+pre[data-more] {
+  mask-image: linear-gradient(to left, transparent, #000 2.5rem);
 }
 
 /* Findings, underlined the way editors do. */

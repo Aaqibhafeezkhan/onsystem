@@ -8,7 +8,7 @@ export const metadata: Metadata = docsMetadata('/docs/eslint');
 
 export default function EslintPage() {
   return (
-    <DocPage href="/docs/eslint" file="docs/eslint.md">
+    <DocPage href="/docs/eslint">
       <MarkdownBlocks markdown={docs.eslint} />
     </DocPage>
   );

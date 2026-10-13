@@ -13,7 +13,7 @@ const button =
 
 export default function ClientsPage() {
   return (
-    <DocPage href="/docs/clients" file="docs/clients.md">
+    <DocPage href="/docs/clients">
       <div className="mb-10 flex flex-wrap gap-3">
         <a href={CURSOR_INSTALL} className={button}>
           Install in Cursor

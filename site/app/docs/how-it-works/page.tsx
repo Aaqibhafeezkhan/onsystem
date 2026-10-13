@@ -18,7 +18,7 @@ const markdown = docs.howItWorks.replace(IMAGE, '');
 
 export default function HowItWorksPage() {
   return (
-    <DocPage href="/docs/how-it-works" file="docs/how-it-works.md">
+    <DocPage href="/docs/how-it-works">
       <MarkdownBlocks markdown={markdown.slice(0, markdown.indexOf('\n\n'))} />
       {/* eslint-disable-next-line @next/next/no-img-element -- a static SVG diagram */}
       <img

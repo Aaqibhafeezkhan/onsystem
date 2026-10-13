@@ -18,7 +18,8 @@ export type TokenKind =
   | 'attr'
   | 'punct'
   | 'prompt'
-  | 'key';
+  | 'key'
+  | 'command';
 
 export interface Token {
   text: string;
@@ -164,6 +165,18 @@ function tokenizeConfig(code: string): Token[] {
   return tokens;
 }
 
+/** Plain text, apart from a slash command opening a line (`/plugin install …`), as the install panel shows it. */
+function tokenizeText(code: string): Token[] {
+  const tokens: Token[] = [];
+  for (const line of code.split(/(?<=\n)/)) {
+    const command = /^\/[\w:-]+(?=[ \n]|$)/.exec(line)?.[0];
+    if (command) tokens.push({ text: command, kind: 'command' });
+    const rest = command ? line.slice(command.length) : line;
+    if (rest) tokens.push({ text: rest, kind: 'plain' });
+  }
+  return tokens;
+}
+
 export function tokenize(code: string, lang: Lang): Token[] {
   switch (lang) {
     case 'tsx':
@@ -176,7 +189,7 @@ export function tokenize(code: string, lang: Lang): Token[] {
     case 'yaml':
       return tokenizeConfig(code);
     default:
-      return [{ text: code, kind: 'plain' }];
+      return tokenizeText(code);
   }
 }
 

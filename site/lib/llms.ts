@@ -14,12 +14,17 @@ import {
 } from '@/lib/site';
 
 /** Links in docs Markdown on `page`, made absolute: site pages where they exist, GitHub otherwise. */
-function absolute(markdown: string, page: string): string {
+export function absolute(markdown: string, page: string): string {
   return markdown.replace(/\]\(([^)]+)\)/g, (_, href: string) => {
     const target = resolveDocHref(href);
     if (target.startsWith('#')) return `](${SITE_URL}${page}${target})`;
     return `](${target.startsWith('/') ? `${SITE_URL}${target}` : target})`;
   });
+}
+
+/** The docs renderer's own markers (steps, package-manager tabs) mean nothing outside the site. */
+export function withoutMarkers(markdown: string): string {
+  return markdown.replace(/^<!-- \/?steps -->\n*/gm, '').replace(/^(```\w+) pm$/gm, '$1');
 }
 
 const summary =
@@ -115,6 +120,6 @@ export function llmsFullTxt(): string {
       .join('\n');
   };
   return `# onsystem\n\n> ${summary}\n\n${sections
-    .map(([title, page, body]) => `## ${title}\n\n${absolute(nest(body), page)}`)
+    .map(([title, page, body]) => `## ${title}\n\n${absolute(nest(withoutMarkers(body)), page)}`)
     .join('\n\n')}\n`;
 }

@@ -8,7 +8,7 @@ export const metadata: Metadata = docsMetadata('/docs/ci');
 
 export default function CiPage() {
   return (
-    <DocPage href="/docs/ci" file="docs/ci.md">
+    <DocPage href="/docs/ci">
       <MarkdownBlocks markdown={docs.ci} />
     </DocPage>
   );

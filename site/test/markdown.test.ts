@@ -12,7 +12,9 @@ const text = (html: string) => html.replace(/<[^>]+>/g, '');
 describe('InlineMarkdown', () => {
   it('renders code inside bold text as code', () => {
     const html = inline('**Read the `detected` line,** or run `inspect --explain`.');
-    expect(html).toMatch(/^<strong[^>]*>Read the <code[^>]*>detected<\/code> line,<\/strong>/);
+    expect(html).toMatch(
+      /^<strong[^>]*>Read the <code[^>]*><span[^>]*>detected<\/span><\/code> line,<\/strong>/,
+    );
     expect(text(html)).not.toContain('`');
   });
 
@@ -25,18 +27,17 @@ describe('InlineMarkdown', () => {
   it('renders a double-backtick span with the backticks it holds', () => {
     const html = inline('Class names built at runtime (`` `bg-${color}-500` ``) are not checked');
     expect(html.match(/<code[^>]*>/g)).toHaveLength(1);
-    expect(html).toContain('>`bg-${color}-500`</code>');
+    expect(html).toContain('>`bg-${color}-500`</span></code>');
     expect(text(html)).toBe('Class names built at runtime (`bg-${color}-500`) are not checked');
   });
 
-  it('keeps short code on one line and lets long code wrap', () => {
+  it('keeps short code on one line and lets long code wrap between its words', () => {
     const html = inline(
       'Run `--require-design-system` or `the ui alias ~/ui resolves through neither tsconfig paths`',
     );
-    const [short, long] = html.match(/<code[^>]*>/g) ?? [];
-    expect(short).toContain('whitespace-nowrap');
-    expect(long).not.toContain('whitespace-nowrap');
-    expect(long).toContain('break-words');
+    const [short, long] = html.split('</code>');
+    expect(short).toMatch(/<span class="whitespace-nowrap">--require-design-system<\/span>$/);
+    expect(long?.match(/<span class="whitespace-nowrap">/g)).toHaveLength(9);
   });
 });
 
