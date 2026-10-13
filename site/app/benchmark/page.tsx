@@ -608,7 +608,8 @@ export default function BenchmarkPage() {
                 </p>
               </Prose>
               <Fold summary={`The ${String(benchmark.tasks.length)} prompts`}>
-                <ul className="grid gap-4 text-[14px] leading-relaxed">
+                {/* The prompts name long file paths, which break anywhere on a phone. */}
+                <ul className="grid gap-4 text-[14px] leading-relaxed [overflow-wrap:anywhere]">
                   {benchmark.repos.map((repo) => (
                     <li key={repo.name}>
                       <p className="font-mono text-[12.5px] text-fg-soft">{repo.name}</p>
