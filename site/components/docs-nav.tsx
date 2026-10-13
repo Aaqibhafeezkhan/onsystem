@@ -2,80 +2,126 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ArrowUpRightIcon, ChevronDownIcon } from '@/components/icons';
+import { ChevronDownIcon, MenuIcon } from '@/components/icons';
+import { OnThisPageMenu } from '@/components/on-this-page';
 
-export interface DocsNavLink {
-  href: string;
-  title: string;
-  /** A docs page, marked when it is the one open. */
-  page?: boolean;
-  /** Leaves the site. */
-  external?: boolean;
-  /** Starts the group after the docs pages. */
-  group?: boolean;
+export interface DocsNavGroup {
+  group: string;
+  items: { href: string; label: string }[];
 }
 
 const item =
-  'block rounded-md border border-transparent px-2.5 py-1.5 text-[13.5px] text-muted transition-colors hover:text-fg aria-[current=page]:bg-cyan/10 aria-[current=page]:text-fg';
+  'block rounded-md px-2.5 py-1.5 text-[13.5px] text-muted transition-colors hover:text-fg aria-[current=page]:bg-cyan/10 aria-[current=page]:text-fg';
+
+function Groups({ groups, onFollow }: { groups: DocsNavGroup[]; onFollow?: () => void }) {
+  const pathname = usePathname();
+  return (
+    <div className="grid gap-6">
+      {groups.map(({ group, items }) => (
+        <div key={group}>
+          <p className="px-2.5 font-mono text-[11px] tracking-[0.14em] text-subtle uppercase">
+            {group}
+          </p>
+          <ul className="mt-2 grid gap-0.5">
+            {items.map((link) => (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  aria-current={link.href === pathname ? 'page' : undefined}
+                  className={item}
+                  onClick={onFollow}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The docs sidebar from 1024px: the pages in their groups, the open one marked. */
+export function DocsSidebar({ groups }: { groups: DocsNavGroup[] }) {
+  return (
+    <nav
+      aria-label="Docs"
+      className="sticky top-20 hidden max-h-[calc(100dvh-6rem)] self-start overflow-y-auto pb-6 lg:block"
+    >
+      <Groups groups={groups} />
+    </nav>
+  );
+}
 
 /**
- * The docs navigation: a list beside the page on wide screens, and on phones one menu that
- * names the page you are on, so the page starts right below it rather than below every link.
+ * Below 1024px, a bar under the site header that stays in view: the docs pages in a menu that
+ * names the page you are on, and the page's sections in "On this page".
  */
-export function DocsNav({ links }: { links: DocsNavLink[] }) {
+export function DocsBar({ groups }: { groups: DocsNavGroup[] }) {
   const pathname = usePathname();
-  const menu = useRef<HTMLDetailsElement>(null);
-  // A link followed from the open menu: close it on the next page.
-  useEffect(() => {
-    menu.current?.removeAttribute('open');
-  }, [pathname]);
-  const current = links.find((link) => link.page && link.href === pathname);
+  // Open on the page it was opened on: following a link to another page closes it.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === pathname;
+  const setOpen = (value: boolean) => {
+    setOpenOn(value ? pathname : null);
+  };
+  const root = useRef<HTMLDivElement>(null);
+  const current = groups.flatMap((g) => g.items).find((link) => link.href === pathname);
 
-  const list = (
-    <ul className="grid gap-0.5">
-      {links.map((link) => (
-        <li key={link.href} className={link.group ? 'mt-3' : undefined}>
-          {link.external ? (
-            <a href={link.href} className={`${item} inline-flex items-center gap-1`}>
-              {link.title}
-              <ArrowUpRightIcon className="size-3.5 text-subtle" />
-            </a>
-          ) : (
-            <Link
-              href={link.href}
-              aria-current={link.page && link.href === pathname ? 'page' : undefined}
-              className={item}
-            >
-              {link.title}
-            </Link>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpenOn(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenOn(null);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   return (
-    <nav aria-label="Docs" className="lg:sticky lg:top-20 lg:self-start">
-      <details ref={menu} className="group rounded-xl border border-line bg-raised lg:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-2.5 [&::-webkit-details-marker]:hidden">
-          <span className="min-w-0">
-            <span className="block font-mono text-[11px] tracking-[0.14em] text-subtle uppercase">
-              Docs
-            </span>
-            <span className="block truncate text-[15px] text-fg">
-              {current?.title ?? 'All pages'}
-            </span>
-          </span>
-          <ChevronDownIcon className="size-4 shrink-0 text-muted transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="border-t border-line p-2">{list}</div>
-      </details>
-      <div className="hidden lg:block">
-        <p className="font-mono text-[11px] tracking-[0.14em] text-subtle uppercase">Docs</p>
-        <div className="mt-3">{list}</div>
+    <div className="sticky top-14 z-30 border-b border-line/80 bg-ink/95 backdrop-blur-md lg:hidden">
+      <div className="relative mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div ref={root} className="min-w-0">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-label={`Docs pages${current ? `, on ${current.label}` : ''}`}
+            onClick={() => {
+              setOpen(!open);
+            }}
+            className="flex h-11 min-w-0 cursor-pointer items-center gap-2 text-[14px] text-fg"
+          >
+            <MenuIcon className="size-4 shrink-0 text-muted" />
+            <span className="truncate">{current?.label ?? 'All pages'}</span>
+            <ChevronDownIcon
+              className={`size-4 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {open && (
+            <nav
+              aria-label="Docs"
+              className="absolute inset-x-0 top-full max-h-[min(75dvh,40rem)] overflow-y-auto border-b border-line bg-ink px-2 py-4 shadow-[0_24px_48px_var(--site-shadow)] sm:px-4"
+            >
+              <Groups
+                groups={groups}
+                onFollow={() => {
+                  setOpen(false);
+                }}
+              />
+            </nav>
+          )}
+        </div>
+        <OnThisPageMenu />
       </div>
-    </nav>
+    </div>
   );
 }

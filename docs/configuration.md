@@ -39,7 +39,7 @@ The root stays one project, as before, when it has a design system of its own (a
 
 `onsystem.config.json` (or `.mjs`, `.js`, or `.ts` on Node.js 22.18 or later) in the project root. Every field is optional; the [JSON Schema](../schema.json) gives editor completion. `npx onsystem init` writes one: the folders zero config found, or the default `components/ui` folders when they hold the components, spelled out (it leaves `components` to zero config when a package's exports name more than a few files or import paths a config cannot spell), or your answers to where the components, tokens and import path are when it found nothing. It never replaces an existing config without `--force`. At a monorepo root it writes a config with only `$schema`, for rules all projects share. In a design-system package it also declares the config in `package.json`, so every app that depends on the package reads it, and writes `ONSYSTEM.md` for those apps' teams ([design-system packages](design-system-packages.md)); in an app that takes on such a config, it writes none of its own unless `--force` is passed.
 
-```json
+```json title="onsystem.config.json"
 {
   "$schema": "https://unpkg.com/onsystem/schema.json",
   "components": ["src/components/**/*.tsx"],

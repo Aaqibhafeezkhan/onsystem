@@ -482,10 +482,9 @@ function AgentView() {
             code={`${formatCall('check_ui', check.args)}\n\n${check.output}`}
             lang="text"
             title="check_ui"
-            wrap
           />
         )}
-        <Code code={hook} lang="text" title="Claude Code, with the plugin's hook" wrap />
+        <Code code={hook} lang="text" title="Claude Code, with the plugin's hook" />
       </div>
     </section>
   );
@@ -696,7 +695,7 @@ No new problems in ${n(files)} files (${n(findings)} in the baseline).`;
       }
     >
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <Code code={baseline} lang="sh" title="Baseline" copy="Copy the baseline commands" wrap />
+        <Code code={baseline} lang="sh" title="Baseline" copy="Copy the baseline commands" />
         <div className="grid content-start gap-4">
           <ul className="grid gap-2.5 text-[14.5px] leading-relaxed text-muted">
             {[
@@ -710,13 +709,7 @@ No new problems in ${n(files)} files (${n(findings)} in the baseline).`;
               </li>
             ))}
           </ul>
-          <Code
-            code={ci}
-            lang="yaml"
-            title=".github/workflows/ci.yml"
-            copy="Copy the CI step"
-            wrap
-          />
+          <Code code={ci} lang="yaml" title=".github/workflows/ci.yml" copy="Copy the CI step" />
           <p className="text-[14px] leading-relaxed text-muted">
             <InlineCode>--format github</InlineCode> turns findings into pull request annotations.{' '}
             <InlineCode>--require-design-system</InlineCode> fails the job when the globs stop

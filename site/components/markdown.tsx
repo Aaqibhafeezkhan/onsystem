@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { codeWrap } from '@/components/section';
+import { CodeText, INLINE_CODE } from '@/components/section';
 import { resolveDocHref } from '@/lib/site';
 
 /**
@@ -21,11 +21,8 @@ export function InlineMarkdown({ text }: { text: string }): ReactNode {
     const key = parts.length;
     if (code !== undefined) {
       parts.push(
-        <code
-          key={key}
-          className={`rounded bg-fg/[0.06] px-1 py-px font-mono text-[0.9em] text-fg-soft ${codeWrap(code)}`}
-        >
-          {code}
+        <code key={key} className={`${INLINE_CODE} text-[0.9em]`}>
+          <CodeText text={code} />
         </code>,
       );
     } else if (label !== undefined && href !== undefined) {

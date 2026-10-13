@@ -8,7 +8,7 @@ export const metadata: Metadata = docsMetadata('/docs/required-check');
 
 export default function RequiredCheckPage() {
   return (
-    <DocPage href="/docs/required-check" file="docs/required-check.md">
+    <DocPage href="/docs/required-check">
       <MarkdownBlocks markdown={docs.requiredCheck} />
     </DocPage>
   );

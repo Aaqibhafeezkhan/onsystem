@@ -50,21 +50,46 @@ export function Section({
   );
 }
 
+/** Code spans longer than this may wrap; shorter ones stay on one line, as a phone's column fits them. */
+const SHORT_CODE = 28;
+
 /**
- * How inline code wraps: up to 30 characters stays on one line, which fits the narrowest text
- * column on a phone; longer code wraps with the text, inside a long token too, so it never
- * runs past the column.
+ * Inline code that never breaks inside a flag or a class name (`--root`, `border-destructive`):
+ * short code stays on one line, longer code wraps only between its words, and a single word
+ * longer than {@link SHORT_CODE} characters breaks anywhere below 40rem, where it would not fit.
  */
-export function codeWrap(text: string): string {
-  return text.length <= 30 ? 'whitespace-nowrap' : 'break-words';
+export function CodeText({ text }: { text: string }) {
+  if (text.length <= SHORT_CODE) return <span className="whitespace-nowrap">{text}</span>;
+  return text.split(/( +)/).map((part, i) =>
+    /^ +$/.test(part) ? (
+      part
+    ) : (
+      <span
+        key={i}
+        className={
+          part.length > SHORT_CODE
+            ? 'max-sm:[overflow-wrap:anywhere] sm:whitespace-nowrap'
+            : 'whitespace-nowrap'
+        }
+      >
+        {part}
+      </span>
+    ),
+  );
 }
+
+/** The inline code style, shared with the Markdown renderer. */
+export const INLINE_CODE =
+  'rounded bg-fg/[0.06] px-1 py-px font-mono text-fg-soft box-decoration-clone';
 
 export function InlineCode({ children }: { children: ReactNode }) {
   return (
-    <code
-      className={`rounded bg-fg/[0.06] px-1 py-px font-mono text-[0.88em] text-fg-soft ${codeWrap(typeof children === 'string' ? children : '')}`}
-    >
-      {children}
+    <code className={`${INLINE_CODE} text-[0.88em]`}>
+      {typeof children === 'string' ? (
+        <CodeText text={children} />
+      ) : (
+        <span className="whitespace-nowrap">{children}</span>
+      )}
     </code>
   );
 }

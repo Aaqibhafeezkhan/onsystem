@@ -2,13 +2,13 @@
 
 The same rules as an ESLint plugin, for ESLint 9 and 10 with a flat config, so the design system is enforced in every editor and CI job that already runs ESLint, and travels with shared configs and presets.
 
-```sh
+```sh pm
 npm install --save-dev onsystem
 ```
 
 Add the recommended config at the end of `eslint.config.mjs`:
 
-```js
+```js title="eslint.config.mjs"
 import onsystem from 'onsystem/eslint';
 
 export default [
