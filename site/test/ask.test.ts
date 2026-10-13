@@ -9,12 +9,14 @@ import { GET as askStatusRoute, POST as askRoute } from '@/app/api/ask/route';
 import { DELETE as mcpDelete, GET as mcpGet, POST as mcpRoute } from '@/app/api/mcp/route';
 import { AskButton, askStatus, resetAskStatus } from '@/components/ask';
 import { DocsForAgents } from '@/components/docs-for-agents';
+import { slug } from '@/components/markdown-blocks';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import index from '@/generated/ask-index.json';
 import { askEnabled } from '@/lib/ask';
 import { ruleCatalog } from '@/lib/data';
 import { DOCS_MCP } from '@/lib/docs-mcp';
+import { FAQ } from '@/lib/faq';
 import { llmsTxt } from '@/lib/llms';
 import { DOCS_FILES, SITE_URL } from '@/lib/site';
 
@@ -29,14 +31,31 @@ afterEach(() => {
 // ─── The index ──────────────────────────────────────────────────────────────
 
 describe('the docs index', () => {
-  it('holds every docs page and every rule, as the site serves them', () => {
+  it('holds every docs page, the FAQ and every rule, as the site serves them', () => {
     const urls = index.documents.map((doc) => doc.url).sort();
     expect(urls).toEqual(
       [
         ...Object.values(DOCS_FILES),
+        '/docs/faq',
         ...ruleCatalog.rules.map((rule) => `/rules/${rule.id}`),
       ].sort(),
     );
+  });
+
+  it('leaves out the docs renderer’s markers, as the pages’ Markdown does', () => {
+    for (const chunk of index.chunks) {
+      expect(chunk.text, chunk.id).not.toMatch(/^```\w+ pm$/m);
+      expect(chunk.text, chunk.id).not.toContain('<!-- steps -->');
+    }
+    const ci = index.chunks.find((c) => c.text.includes('npm install --save-dev onsystem'));
+    expect(ci?.text).toContain('```sh\nnpm install --save-dev onsystem');
+  });
+
+  it('cites each FAQ question by the anchor the FAQ page gives it', () => {
+    const faq = index.documents.findIndex((doc) => doc.url === '/docs/faq');
+    expect(index.documents[faq]?.title).toBe('FAQ');
+    const anchors = index.chunks.filter((c) => c.doc === faq).map((c) => c.anchor);
+    expect(anchors).toEqual(FAQ.map(([question]) => slug(question)));
   });
 
   it('is keyword-only, so building and searching it calls no model', () => {
