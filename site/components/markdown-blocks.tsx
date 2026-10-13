@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Code } from '@/components/code';
 import { AnchorHeading, plainLabel } from '@/components/heading';
 import { InlineMarkdown } from '@/components/markdown';
+import { TableScroll } from '@/components/table-scroll';
 import { Tabs } from '@/components/tabs';
 import type { Lang } from '@/lib/highlight';
 import { forPackageManager, PACKAGE_MANAGERS } from '@/lib/package-managers';
@@ -290,6 +291,12 @@ const CALLOUT_STYLES: Record<CalloutKind, { title: string; frame: string; label:
   },
 };
 
+/** A scrolling table's name: the heading it is under, as ondocs names its tables. */
+function tableLabel(blocks: Block[], index: number): string {
+  const heading = blocks.slice(0, index).findLast((block) => block.type === 'heading');
+  return heading?.type === 'heading' ? plainLabel(heading.text) : 'Table';
+}
+
 function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNode {
   return blocks.map((block, i) => {
     switch (block.type) {
@@ -412,7 +419,7 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
             </ul>
             {/* A table wider than the column scrolls rather than being cut off. */}
             <div className="hidden overflow-hidden rounded-xl border border-line sm:block">
-              <div className="overflow-x-auto">
+              <TableScroll label={tableLabel(blocks, i)}>
                 <table className="w-full text-left text-[14px]">
                   <thead className="bg-raised">
                     <tr>
@@ -442,7 +449,7 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </TableScroll>
             </div>
           </div>
         );

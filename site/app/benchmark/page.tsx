@@ -5,6 +5,7 @@ import { Benchmark as EarlierBenchmark } from '@/components/benchmark';
 import { Headline, HeadlineStats } from '@/components/benchmark-summary';
 import { MarkdownBlocks } from '@/components/markdown-blocks';
 import { Eyebrow, InlineCode, TextLink } from '@/components/section';
+import { TableScroll } from '@/components/table-scroll';
 import {
   ARM_LABELS,
   count,
@@ -88,9 +89,13 @@ function ArmName({ arm }: { arm: string }) {
   );
 }
 
-/** A table that scrolls sideways on narrow screens. */
-function Scroll({ children }: { children: ReactNode }) {
-  return <div className="overflow-x-auto rounded-xl border border-line">{children}</div>;
+/** A table that scrolls sideways on narrow screens, and takes focus while it does. */
+function Scroll({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <TableScroll label={label} className="rounded-xl border border-line">
+      {children}
+    </TableScroll>
+  );
 }
 
 function Fold({ summary, children }: { summary: string; children: ReactNode }) {
@@ -111,7 +116,7 @@ function Fold({ summary, children }: { summary: string; children: ReactNode }) {
 /** Every arm, pooled over all models. */
 function ArmsTable() {
   return (
-    <Scroll>
+    <Scroll label="Results by arm">
       <table data-table="arms" className="w-full min-w-[720px] text-left text-[13px]">
         <caption className="sr-only">
           Results by arm, pooled over all {benchmark.models.length} models, with 95% intervals
@@ -219,7 +224,7 @@ function DeltaHead({ first }: { first: ReactNode }) {
 /** Each arm against `none`, pooled over all models. */
 function DeltasTable() {
   return (
-    <Scroll>
+    <Scroll label="Each arm against no onsystem">
       <table data-table="deltas" className="w-full min-w-[680px] text-left text-[13px]">
         <caption className="sr-only">
           Each arm against no onsystem, paired on model, task and repeat, all models, with 95%
@@ -265,7 +270,7 @@ function ModelCell({ model }: { model: string }) {
 /** Every row of results.json: each model, each tier's models, all models. */
 function ModelsTable() {
   return (
-    <Scroll>
+    <Scroll label="Results by model">
       <table data-table="models" className="w-full min-w-[1080px] text-left text-[13px]">
         <caption className="sr-only">
           Results for every model and arm, then each tier and all models pooled, with 95% intervals
@@ -324,7 +329,7 @@ function ModelsTable() {
 /** Every paired difference in results.json. */
 function ModelDeltasTable() {
   return (
-    <Scroll>
+    <Scroll label="Each arm against no onsystem, by model">
       <table data-table="model-deltas" className="w-full min-w-[820px] text-left text-[13px]">
         <caption className="sr-only">
           Each arm against no onsystem for every model, each tier and all models, with 95% intervals
@@ -371,7 +376,7 @@ function LabelsTable() {
     </>
   );
   return (
-    <Scroll>
+    <Scroll label="Blind labels by arm">
       <table data-table="labels" className="w-full min-w-[640px] text-left text-[13px]">
         <caption className="sr-only">
           The blind-labelled sample by arm, as the labeller counted it, with 95% intervals
@@ -603,7 +608,8 @@ export default function BenchmarkPage() {
                 </p>
               </Prose>
               <Fold summary={`The ${String(benchmark.tasks.length)} prompts`}>
-                <ul className="grid gap-4 text-[14px] leading-relaxed">
+                {/* The prompts name long file paths, which break anywhere on a phone. */}
+                <ul className="grid gap-4 text-[14px] leading-relaxed [overflow-wrap:anywhere]">
                   {benchmark.repos.map((repo) => (
                     <li key={repo.name}>
                       <p className="font-mono text-[12.5px] text-fg-soft">{repo.name}</p>
@@ -621,7 +627,7 @@ export default function BenchmarkPage() {
             </Sub>
 
             <Sub title="The repositories">
-              <Scroll>
+              <Scroll label="The repositories">
                 <table className="w-full min-w-[720px] text-left text-[13px]">
                   <thead className="bg-raised">
                     <tr>
@@ -681,7 +687,7 @@ export default function BenchmarkPage() {
                 </p>
               </Prose>
               <div className="mt-4">
-                <Scroll>
+                <Scroll label="The models">
                   <table className="w-full min-w-[560px] text-left text-[13px]">
                     <thead className="bg-raised">
                       <tr>
