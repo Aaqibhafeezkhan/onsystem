@@ -222,7 +222,7 @@ describe('the footer', () => {
     expect(columns.map((c) => c[1])).toEqual(['Project', 'For agents', 'More by Diogo Esteves']);
     const [project, agents, more] = columns.map((c) => text(c[2] ?? ''));
     expect(project).toMatch(/^Project Docs Changelog Issues npm v\d+\.\d+\.\d+$/);
-    expect(agents).toBe('For agents llms.txt llms-full.txt MCP server');
+    expect(agents).toBe('For agents llms.txt llms-full.txt MCP server Docs over MCP');
     for (const sibling of MORE) expect(more).toContain(sibling.name);
     const links = columns[1]?.[2] ?? '';
     expect(links).toContain('href="/llms.txt"');

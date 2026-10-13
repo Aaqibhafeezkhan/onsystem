@@ -906,3 +906,59 @@ write('social.json', {
   stars: count(repoInfo?.stargazers_count),
   weeklyDownloads: count(downloads?.downloads),
 });
+
+// ─── The docs index for Ask and MCP ─────────────────────────────────────────
+
+// ondocs's search index over the docs and the rules, for /api/ask and /api/mcp. Keyword-only
+// (BM25, no embedding model), so building it needs no API key and an agent's searches over MCP
+// call no model at all. The pages are those of DOCS_FILES in lib/site.ts; test/ask.test.ts keeps
+// the two lists in step.
+const { buildIndex, fromMarkdown, serializeIndexFile } = await import('ondocs');
+const ASK_PAGES = {
+  'quickstart.md': '/docs',
+  'plugin.md': '/docs/plugin',
+  'ci.md': '/docs/ci',
+  'required-check.md': '/docs/required-check',
+  'clients.md': '/docs/clients',
+  'configuration.md': '/docs/configuration',
+  'design-system-packages.md': '/docs/design-system-packages',
+  'tokens.md': '/docs/tokens',
+  'eslint.md': '/docs/eslint',
+  'tools.md': '/docs/tools',
+  'troubleshooting.md': '/docs/troubleshooting',
+  'how-it-works.md': '/docs/how-it-works',
+  'migrating.md': '/docs/migrating',
+  'rules.md': '/rules',
+};
+const fence = (code, lang) => `\`\`\`${lang}\n${code.trimEnd()}\n\`\`\``;
+const askDocuments = [
+  ...Object.entries(ASK_PAGES).map(([name, url]) =>
+    fromMarkdown(fs.readFileSync(path.join(repo, 'docs', name), 'utf8'), {
+      id: `docs/${name}`,
+      url,
+    }),
+  ),
+  // Each rule's page, from the same data the page renders.
+  ...rules.map((rule) =>
+    fromMarkdown(
+      [
+        `# ${rule.id}`,
+        `${rule.description} ${rule.severity === 'error' ? 'An error' : 'A warning'} by default.`,
+        `## What it catches\n\n${rule.catches}`,
+        `## What it suggests\n\n${rule.suggests}`,
+        `## Why it matters\n\n${rule.why}`,
+        `## Example\n\n${fence(rule.bad, 'tsx')}\n\n${rule.findings.map((f) => `- ${f.line}:${f.column} ${f.message}`).join('\n')}`,
+        `## Fixed\n\n${fence(rule.good, 'tsx')}`,
+      ].join('\n\n'),
+      { id: `rules/${rule.id}`, url: `/rules/${rule.id}` },
+    ),
+  ),
+].filter(Boolean);
+const { index: askIndex, stats: askStats } = await buildIndex({
+  documents: askDocuments,
+  embeddingModel: null,
+});
+fs.writeFileSync(path.join(OUT, 'ask-index.json'), `${serializeIndexFile(askIndex)}\n`);
+console.log(
+  `generated/ask-index.json ${(fs.statSync(path.join(OUT, 'ask-index.json')).size / 1024).toFixed(1)}kB, ${askStats.documents} pages, ${askStats.chunks} chunks`,
+);

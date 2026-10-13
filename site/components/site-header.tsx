@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { AskButton } from '@/components/ask';
 import { GitHubIcon } from '@/components/icons';
 import { LogoMark } from '@/components/logo';
 import { NavLink } from '@/components/nav-link';
@@ -56,6 +57,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 md:ml-1">
+          <AskButton />
           <ThemeSwitch className="hidden md:flex" />
           <a
             href={REPO}

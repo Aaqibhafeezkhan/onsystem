@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { DocPage, docsMetadata } from '@/components/doc-page';
+import { DocsForAgents } from '@/components/docs-for-agents';
 import { InstallPanel } from '@/components/install';
 import { MarkdownBlocks } from '@/components/markdown-blocks';
 import { docs } from '@/lib/data';
@@ -21,6 +22,7 @@ export default function QuickstartPage() {
     >
       <InstallPanel className="mb-10" />
       <MarkdownBlocks markdown={docs.quickstart} />
+      <DocsForAgents />
     </DocPage>
   );
 }
