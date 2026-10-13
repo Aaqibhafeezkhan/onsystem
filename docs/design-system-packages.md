@@ -21,7 +21,7 @@ Then it checks the package once and offers a baseline, as in any project. When `
 
 In a package that already has a config, `init` leaves it as it is (`--force` would replace it) and says to add the field by hand. The field names a JSON file in the package:
 
-```json
+```json title="package.json"
 {
   "name": "@acme/ui",
   "exports": { ".": "./dist/index.mjs" },

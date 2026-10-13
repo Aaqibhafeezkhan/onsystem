@@ -8,7 +8,7 @@ export const metadata: Metadata = docsMetadata('/docs/design-system-packages');
 
 export default function DesignSystemPackagesPage() {
   return (
-    <DocPage href="/docs/design-system-packages" file="docs/design-system-packages.md">
+    <DocPage href="/docs/design-system-packages">
       <MarkdownBlocks markdown={docs.designSystemPackages} />
     </DocPage>
   );

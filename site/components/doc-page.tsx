@@ -3,26 +3,39 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { ArrowRightIcon } from '@/components/icons';
+import { PageActions } from '@/components/page-actions';
 import { Eyebrow } from '@/components/section';
 import { docsPage, docsSlug, type DocsHref, type DocsPage } from '@/lib/docs';
-import { pageMetadata } from '@/lib/metadata';
 import { lastModified } from '@/lib/git';
+import { pageMetadata } from '@/lib/metadata';
+import { markdownPath, markdownUrl } from '@/lib/page-markdown';
 import { AUTHOR, repoLink, SITE_URL } from '@/lib/site';
 
-/** The frame of a docs page: title, lead, content, where it comes from, and the next page. */
+/** "Oct 12, 2026", in UTC so the build's time zone does not move it. */
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * The frame of a docs page: its group, title and lead, the page actions, the content, when it
+ * last changed and where to edit it, and the pages before and after it.
+ */
 export function DocPage({
   href,
   lead,
-  file,
   children,
 }: {
   href: DocsHref;
   lead?: ReactNode;
-  /** The file in the repository the page is generated from, such as `docs/ci.md`. */
-  file?: string;
   children: ReactNode;
 }) {
   const { page, previous, next } = docsPage(href);
+  const modified = lastModified([page.source]);
   return (
     <main id="main" className="min-w-0">
       <script
@@ -32,36 +45,45 @@ export function DocPage({
           __html: JSON.stringify(docsJsonLd(page)).replace(/</g, '\\u003c'),
         }}
       />
-      <Eyebrow>Docs</Eyebrow>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Eyebrow>{page.group}</Eyebrow>
+        <PageActions markdownPath={markdownPath(page)} markdownUrl={markdownUrl(page)} />
+      </div>
       <h1 className="mt-3 text-[2rem] leading-[1.1] font-semibold tracking-[-0.025em] text-balance text-fg sm:text-[2.4rem]">
         {page.title}
       </h1>
-      {lead && (
+      {(lead ?? page.lead) && (
         <div className="mt-4 max-w-3xl text-base leading-relaxed text-muted sm:text-[17px]">
-          {lead}
+          {lead ?? <p>{page.lead}</p>}
         </div>
       )}
       <div className="mt-10 max-w-3xl">{children}</div>
 
-      {file && (
-        <p className="mt-12 max-w-3xl border-t border-line pt-5 text-[13px] text-subtle">
-          <a
-            href={repoLink(file, 'edit')}
-            className="text-muted underline decoration-line-strong underline-offset-4 hover:text-fg"
-          >
-            Edit this page on GitHub
-          </a>
-        </p>
-      )}
+      <div className="mt-12 flex max-w-3xl flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-line pt-5 text-[13px] text-subtle">
+        <a
+          href={repoLink(page.source, 'edit')}
+          className="text-muted underline decoration-line-strong underline-offset-4 hover:text-fg"
+        >
+          Edit this page on GitHub
+        </a>
+        {modified && (
+          <p>
+            Last updated <time dateTime={modified.toISOString()}>{formatDate(modified)}</time>
+          </p>
+        )}
+      </div>
 
       <nav aria-label="Previous and next" className="mt-8 grid max-w-3xl gap-3 sm:grid-cols-2">
         {previous ? (
           <Link
             href={previous.href}
-            className="rounded-xl border border-line bg-raised px-4 py-3 transition-colors hover:border-line-strong"
+            className="group rounded-xl border border-line bg-raised px-4 py-3 transition-colors hover:border-line-strong"
           >
             <span className="block text-[12px] text-subtle">Previous</span>
-            <span className="text-[15px] font-medium text-fg">{previous.title}</span>
+            <span className="inline-flex items-center gap-1.5 text-[15px] font-medium text-fg">
+              <ArrowRightIcon className="size-4 rotate-180 text-subtle transition-transform group-hover:-translate-x-0.5 group-hover:text-cyan" />
+              {previous.label ?? previous.title}
+            </span>
           </Link>
         ) : (
           <span className="hidden sm:block" />
@@ -73,7 +95,7 @@ export function DocPage({
           >
             <span className="block text-[12px] text-subtle">Next</span>
             <span className="inline-flex items-center gap-1.5 text-[15px] font-medium text-fg">
-              {next.title}
+              {next.label ?? next.title}
               <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
             </span>
           </Link>

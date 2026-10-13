@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { Line } from '@/components/code';
+import { Code } from '@/components/code';
 import { InlineMarkdown } from '@/components/markdown';
+import { OnThisPageRail, type TocItem } from '@/components/on-this-page';
 import { MarkdownBlocks } from '@/components/markdown-blocks';
 import { RuleCard } from '@/components/rule-example';
 import { RuleHashRedirect } from '@/components/rule-hash-redirect';
 import { Eyebrow, InlineCode, TextLink } from '@/components/section';
 import { ruleCatalog } from '@/lib/data';
-import { highlightLines } from '@/lib/highlight';
 import { pageMetadata } from '@/lib/metadata';
 import { repoLink } from '@/lib/site';
 
@@ -21,6 +21,22 @@ export const metadata: Metadata = pageMetadata({
   description,
   path: '/rules',
 });
+
+const RULES_CONFIG = `{
+  "rules": {
+    "no-hardcoded-spacing": "error",
+    "no-hardcoded-color": ["error", { "allow": ["#fff"] }],
+    "icon-button-accessible-name": "off"
+  }
+}`;
+
+/** "On this page": each rule's card, then the sections under the list. */
+const TOC: TocItem[] = [
+  ...ruleCatalog.rules.map((rule) => ({ id: rule.id, label: rule.id, level: 2 })),
+  { id: 'configure', label: 'Configuring the rules', level: 2 },
+  { id: 'suppressing-findings', label: 'Suppressing findings', level: 2 },
+  { id: 'fixes', label: 'How fixes are chosen', level: 2 },
+];
 
 export default function RulesPage() {
   const { rules, version, details, suppression } = ruleCatalog;
@@ -50,95 +66,84 @@ export default function RulesPage() {
         </div>
 
         <RuleHashRedirect ids={rules.map((rule) => rule.id)} />
-        <div className="mt-10 lg:mt-14">
-          <ul aria-label="Rules" className="grid gap-3 md:grid-cols-2">
-            {rules.map((rule) => (
-              // The id keeps old links to a rule's section (/rules#no-unknown-prop) landing on it.
-              <li key={rule.id} id={rule.id} className="scroll-mt-20">
-                <RuleCard rule={rule} />
-              </li>
-            ))}
-          </ul>
+        <div className="mt-10 grid grid-cols-[minmax(0,1fr)] gap-10 lg:mt-14 lg:grid-cols-[minmax(0,1fr)_10.5rem] xl:grid-cols-[minmax(0,1fr)_12rem] xl:gap-12">
+          <div className="min-w-0">
+            <ul aria-label="Rules" className="grid gap-3 md:grid-cols-2">
+              {rules.map((rule) => (
+                // The id keeps old links to a rule's section (/rules#no-unknown-prop) landing on it.
+                <li key={rule.id} id={rule.id} className="scroll-mt-20">
+                  <RuleCard rule={rule} />
+                </li>
+              ))}
+            </ul>
 
-          <div className="mt-14 max-w-3xl">
-            <section
-              id="configure"
-              aria-labelledby="configure-title"
-              className="scroll-mt-20 border-t border-line pt-10 pb-12"
-            >
-              <h2 id="configure-title" className="text-xl font-semibold tracking-tight text-fg">
-                Configuring the rules
-              </h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-muted">
-                Set a rule to <InlineCode>&quot;off&quot;</InlineCode>,{' '}
-                <InlineCode>&quot;warn&quot;</InlineCode> or{' '}
-                <InlineCode>&quot;error&quot;</InlineCode>, or give it values to accept with{' '}
-                <InlineCode>
-                  [severity, {'{'} &quot;allow&quot;: [...] {'}'}]
-                </InlineCode>
-                , in <InlineCode>onsystem.config.json</InlineCode>. Rules that need tokens skip
-                themselves when the design system has none of that kind, and code that does not
-                parse is reported under <InlineCode>syntax</InlineCode>.{' '}
-                <Link
-                  href="/docs/configuration#config-file"
-                  className="text-fg underline decoration-line-strong underline-offset-4 hover:decoration-cyan"
+            <div className="mt-14 max-w-3xl">
+              <section
+                id="configure"
+                aria-labelledby="configure-title"
+                className="scroll-mt-20 border-t border-line pt-10 pb-12"
+              >
+                <h2 id="configure-title" className="text-xl font-semibold tracking-tight text-fg">
+                  Configuring the rules
+                </h2>
+                <p className="mt-3 text-[15px] leading-relaxed text-muted">
+                  Set a rule to <InlineCode>&quot;off&quot;</InlineCode>,{' '}
+                  <InlineCode>&quot;warn&quot;</InlineCode> or{' '}
+                  <InlineCode>&quot;error&quot;</InlineCode>, or give it values to accept with{' '}
+                  <InlineCode>
+                    [severity, {'{'} &quot;allow&quot;: [...] {'}'}]
+                  </InlineCode>
+                  , in <InlineCode>onsystem.config.json</InlineCode>. Rules that need tokens skip
+                  themselves when the design system has none of that kind, and code that does not
+                  parse is reported under <InlineCode>syntax</InlineCode>.{' '}
+                  <Link
+                    href="/docs/configuration#config-file"
+                    className="text-fg underline decoration-line-strong underline-offset-4 hover:decoration-cyan"
+                  >
+                    The config file
+                  </Link>{' '}
+                  covers the rest.
+                </p>
+                <Code
+                  code={RULES_CONFIG}
+                  lang="json"
+                  title="onsystem.config.json"
+                  copy="Copy the config"
+                  className="mt-4"
+                />
+              </section>
+
+              <section
+                id="suppressing-findings"
+                aria-labelledby="suppressing-findings-title"
+                className="scroll-mt-20 border-t border-line pt-10 pb-12"
+              >
+                <h2
+                  id="suppressing-findings-title"
+                  className="text-xl font-semibold tracking-tight text-fg"
                 >
-                  The config file
-                </Link>{' '}
-                covers the rest.
-              </p>
-              <pre
-                tabIndex={0}
-                className="code mt-4 overflow-x-auto rounded-xl border border-line bg-code px-4 py-3 text-[12.5px] leading-[1.7]"
-              >
-                <code>
-                  {highlightLines(
-                    `{
-  "rules": {
-    "no-hardcoded-spacing": "error",
-    "no-hardcoded-color": ["error", { "allow": ["#fff"] }],
-    "icon-button-accessible-name": "off"
-  }
-}`,
-                    'json',
-                  ).map((segments, i) => (
-                    <span key={i} className="block">
-                      <Line segments={segments} />
-                    </span>
-                  ))}
-                </code>
-              </pre>
-            </section>
+                  Suppressing findings
+                </h2>
+                <div className="mt-3">
+                  <MarkdownBlocks markdown={suppression} />
+                </div>
+              </section>
 
-            <section
-              id="suppressing-findings"
-              aria-labelledby="suppressing-findings-title"
-              className="scroll-mt-20 border-t border-line pt-10 pb-12"
-            >
-              <h2
-                id="suppressing-findings-title"
-                className="text-xl font-semibold tracking-tight text-fg"
+              <section
+                id="fixes"
+                aria-labelledby="fixes-title"
+                className="scroll-mt-20 border-t border-line pt-10"
               >
-                Suppressing findings
-              </h2>
-              <div className="mt-3">
-                <MarkdownBlocks markdown={suppression} />
-              </div>
-            </section>
-
-            <section
-              id="fixes"
-              aria-labelledby="fixes-title"
-              className="scroll-mt-20 border-t border-line pt-10"
-            >
-              <h2 id="fixes-title" className="text-xl font-semibold tracking-tight text-fg">
-                How fixes are chosen
-              </h2>
-              <p className="mt-3 text-[15px] leading-relaxed text-muted">
-                <InlineMarkdown text={details} />
-              </p>
-            </section>
+                <h2 id="fixes-title" className="text-xl font-semibold tracking-tight text-fg">
+                  How fixes are chosen
+                </h2>
+                <p className="mt-3 text-[15px] leading-relaxed text-muted">
+                  <InlineMarkdown text={details} />
+                </p>
+              </section>
+            </div>
           </div>
+          <OnThisPageRail items={TOC} className="hidden lg:block" />
         </div>
       </div>
     </main>

@@ -8,7 +8,7 @@ export const metadata: Metadata = docsMetadata('/docs/troubleshooting');
 
 export default function TroubleshootingPage() {
   return (
-    <DocPage href="/docs/troubleshooting" file="docs/troubleshooting.md">
+    <DocPage href="/docs/troubleshooting">
       <MarkdownBlocks markdown={docs.troubleshooting} />
     </DocPage>
   );

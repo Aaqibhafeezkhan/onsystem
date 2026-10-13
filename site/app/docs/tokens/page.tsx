@@ -8,7 +8,7 @@ export const metadata: Metadata = docsMetadata('/docs/tokens');
 
 export default function TokensPage() {
   return (
-    <DocPage href="/docs/tokens" file="docs/tokens.md">
+    <DocPage href="/docs/tokens">
       <MarkdownBlocks markdown={docs.tokens} />
     </DocPage>
   );
