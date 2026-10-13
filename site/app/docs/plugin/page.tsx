@@ -30,9 +30,12 @@ export default function PluginPage() {
         </a>
         :
       </p>
-      {/* Quoted, so its own headings are set small and stay out of this page's outline. */}
+      {/*
+        Quoted, so its own headings are set small and stay out of this page's outline; they are
+        h3 and h4 under this h2, so the heading levels never skip one.
+      */}
       <blockquote className="mt-6 rounded-2xl border border-line bg-raised p-5 sm:p-6">
-        <MarkdownBlocks markdown={skill} shift={-2} />
+        <MarkdownBlocks markdown={skill} shift={-1} quiet />
       </blockquote>
     </DocPage>
   );

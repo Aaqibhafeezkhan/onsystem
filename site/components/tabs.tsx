@@ -112,7 +112,7 @@ export function Tabs({
                 choose(next);
                 list.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
               }}
-              className="cursor-pointer border-b-2 border-transparent px-2.5 font-mono text-[12px] text-subtle transition-colors hover:text-fg focus-visible:-outline-offset-2 aria-selected:border-cyan aria-selected:text-fg"
+              className="tap cursor-pointer border-b-2 border-transparent px-2.5 font-mono text-[12px] text-subtle transition-colors hover:text-fg focus-visible:-outline-offset-2 aria-selected:border-cyan aria-selected:text-fg"
             >
               {label}
             </button>

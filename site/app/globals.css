@@ -65,6 +65,11 @@
   --site-scrollbar: light-dark(#cdd2d9, #2b313a);
 }
 
+/* Prose at about 70 characters a line, whatever its size (Geist averages under half an em). */
+@utility measure {
+  max-width: 34em;
+}
+
 .light {
   color-scheme: light;
 }
@@ -103,6 +108,25 @@ body {
   :target,
   section[id] {
     scroll-margin-top: 5rem;
+  }
+}
+
+/*
+ * On touch screens a small control gets a 44 px target without growing: an invisible box
+ * centred on it. On a mouse it is exactly as drawn.
+ */
+@media (pointer: coarse) {
+  .tap {
+    position: relative;
+  }
+  .tap::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    content: '';
+    translate: -50% -50%;
   }
 }
 

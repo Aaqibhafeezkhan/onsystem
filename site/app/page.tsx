@@ -9,7 +9,7 @@ import { ArrowRightIcon, CheckIcon } from '@/components/icons';
 import { InstallPanel, StarButton } from '@/components/install';
 import { LoopDemo } from '@/components/loop-demo';
 import { InlineMarkdown } from '@/components/markdown';
-import { Eyebrow, InlineCode, Section, TextLink } from '@/components/section';
+import { Eyebrow, InlineCode, Section, SubSection, TextLink } from '@/components/section';
 import { headline } from '@/lib/benchmark';
 import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
 import { formatJson, inline } from '@/lib/format-json';
@@ -64,9 +64,7 @@ export default function Home() {
       <Hero />
       <Problem />
       <Proof />
-      <RealCodebases />
       <HowItWorks />
-      <AgentView />
       <ShadcnLint />
       <WorksWith />
       <Adoption />
@@ -132,10 +130,14 @@ function Hero() {
               <StarButton />
               <Link
                 href="/benchmark"
-                className="group inline-flex items-center gap-1.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
+                className="group text-sm font-medium text-fg-soft transition-colors hover:text-fg"
               >
-                {`Rule violations per run: ${result.from} → ${result.to} over ${result.runs} runs`}
-                <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+                {`Rule violations per run: ${result.from} → ${result.to} over ${result.runs} `}
+                {/* The arrow stays with the last word when the line wraps. */}
+                <span className="whitespace-nowrap">
+                  runs
+                  <ArrowRightIcon className="ml-1.5 inline size-4 -translate-y-px text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+                </span>
               </Link>
             </div>
           </div>
@@ -193,8 +195,12 @@ function Hero() {
   );
 }
 
+/** The demo's findings that `tsc` reports too: an invalid variant, an unknown prop, a missing member. */
+const TSC_RULES = new Set(['no-unknown-variant', 'no-unknown-prop', 'no-unknown-component']);
+
 function Problem() {
   const errors = demo.errorCount + demo.warningCount;
+  const tsc = demo.findings.filter((f) => TSC_RULES.has(f.ruleId)).length;
   return (
     <Section
       id="problem"
@@ -211,14 +217,80 @@ function Problem() {
             with a screen reader.
           </p>
           <p className="mt-4">
-            On the draft above, <InlineCode>tsc</InlineCode> reports 3 of the {errors} problems: the
-            invalid variant, the unknown prop and the missing member. It has no opinion on hex
+            On the draft above, <InlineCode>tsc</InlineCode> reports {tsc} of the {errors} problems:
+            the invalid variant, the unknown prop and the missing member. It has no opinion on hex
             colors, off-scale spacing, native elements or accessible names. Review catches the rest,
             when someone has the time.
           </p>
         </>
       }
+      aside={<CaughtBy tsc={tsc} />}
     />
+  );
+}
+
+/** The demo draft's findings, and which of them `tsc` reports as well as `check_ui`. */
+function CaughtBy({ tsc }: { tsc: number }) {
+  const mark = (caught: boolean, who: string) =>
+    caught ? (
+      <>
+        <CheckIcon className="mx-auto size-4 text-success" aria-hidden="true" />
+        <span className="sr-only">{who} reports it</span>
+      </>
+    ) : (
+      <>
+        <span className="text-subtle" aria-hidden="true">
+          –
+        </span>
+        <span className="sr-only">{who} misses it</span>
+      </>
+    );
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-raised">
+      <table className="w-full text-left text-[13px]">
+        <caption className="border-b border-line px-4 py-3 text-left text-[13px] font-medium text-fg">
+          The draft, checked by each
+        </caption>
+        <thead className="font-mono text-[11px] tracking-[0.12em] text-subtle uppercase">
+          <tr className="border-b border-line">
+            <th scope="col" className="px-4 py-2 font-medium">
+              In the draft
+            </th>
+            <th scope="col" className="w-16 px-2 py-2 text-center font-medium normal-case">
+              tsc
+            </th>
+            <th scope="col" className="w-20 px-2 py-2 pr-4 text-center font-medium normal-case">
+              check_ui
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line/60">
+          {demo.findings.map((f, i) => (
+            <tr key={i}>
+              <th scope="row" className="px-4 py-1.5 font-normal">
+                <span className="block font-mono text-[12.5px] out-string">{f.found}</span>
+                <span className="block font-mono text-[11px] out-accent">{f.ruleId}</span>
+              </th>
+              <td className="px-2 py-1.5 text-center">{mark(TSC_RULES.has(f.ruleId), 'tsc')}</td>
+              <td className="px-2 py-1.5 pr-4 text-center">{mark(true, 'check_ui')}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="border-t border-line font-mono text-[12px]">
+          <tr>
+            <th scope="row" className="px-4 py-2.5 text-left font-medium text-fg-soft">
+              Reported
+            </th>
+            <td className="px-2 py-2.5 text-center text-muted">
+              {tsc}/{demo.findings.length}
+            </td>
+            <td className="px-2 py-2.5 pr-4 text-center text-success">
+              {demo.findings.length}/{demo.findings.length}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   );
 }
 
@@ -244,12 +316,16 @@ function Proof() {
       <p className="mt-6 text-[15px] leading-relaxed text-muted">
         <Link
           href="/benchmark"
-          className="group inline-flex items-center gap-1.5 font-medium text-fg-soft transition-colors hover:text-fg"
+          className="group font-medium text-fg-soft transition-colors hover:text-fg"
         >
-          The tables by arm and model, the blind labels, the method and how to reproduce it
-          <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+          The tables by arm and model, the blind labels, the method and how to reproduce{' '}
+          <span className="whitespace-nowrap">
+            it
+            <ArrowRightIcon className="ml-1.5 inline size-4 -translate-y-px text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+          </span>
         </Link>
       </p>
+      <RealCodebases />
     </Section>
   );
 }
@@ -257,34 +333,30 @@ function Proof() {
 function RealCodebases() {
   const { intro, rows } = readme.realCodebases;
   return (
-    <section
-      aria-labelledby="real-codebases-title"
+    <SubSection
       id="real-codebases"
-      className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6 sm:pb-20"
+      title="On real codebases, with zero config"
+      lead={
+        <>
+          <p>
+            <InlineMarkdown text={intro} />
+          </p>
+          <p className="mt-3">
+            How often it is wrong is measured, not guessed: the{' '}
+            <TextLink href={repoLink('corpus', 'tree')}>corpus</TextLink> runs{' '}
+            <InlineCode>check</InlineCode> on {corpus.repos} public repositories pinned by commit (
+            {corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct findings) and
+            compares the findings with labels. In a random sample of {corpus.sample},{' '}
+            {corpus.truePositives} are clearly right, {corpus.debatable} debatable and{' '}
+            {corpus.falsePositives} false positives (
+            {((corpus.falsePositives / corpus.sample) * 100).toFixed(1)}%); weighted by run and
+            rule, about {(corpus.weightedRate * 100).toFixed(1)}% of all findings are false
+            positives.
+          </p>
+        </>
+      }
     >
-      <div className="max-w-3xl">
-        <h3
-          id="real-codebases-title"
-          className="text-xl font-semibold tracking-tight text-fg sm:text-2xl"
-        >
-          On real codebases, with zero config
-        </h3>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          <InlineMarkdown text={intro} />
-        </p>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          How often it is wrong is measured, not guessed: the{' '}
-          <TextLink href={repoLink('corpus', 'tree')}>corpus</TextLink> runs{' '}
-          <InlineCode>check</InlineCode> on {corpus.repos} public repositories pinned by commit (
-          {corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct findings) and
-          compares the findings with labels. In a random sample of {corpus.sample},{' '}
-          {corpus.truePositives} are clearly right, {corpus.debatable} debatable and{' '}
-          {corpus.falsePositives} false positives (
-          {((corpus.falsePositives / corpus.sample) * 100).toFixed(1)}%); weighted by run and rule,
-          about {(corpus.weightedRate * 100).toFixed(1)}% of all findings are false positives.
-        </p>
-      </div>
-      <ul className="mt-8 grid gap-4 lg:grid-cols-3">
+      <ul className="grid gap-4 lg:grid-cols-3">
         {rows.map(([project = '', found = '', findings = '']) => (
           <li key={project} className="rounded-2xl border border-line bg-raised p-5">
             <p className="font-mono text-[13px] text-fg-soft">
@@ -309,7 +381,7 @@ function RealCodebases() {
           </li>
         ))}
       </ul>
-    </section>
+    </SubSection>
   );
 }
 
@@ -438,6 +510,7 @@ function HowItWorks() {
           </p>
         </Card>
       </div>
+      <AgentView />
     </Section>
   );
 }
@@ -461,22 +534,18 @@ function AgentView() {
 ⏺ Write(app/promo/page.tsx)   →   <Button variant="destructive"> on bg-muted, hook passes`;
   const code = check?.args.code;
   return (
-    <section
-      aria-labelledby="agent-view-title"
-      className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6 sm:pb-20"
+    <SubSection
+      id="agent-view"
+      title="What the agent sees"
+      lead={
+        <p>
+          Compact Markdown for the model, with JSON <InlineCode>structuredContent</InlineCode> for
+          programs. These are the server&apos;s responses on the demo design system, captured when
+          this site was built.
+        </p>
+      }
     >
-      <h3
-        id="agent-view-title"
-        className="text-xl font-semibold tracking-tight text-fg sm:text-2xl"
-      >
-        What the agent sees
-      </h3>
-      <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-muted">
-        Compact Markdown for the model, with JSON <InlineCode>structuredContent</InlineCode> for
-        programs. These are the server&apos;s responses on the demo design system, captured when
-        this site was built.
-      </p>
-      <div className="mt-8 grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {component && (
           <div className="relative min-w-0 lg:row-span-2">
             <Code
@@ -509,7 +578,7 @@ function AgentView() {
         )}
         <Code code={hook} lang="text" title="Claude Code, with the plugin's hook" />
       </div>
-    </section>
+    </SubSection>
   );
 }
 

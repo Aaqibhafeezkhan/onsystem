@@ -50,7 +50,7 @@ export function CodeTabs({
                 setActive(next);
                 list.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
               }}
-              className="cursor-pointer rounded-md px-2 py-1 text-[11.5px] text-subtle transition-colors hover:text-fg aria-selected:bg-raised-2 aria-selected:text-fg"
+              className="tap cursor-pointer rounded-md px-2 py-1 text-[11.5px] text-subtle transition-colors hover:text-fg aria-selected:bg-raised-2 aria-selected:text-fg"
             >
               {name}
             </button>

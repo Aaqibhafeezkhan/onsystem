@@ -53,7 +53,7 @@ export function DocPage({
         {page.title}
       </h1>
       {(lead ?? page.lead) && (
-        <div className="mt-4 max-w-3xl text-base leading-relaxed text-muted sm:text-[17px]">
+        <div className="measure mt-4 text-base leading-relaxed text-muted sm:text-[17px]">
           {lead ?? <p>{page.lead}</p>}
         </div>
       )}

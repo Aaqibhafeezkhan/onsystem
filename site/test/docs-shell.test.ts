@@ -127,9 +127,9 @@ describe('a docs page', () => {
 
   it('sets SKILL.md’s headings small on the plugin page, out of its outline', () => {
     const page = render(createElement(PluginPage));
-    expect(page).toMatch(/<h4 id="before-writing-ui"/);
-    expect(page).not.toMatch(/<h[23] id="before-writing-ui"/);
-    expect(page).not.toMatch(/<h4[^>]*data-toc/);
+    // An h3 under the page's h2, so no level is skipped, set small and out of the outline.
+    expect(page).toMatch(/<h3 id="before-writing-ui" data-level="3"/);
+    expect(page).not.toMatch(/id="(?:before|after)-writing-ui" data-toc/);
     expect(page).toMatch(/<h2 id="the-skill" data-toc="What the skill tells Claude"/);
   });
 

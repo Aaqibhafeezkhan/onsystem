@@ -8,6 +8,7 @@ import { ArrowRightIcon } from '@/components/icons';
 import { InlineMarkdown } from '@/components/markdown';
 import { MarkedCode, Panel, RuleCard, RuleExample, Severity } from '@/components/rule-example';
 import { Eyebrow, InlineCode, TextLink } from '@/components/section';
+import { SentenceList } from '@/components/sentence-list';
 import { ruleCatalog, type RuleEntry } from '@/lib/data';
 import { pageMetadata } from '@/lib/metadata';
 import { plainText, repoLink, ruleHref } from '@/lib/site';
@@ -60,7 +61,7 @@ function Block({ id, title, children }: { id: string; title: string; children: R
   );
 }
 
-const prose = 'max-w-3xl text-[15.5px] leading-relaxed text-muted';
+const prose = 'measure text-[15.5px] leading-relaxed text-muted';
 
 export default async function RulePage({ params }: { params: Promise<{ id: string }> }) {
   const rule = findRule((await params).id);
@@ -106,7 +107,7 @@ export default async function RulePage({ params }: { params: Promise<{ id: strin
           <div className="mt-4">
             <Severity severity={rule.severity} />
           </div>
-          <p className="mt-4 text-base leading-relaxed text-fg-soft sm:text-[17px]">
+          <p className="measure mt-4 text-base leading-relaxed text-fg-soft sm:text-[17px]">
             <InlineMarkdown text={rule.description} />
           </p>
         </div>
@@ -161,9 +162,7 @@ export default async function RulePage({ params }: { params: Promise<{ id: strin
                   : 'The code after the fix needed a decision, so it was written by hand and checked clean.'}
               </p>
               {rule.id.startsWith('no-hardcoded-') && (
-                <p className="mt-3">
-                  <InlineMarkdown text={details} />
-                </p>
+                <SentenceList text={details} className="mt-4" />
               )}
             </div>
           </Block>

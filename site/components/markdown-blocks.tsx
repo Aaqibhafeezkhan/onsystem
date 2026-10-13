@@ -240,10 +240,24 @@ export function parseBlocks(markdown: string): Block[] {
   return blocks;
 }
 
-function Heading({ level, text, className }: { level: number; text: string; className?: string }) {
+function Heading({
+  level,
+  text,
+  quiet = false,
+  className,
+}: {
+  level: number;
+  text: string;
+  /** Set a size smaller and kept out of "On this page", for quoted Markdown. */
+  quiet?: boolean;
+  className?: string;
+}) {
+  const tag = level <= 2 ? 2 : level === 3 ? 3 : 4;
   return (
     <AnchorHeading
-      level={level <= 2 ? 2 : level === 3 ? 3 : 4}
+      level={tag}
+      look={quiet ? 4 : tag}
+      toc={quiet ? false : undefined}
       id={slug(text)}
       label={plainLabel(text)}
       className={className}
@@ -277,14 +291,29 @@ function tableLabel(blocks: Block[], index: number): string {
   return heading?.type === 'heading' ? plainLabel(heading.text) : 'Table';
 }
 
-function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNode {
+function Blocks({
+  blocks,
+  shift,
+  quiet = false,
+}: {
+  blocks: Block[];
+  shift: number;
+  quiet?: boolean;
+}): ReactNode {
   return blocks.map((block, i) => {
     switch (block.type) {
       case 'heading':
-        return <Heading key={i} level={Math.max(2, block.level - shift)} text={block.text} />;
+        return (
+          <Heading
+            key={i}
+            level={Math.max(2, block.level - shift)}
+            text={block.text}
+            quiet={quiet}
+          />
+        );
       case 'paragraph':
         return (
-          <p key={i} className="mt-4 leading-relaxed text-muted first:mt-0">
+          <p key={i} className="measure mt-4 leading-relaxed text-muted first:mt-0">
             <InlineMarkdown text={block.text} />
           </p>
         );
@@ -317,7 +346,7 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
               {style.title}
             </p>
             <div className="mt-1.5 [&>p]:mt-2 [&>p:first-child]:mt-0">
-              <Blocks blocks={block.blocks} shift={shift} />
+              <Blocks blocks={block.blocks} shift={shift} quiet={quiet} />
             </div>
           </div>
         );
@@ -325,7 +354,7 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
       case 'quote':
         return (
           <blockquote key={i} className="mt-4 border-l-2 border-line-strong pl-4 first:mt-0">
-            <Blocks blocks={block.blocks} shift={shift} />
+            <Blocks blocks={block.blocks} shift={shift} quiet={quiet} />
           </blockquote>
         );
       case 'steps':
@@ -352,7 +381,7 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
                   className="mt-0! pt-0.5"
                 />
                 <div className="mt-3">
-                  <Blocks blocks={step.blocks} shift={shift} />
+                  <Blocks blocks={step.blocks} shift={shift} quiet={quiet} />
                 </div>
               </li>
             ))}
@@ -363,11 +392,11 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
         return (
           <Tag
             key={i}
-            className={`mt-4 grid gap-2.5 pl-5 leading-relaxed text-muted marker:text-subtle first:mt-0 ${block.ordered ? 'list-decimal' : 'list-disc'}`}
+            className={`measure mt-4 grid gap-2.5 pl-5 leading-relaxed text-muted marker:text-subtle first:mt-0 ${block.ordered ? 'list-decimal' : 'list-disc'}`}
           >
             {block.items.map((item, j) => (
               <li key={j} className="min-w-0 pl-1 [&>p]:mt-2 [&>p:first-child]:mt-0">
-                <Blocks blocks={item} shift={shift} />
+                <Blocks blocks={item} shift={shift} quiet={quiet} />
               </li>
             ))}
           </Tag>
@@ -404,15 +433,20 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
                 <table className="w-full text-left text-[14px]">
                   <thead className="bg-raised">
                     <tr>
-                      {block.header.map((cell, j) => (
-                        <th
-                          key={j}
-                          scope="col"
-                          className="px-4 py-2.5 align-bottom font-medium text-fg-soft"
-                        >
-                          <InlineMarkdown text={cell} />
-                        </th>
-                      ))}
+                      {block.header.map((cell, j) =>
+                        // An empty corner cell names nothing, so it is not a header (axe).
+                        cell ? (
+                          <th
+                            key={j}
+                            scope="col"
+                            className="px-4 py-2.5 align-bottom font-medium text-fg-soft"
+                          >
+                            <InlineMarkdown text={cell} />
+                          </th>
+                        ) : (
+                          <td key={j} />
+                        ),
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line/70">
@@ -438,11 +472,22 @@ function Blocks({ blocks, shift }: { blocks: Block[]; shift: number }): ReactNod
   });
 }
 
-/** Docs Markdown as page content. `shift` lowers heading levels: `###` → `h2` with 1. */
-export function MarkdownBlocks({ markdown, shift = 0 }: { markdown: string; shift?: number }) {
+/**
+ * Docs Markdown as page content. `shift` lowers heading levels: `###` → `h2` with 1. `quiet`
+ * sets headings small and out of "On this page", for Markdown quoted inside a page.
+ */
+export function MarkdownBlocks({
+  markdown,
+  shift = 0,
+  quiet = false,
+}: {
+  markdown: string;
+  shift?: number;
+  quiet?: boolean;
+}) {
   return (
     <div className="text-[15.5px]">
-      <Blocks blocks={parseBlocks(markdown)} shift={shift} />
+      <Blocks blocks={parseBlocks(markdown)} shift={shift} quiet={quiet} />
     </div>
   );
 }

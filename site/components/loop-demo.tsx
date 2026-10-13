@@ -188,7 +188,7 @@ export function LoopDemo({
                 setPlaying(false);
                 setChosenPane(which);
               }}
-              className="cursor-pointer rounded px-2.5 py-1 font-mono text-[11px] text-muted aria-pressed:bg-raised-2 aria-pressed:text-fg"
+              className="tap cursor-pointer rounded px-2.5 py-1 font-mono text-[11px] text-muted aria-pressed:bg-raised-2 aria-pressed:text-fg"
             >
               {which === 'agent' ? 'Agent' : 'Editor'}
             </button>
@@ -363,7 +363,7 @@ export function LoopDemo({
             setPlaying((p) => !p);
           }}
           aria-label={playing ? 'Pause the demo' : 'Play the demo'}
-          className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-line bg-raised-2 text-fg-soft transition-colors hover:border-line-strong hover:text-fg"
+          className="tap inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-line bg-raised-2 text-fg-soft transition-colors hover:border-line-strong hover:text-fg"
         >
           {playing ? <PauseIcon className="size-3.5" /> : <PlayIcon className="size-3.5" />}
         </button>
@@ -377,7 +377,7 @@ export function LoopDemo({
                   show(i as Step);
                 }}
                 aria-current={step === i ? 'step' : undefined}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 font-mono text-xs text-muted transition-colors hover:text-fg aria-[current=step]:border-line aria-[current=step]:bg-raised-2 aria-[current=step]:text-fg sm:px-2.5"
+                className="tap inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 font-mono text-xs text-muted transition-colors hover:text-fg aria-[current=step]:border-line aria-[current=step]:bg-raised-2 aria-[current=step]:text-fg sm:px-2.5"
               >
                 <span className="text-subtle max-sm:hidden">{i + 1}</span>
                 {s.label}

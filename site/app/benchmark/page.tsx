@@ -447,7 +447,7 @@ function Sub({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function Prose({ children }: { children: ReactNode }) {
-  return <div className="max-w-3xl text-[15.5px] leading-relaxed text-muted">{children}</div>;
+  return <div className="measure text-[15.5px] leading-relaxed text-muted">{children}</div>;
 }
 
 const SECTIONS = [
@@ -555,7 +555,7 @@ export default function BenchmarkPage() {
             <h3 className="mt-9 text-lg font-semibold tracking-tight text-fg">
               Each arm against no onsystem
             </h3>
-            <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-muted">
+            <p className="measure mt-2 text-[15px] leading-relaxed text-muted">
               Paired on model, task and repeat. Accepted means the file was created, passes{' '}
               <InlineCode>tsc</InlineCode> and has no onsystem error.
             </p>

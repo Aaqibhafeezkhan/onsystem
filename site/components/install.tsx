@@ -4,7 +4,7 @@ import { ArrowUpRightIcon, StarIcon } from '@/components/icons';
 import { CURSOR_INSTALL, NPX, PLUGIN_COMMANDS, REPO, VSCODE_INSTALL } from '@/lib/site';
 
 const link =
-  'group flex min-h-11 items-center justify-between gap-2 rounded-lg border border-line bg-raised-2 px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:border-line-strong hover:bg-raised-3';
+  'group flex min-h-11 items-center justify-between gap-1.5 rounded-lg border border-line bg-raised-2 px-3 py-2 text-[13px] font-medium sm:gap-2 sm:px-3.5 sm:text-sm text-fg transition-colors hover:border-line-strong hover:bg-raised-3';
 
 /** Every way in, in the order most people need them: the plugin, one-click editors, any client. */
 export function InstallPanel({ className = '' }: { className?: string }) {

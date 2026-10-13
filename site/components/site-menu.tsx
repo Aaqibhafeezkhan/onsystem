@@ -51,7 +51,7 @@ export function SiteMenu({
         aria-label="Menu"
         aria-expanded={open}
         aria-controls={id}
-        className={`inline-flex size-9 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition-colors hover:border-line-strong hover:text-fg ${className}`}
+        className={`tap inline-flex size-9 cursor-pointer items-center justify-center rounded-lg border border-line text-muted transition-colors hover:border-line-strong hover:text-fg ${className}`}
       >
         {open ? <CloseIcon className="size-4" /> : <MenuIcon className="size-4" />}
       </button>
