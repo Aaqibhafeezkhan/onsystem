@@ -10,7 +10,7 @@ import { CODE_BACKGROUND, CODE_COLORS } from '@/lib/code-theme';
 import { formatJson } from '@/lib/format-json';
 import { highlightLines } from '@/lib/highlight';
 import { outputLines } from '@/lib/output';
-import { highlight, langOf } from '@/lib/render-code';
+import { highlight, isColumnar, langOf, wrapsLines } from '@/lib/render-code';
 import { markLines, type Segment } from '@/lib/segments';
 
 const site = path.join(import.meta.dirname, '..');
@@ -133,6 +133,20 @@ describe('code colours', () => {
     // Output strings and tags are the code theme's.
     expect(colours.string).toEqual(CODE_COLORS.string);
     expect(colours.tag).toEqual(CODE_COLORS.tag);
+  });
+
+  it('give output the values ondocs’s terminal grammar uses, so an error is the same red', () => {
+    // ondocs: examples/nextjs/app/globals.css, --code-red, --code-amber, --code-green,
+    // --code-dim, --code-accent, --code-fg, --code-soft.
+    const colours = outputColours();
+    expect(colours.error).toEqual(['#b91c1c', '#f87171']);
+    expect(colours.warn).toEqual(['#92400e', '#fbbf24']);
+    expect(colours.success).toEqual(['#166534', '#4ade80']);
+    expect(colours.dim).toEqual(['#525b67', '#8b94a0']);
+    expect(colours.prompt).toEqual(['#525b67', '#8b94a0']);
+    expect(colours.accent).toEqual(['#155e75', '#67e8f9']);
+    expect(colours.command).toEqual(['#0d0f12', '#e8eaed']);
+    expect(css).toMatch(/\.code-output \{\n {4}color: light-dark\(#1f2937, #c9d1d9\);/);
   });
 
   it.each(SIDES)(
@@ -361,6 +375,22 @@ describe('the output grammar', () => {
       ['onsystem - ', 'dim'],
       ['get_component', 'accent'],
     ]);
+  });
+
+  it('wraps transcripts, output and errors, and scrolls source code and columns', () => {
+    expect(
+      wrapsLines('⏺ Write(app/page.tsx)\n  ⎿  1:58 error [no-hardcoded-color] …', 'text'),
+    ).toBe(true);
+    expect(wrapsLines('$ npx onsystem check src\nNo new problems in 3 files.', 'sh')).toBe(true);
+    expect(wrapsLines('<Button variant="destructive" />', 'tsx')).toBe(false);
+    expect(wrapsLines('npx onsystem check . --format github', 'sh')).toBe(false);
+    // Padded columns and tables keep their alignment.
+    expect(isColumnar('config   ../ui/onsystem.config.json\ndetected workspace package')).toBe(
+      true,
+    );
+    expect(isColumnar('| Rule | Count |\n| --- | --- |\n| a | 1 |')).toBe(true);
+    expect(isColumnar('# Badge\nA small status label.\n  default   bg-primary')).toBe(false);
+    expect(wrapsLines('config   a\ncache    b', 'text')).toBe(false);
   });
 
   it('colours the rule ids it is given anywhere, and indents wrapped lines under their text', () => {

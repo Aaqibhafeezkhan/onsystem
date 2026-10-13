@@ -30,18 +30,21 @@ export function Panel({
   );
 }
 
-/** TSX with findings or changes marked, highlighted by Shiki on the server. It wraps, as panels are narrow. */
+/**
+ * TSX with findings or changes marked, highlighted by Shiki on the server. Source code scrolls,
+ * as every code block does, its right edge faded while more is out of view.
+ */
 export function MarkedCode({ code, marks }: { code: string; marks: Mark[] }) {
-  return <CodeBody code={code.trimEnd()} lang="tsx" marks={marks} wrap />;
+  return <CodeBody code={code.trimEnd()} lang="tsx" marks={marks} />;
 }
 
 export function Severity({ severity }: { severity: RuleEntry['severity'] }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] ${severity === 'error' ? 'border-magenta/40 text-magenta-soft' : 'border-warn/40 text-warn'}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] ${severity === 'error' ? 'border-error/40 text-error' : 'border-warn/40 text-warn'}`}
     >
       <span
-        className={`size-1.5 rounded-full ${severity === 'error' ? 'bg-magenta' : 'bg-warn'}`}
+        className={`size-1.5 rounded-full ${severity === 'error' ? 'bg-error' : 'bg-warn'}`}
         aria-hidden="true"
       />
       {severity === 'error' ? 'error' : 'warning'} by default

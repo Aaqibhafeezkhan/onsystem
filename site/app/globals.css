@@ -1,10 +1,10 @@
 @import 'tailwindcss';
 
 /*
- * Shared with ondocs and signoff-ui: ink, raised surfaces and hairline borders, cyan as
- * the accent, magenta only for errors, amber for warnings and green for success (signoff-ui's
- * --signoff-warn-fg, and the one green the output grammar needs). Text colours keep at least
- * 4.5:1 on every surface.
+ * Shared with ondocs and signoff-ui: ink, raised surfaces and hairline borders, cyan as the
+ * accent and magenta for the glow. Meanings take the same colours on all three sites: red for
+ * errors, amber for warnings, green for success (ondocs's --code-red, --code-amber and
+ * --code-green). Text colours keep at least 4.5:1 on every surface.
  * Two themes: dark, and light from signoff-ui's palette. The theme is a `.light` or `.dark`
  * class on <html>, set before paint by the script in app/layout.tsx; without one it follows
  * the OS.
@@ -26,6 +26,7 @@
   --color-cyan-bright: var(--site-cyan-bright);
   --color-magenta: var(--site-magenta);
   --color-magenta-soft: var(--site-magenta-soft);
+  --color-error: var(--site-error);
   --color-warn: var(--site-warn);
   --color-success: var(--site-success);
 }
@@ -54,6 +55,7 @@
   --site-cyan-bright: light-dark(#155e75, #67e8f9);
   --site-magenta: light-dark(#be185d, #f0468a);
   --site-magenta-soft: light-dark(#9d174d, #ff7eb0);
+  --site-error: light-dark(#b91c1c, #f87171);
   --site-warn: light-dark(#92400e, #fbbf24);
   --site-success: light-dark(#166534, #4ade80);
   --site-glow-cyan: light-dark(rgb(14 116 144 / 0.07), rgb(34 211 238 / 0.09));
@@ -181,25 +183,32 @@ body {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  /* Output's plain text, a step softer than code's (ondocs's --code-soft). */
+  .code-output {
+    color: light-dark(#1f2937, #c9d1d9);
+  }
 }
 
 .sk {
   color: light-dark(var(--shiki-light), var(--shiki-dark));
 }
 
-/* Output: prompts and structure quiet, severities in their colours, names in the accent. */
+/*
+ * Output: the colours of ondocs's terminal grammar (--code-dim, --code-fg, --code-accent,
+ * --code-string and the meanings above), so the same output reads the same on all three sites.
+ */
 .out-prompt {
-  color: var(--color-subtle);
+  color: light-dark(#525b67, #8b94a0);
   user-select: none;
 }
 .out-command,
 .out-heading,
 .out-strong {
-  color: var(--color-fg);
+  color: light-dark(#0d0f12, #e8eaed);
   font-weight: 600;
 }
 .out-error {
-  color: var(--color-magenta-soft);
+  color: var(--color-error);
 }
 .out-warn {
   color: var(--color-warn);
@@ -208,11 +217,11 @@ body {
   color: var(--color-success);
 }
 .out-accent {
-  color: var(--color-cyan-bright);
+  color: light-dark(#155e75, #67e8f9);
 }
 .out-info,
 .out-dim {
-  color: var(--color-subtle);
+  color: light-dark(#525b67, #8b94a0);
 }
 .out-string {
   color: light-dark(#9a3412, #f5c27a);
@@ -245,16 +254,16 @@ pre[data-more][data-more-below]:not(:focus-visible) {
   background: color-mix(in oklab, var(--color-cyan) 9%, transparent);
 }
 .line-del {
-  background: color-mix(in oklab, var(--color-magenta) 8%, transparent);
+  background: color-mix(in oklab, var(--color-error) 8%, transparent);
 }
 
 /* Findings, underlined the way editors do. The fills stay light, so the tokens keep 4.5:1. */
 .mark-error {
-  text-decoration: underline wavy var(--color-magenta);
+  text-decoration: underline wavy var(--color-error);
   text-decoration-thickness: 1.5px;
   text-underline-offset: 4px;
   text-decoration-skip-ink: none;
-  background: color-mix(in oklab, var(--color-magenta) 6%, transparent);
+  background: color-mix(in oklab, var(--color-error) 6%, transparent);
 }
 .mark-warning {
   text-decoration: underline wavy var(--color-warn);
@@ -269,7 +278,7 @@ pre[data-more][data-more-below]:not(:focus-visible) {
   border-radius: 2px;
 }
 .mark-active {
-  background: color-mix(in oklab, var(--color-magenta) 12%, transparent);
+  background: color-mix(in oklab, var(--color-error) 12%, transparent);
 }
 
 @keyframes rise {

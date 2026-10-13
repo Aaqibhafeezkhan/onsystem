@@ -82,11 +82,25 @@ export function isSession(code: string, lang: Lang): boolean {
 }
 
 /**
- * The one rule for long lines: transcripts and output (text, and shell sessions) wrap; source
- * code and commands scroll.
+ * Output laid out in columns: a Markdown table, or most lines padded into columns with runs of
+ * spaces (`config   ../onsystem.config.json`). Wrapping would break its alignment.
+ */
+export function isColumnar(code: string): boolean {
+  const lines = code.split('\n').filter((line) => line.trim());
+  if (lines.length === 0) return false;
+  if (lines.every((line) => /^\s*\|.*\|\s*$/.test(line))) return true;
+  // The gap after a transcript's marker (`⎿  `, `⏺ `) is not a column.
+  const padded = (line: string) => /\S {2,}\S/.test(line.replace(/^\s*[⏺⎿•›❯>$-]\s+/, ''));
+  return lines.filter(padded).length * 2 >= lines.length;
+}
+
+/**
+ * The one rule for long lines, shared with the sibling sites: agent transcripts, tool output and
+ * error messages wrap (text, and shell sessions); source code and output laid out in columns
+ * scroll, with the right edge faded while more is out of view.
  */
 export function wrapsLines(code: string, lang: Lang): boolean {
-  return lang === 'text' || isSession(code, lang);
+  return (lang === 'text' || isSession(code, lang)) && !isColumnar(code);
 }
 
 export interface Highlighted {

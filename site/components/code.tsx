@@ -12,9 +12,9 @@ const RULE_IDS = ruleCatalog.rules.map((rule) => rule.id);
 
 /**
  * Highlighted code in the shared frame, rendered on the server: source code through Shiki,
- * terminal and agent output (`text`) through the output grammar. Output and shell sessions wrap,
- * each wrapped line under its own text; source code scrolls, its right edge faded while more of
- * it is out of view.
+ * terminal and agent output (`text`) through the output grammar. Transcripts, tool output and
+ * shell sessions wrap, each wrapped line under its own text; source code and output laid out in
+ * columns scroll, the right edge faded while more is out of view (`wrapsLines`).
  */
 export function Code({
   code,
@@ -64,31 +64,30 @@ export function CodeBody({
   lang = 'text',
   parts,
   marks,
-  wrap: wraps,
   className = '',
 }: {
   code?: string;
   lang?: Lang;
   parts?: CodePart[] | undefined;
   marks?: Mark[] | undefined;
-  /** Wrap long lines; by default output and shell sessions wrap and source code scrolls. */
-  wrap?: boolean | undefined;
   className?: string;
 }) {
   const runs = parts ?? [{ code, lang }];
-  const wrap = wraps ?? runs.some((run) => wrapsLines(run.code, run.lang));
+  const wrap = runs.some((run) => wrapsLines(run.code, run.lang));
+  const output = runs.some((run) => run.lang === 'text' || isSession(run.code, run.lang));
   const rows = runs.flatMap((run) => {
     const { lines, hangs } = highlight(run.code, run.lang, { marks, ruleIds: RULE_IDS });
     const source = run.code.split('\n');
     return lines.map((segments, i) => ({
       segments,
-      // Output knows where its text starts; wrapped code continues two columns in.
-      hang: hangs?.[i] ?? (/^\s*/.exec(source[i] ?? '')?.[0].length ?? 0) + 2,
+      hang: hangs?.[i] ?? 0,
       tone: run.lang === 'diff' ? diffTone(source[i]) : undefined,
     }));
   });
   return (
-    <CodeScroll className={`code code-body ${wrap ? 'code-wrap' : ''} ${className}`}>
+    <CodeScroll
+      className={`code code-body ${output ? 'code-output' : ''} ${wrap ? 'code-wrap' : ''} ${className}`}
+    >
       <code>
         {rows.map((row, i) => (
           <BlockLine key={i} segments={row.segments} hang={wrap ? row.hang : 0} tone={row.tone} />

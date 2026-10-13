@@ -204,7 +204,7 @@ export function LoopDemo({
           <div className="code-bar pr-4">
             <span className="code-title">{file}</span>
             <span
-              className={`shrink-0 text-[11px] ${step === 1 ? 'text-magenta-soft' : step === 3 ? 'text-success' : 'text-subtle'}`}
+              className={`shrink-0 text-[11px] ${step === 1 ? 'text-error' : step === 3 ? 'text-success' : 'text-subtle'}`}
             >
               {status}
             </span>
@@ -233,7 +233,7 @@ export function LoopDemo({
                     >
                       {severity && (
                         <span
-                          className={`absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full ${severity === 'error' ? 'bg-magenta' : 'bg-warn'}`}
+                          className={`absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 rounded-full ${severity === 'error' ? 'bg-error' : 'bg-warn'}`}
                         />
                       )}
                       {i + 1}
@@ -280,7 +280,7 @@ export function LoopDemo({
             className={`mt-3 rounded-xl border border-line bg-raised-2 transition-opacity duration-300 ${step < 1 ? 'invisible opacity-0' : ''}`}
           >
             <p className="flex flex-wrap items-baseline gap-x-2 border-b border-line px-3.5 py-2.5">
-              <span className="font-medium text-magenta-soft">{errorCount} errors</span>
+              <span className="font-medium text-error">{errorCount} errors</span>
               <span className="text-subtle">·</span>
               <span className="font-medium text-warn">{warningCount} warnings</span>
               <span className="text-subtle">each with a rule id, a location and a fix</span>
@@ -303,7 +303,7 @@ export function LoopDemo({
                       <CheckIcon className="-mt-[3px] -ml-[3px] size-3 text-success" />
                     ) : (
                       <span
-                        className={`block size-1.5 rounded-full ${f.severity === 'error' ? 'bg-magenta' : 'bg-warn'}`}
+                        className={`block size-1.5 rounded-full ${f.severity === 'error' ? 'bg-error' : 'bg-warn'}`}
                       />
                     )}
                   </span>

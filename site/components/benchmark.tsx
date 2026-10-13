@@ -134,7 +134,7 @@ function Cell({ errors, byRule }: { errors: number; byRule: Record<string, numbe
   }
   return (
     <span className="block">
-      <span className="font-medium text-magenta-soft">
+      <span className="font-medium text-error">
         {errors} {errors === 1 ? 'error' : 'errors'}
       </span>
       {Object.entries(byRule).map(([rule, count]) => (

@@ -256,7 +256,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               {preset && code === preset.code ? preset.file : 'Your code'}
             </label>
             <span
-              className={`shrink-0 text-[11px] ${empty || pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-magenta-soft' : current.result.warningCount > 0 ? 'text-warn' : 'text-success'}`}
+              className={`shrink-0 text-[11px] ${empty || pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-error' : current.result.warningCount > 0 ? 'text-warn' : 'text-success'}`}
             >
               {status}
             </span>
@@ -276,7 +276,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                     <span className="relative w-9 shrink-0 pr-2.5 text-right text-[11px] text-subtle select-none sm:w-11 sm:pr-3">
                       {severity && (
                         <span
-                          className={`absolute top-[0.7em] left-1 size-1.5 rounded-full sm:left-1.5 ${severity === 'error' ? 'bg-magenta' : 'bg-warn'}`}
+                          className={`absolute top-[0.7em] left-1 size-1.5 rounded-full sm:left-1.5 ${severity === 'error' ? 'bg-error' : 'bg-warn'}`}
                         />
                       )}
                       {i + 1}
@@ -315,7 +315,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               <kbd className="font-mono">Ctrl</kbd> + <kbd className="font-mono">Enter</kbd>.
               Parsed, never run.
             </span>
-            <span className={`font-mono ${bytes > maxBytes ? 'text-magenta-soft' : ''}`}>
+            <span className={`font-mono ${bytes > maxBytes ? 'text-error' : ''}`}>
               {kb(bytes)} / {kb(maxBytes)}
             </span>
           </div>
@@ -339,9 +339,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                   {shown && (
                     <span className="font-mono text-xs font-normal">
                       {' '}
-                      <span className="text-magenta-soft">
-                        {plural(shown.result.errorCount, 'error')}
-                      </span>
+                      <span className="text-error">{plural(shown.result.errorCount, 'error')}</span>
                       <span className="text-subtle"> · </span>
                       <span className="text-warn">
                         {plural(shown.result.warningCount, 'warning')}
@@ -371,7 +369,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
           {problem && (
             <div
               role="alert"
-              className="mx-4 mt-4 rounded-lg border border-magenta/40 bg-magenta/10 px-3 py-2.5 text-[13px] leading-relaxed text-fg-soft"
+              className="mx-4 mt-4 rounded-lg border border-error/40 bg-error/10 px-3 py-2.5 text-[13px] leading-relaxed text-fg-soft"
             >
               <p className="font-medium text-fg">
                 {problem.code === 'too_large'
@@ -435,7 +433,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                   {/* The output grammar's order and colours: position, severity, rule id. */}
                   <div className="flex items-baseline gap-2 font-mono text-[11.5px]">
                     <span
-                      className={`size-1.5 shrink-0 translate-y-[-1px] rounded-full ${d.severity === 'error' ? 'bg-magenta' : 'bg-warn'}`}
+                      className={`size-1.5 shrink-0 translate-y-[-1px] rounded-full ${d.severity === 'error' ? 'bg-error' : 'bg-warn'}`}
                       aria-hidden="true"
                     />
                     <button
