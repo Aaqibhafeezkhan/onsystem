@@ -9,9 +9,20 @@ import type { CheckError, CheckResponse } from '@/lib/check-service';
 import { highlightLines } from '@/lib/highlight';
 import type { Mark } from '@/lib/segments';
 import type { Preset, PresetResult } from '@/lib/playground';
+import {
+  applyEdits,
+  applyFixes,
+  applyLabel,
+  decisionFor,
+  decisionNote,
+  lineStartsOf,
+  offsetOf,
+  summaryText,
+  undecided,
+  type Decision,
+  type Suggestion,
+} from '@/lib/playground-edits';
 import { ruleHref } from '@/lib/site';
-
-type Diagnostic = PresetResult['diagnostics'][number];
 
 interface Checked {
   /** The code the result belongs to: marks only line up with exactly this text. */
@@ -20,33 +31,74 @@ interface Checked {
   ms?: number;
 }
 
+/** What the visitor applied since they last edited the code themselves. */
+interface Applied {
+  /** The code it led to: the summary goes once the code is anything else. */
+  code: string;
+  fixes: number;
+  suggestions: number;
+}
+
 type Problem =
   { code: CheckError['error']['code']; message: string } | { code: 'network'; message: string };
 
 const DEBOUNCE_MS = 650;
 
-/** Applies the edits of `diagnostics`, from the end backwards, skipping overlaps (as the CLI does). */
-function applyFixes(code: string, diagnostics: Diagnostic[]): string {
-  const edits = diagnostics.flatMap((d) => d.fix ?? []).sort((a, b) => b.range[0] - a.range[0]);
-  let out = code;
-  let floor = Infinity;
-  for (const edit of edits) {
-    if (edit.range[1] > floor) continue;
-    out = out.slice(0, edit.range[0]) + edit.text + out.slice(edit.range[1]);
-    floor = edit.range[0];
-  }
-  return out;
+/** A suggestion's label, its code (in backticks) set in mono. */
+function SuggestionLabel({ text }: { text: string }) {
+  return text.split(/(`[^`]+`)/).map((part, i) =>
+    part.startsWith('`') ? (
+      <code key={i} className="font-mono text-[0.92em] text-fg">
+        {part.slice(1, -1)}
+      </code>
+    ) : (
+      part
+    ),
+  );
 }
 
-/** 1-based line and column → offset. */
-function offsetOf(lineStarts: number[], line: number, column: number): number {
-  return (lineStarts[line - 1] ?? 0) + column - 1;
-}
-
-function lineStartsOf(code: string): number[] {
-  const starts = [0];
-  for (let i = 0; i < code.length; i++) if (code[i] === '\n') starts.push(i + 1);
-  return starts;
+/**
+ * The suggestions for a finding with no automatic fix. They are judgment calls, so they are drawn
+ * apart from a fix (dashed, after "Needs a decision") and each says what it will change.
+ */
+function Suggestions({
+  decision,
+  disabled,
+  onApply,
+}: {
+  decision: Decision;
+  disabled: boolean;
+  onApply: (option: Suggestion) => void;
+}) {
+  return (
+    <div
+      role={decision.choice ? 'group' : undefined}
+      aria-label={decision.choice ? decision.prompt : undefined}
+      className="mt-2 flex flex-wrap items-center gap-1.5"
+    >
+      <span className="mr-0.5 text-[12px] text-subtle">{decision.prompt}</span>
+      {decision.options.map((option) => (
+        <button
+          key={option.label}
+          type="button"
+          disabled={disabled}
+          aria-label={option.value === undefined ? undefined : `Use ${option.label}`}
+          onClick={() => {
+            onApply(option);
+          }}
+          className="tap inline-flex cursor-pointer items-center rounded-md border border-dashed border-line-strong px-2 py-1 text-left text-[12.5px] leading-snug text-fg-soft transition-colors hover:border-cyan/60 hover:bg-cyan/5 hover:text-fg disabled:cursor-default disabled:hover:border-line-strong disabled:hover:bg-transparent"
+        >
+          {option.value === undefined ? (
+            <span>
+              <SuggestionLabel text={option.label} />
+            </span>
+          ) : (
+            <span className="font-mono text-[12px] out-string">{option.value}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function plural(n: number, noun: string): string {
@@ -67,7 +119,10 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   const [pending, setPending] = useState(false);
   const [problem, setProblem] = useState<Problem | undefined>(undefined);
   const [selected, setSelected] = useState<number | undefined>(undefined);
+  const [applied, setApplied] = useState<Applied | undefined>(undefined);
+  const [focusSummary, setFocusSummary] = useState(0);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const summaryBox = useRef<HTMLDivElement>(null);
   const editor = useRef<HTMLDivElement>(null);
   const request = useRef<AbortController | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -135,6 +190,12 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
     [],
   );
 
+  // After applying, focus moves to the summary of what happened: the button that was pressed
+  // goes away with its finding.
+  useEffect(() => {
+    if (focusSummary) summaryBox.current?.focus();
+  }, [focusSummary]);
+
   const edit = (next: string, { now = false } = {}) => {
     setCode(next);
     clearTimeout(timer.current);
@@ -147,6 +208,22 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
     }
   };
 
+  /** Applies fixes or a suggestion and checks the result now, adding to the running summary. */
+  const apply = (next: string, counts: { fixes?: number; suggestions?: number }) => {
+    const before = applied?.code === code ? applied : { fixes: 0, suggestions: 0 };
+    setApplied({
+      code: next,
+      fixes: before.fixes + (counts.fixes ?? 0),
+      suggestions: before.suggestions + (counts.suggestions ?? 0),
+    });
+    setFocusSummary((n) => n + 1);
+    edit(next, { now: true });
+  };
+
+  const applySuggestion = (option: Suggestion) => {
+    apply(applyEdits(code, option.edits).code, { suggestions: 1 });
+  };
+
   const choose = (next: Preset) => {
     clearTimeout(timer.current);
     request.current?.abort();
@@ -156,6 +233,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
     setChecked({ code: next.code, result: next.result });
     setProblem(undefined);
     setSelected(undefined);
+    setApplied(undefined);
   };
 
   // The list keeps the last result while the edited code is checked again; its offsets only
@@ -166,7 +244,17 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   const shown = empty || (problem && stale) ? undefined : checked;
   const diagnostics = shown?.result.diagnostics ?? [];
   const fixable = stale ? [] : diagnostics.filter((d) => d.fix?.length);
+  const open = stale ? 0 : undecided(diagnostics);
   const syntax = diagnostics.some((d) => d.ruleId === 'syntax');
+  // The findings with no automatic fix, as suggestions; offsets into the code they were checked on.
+  const decisions = useMemo(
+    () => (shown ? shown.result.diagnostics.map((d) => decisionFor(shown.code, d)) : []),
+    [shown],
+  );
+  const summary =
+    applied?.code === code
+      ? summaryText(applied, current && !pending ? current.result.diagnostics : undefined)
+      : undefined;
 
   // Underlines and gutter markers for the checked code.
   const { lines, gutter } = useMemo(() => {
@@ -248,7 +336,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
       </div>
       {preset && <p className="mt-3 text-[14px] text-muted">{preset.description}</p>}
 
-      <div className="mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+      <div className="mt-5 grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
         {/* Editor */}
         <div className="code-block transition-colors focus-within:border-cyan/60 focus-within:ring-1 focus-within:ring-cyan/35">
           <div className="code-bar pr-4">
@@ -298,6 +386,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               autoCorrect="off"
               aria-describedby={`${ids}-hint`}
               onChange={(event) => {
+                setApplied(undefined);
                 edit(event.target.value);
               }}
               onKeyDown={(event) => {
@@ -350,21 +439,49 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               )}
             </h2>
             {fixable.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  edit(applyFixes(code, fixable), { now: true });
-                }}
-                className="tap cursor-pointer rounded-md border border-cyan/40 bg-cyan/10 px-2.5 py-1 text-[13px] font-medium text-cyan-bright transition-colors hover:bg-cyan/20"
-              >
-                Apply {fixable.length === 1 ? 'the fix' : `all ${String(fixable.length)} fixes`}
-              </button>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {open > 0 && (
+                  <span id={`${ids}-open`} className="text-[12.5px] text-subtle">
+                    {decisionNote(open)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-describedby={open > 0 ? `${ids}-open` : undefined}
+                  onClick={() => {
+                    const result = applyFixes(code, fixable);
+                    apply(result.code, { fixes: result.count });
+                  }}
+                  className="tap cursor-pointer rounded-md border border-cyan/40 bg-cyan/10 px-2.5 py-1 text-[13px] font-medium text-cyan-bright transition-colors hover:bg-cyan/20"
+                >
+                  {applyLabel(fixable.length)}
+                </button>
+              </div>
             )}
           </div>
 
           <p className="sr-only" role="status">
-            {pending ? '' : status}
+            {pending ? '' : (summary ?? status)}
           </p>
+
+          {summary && (
+            <div
+              ref={summaryBox}
+              tabIndex={-1}
+              className="mx-4 mt-4 rounded-lg border border-line bg-raised-2 px-3 py-2.5 text-[13px] leading-relaxed"
+            >
+              <p className="flex items-start gap-2 font-medium text-fg">
+                <CheckIcon className="mt-[0.2em] size-4 shrink-0 text-success" />
+                {summary}
+              </p>
+              {current && !pending && undecided(current.result.diagnostics) > 0 && (
+                <p className="mt-1 pl-6 text-muted">
+                  Fixes only go in where the change is mechanical; the rest are judgment calls, left
+                  to you.
+                </p>
+              )}
+            </div>
+          )}
 
           {problem && (
             <div
@@ -470,13 +587,20 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                       type="button"
                       disabled={stale}
                       onClick={() => {
-                        edit(applyFixes(code, [d]), { now: true });
+                        const result = applyFixes(code, [d]);
+                        apply(result.code, { fixes: result.count });
                       }}
                       className="tap mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line bg-raised-2 px-2 py-1 font-mono text-[12px] text-fg-soft transition-colors hover:border-cyan/50 hover:text-fg disabled:cursor-default disabled:hover:border-line"
                     >
                       Apply fix
                       {d.suggestion && <span className="out-success">{d.suggestion}</span>}
                     </button>
+                  ) : decisions[i] ? (
+                    <Suggestions
+                      decision={decisions[i]}
+                      disabled={stale}
+                      onApply={applySuggestion}
+                    />
                   ) : d.suggestion ? (
                     <p className="mt-2 font-mono text-[12px] text-subtle">
                       Suggests <span className="out-string">{d.suggestion}</span>; the change needs
