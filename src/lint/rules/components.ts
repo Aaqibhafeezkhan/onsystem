@@ -622,7 +622,10 @@ const SPELLED_GROUPS = VALUE_GROUPS.map((group) => group.map(stepSpelling));
 
 /**
  * An allowed value that means the same: the same step spelled another way (`xxl` → `2xl`,
- * `XL` → `xl`), or a synonym (`danger` → `destructive`, `small` → `sm`).
+ * `XL` → `xl`), or a synonym (`danger` → `destructive`, `small` → `sm`). A group is searched
+ * in its own order, not the scale's: TypeScript orders a union by when the program first met
+ * each literal, so another file can reorder the scale, and `positive` must stay `success` on
+ * a scale that also has `active`.
  */
 function synonymValue(value: string, allowed: readonly string[]): string | undefined {
   const spelling = stepSpelling(value);
@@ -630,31 +633,35 @@ function synonymValue(value: string, allowed: readonly string[]): string | undef
   if (same) return same;
   for (const group of SPELLED_GROUPS) {
     if (!group.includes(spelling)) continue;
-    const match = allowed.find((member) => {
-      const memberSpelling = stepSpelling(member);
-      return memberSpelling !== spelling && group.includes(memberSpelling);
-    });
-    if (match) return match;
+    for (const member of group) {
+      if (member === spelling) continue;
+      const match = allowed.find((candidate) => stepSpelling(candidate) === member);
+      if (match) return match;
+    }
   }
   return undefined;
 }
 
 /**
- * The step a size one past an end of the scale stands next to, with its x's counted:
- * `2xl` → `xl`, `3xl` → `2xl`, `2xs` → `xs`, `xs` → `sm`.
+ * The step a size one past an end of the scale stands next to, with its x's counted and its
+ * prefix kept: `2xl` → `xl`, `3xl` → `2xl`, `2xs` → `xs`, `xs` → `sm`, `icon-2xl` → `icon-xl`.
  */
 function stepInside(spelling: string): string | undefined {
-  if (spelling === 'xs') return 'sm';
-  const match = /^(\d+)x([sl])$/.exec(spelling);
-  const count = Number(match?.[1]);
-  if (!match || count < 2) return undefined;
-  return `${count === 2 ? '' : count - 1}x${match[2]}`;
+  const match = /^(.*-)?(\d*)x([sl])$/.exec(spelling);
+  if (!match) return undefined;
+  const prefix = match[1] ?? '';
+  const end = match[3];
+  if (!match[2]) return end === 's' ? `${prefix}sm` : undefined;
+  const count = Number(match[2]);
+  if (count < 2) return undefined;
+  return `${prefix}${count === 2 ? '' : count - 1}x${end}`;
 }
 
 /**
  * The end of the scale a size one step past it stands next to, under whichever name the scale
- * gives it: `2xl` or `xxl` → `xl`, `3xl` → `2xl` or `xxl`, `xs` → `sm` or `small`. It renders
- * another size than the one written, so it is named in the message but not fixed.
+ * gives it: `2xl` or `xxl` → `xl`, `3xl` → `2xl` or `xxl`, `xs` → `sm` or `small`, `icon-xxl`
+ * → `icon-xl`. It renders another size than the one written, so it is named in the message
+ * but not fixed.
  */
 function nextStep(value: string, allowed: readonly string[]): string | undefined {
   const step = stepInside(stepSpelling(value));

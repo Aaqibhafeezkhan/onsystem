@@ -1834,6 +1834,38 @@ describe('no-unknown-variant', () => {
     expect(applyFixes(code, diagnostics)).toContain('<Button variant="destructive" size="sm">');
   });
 
+  it('maps a synonym in the order of its group, not the order of the scale', async () => {
+    // TypeScript orders a union by when the program first met each literal, so another file
+    // can change the scale's order. `active` and `success` are in one group; `success` leads it.
+    const status = `export function Status(props: { variant?: "active" | "success" | "inactive" }) {
+  return <span />
+}`;
+    const alert = `export function Alert(props: { variant?: "success" | "error" }) {
+  return <div />
+}`;
+    const code = `import { Status } from "@/components/ui/status"
+<>
+  <Status variant="positive" />
+  <Status variant="green" />
+  <Status variant="done" />
+</>`;
+    const programs: Record<string, string>[] = [
+      { 'components/ui/status.tsx': status },
+      { 'components/ui/alert.tsx': alert, 'components/ui/status.tsx': status },
+    ];
+    for (const files of programs) {
+      const system = await load(fixture({ 'tsconfig.json': TSCONFIG, ...files }));
+      const findings = system
+        .check(code, 'app/page.tsx')
+        .diagnostics.filter((d) => d.ruleId === rule);
+      expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+        ['"positive"', 'variant="success"', 'success'],
+        ['"green"', 'variant="success"', 'success'],
+        ['"done"', 'variant="success"', 'success'],
+      ]);
+    }
+  });
+
   it('checks every branch of a conditional value', () => {
     const diagnostics = check(`${IMPORTS}<Button variant={on ? "primary" : "ghost"} />`, rule);
     expect(diagnostics).toHaveLength(1);
@@ -1971,6 +2003,41 @@ import { Tag } from "@/components/ui/tag"
     expect(fixed).toContain('<Tag size="xxl" />\n  <Tag size="xxs" />\n  <Tag size="xxl" />');
     expect(fixed).toContain('<Badge size="xxxl" />\n  <Badge size="3xs" />');
     expect(fixed).toContain('<Tag size="3xl" />\n  <Tag size="xxxs" />');
+  });
+
+  it('names a prefixed size one step past the end next to that end, as it does a plain one', async () => {
+    const system = await load(
+      fixture({
+        'tsconfig.json': TSCONFIG,
+        'components/ui/fab.tsx': `export function Fab(props: {
+  size?: "sm" | "md" | "lg" | "xl" | "icon-sm" | "icon-lg" | "icon-xl"
+}) {
+  return <button />
+}`,
+      }),
+    );
+    const code = `import { Fab } from "@/components/ui/fab"
+<>
+  <Fab size="xxl" />
+  <Fab size="icon-xxl" />
+  <Fab size="icon-2xl" />
+  <Fab size="xs" />
+  <Fab size="icon-xs" />
+  <Fab size="icon-md" />
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['"xxl"', 'size="xl"', undefined],
+      ['"icon-xxl"', 'size="icon-xl"', undefined],
+      ['"icon-2xl"', 'size="icon-xl"', undefined],
+      ['"xs"', 'size="sm"', undefined],
+      ['"icon-xs"', 'size="icon-sm"', undefined],
+      // Not past an end, so there is no end to name, and a size is never guessed by spelling.
+      ['"icon-md"', undefined, undefined],
+    ]);
+    expect(applyFixes(code, findings)).toBe(code);
   });
 
   it('fixes a value written in other case', () => {
