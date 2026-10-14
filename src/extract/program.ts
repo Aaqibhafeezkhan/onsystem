@@ -27,13 +27,27 @@ export interface ProjectConfig {
 }
 
 /**
- * Reads the project's tsconfig (only from inside the root: walking further up
- * would pick up unrelated configs, e.g. this repository's own when extracting
- * test fixtures).
+ * The configs read from a project's root without a `tsconfig` option, in order: a
+ * JavaScript app keeps its `paths` in jsconfig.json (create-next-app, shadcn/ui with
+ * `"tsx": false`), which TypeScript reads when there is no tsconfig.json.
+ */
+export const PROJECT_CONFIG_FILES = ['tsconfig.json', 'jsconfig.json'];
+
+/** The root's tsconfig.json, else its jsconfig.json. */
+export function defaultProjectConfig(root: string): string | undefined {
+  return PROJECT_CONFIG_FILES.map((file) => path.join(root, file)).find((file) =>
+    fs.existsSync(file),
+  );
+}
+
+/**
+ * Reads the project's tsconfig, or its jsconfig without one (only from inside
+ * the root: walking further up would pick up unrelated configs, e.g. this
+ * repository's own when extracting test fixtures).
  */
 export function readProjectConfig(root: string, tsconfig?: string): ProjectConfig {
-  const configFile = tsconfig ? path.resolve(root, tsconfig) : path.join(root, 'tsconfig.json');
-  if (!fs.existsSync(configFile)) {
+  const configFile = tsconfig ? path.resolve(root, tsconfig) : defaultProjectConfig(root);
+  if (!configFile || !fs.existsSync(configFile)) {
     return {
       options: { ...DEFAULT_OPTIONS },
       pathsBase: root,
@@ -65,7 +79,15 @@ export function readProjectConfig(root: string, tsconfig?: string): ProjectConfi
       return ts.sys.readFile(file);
     },
   };
-  const parsed = ts.parseJsonConfigFileContent(read.config, host, path.dirname(configFile));
+  // A jsconfig.json is a tsconfig.json with `allowJs` on, so by default it includes the
+  // .js and .jsx files too. (TypeScript's other jsconfig default, `maxNodeModuleJsDepth`,
+  // would have the checker read untyped JavaScript in node_modules: left out.)
+  const parsed = ts.parseJsonConfigFileContent(
+    read.config,
+    host,
+    path.dirname(configFile),
+    path.basename(configFile) === 'jsconfig.json' ? { allowJs: true } : undefined,
+  );
   const options: ts.CompilerOptions = { ...DEFAULT_OPTIONS, ...parsed.options };
   // Extraction only needs the checker. Keep it fast and permissive.
   options.noEmit = true;

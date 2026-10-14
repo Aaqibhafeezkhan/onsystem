@@ -4,6 +4,7 @@ import path from 'node:path';
 import { DEFAULT_SEVERITY, RULE_IDS, type ResolvedConfig } from './config.js';
 import type { DesignSystem } from './design-system.js';
 import { detectProject, findDesignSystemPackage, type DetectionStep } from './detect.js';
+import { defaultProjectConfig } from './extract/program.js';
 import { LIBRARY_IDS, type LibrarySource } from './libraries/index.js';
 import { relativePath } from './util/paths.js';
 
@@ -75,10 +76,10 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
     ),
   );
   field('docs', listOf(config.docs));
+  const projectConfig = defaultProjectConfig(config.root);
   field(
     'tsconfig',
-    config.tsconfig ??
-      (fs.existsSync(path.join(config.root, 'tsconfig.json')) ? 'tsconfig.json' : '(none)'),
+    config.tsconfig ?? (projectConfig ? display(config.root, projectConfig) : '(none)'),
   );
   field('importPath', importPaths(ds));
   field(

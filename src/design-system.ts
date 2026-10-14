@@ -11,7 +11,12 @@ import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } fro
 import { presetResolver, stylesheetResolver } from './detect.js';
 import { extractComponents } from './extract/components.js';
 import { attachDocs, parseDoc, type ParsedDoc } from './extract/docs.js';
-import { isProjectFile, projectFiles, readProjectConfig } from './extract/program.js';
+import {
+  isProjectFile,
+  PROJECT_CONFIG_FILES,
+  projectFiles,
+  readProjectConfig,
+} from './extract/program.js';
 import { loadLibraries } from './libraries/load.js';
 import { checkSource, LintTarget } from './lint/index.js';
 import { ModuleResolver } from './modules.js';
@@ -355,7 +360,7 @@ async function cacheKey(
   stats = new FileStats(config.root),
 ): Promise<string> {
   const extra = [
-    'tsconfig.json',
+    ...PROJECT_CONFIG_FILES,
     'package.json',
     'pnpm-lock.yaml',
     'package-lock.json',
@@ -635,7 +640,9 @@ export class DesignSystemHost {
       designSystemPackage && path.join(designSystemPackage.dir, 'package.json'),
       // Zero-config detection reads these; a change re-runs it.
       ...DETECTION_FILES.map((f) => path.join(root, f)),
-      path.resolve(root, tsconfig ?? 'tsconfig.json'),
+      ...(tsconfig
+        ? [path.resolve(root, tsconfig)]
+        : PROJECT_CONFIG_FILES.map((f) => path.join(root, f))),
       // Installed bases (`@tsconfig/next`) change with the lockfile, which the fingerprint covers.
       ...readProjectConfig(root, tsconfig).configFiles.filter(isProjectFile),
     ]
