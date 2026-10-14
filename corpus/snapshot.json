@@ -137,7 +137,7 @@
         "no-hardcoded-color": {
           "errors": 874,
           "warnings": 150,
-          "fixes": 541
+          "fixes": 499
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -175,7 +175,7 @@
         "no-hardcoded-color": {
           "errors": 190,
           "warnings": 93,
-          "fixes": 63
+          "fixes": 61
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -219,7 +219,7 @@
         "no-hardcoded-color": {
           "errors": 190,
           "warnings": 93,
-          "fixes": 63
+          "fixes": 61
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -262,7 +262,7 @@
         "no-hardcoded-color": {
           "errors": 10024,
           "warnings": 164,
-          "fixes": 6593
+          "fixes": 6583
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -324,7 +324,7 @@
         "no-hardcoded-color": {
           "errors": 9967,
           "warnings": 134,
-          "fixes": 6593
+          "fixes": 6583
         },
         "prefer-design-system-component": {
           "errors": 973,
@@ -356,7 +356,7 @@
         "no-hardcoded-color": {
           "errors": 10024,
           "warnings": 164,
-          "fixes": 6593
+          "fixes": 6583
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -412,7 +412,7 @@
         "no-hardcoded-color": {
           "errors": 10300,
           "warnings": 170,
-          "fixes": 6726
+          "fixes": 6716
         },
         "prefer-design-system-component": {
           "errors": 1015,
@@ -661,7 +661,7 @@
         "no-hardcoded-color": {
           "errors": 201,
           "warnings": 13,
-          "fixes": 73
+          "fixes": 72
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -860,7 +860,7 @@
         "no-hardcoded-color": {
           "errors": 384,
           "warnings": 13,
-          "fixes": 82
+          "fixes": 81
         },
         "no-hardcoded-radius": {
           "errors": 0,

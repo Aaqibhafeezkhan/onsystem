@@ -4,14 +4,15 @@ import { propertyName } from '../../extract/cva.js';
 import {
   colorDistance,
   findColorLiterals,
-  formatDeltaE,
+  formatDistance,
+  formatOpacityGap,
   isNamedColor,
   isTinted,
   parseColor,
   SAME_COLOR,
   type Oklch,
 } from '../../tokens/color.js';
-import type { ColorSuggestion } from '../../tokens/index.js';
+import type { ColorCandidate, ColorSuggestion } from '../../tokens/index.js';
 import {
   colorRole,
   scopesIn,
@@ -335,11 +336,7 @@ function reportColor(
   // (#dc2626), which Dub's `content-error` holds, is ΔE 0.030 from v4's.
   const held =
     close && input.palette && nearest.distance >= SAME_COLOR
-      ? heldBack(
-          input.palette,
-          (mode && nearest.candidate.modes?.[mode]) || nearest.candidate.color,
-          nearest.distance,
-        )
+      ? heldBack(input.palette, valueIn(nearest.candidate, mode), nearest.distance)
       : undefined;
   const variant = cls && input.element ? variantApplying(context, input.element, cls) : undefined;
 
@@ -369,7 +366,11 @@ function reportColor(
 
   const same = sameValue.length ? `, same value as ${sameValue.map((t) => t.name).join(', ')}` : '';
   const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';
-  const found = `${token.name}${inMode} (${formatDeltaE(nearest.distance)}${same})`;
+  const value = valueIn(nearest.candidate, mode);
+  const found = `${token.name}${inMode} (${formatDistance(input.color, value)}${same})`;
+  // A translucent color is not its opaque token (`bg-[#e7000b33]` is not `bg-destructive`): say
+  // both opacities, so the agent can keep it with an opacity modifier (`bg-destructive/20`).
+  const opacityGap = formatOpacityGap(input.color, value, `${token.name}${inMode}`);
   const tinted = input.tinted ?? isTinted(input.color);
   // No token has the color's hue (a status green in a stock shadcn/ui theme). Naming the nearest,
   // a gray or another hue's token (`chart-2` in a chart), led agents to swap the meaning away, so
@@ -381,11 +382,12 @@ function reportColor(
     if (advice) message += ` → ${advice}`;
     if (variant) message += `, or use ${variant}`;
     message += '.';
+    if (opacityGap) message += ` ${opacityGap}`;
     if (held) message += ` ${held}`;
   } else if (noHue) {
     message = `${input.what}. ${NO_TOKEN_HAS_HUE}`;
   } else {
-    message = `${input.what}. ${noMatch(reason, role, found, hueOff)}${meantForAnother(otherRole, mode)} Pick the semantic token that fits.`;
+    message = `${input.what}. ${noMatch(reason, role, found, hueOff)}${meantForAnother(otherRole, input.color, mode)}${opacityGap ? ` ${opacityGap}` : ''} Pick the semantic token that fits.`;
   }
   const owner =
     !variant && input.prefix && input.element
@@ -488,14 +490,23 @@ function heldBack(key: string, color: Oklch, distance: number): string | undefin
   return `That is ${what}, so it is not applied automatically: use it if ${intended} is intended, otherwise pick the semantic token that fits.`;
 }
 
+/** A token's value where the class applies: a `dark:` class takes its dark-mode value. */
+function valueIn(candidate: ColorCandidate, mode: string | undefined): Oklch {
+  return (mode && candidate.modes?.[mode]) || candidate.color;
+}
+
 /** `content-subtle has this color (exact match), but it is meant for text.` */
-function meantForAnother(other: ColorSuggestion['otherRole'], mode: string | undefined): string {
+function meantForAnother(
+  other: ColorSuggestion['otherRole'],
+  color: Oklch,
+  mode: string | undefined,
+): string {
   if (!other) return '';
   const { token } = other.candidate;
   const role = tokenRole(token);
   const how = other.distance < SAME_COLOR ? 'has this color' : 'is close';
   const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';
-  return ` ${token.name} ${how}${inMode} (${formatDeltaE(other.distance)}), but it is meant for ${role ? ROLE_WORDS[role] : 'another role'}.`;
+  return ` ${token.name} ${how}${inMode} (${formatDistance(color, valueIn(other.candidate, mode))}), but it is meant for ${role ? ROLE_WORDS[role] : 'another role'}.`;
 }
 
 const ROLE_WORDS: Record<ColorRole, string> = {
