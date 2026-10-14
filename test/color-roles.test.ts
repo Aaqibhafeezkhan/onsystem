@@ -138,8 +138,9 @@ describe("no-hardcoded-color on Dub's content-*, bg-* and border-* tokens", () =
     for (const [cls, suggestion, shade] of cases) {
       const d = one(cls);
       expect([cls, d?.fix, d?.suggestion]).toEqual([cls, undefined, suggestion]);
+      const darker = shade.includes('darker') ? 'darker' : 'lighter';
       expect(d?.message).toContain(
-        `→ \`${suggestion}\`. That is ${shade}, so it is not applied automatically.`,
+        `→ \`${suggestion}\`. That is ${shade}, so it is not applied automatically: use it if the ${darker} color is intended, otherwise pick the semantic token that fits.`,
       );
     }
     // Tailwind v3's red-600, which content-error copies, is ΔE 0.030 from v4's: the same shade.
@@ -154,6 +155,36 @@ describe("no-hardcoded-color on Dub's content-*, bg-* and border-* tokens", () =
     const code = `<p className="text-neutral-600 text-red-600 text-neutral-400 border-red-500" />`;
     expect(applyFixes(code, colors(code))).toBe(
       `<p className="text-neutral-600 text-content-error text-content-muted border-red-500" />`,
+    );
+  });
+});
+
+describe('no-hardcoded-color on a palette class whose token has its shade', () => {
+  it('fixes a copy of the shade from either Tailwind version, never another color of it', async () => {
+    const system = await load(
+      fixture({
+        // brand is Tailwind v3's fuchsia-600, the shade v3 and v4 differ most on; ink is neutral-500.
+        'app/globals.css': `@import "tailwindcss";
+@theme {
+  --color-brand: #c026d3;
+  --color-ink: #737373;
+}`,
+      }),
+    );
+    const one = (cls: string): Diagnostic | undefined =>
+      system
+        .check(`<p className="${cls}" />`, 'app/page.tsx')
+        .diagnostics.find((d) => d.ruleId === rule);
+    expect(one('text-fuchsia-600')?.message).toContain('Nearest token color-brand (ΔE 0.036)');
+    expect(one('text-fuchsia-600')?.fix?.[0]?.text).toBe('text-brand');
+    // gray-500 and neutral-500 are closer than v3's and v4's fuchsia-600.
+    expect(one('text-gray-500')?.message).toContain('Nearest token color-ink (ΔE 0.027)');
+    expect(one('text-gray-500')?.fix?.[0]?.text).toBe('text-ink');
+    // slate-500 is bluer: ink is its shade, but not its color.
+    const slate = one('text-slate-500');
+    expect([slate?.fix, slate?.suggestion]).toEqual([undefined, 'text-ink']);
+    expect(slate?.message).toContain(
+      'Nearest token color-ink (ΔE 0.046) → `text-ink`. That is closest to neutral-500, not slate-500, so it is not applied automatically: use it if that color is intended, otherwise pick the semantic token that fits.',
     );
   });
 });
@@ -181,5 +212,42 @@ describe('no-hardcoded-color on Material-style on-* tokens', () => {
     expect(bg?.message).toContain(
       'on-surface has this color (exact match), but it is meant for text.',
     );
+  });
+});
+
+describe('no-hardcoded-color on content-* tokens named for a surface or a line', () => {
+  it('keeps content-background a background and content-border a border', async () => {
+    const system = await load(
+      fixture({
+        'app/globals.css': `@import "tailwindcss";
+@theme {
+  --color-content-background: #f5f5f5;
+  --color-content-bg: #fafafa;
+  --color-content-border: #e5e5e5;
+  --color-content-muted: #a3a3a3;
+}`,
+      }),
+    );
+    const one = (cls: string): Diagnostic | undefined =>
+      system
+        .check(`<p className="${cls}" />`, 'app/page.tsx')
+        .diagnostics.find((d) => d.ruleId === rule);
+    // Exact matches of the role the name says: neutral-100, -50, -200 and -400.
+    expect(one('bg-neutral-100')?.fix?.[0]?.text).toBe('bg-content-background');
+    expect(one('bg-neutral-50')?.fix?.[0]?.text).toBe('bg-content-bg');
+    expect(one('border-neutral-200')?.fix?.[0]?.text).toBe('border-content-border');
+    expect(one('text-neutral-400')?.fix?.[0]?.text).toBe('text-content-muted');
+    // A surface or a border is never swapped into text, though the color is the same.
+    const cases: [string, string, string][] = [
+      ['text-neutral-100', 'content-background', 'backgrounds'],
+      ['text-neutral-200', 'content-border', 'borders'],
+    ];
+    for (const [cls, token, role] of cases) {
+      const d = one(cls);
+      expect([cls, d?.fix, d?.suggestion]).toEqual([cls, undefined, undefined]);
+      expect(d?.message).toContain(
+        `${token} has this color (exact match), but it is meant for ${role}.`,
+      );
+    }
   });
 });
