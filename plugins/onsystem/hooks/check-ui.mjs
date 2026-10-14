@@ -29,6 +29,11 @@
 // It reads the project's files and writes nothing but markers in the system temp
 // folder, for the one-time notice and the pause; the only network access is npm's,
 // when npx needs the registry.
+// The check runs from the file's project folder, the nearest one with a config, a
+// components.json, a package.json or a project.json. In a monorepo whose root has a config or
+// a baseline (`init` at the root writes both), it runs from the root, as `check .` there does,
+// so the root's rules and baseline apply; the file is still checked by its own project. A
+// project that keeps a baseline of its own, as a CI job per app does, is checked from its folder.
 // ONSYSTEM_BIN points at another CLI script, ONSYSTEM_NPX at another npx script,
 // and ONSYSTEM_HOOK_TIMEOUT (milliseconds) shortens the time limit, for tests.
 // DESIGN_SYSTEM_MCP_BIN, ONSYSTEM_BIN's name before the rename, still works, with
@@ -70,6 +75,10 @@ const PROJECT_FILES = [
   // An Nx project without a package.json of its own.
   'project.json',
 ];
+// The baseline `check` reads in the folder it runs from, under its name from before the rename too.
+const BASELINE_FILES = ['onsystem.baseline.json', 'design-system-mcp.baseline.json'];
+// What makes a monorepo root's own `check` the one that covers its projects: a config or a baseline.
+const ROOT_FILES = [...PROJECT_FILES.filter((f) => f.includes('.config.')), ...BASELINE_FILES];
 const BIN = process.env.ONSYSTEM_BIN || process.env.DESIGN_SYSTEM_MCP_BIN || undefined;
 
 const input = await readInput();
@@ -81,7 +90,9 @@ const sessionDir =
     ? input.cwd
     : (process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
 const file = path.resolve(sessionDir, filePath);
-const root = projectRoot(path.dirname(file)) ?? sessionDir;
+const project = projectRoot(path.dirname(file));
+// Where `check` runs: the project's folder, or the monorepo root whose config or baseline covers it.
+const root = (project && monorepoRoot(project)) ?? project ?? sessionDir;
 // Forward slashes, as the CLI prints paths, on Windows too.
 const name = path.relative(root, file).split(path.sep).join('/') || file;
 if (!process.env.ONSYSTEM_BIN && process.env.DESIGN_SYSTEM_MCP_BIN) {
@@ -91,7 +102,8 @@ if (!process.env.ONSYSTEM_BIN && process.env.DESIGN_SYSTEM_MCP_BIN) {
     if (code === 0) once('env-notice', text, () => fs.writeSync(2, `${text}\n`));
   });
 }
-const cli = resolveCli(root);
+// The project's own install, which may be in the project's node_modules rather than the root's.
+const cli = resolveCli(project ?? root);
 if (!cli.argv) cannotRun('npx was not found next to this Node.js.');
 // npm could not reach the registry, or npx ran out of time, less than OFFLINE_PAUSE ago: the
 // notice has been shown, and npx would wait as long again.
@@ -227,9 +239,13 @@ function check(npm) {
   const [command, ...args] = cli.npx
     ? [...cli.argv, ...npm, '--yes', `${PACKAGE}@${VERSION}`]
     : cli.argv;
+  // Relative to the folder it runs in, which the CLI sees by its real path: an absolute path
+  // through a symlink (macOS's /tmp) would fall outside it, and outside every project in it.
+  const relative = path.relative(root, file);
+  const target = relative && !path.isAbsolute(relative) ? `.${path.sep}${relative}` : file;
   return spawnSync(
     command,
-    [...args, 'check', file, '--format', 'json', '--quiet-without-design-system'],
+    [...args, 'check', target, '--format', 'json', '--quiet-without-design-system'],
     {
       cwd: root,
       encoding: 'utf8',
@@ -320,6 +336,83 @@ function projectRoot(dir) {
   for (let current = dir; ; current = path.dirname(current)) {
     if (PROJECT_FILES.some((f) => fs.existsSync(path.join(current, f)))) return current;
     if (current === path.dirname(current)) return undefined;
+  }
+}
+
+/**
+ * The monorepo root to run `check` from for a file in `dir`, its project folder: the nearest
+ * workspace root at or above `dir`, when it has a config or a baseline. `check` there finds the
+ * file's project as the hook does, then adds the root's config (to a project without its own)
+ * and the root's baseline. None when `dir` is the root itself, keeps a baseline of its own, or
+ * the root has neither file. The home folder is never one.
+ */
+function monorepoRoot(dir) {
+  if (BASELINE_FILES.some((f) => fs.existsSync(path.join(dir, f)))) return undefined;
+  const home = os.homedir();
+  for (let up = dir; up !== path.dirname(up); up = path.dirname(up)) {
+    if (up === home || !isWorkspaceRoot(up)) continue;
+    if (up === dir || !ROOT_FILES.some((f) => fs.existsSync(path.join(up, f)))) return undefined;
+    return up;
+  }
+  return undefined;
+}
+
+/**
+ * A monorepo root, as `check` reads one (isWorkspaceRoot in src/detect.ts): a pnpm-workspace.yaml
+ * whose `packages` name more than the root, `workspaces` in package.json, an nx.json, or a
+ * lerna.json with `packages`. A pnpm-workspace.yaml with settings alone is a single app's.
+ */
+function isWorkspaceRoot(dir) {
+  const beyondRoot = (p) =>
+    !p.startsWith('!') && path.posix.normalize(p.replace(/\\/g, '/').replace(/\/+$/, '')) !== '.';
+  if (pnpmPackages(dir).some(beyondRoot)) return true;
+  if (fs.existsSync(path.join(dir, 'nx.json'))) return true;
+  if (readJson(path.join(dir, 'package.json'))?.workspaces !== undefined) return true;
+  return Array.isArray(readJson(path.join(dir, 'lerna.json'))?.packages);
+}
+
+/** The `packages` list of the pnpm-workspace.yaml in `dir`, block or flow style, as `check` reads it. */
+function pnpmPackages(dir) {
+  let text;
+  try {
+    text = fs.readFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'utf8');
+  } catch {
+    return [];
+  }
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^(['"]?)packages\1\s*:/.test(line));
+  if (start === -1) return [];
+  const uncomment = (s) => s.replace(/(?:^|\s)#.*$/, '').trim();
+  const unquote = (s) => s.trim().replace(/^(['"])(.*)\1$/, '$2');
+  const inline = uncomment(lines[start].slice(lines[start].indexOf(':') + 1));
+  if (inline.startsWith('[')) {
+    let flow = inline;
+    for (let i = start + 1; !flow.includes(']') && i < lines.length; i++) {
+      flow += ` ${uncomment(lines[i])}`;
+    }
+    const end = flow.indexOf(']');
+    return flow
+      .slice(1, end === -1 ? undefined : end)
+      .split(',')
+      .map(unquote)
+      .filter(Boolean);
+  }
+  const items = [];
+  for (const line of lines.slice(start + 1)) {
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const item = /^\s*-\s*(.*)$/.exec(line);
+    if (item) items.push(unquote(uncomment(item[1])));
+    // The next top-level key ends the list.
+    else if (/^\S/.test(line)) break;
+  }
+  return items.filter(Boolean);
+}
+
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return undefined;
   }
 }
 
