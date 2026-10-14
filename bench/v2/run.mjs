@@ -506,10 +506,15 @@ function report(out) {
       .map(([s, n]) => `${n} ${s}`)
       .join(
         ', ',
-      )}), onsystem ${info.onsystem ?? '?'}, started ${info.startedAt ?? '?'}. Rates with 95% Wilson intervals; errors per run and differences with 95% cluster-bootstrap intervals (tasks resampled, 10,000 draws, seed 1). Method: [README](../README.md).`,
+      )}), onsystem ${info.onsystem ?? '?'}, started ${info.startedAt ?? '?'}. Rates with 95% Wilson intervals; errors per run and differences with 95% cluster-bootstrap intervals (tasks resampled, 10,000 draws, seed 1). Method: [README](../../README.md).`,
     '',
-    renderMarkdown(rows, diffs),
   ];
+  // What the tables cannot show (the version's blind spots, how a number was reached) is kept
+  // next to the run in <out>/notes.md, which report does not generate. It goes above the
+  // tables, so rebuilding them keeps it.
+  const notes = path.join(out, 'notes.md');
+  if (fs.existsSync(notes)) lines.push(fs.readFileSync(notes, 'utf8').trim(), '');
+  lines.push(renderMarkdown(rows, diffs));
   const labelFile = path.join(out, 'labels', 'labels.csv');
   const keyFile = path.join(out, 'labels', 'key.json');
   if (fs.existsSync(labelFile) && fs.existsSync(keyFile)) {
