@@ -12,7 +12,7 @@ import {
   SAME_COLOR,
   type Oklch,
 } from '../../tokens/color.js';
-import type { ColorCandidate, ColorSuggestion } from '../../tokens/index.js';
+import type { ColorCandidate, ColorSuggestion, Nearest } from '../../tokens/index.js';
 import {
   colorRole,
   scopesIn,
@@ -24,7 +24,7 @@ import { formatPx, lengthToPx } from '../../tokens/units.js';
 import { cssReference } from '../../tokens/usage.js';
 import type { Token } from '../../types.js';
 import { attributeName, literalValues, valueBranches, type JsxNode } from '../analyze.js';
-import type { Rule, RuleContext } from '../context.js';
+import type { Report, Rule, RuleContext } from '../context.js';
 import { TAILWIND_PALETTE } from '../tailwind-palette.js';
 import {
   COLOR_PREFIXES,
@@ -125,9 +125,16 @@ export const noHardcodedColor: Rule = {
     if (!tokens.has('color')) return;
     const allow = new Set((context.options.allow ?? []).map((v) => v.toLowerCase()));
     const maskGradients = maskReferencedGradientIds(context.analysis.elements);
+    // An element's classes are one list, across cn() arguments; a string elsewhere is its own.
+    const lists = new Map<object, ListedClass[]>();
 
     for (const classString of context.analysis.classStrings) {
+      const key = classString.element ?? classString;
+      const list = lists.get(key) ?? [];
+      lists.set(key, list);
       for (const token of splitClasses(classString.text, classString.start)) {
+        const listed: ListedClass = { value: token.value };
+        list.push(listed);
         if (allow.has(token.value.toLowerCase())) continue;
         const utility = parseUtility(token.value);
         const element = classString.element;
@@ -142,7 +149,7 @@ export const noHardcodedColor: Rule = {
           // `shadow-[0_1px_2px_#000]`: report the color inside, but no class can replace it 1:1.
           const literal = whole ? { text: value, color: whole } : findColorLiterals(value)[0];
           if (!literal || allow.has(literal.text.toLowerCase())) continue;
-          reportColor(context, {
+          listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
             what: `Hardcoded color \`${token.value}\``,
@@ -163,7 +170,7 @@ export const noHardcodedColor: Rule = {
           const whole = parseColor(value);
           const literal = whole ? { text: value, color: whole } : findColorLiterals(value)[0];
           if (!literal || allow.has(literal.text.toLowerCase())) continue;
-          reportColor(context, {
+          listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
             what: `Hardcoded color \`${token.value}\``,
@@ -181,7 +188,7 @@ export const noHardcodedColor: Rule = {
         if (palette && !tokens.colorKeys.has(palette.key)) {
           const color = parseColor(palette.value);
           if (!color) continue;
-          reportColor(context, {
+          listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
             what: `\`${token.value}\` is Tailwind's default palette, not a design-system color`,
@@ -196,6 +203,10 @@ export const noHardcodedColor: Rule = {
           });
         }
       }
+    }
+    for (const list of lists.values()) {
+      keepStatesApart(list);
+      for (const { report } of list) if (report) context.report(report);
     }
 
     for (const { object, element } of context.analysis.styles) {
@@ -278,7 +289,7 @@ function reportLiteralColors(
   }
   for (const match of matches) {
     if (options.allow.has(match.text.toLowerCase())) continue;
-    reportColor(context, {
+    const report = colorReport(context, {
       start: start + match.index,
       end: start + match.index + match.text.length,
       what: `Hardcoded color \`${match.text}\` in ${options.where}`,
@@ -287,34 +298,35 @@ function reportLiteralColors(
       place: options.place,
       element,
     });
+    if (report) context.report(report);
   }
 }
 
-function reportColor(
-  context: RuleContext,
-  input: {
-    start: number;
-    end: number;
-    what: string;
-    color: Oklch;
-    /** A hue rather than a gray, when the source says so (`bg-sky-50` is blue, however pale). */
-    tinted?: boolean;
-    /** The default-palette color the class names (`neutral-600`), whose shade a fix must keep. */
-    palette?: string;
-    /** Tailwind prefix to build the replacement class with (`bg`, `text`, `border-t`). */
-    prefix: string | undefined;
-    /**
-     * Where the literal sits: a class list (replace the class), a style value
-     * (replace with `var(--token)`), or a JSX attribute such as `fill` or an
-     * icon's `color` (move it to className; SVG attributes cannot use `var()`).
-     */
-    place: 'class' | 'style' | 'attribute';
-    utility?: Utility;
-    element?: JsxNode | undefined;
-    /** The class string the color is in, which can place it in a sidebar or chart. */
-    classes?: string | undefined;
-  },
-): void {
+interface ColorInput {
+  start: number;
+  end: number;
+  what: string;
+  color: Oklch;
+  /** A hue rather than a gray, when the source says so (`bg-sky-50` is blue, however pale). */
+  tinted?: boolean;
+  /** The default-palette color the class names (`neutral-600`), whose shade a fix must keep. */
+  palette?: string;
+  /** Tailwind prefix to build the replacement class with (`bg`, `text`, `border-t`). */
+  prefix: string | undefined;
+  /**
+   * Where the literal sits: a class list (replace the class), a style value
+   * (replace with `var(--token)`), or a JSX attribute such as `fill` or an
+   * icon's `color` (move it to className; SVG attributes cannot use `var()`).
+   */
+  place: 'class' | 'style' | 'attribute';
+  utility?: Utility;
+  element?: JsxNode | undefined;
+  /** The class string the color is in, which can place it in a sidebar or chart. */
+  classes?: string | undefined;
+}
+
+/** The finding for a color, or undefined when the design system has no color to name. */
+function colorReport(context: RuleContext, input: ColorInput): Report | undefined {
   const role = colorRole(input.prefix ?? input.utility?.prefix);
   // `dark:bg-slate-900` is the dark-mode color: compare it with the tokens' dark values.
   const mode = input.utility?.variants.includes('dark') ? 'dark' : undefined;
@@ -324,12 +336,11 @@ function reportColor(
     tinted: input.tinted,
     mode,
   });
-  if (!suggestion) return;
-  const { match, nearest, reason, sameValue, hueOff, otherRole } = suggestion;
+  if (!suggestion) return undefined;
+  const { match, nearest, reason, sameValue, hueOff, otherRole, closeStatus } = suggestion;
   const token = nearest.candidate.token;
 
-  const cls = input.prefix && token.tailwind ? `${input.prefix}-${token.tailwind}` : undefined;
-  const cssVar = cssReference(token);
+  const { cls, replacement, advice, edit } = writing(input, token);
   const close = match !== undefined;
   // A palette class names one color of a designed scale, so a token of another color is suggested
   // but not applied (see `heldBack`). One that copies Tailwind v3's shade still is: v3's red-600
@@ -338,8 +349,68 @@ function reportColor(
     close && input.palette && nearest.distance >= SAME_COLOR
       ? heldBack(input.palette, valueIn(nearest.candidate, mode), nearest.distance)
       : undefined;
+  // A status color of the hue about as close as the match (`destructive` for red-500 next to a
+  // rose `brand`): the color may say what happened, which the next rebrand must not change.
+  const status =
+    close && closeStatus ? statusTooClose(input, mode, closeStatus, token, advice) : undefined;
   const variant = cls && input.element ? variantApplying(context, input.element, cls) : undefined;
 
+  const same = sameValue.length ? `, same value as ${sameValue.map((t) => t.name).join(', ')}` : '';
+  const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';
+  const value = valueIn(nearest.candidate, mode);
+  const found = `${token.name}${inMode} (${formatDistance(input.color, value)}${same})`;
+  // A translucent color is not its opaque token (`bg-[#e7000b33]` is not `bg-destructive`): say
+  // both opacities, so the agent can keep it with an opacity modifier (`bg-destructive/20`).
+  const opacityGap = formatOpacityGap(input.color, value, `${token.name}${inMode}`);
+  const tinted = input.tinted ?? isTinted(input.color);
+  // No token has the color's hue (a status green in a stock shadcn/ui theme). Naming the nearest,
+  // a gray or another hue's token (`chart-2` in a chart), led agents to swap the meaning away, so
+  // the message names none and leaves two ways out, as a warning.
+  const noHue = !close && reason === 'hue' && tinted;
+  let message: string;
+  if (close) {
+    message = `${input.what}. ${nearest.distance < SAME_COLOR ? 'Matches token' : 'Nearest token'} ${found}`;
+    if (advice) message += ` → ${advice}`;
+    if (variant) message += `, or use ${variant}`;
+    message += '.';
+    if (opacityGap) message += ` ${opacityGap}`;
+    if (status) message += ` ${status}`;
+    else if (held) message += ` ${held}`;
+  } else if (noHue) {
+    message = `${input.what}. ${NO_TOKEN_HAS_HUE}`;
+  } else {
+    message = `${input.what}. ${noMatch(reason, role, found, hueOff)}${meantForAnother(otherRole, input.color, mode)}${opacityGap ? ` ${opacityGap}` : ''} Pick the semantic token that fits.`;
+  }
+  const owner =
+    !variant && input.prefix && input.element
+      ? variantProp(context, input.element, input.prefix)
+      : undefined;
+  if (owner)
+    message += ` <${owner.component}> already sets ${input.prefix}-* through \`${owner.prop}\`; prefer a variant over overriding it.`;
+
+  return {
+    start: input.start,
+    end: input.end,
+    message,
+    suggestion: close ? (variant ?? replacement) : undefined,
+    fix:
+      close && edit && !held && !status
+        ? [{ range: [input.start, input.end], text: edit }]
+        : undefined,
+    severity: noHue ? 'warning' : undefined,
+  };
+}
+
+/**
+ * How code writes `token` where the color is: the class (`bg-primary`), what to suggest, the
+ * message's advice and the text a fix puts in place of the color.
+ */
+function writing(
+  input: ColorInput,
+  token: Token,
+): { cls?: string; replacement?: string; advice?: string; edit?: string } {
+  const cls = input.prefix && token.tailwind ? `${input.prefix}-${token.tailwind}` : undefined;
+  const cssVar = cssReference(token);
   let replacement: string | undefined;
   let advice: string | undefined;
   let edit: string | undefined;
@@ -363,47 +434,81 @@ function reportColor(
   if (!cls && !cssVar && token.usage.length) {
     advice = token.usage.map((usage) => `\`${usage}\``).join(' or ');
   }
+  return { cls, replacement, advice, edit };
+}
 
-  const same = sameValue.length ? `, same value as ${sameValue.map((t) => t.name).join(', ')}` : '';
+/**
+ * Why a close match is not applied when a status color of the color's hue is about as close:
+ * `destructive is close too (ΔE 0.071), and it is a status color, so this is not applied
+ * automatically: use \`bg-destructive\` if the color shows a status, otherwise \`bg-brand\`.`
+ */
+function statusTooClose(
+  input: ColorInput,
+  mode: string | undefined,
+  status: Nearest<ColorCandidate>,
+  found: Token,
+  advice: string | undefined,
+): string {
+  const { token } = status.candidate;
   const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';
-  const value = valueIn(nearest.candidate, mode);
-  const found = `${token.name}${inMode} (${formatDistance(input.color, value)}${same})`;
-  // A translucent color is not its opaque token (`bg-[#e7000b33]` is not `bg-destructive`): say
-  // both opacities, so the agent can keep it with an opacity modifier (`bg-destructive/20`).
-  const opacityGap = formatOpacityGap(input.color, value, `${token.name}${inMode}`);
-  const tinted = input.tinted ?? isTinted(input.color);
-  // No token has the color's hue (a status green in a stock shadcn/ui theme). Naming the nearest,
-  // a gray or another hue's token (`chart-2` in a chart), led agents to swap the meaning away, so
-  // the message names none and leaves two ways out, as a warning.
-  const noHue = !close && reason === 'hue' && tinted;
-  let message: string;
-  if (close) {
-    message = `${input.what}. ${nearest.distance < SAME_COLOR ? 'Matches token' : 'Nearest token'} ${found}`;
-    if (advice) message += ` → ${advice}`;
-    if (variant) message += `, or use ${variant}`;
-    message += '.';
-    if (opacityGap) message += ` ${opacityGap}`;
-    if (held) message += ` ${held}`;
-  } else if (noHue) {
-    message = `${input.what}. ${NO_TOKEN_HAS_HUE}`;
-  } else {
-    message = `${input.what}. ${noMatch(reason, role, found, hueOff)}${meantForAnother(otherRole, input.color, mode)}${opacityGap ? ` ${opacityGap}` : ''} Pick the semantic token that fits.`;
-  }
-  const owner =
-    !variant && input.prefix && input.element
-      ? variantProp(context, input.element, input.prefix)
-      : undefined;
-  if (owner)
-    message += ` <${owner.component}> already sets ${input.prefix}-* through \`${owner.prop}\`; prefer a variant over overriding it.`;
+  const distance = formatDistance(input.color, valueIn(status.candidate, mode));
+  const statusAdvice = writing(input, token).advice || token.name;
+  return `${token.name}${inMode} is close too (${distance}), and it is a status color, so this is not applied automatically: use ${statusAdvice} if the color shows a status, otherwise ${advice || found.name}.`;
+}
 
-  context.report({
-    start: input.start,
-    end: input.end,
-    message,
-    suggestion: close ? (variant ?? replacement) : undefined,
-    fix: close && edit && !held ? [{ range: [input.start, input.end], text: edit }] : undefined,
-    severity: noHue ? 'warning' : undefined,
-  });
+/** A class in a class list, with its finding if it has one. */
+interface ListedClass {
+  value: string;
+  report?: Report | undefined;
+}
+
+/**
+ * Takes back a fix that would make a class under a condition (`hover:`, `focus-visible:`, `md:`)
+ * the same color as the class without it: `bg-[#2563eb] hover:bg-[#1d4ed8]` would become
+ * `bg-primary hover:bg-primary`, and the hover would change nothing. The state class gives way
+ * first; a base class does when the state class already has the token it would get. `dark:` is
+ * no such condition: dark classes are compared with the tokens' dark values, where the same
+ * token is right.
+ */
+function keepStatesApart(list: readonly ListedClass[]): void {
+  const after = (listed: ListedClass) => listed.report?.fix?.[0]?.text ?? listed.value;
+  for (const pass of ['state', 'base'] as const) {
+    for (const listed of list) {
+      const { report } = listed;
+      const edit = report?.fix?.[0]?.text;
+      if (!report || edit === undefined) continue;
+      for (const other of list) {
+        if (other === listed) continue;
+        const [state, base] = pass === 'state' ? [edit, after(other)] : [after(other), edit];
+        const conditions = conditionsBetween(parseUtility(state), parseUtility(base));
+        if (!conditions) continue;
+        const had =
+          pass === 'base'
+            ? `\`${other.value}\` is in the class list too`
+            : after(other) === other.value
+              ? `The class list already has \`${other.value}\``
+              : `\`${other.value}\` becomes \`${after(other)}\` too`;
+        const stateClass = parseUtility(state);
+        const apart = stateClass.modifier
+          ? 'such as with another opacity modifier'
+          : `such as with \`${withBase({ ...stateClass, modifier: '/90' }, stateClass.base)}\``;
+        report.message += ` ${had}, so with this fix \`${conditions}\` would change nothing: it is not applied automatically. Keep the two apart, ${apart}.`;
+        report.fix = undefined;
+        break;
+      }
+    }
+  }
+}
+
+/**
+ * The conditions (`hover:`) under which `state` applies and `base` does too, when both are the
+ * same color: undefined when they are not, or `state` adds no condition but `dark:`.
+ */
+function conditionsBetween(state: Utility, base: Utility): string | undefined {
+  if (state.base !== base.base || state.modifier !== base.modifier) return undefined;
+  if (!base.variants.every((variant) => state.variants.includes(variant))) return undefined;
+  const added = state.variants.filter((v) => v !== 'dark' && !base.variants.includes(v));
+  return added.length ? `${added.join(':')}:` : undefined;
 }
 
 /**

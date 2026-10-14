@@ -159,6 +159,13 @@ export const HUE_TOLERANCE = 15;
  * red-600 `destructive`, but not orange-600, 14° away.
  */
 export const STATUS_HUE_TOLERANCE = 8;
+/**
+ * A status color of the color's hue that is at most this much further than the token found
+ * may be what the color means: with a rose-500 `brand`, red-500 is 0.039 from it and 0.061
+ * from a red-600 `destructive`, and error text must not follow the next rebrand. A color that
+ * is the brand's (rose-500, 0.082 from `destructive`) is clear of it.
+ */
+export const STATUS_MARGIN = 0.03;
 
 const maxChromas = new Map<string, number>();
 
