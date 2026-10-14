@@ -1,6 +1,6 @@
 # How it works
 
-onsystem reads the design system from source into one model, then checks UI code against it in three places: the Claude Code hook after every edit, `check_ui` when an agent asks, and `onsystem check` in CI. Everything is static analysis: no model calls, no API key, and it runs offline.
+onsystem reads the design system from source into one model, then checks UI code against it in three places: the Claude Code hook after every edit, `check_ui` when an agent asks, and `onsystem check` in CI. Everything is static analysis: no model calls, no API key, and no network requests of its own: installed in the project, it runs offline, and through npx only npm contacts the registry ([when](plugin.md#what-it-runs-and-what-it-touches)).
 
 ![Sources (components, tokens, docs, config) flow through the TypeScript checker, a cva parser, token parsers and a docs parser into a cached design-system model with a BM25 index, an OKLCH token index and the lint rules, served by an MCP server over stdio and by the check CLI, which the Claude Code hook and CI run.](../.github/assets/architecture.svg)
 
@@ -37,7 +37,7 @@ These tools work at different layers, and several combine well:
 
 ## Design decisions
 
-**Static analysis, not another model.** The agent is already the LLM; what it lacks is ground truth. Everything here is deterministic, takes milliseconds, runs offline, needs no API key, and can be unit-tested rule by rule. The cost: it cannot judge intent, such as whether a `Dialog` was the right call. That stays with the agent and the reviewer.
+**Static analysis, not another model.** The agent is already the LLM; what it lacks is ground truth. Everything here is deterministic, takes milliseconds, makes no network requests, needs no API key, and can be unit-tested rule by rule. The cost: it cannot judge intent, such as whether a `Dialog` was the right call. That stays with the agent and the reviewer.
 
 **The TypeScript checker over `react-docgen-typescript`.** react-docgen-typescript wraps the same API but hides the AST, and `cva()` parsing, composition and element inference all need it. One program serves all four. The runtime dependency is TypeScript 6, the last release with the JavaScript compiler API; TypeScript 7 (the Go port) does not expose a stable one yet.
 

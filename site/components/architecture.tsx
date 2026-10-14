@@ -118,7 +118,7 @@ export function Architecture({ alt }: { alt: string }) {
       </Stage>
       <p className="mt-4 border-t border-line pt-3 text-[13px] leading-relaxed text-muted">
         <span className="font-mono text-[11px] tracking-[0.14em] text-subtle uppercase">
-          Used by
+          Clients:
         </span>{' '}
         Claude Code · Cursor · VS Code · any MCP client, and CI (GitHub annotations, exit codes)
       </p>

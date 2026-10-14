@@ -13,15 +13,26 @@
 // - The CLI cannot run (npx fails, a min-release-age policy, offline, a private
 //   registry, a broken config): exit 0 with a one-time notice, once per session
 //   and project, on stderr and as a `systemMessage` the user sees. It never
-//   blocks the edit, and Claude is not asked to fix it.
+//   blocks the edit, and Claude is not asked to fix it. When npm could not
+//   reach the registry, or npx did not finish in time, npx is not started again
+//   for ten minutes, so an offline session waits for npm once, not on every edit.
 //
 // The CLI is the project's own install when there is one, else npx, pinned to
 // this plugin's release. Both run through Node directly, never a shell, so paths
-// are passed as they are. It reads the project's files and writes nothing but a
-// marker in the system temp folder for the one-time notice; the only network
-// access is npx fetching the package from the npm registry.
-// ONSYSTEM_BIN points at another CLI script, for tests. DESIGN_SYSTEM_MCP_BIN,
-// its name before the rename, still works, with a one-time notice.
+// are passed as they are. npx runs with --prefer-offline: the package in npm's
+// cache is used without asking the registry, which npm otherwise does on every
+// run, and waits for when offline. The version is exact and a published npm
+// version never changes, so the cached copy is the release. When npm itself fails
+// with the cache, as when its cached list of versions is older than this release,
+// it runs once more with --prefer-online, which asks the registry. A failure of
+// the CLI it started, such as a broken config, is not retried.
+// It reads the project's files and writes nothing but markers in the system temp
+// folder, for the one-time notice and the pause; the only network access is npm's,
+// when npx needs the registry.
+// ONSYSTEM_BIN points at another CLI script, ONSYSTEM_NPX at another npx script,
+// and ONSYSTEM_HOOK_TIMEOUT (milliseconds) shortens the time limit, for tests.
+// DESIGN_SYSTEM_MCP_BIN, ONSYSTEM_BIN's name before the rename, still works, with
+// a one-time notice.
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -35,6 +46,11 @@ const PACKAGE = 'onsystem';
 const VERSION = '0.6.0';
 const UI_FILE = /\.[jt]sx$/i;
 const MAX_FINDINGS = 30;
+// Both runs together, within the 60 seconds hooks.json gives the hook. Tests shorten it.
+const LIMIT = Number(process.env.ONSYSTEM_HOOK_TIMEOUT);
+const TIMEOUT = LIMIT > 0 && LIMIT < 55_000 ? LIMIT : 55_000;
+// How long npx is not started again after npm could not reach the registry, or ran out of time.
+const OFFLINE_PAUSE = 10 * 60_000;
 // Where the CLI looks for the design system: the nearest of these marks the project. `check`
 // from a monorepo root finds each file's project the same way (src/workspace.ts).
 const PROJECT_FILES = [
@@ -76,29 +92,35 @@ if (!process.env.ONSYSTEM_BIN && process.env.DESIGN_SYSTEM_MCP_BIN) {
   });
 }
 const cli = resolveCli(root);
-if (!cli) cannotRun('npx was not found next to this Node.js.');
+if (!cli.argv) cannotRun('npx was not found next to this Node.js.');
+// npm could not reach the registry, or npx ran out of time, less than OFFLINE_PAUSE ago: the
+// notice has been shown, and npx would wait as long again.
+const pause = markerPath('offline');
+if (cli.npx && paused()) process.exit(0);
 
-const run = spawnSync(
-  cli[0],
-  [...cli.slice(1), 'check', file, '--format', 'json', '--quiet-without-design-system'],
-  {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1' },
-    maxBuffer: 64 * 1024 * 1024,
-    timeout: 55_000,
-    windowsHide: true,
-  },
-);
-// 0: clean or warnings, 1: errors. Anything else (a config error, npx unable to
-// fetch the package) is not Claude's to fix: tell the user once, and move on.
-if (run.error || (run.status !== 0 && run.status !== 1)) cannotRun(failure(run));
-
-let results;
-try {
-  results = JSON.parse(run.stdout);
-} catch {
-  // npx exits 1 too when it cannot install the package, with npm's error on stderr.
+const deadline = Date.now() + TIMEOUT;
+let run = check(cli.npx ? ['--prefer-offline'] : []);
+let results = resultsOf(run);
+// A run from the cache can fail where the registry would not: npm's cached list of versions can
+// predate this release, after the plugin moves to it. When npm itself failed, then, once more with
+// the registry, unless npm could not reach it, which a second run would not change. When the CLI
+// ran and failed (a broken config, a crash), npm did its part: the registry would not change that.
+if (results === undefined && cli.npx && npmFailed(run) && !unreachable(run)) {
+  run = check(['--prefer-online']);
+  results = resultsOf(run);
+}
+// Anything else (a config error, npx unable to fetch the package) is not Claude's to fix: tell
+// the user once, and move on.
+if (results === undefined) {
+  // The next edit would wait as long: npx is paused.
+  if (cli.npx && (timedOut(run) || unreachable(run))) {
+    try {
+      fs.mkdirSync(path.dirname(pause), { recursive: true });
+      fs.writeFileSync(pause, '');
+    } catch {
+      // Without the marker the next edit waits for npm again; it still never blocks.
+    }
+  }
   cannotRun(failure(run));
 }
 if (!Array.isArray(results)) process.exit(0);
@@ -155,10 +177,9 @@ process.exit(0);
  * on stderr (the debug log) and as a `systemMessage` the user sees. Never blocks.
  */
 function cannotRun(reason) {
-  const usesNpx = !BIN && !installedCli(root);
   const advice = /config|tsconfig|Token file/i.test(reason)
     ? 'Fix the config, or run `onsystem inspect` to see the problem.'
-    : usesNpx
+    : cli.npx
       ? `Install it in the project to run it without npx: npm install --save-dev ${PACKAGE}`
       : `Run \`onsystem check ${name}\` to see why.`;
   const text = `onsystem could not check ${name}, so edits are not being checked against the design system: ${reason} ${advice}`;
@@ -169,14 +190,19 @@ function cannotRun(reason) {
   process.exit(0);
 }
 
-/** Runs `say` once per session and project (per day without a session), through a marker file. */
-function once(kind, text, say) {
+/** A marker file in the system temp folder, per session and project (per day without a session). */
+function markerPath(kind) {
   const day = new Date().toISOString().slice(0, 10);
   const key = createHash('sha256')
     .update(`${input.session_id ?? day}\0${root}`)
     .digest('hex')
     .slice(0, 16);
-  const marker = path.join(os.tmpdir(), 'onsystem', `${kind}-${key}`);
+  return path.join(os.tmpdir(), 'onsystem', `${kind}-${key}`);
+}
+
+/** Runs `say` once per session and project (per day without a session), through a marker file. */
+function once(kind, text, say) {
+  const marker = markerPath(kind);
   if (fs.existsSync(marker)) return;
   try {
     fs.mkdirSync(path.dirname(marker), { recursive: true });
@@ -187,21 +213,94 @@ function once(kind, text, say) {
   say();
 }
 
+/** Whether npx was paused, in this session and project, less than OFFLINE_PAUSE ago. */
+function paused() {
+  try {
+    return Date.now() - fs.statSync(pause).mtimeMs < OFFLINE_PAUSE;
+  } catch {
+    return false;
+  }
+}
+
+/** Runs `check` on the file, through npx with `npm` flags, in what is left of TIMEOUT. */
+function check(npm) {
+  const [command, ...args] = cli.npx
+    ? [...cli.argv, ...npm, '--yes', `${PACKAGE}@${VERSION}`]
+    : cli.argv;
+  return spawnSync(
+    command,
+    [...args, 'check', file, '--format', 'json', '--quiet-without-design-system'],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, NO_COLOR: '1' },
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: Math.max(deadline - Date.now(), 1),
+      windowsHide: true,
+    },
+  );
+}
+
+/** The JSON a run printed, when it exited with 0 (clean or warnings) or 1 (errors). */
+function resultsOf(result) {
+  if (result.error || (result.status !== 0 && result.status !== 1)) return undefined;
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    // npx exits 1 too when it cannot install the package, with npm's error on stderr.
+    return undefined;
+  }
+}
+
+/** Whether the run was stopped at the deadline: spawnSync's timeout, not any other signal. */
+function timedOut(result) {
+  return result.error?.code === 'ETIMEDOUT';
+}
+
+/**
+ * npm's own error lines in a run's stderr (`npm error …`, `npm ERR! …` before npm 10), without
+ * the CLI's: npx prints them when it cannot resolve or install the package, not when the CLI
+ * it started fails.
+ */
+function npmErrors(result) {
+  return String(result.stderr ?? '')
+    .split('\n')
+    .filter((line) => /^npm (error|ERR!) /.test(line))
+    .join('\n');
+}
+
+/** Whether npm itself failed: it exited with its own error, without starting the CLI. */
+function npmFailed(result) {
+  return !result.error && !result.signal && npmErrors(result) !== '';
+}
+
+/** Whether npm said it could not reach the registry. */
+function unreachable(result) {
+  return /ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ENETUNREACH|ETIMEDOUT|network/i.test(
+    npmErrors(result),
+  );
+}
+
 /** Why the CLI did not run, in a sentence, without anything that could hold a credential. */
 function failure(result) {
   if (result.error?.code === 'ENOENT') return 'npx was not found.';
-  if (result.error?.code === 'ETIMEDOUT' || result.signal)
-    return 'it did not finish within 55 seconds.';
-  const stderr = String(result.stderr ?? '');
-  if (/ENOVERSIONS|No versions available/i.test(stderr)) {
+  if (timedOut(result)) {
+    // npm may have been waiting for the registry, or the CLI for itself: it cannot be told apart.
+    return cli.npx
+      ? `it did not finish within ${TIMEOUT / 1000} seconds; npm may not have reached the registry (offline?).`
+      : `it did not finish within ${TIMEOUT / 1000} seconds.`;
+  }
+  // Stopped from outside, as when the system runs out of memory.
+  if (result.signal) return `it was stopped by ${result.signal}.`;
+  const npm = npmErrors(result);
+  if (/ENOVERSIONS|No versions available/i.test(npm)) {
     return `npm found no version of ${PACKAGE}@${VERSION} it may install (ENOVERSIONS), as with a min-release-age policy.`;
   }
-  if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|EAI_AGAIN|ENETUNREACH|ETIMEDOUT|network/i.test(stderr)) {
-    return 'npm could not reach the registry (offline?).';
-  }
-  if (/E401|E403|ENEEDAUTH|E404|404 Not Found/.test(stderr)) {
+  if (unreachable(result)) return 'npm could not reach the registry (offline?).';
+  if (/E401|E403|ENEEDAUTH|E404|404 Not Found/.test(npm)) {
     return 'the npm registry refused the package (a private registry?).';
   }
+  const stderr = String(result.stderr ?? '');
   const line = stderr
     .split('\n')
     .map((l) => l.trim())
@@ -224,19 +323,24 @@ function projectRoot(dir) {
   }
 }
 
-/** [node, script, ...args] for the CLI: an override, the project's install, or npx. */
+/**
+ * How to start the CLI: `argv` ([node, script] or ['npx']) runs an override, the project's
+ * install, or npx (`npx: true`, without npm's flags and the package). No `argv`: no npx found.
+ */
 function resolveCli(dir) {
-  if (BIN) return [process.execPath, BIN];
+  if (BIN) return { argv: [process.execPath, BIN] };
   const installed = installedCli(dir);
-  if (installed) return [process.execPath, installed];
+  if (installed) return { argv: [process.execPath, installed] };
   // npm's own npx script, run with this Node: no shell, so no quoting or .cmd issues on Windows.
   const nodeDir = path.dirname(process.execPath);
-  const npx = [
-    path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npx-cli.js'),
-    path.join(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js'),
-  ].find((f) => fs.existsSync(f));
-  if (npx) return [process.execPath, npx, '--yes', `${PACKAGE}@${VERSION}`];
-  return process.platform === 'win32' ? undefined : ['npx', '--yes', `${PACKAGE}@${VERSION}`];
+  const npx =
+    process.env.ONSYSTEM_NPX ||
+    [
+      path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npx-cli.js'),
+      path.join(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js'),
+    ].find((f) => fs.existsSync(f));
+  if (npx) return { argv: [process.execPath, npx], npx: true };
+  return { argv: process.platform === 'win32' ? undefined : ['npx'], npx: true };
 }
 
 /** The CLI script of the project's own install, if it has one. */
