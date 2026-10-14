@@ -50,6 +50,17 @@ npm's `min-release-age` (a number of days, usually in `.npmrc`) makes npm and np
 - **For one command,** override the setting: `npx --min-release-age=0 onsystem check .`.
 - **Or wait** until the release is older than the policy's limit.
 
+## A status color has no token
+
+`check` warns `No token has this hue` on a green, yellow or blue, such as a status badge's `bg-green-100 text-green-800`: the theme has no token of that hue, as shadcn/ui's themes have no `success`, `warning` or `info`. It is a warning: `check` exits 0 on it unless the warnings pass `--max-warnings`, and the Claude Code hook does not block.
+
+- **Add the token** to the theme: [status colors](tokens.md#status-colors) has the CSS for `success`, `warning` and `info`, light and dark. Then write `bg-success/10 text-success`.
+- **Or keep the color** and say why on the line above: `// onsystem-disable-next-line no-hardcoded-color -- <reason>`, or `{/* onsystem-disable-next-line no-hardcoded-color -- <reason> */}` between JSX children.
+
+## Findings in code from a shadcn registry
+
+`check .` reports files in `components/ai-elements`, `components/signoff-ui` or another folder that `npx shadcn add` filled from a registry other than shadcn/ui's. Zero config takes only the `ui` folder of `components.json` as the design system. List the registry's folder in `components`, or turn the rules off for it in `overrides`: [code from shadcn registries](configuration.md#code-from-shadcn-registries) has both, and why `exclude` is not enough.
+
 ## Still stuck
 
 Open an [issue](https://github.com/dgesteves/onsystem/issues/new/choose) with the output of `npx onsystem inspect`, the smallest snippet that shows the problem, and the version (`npx onsystem --version`). False positives are the reports that help most.

@@ -90,3 +90,46 @@ Read back as a token source, the file gives the same tokens with the same names:
 ### DESIGN.md
 
 Front matter in the DESIGN.md schema (`version`, `name`, `colors`, `typography`, `rounded`, `spacing`), then a section per category in the format's order (Colors, Typography, Layout, Elevation & Depth, Shapes, and Other tokens), each with one sentence and a table of the tokens: their value, a column per mode, the class and custom property code uses, and the description. Values the schema cannot hold, such as a `var()` font family, are left out of the front matter and kept in the table. Aliases stay references (`"{colors.background}"`).
+
+## Status colors
+
+shadcn/ui's themes have `destructive` for errors, and no token for success, warning or info. A green "Active" badge, a yellow "Pending" one or a blue notice then has no token to use, and `no-hardcoded-color` warns that no token has the color's hue rather than name a gray or another hue's token, which would lose what the color says. Add the three to the theme, in the stylesheet that defines the others (`app/globals.css` in a shadcn/ui app):
+
+```css title="app/globals.css"
+:root {
+  --success: oklch(0.527 0.154 150.069);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.554 0.135 66.442);
+  --warning-foreground: oklch(0.985 0 0);
+  --info: oklch(0.546 0.245 262.881);
+  --info-foreground: oklch(0.985 0 0);
+}
+
+.dark {
+  --success: oklch(0.792 0.209 151.711);
+  --success-foreground: oklch(0.145 0 0);
+  --warning: oklch(0.852 0.199 91.936);
+  --warning-foreground: oklch(0.145 0 0);
+  --info: oklch(0.707 0.165 254.624);
+  --info-foreground: oklch(0.145 0 0);
+}
+
+@theme inline {
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+}
+```
+
+The values are Tailwind v4's green-700, yellow-700 and blue-600 in light mode, and green-400, yellow-400 and blue-400 in dark mode. Each has a contrast of at least 4.5:1 (WCAG AA for text) with shadcn/ui's page background and with its own foreground. Change the values to fit your brand, and keep the names: onsystem reads `success`, `warning` and `info` as status colors, as it reads `destructive`. Use them like the theme's other colors:
+
+```tsx
+<span className="bg-success/10 text-success">Active</span>
+<span className="bg-warning text-warning-foreground">Pending</span>
+<p className="border-info/50 text-info">Your invoice is on its way.</p>
+```
+
+With the tokens in place, `check` treats these colors as it treats `destructive` ([how fixes are chosen](rules.md#how-fixes-are-chosen)): a color within 8° of a status token's hue gets an error that names the token, with the token as the fix when the color is the same or close (`text-green-700` becomes `text-success`, `dark:text-green-400` becomes `dark:text-success`). Tailwind's colors change hue from shade to shade, yellow the most (103° at yellow-100, 62° at yellow-800), so a pale `bg-yellow-100` still gets the warning: write a tint as the token with an opacity, `bg-warning/10`.
