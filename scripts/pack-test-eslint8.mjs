@@ -1,8 +1,10 @@
-// The package in a project already on ESLint 8.57.1, the oldest ESLint its peer range admits.
-// Packs the repository with `npm pack`, installs ESLint 8.57.1 into a new project outside the
+// The package in a project already on ESLint 8.57.0, the oldest ESLint its peer range admits.
+// Packs the repository with `npm pack`, installs ESLint 8.57.0 into a new project outside the
 // repository, then the tarball with plain npm, whose peer check stops the install (ERESOLVE) when
-// the range leaves the project's ESLint out, and lints a page with ESLint 8 from a flat config
-// with `onsystem.configs.recommended`, then fixes it with `--fix`.
+// the range leaves the project's ESLint out. Checks that the installed `onsystem/eslint` and its
+// worker import nothing but the package's dependencies and Node's own modules (no `eslint`), and
+// lints a page with ESLint 8 from a flat config with `onsystem.configs.recommended`, then fixes it
+// with `--fix`.
 // Run after `pnpm build` (`pnpm pack-test` runs it). Needs the npm registry.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -10,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const ESLINT = '8.57.1';
+const ESLINT = '8.57.0';
 const repo = path.resolve(import.meta.dirname, '..');
 const windows = process.platform === 'win32';
 assert.ok(
@@ -43,6 +45,38 @@ function run(command, args, cwd, expected = [0]) {
     );
   }
   return result;
+}
+
+/**
+ * The packages that `entries` (files in `dir`) import, following their imports of each other: the
+ * specifiers of static `import` and `export ... from` statements and of `import("...")` calls,
+ * leaving out comment lines (the bundle's JSDoc quotes import statements).
+ */
+function bareImports(dir, entries) {
+  const seen = new Set();
+  const bare = new Set();
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const code = fs
+      .readFileSync(path.join(dir, file), 'utf8')
+      .split('\n')
+      .filter((line) => !/^\s*(?:\*|\/\/|\/\*)/.test(line))
+      .join('\n');
+    const specifiers = [
+      ...code.matchAll(/^\s*(?:import|export)\b[^'"`;]*?\bfrom\s*(['"])([^'"]+)\1/gm),
+      ...code.matchAll(/^\s*import\s*(['"])([^'"]+)\1/gm),
+      ...code.matchAll(/\bimport\(\s*(['"])([^'"]+)\1\s*\)/g),
+    ].map((match) => match[2]);
+    for (const specifier of specifiers) {
+      if (specifier.startsWith('.')) {
+        queue.push(path.posix.join(path.posix.dirname(file), specifier));
+      } else bare.add(specifier);
+    }
+  }
+  return { files: seen.size, packages: [...bare].sort() };
 }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'onsystem-pack-eslint8-'));
@@ -108,7 +142,23 @@ try {
   assert.equal(eslint('--version').stdout.trim(), `v${ESLINT}`);
   console.log(`npm install --save-dev ${info.filename} next to eslint@${ESLINT}: installed`);
 
-  // 4. The plugin's findings, as ESLint 8 reports them, and its fixes.
+  // 4. The plugin runs on whatever ESLint the project has because it imports none: the peer range
+  //    follows the context API it uses. The worker is loaded by path, so it is an entry too.
+  const installed = path.join(app, 'node_modules', 'onsystem');
+  const { dependencies } = JSON.parse(
+    fs.readFileSync(path.join(installed, 'package.json'), 'utf8'),
+  );
+  const graph = bareImports(path.join(installed, 'dist'), ['eslint.js', 'eslint-worker.js']);
+  const unexpected = graph.packages.filter(
+    (name) => !name.startsWith('node:') && !Object.hasOwn(dependencies, name),
+  );
+  assert.deepEqual(unexpected, [], 'onsystem/eslint imports only its dependencies and node:*');
+  assert.ok(graph.packages.includes('node:worker_threads'), 'the import scan found the imports');
+  console.log(
+    `onsystem/eslint: ${graph.files} files import ${graph.packages.filter((n) => !n.startsWith('node:')).join(', ')} and node:*, no eslint`,
+  );
+
+  // 5. The plugin's findings, as ESLint 8 reports them, and its fixes.
   const linted = eslint('app', '--format', 'json');
   assert.equal(linted.status, 1, `ESLint exits 1 on errors\n${linted.stderr}`);
   const rules = JSON.parse(linted.stdout)

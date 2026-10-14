@@ -53,7 +53,7 @@ export default [
 
 The plugin loads each design system once, in a worker thread (ESLint rules run synchronously and extraction does not), and looks at its files again at most every two seconds, so an editor's ESLint server picks up a new component or variant without a restart.
 
-A few things stay with the CLI. The [baseline](ci.md#adopting-it-in-an-existing-codebase) applies to `check` only. ESLint has its own: on ESLint 9.24 and later, `npx eslint . --suppress-all` records the findings already in the code in `eslint-suppressions.json`, which you commit, and later runs leave them out ([bulk suppressions](https://eslint.org/docs/latest/use/suppressions)); on older versions, use `eslint-disable` comments or `--max-warnings`. ESLint reports syntax errors itself. Which files ESLint lints is up to its config (`ignores`), where `check` leaves out what git ignores.
+A few things stay with the CLI. The [baseline](ci.md#adopting-it-in-an-existing-codebase) applies to `check` only. ESLint has its own: on ESLint 9.24 and later, `npx eslint . --suppress-all` records the findings already in the code in `eslint-suppressions.json`, which you commit, and later runs leave them out ([bulk suppressions](https://eslint.org/docs/latest/use/suppressions)). Once a recorded finding is fixed, ESLint fails the run until `npx eslint . --prune-suppressions` takes it out of the file. On older versions, use `eslint-disable` comments, or set the onsystem rules to `warn` and cap them with `--max-warnings` (it counts warnings only, and most onsystem rules default to `error`). ESLint reports syntax errors itself. Which files ESLint lints is up to its config (`ignores`), where `check` leaves out what git ignores.
 
 ## With @shadcn/lint
 

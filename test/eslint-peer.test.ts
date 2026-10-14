@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 // so a range that leaves out the project's ESLint stops `npm install --save-dev onsystem` with
 // ERESOLVE, for the CLI and the GitHub Action too, which need no ESLint. The plugin needs a flat
 // config and `context.sourceCode`, `filename` and `cwd`, which ESLint 8.57 has; `pnpm pack-test`
-// installs the package with npm into a project on ESLint 8.57.1 and lints with it there.
+// installs the package with npm into a project on ESLint 8.57.0 and lints with it there.
 const root = path.resolve(import.meta.dirname, '..');
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const pkg = JSON.parse(read('package.json')) as {
@@ -59,14 +59,23 @@ describe('the ESLint peer', () => {
     expect(read('docs/eslint.md')).toContain(oldest);
   });
 
-  // The range follows the context API the plugin uses, not a version it imports.
+  // The range follows the context API the plugin uses, not a version it imports. This reads the
+  // plugin's own sources; `pnpm pack-test` follows the built files' imports of each other.
   it('is not imported at runtime by the plugin', () => {
     const dir = path.join(root, 'src/eslint');
-    for (const file of fs.readdirSync(dir)) {
+    const files = fs
+      .readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile() && /\.[cm]?[jt]sx?$/.test(entry.name))
+      .map((entry) => path.relative(dir, path.join(entry.parentPath, entry.name)));
+    expect(files).toContain('index.ts');
+    for (const file of files) {
       const source = fs.readFileSync(path.join(dir, file), 'utf8');
-      const imports = source.match(/^import\s[^;]*?from\s+'eslint(?:\/[^']*)?';/gm) ?? [];
-      for (const statement of imports) expect(statement, file).toMatch(/^import type /);
-      expect(source, file).not.toMatch(/\b(?:import|require)\(\s*'eslint/);
+      const statements =
+        source.match(/^(?:import|export)\s[^;]*?from\s+['"]eslint(?:\/[^'"]*)?['"]/gm) ?? [];
+      for (const statement of statements)
+        expect(statement, file).toMatch(/^(?:import|export) type /);
+      expect(source, file).not.toMatch(/^import\s+['"]eslint(?:\/[^'"]*)?['"]/m);
+      expect(source, file).not.toMatch(/\b(?:import|require)\(\s*['"]eslint(?:\/|['"])/);
     }
   });
 });
