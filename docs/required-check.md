@@ -26,7 +26,22 @@ jobs:
       - uses: dgesteves/onsystem@v0
 ```
 
-The action runs `onsystem check` on the files, honours the [baseline](ci.md#adopting-it-in-an-existing-codebase), and reports the findings on the lines the pull request changed: as annotations on those lines, and as a table in the job summary (GitHub shows at most ten annotations of each kind per step). It fails the job when one of them is an error. Findings on lines the pull request did not touch are counted in the summary, not reported, so an existing codebase can turn the check on before it is clean. A hunk that only deletes lines counts the lines either side of it, so removing an `aria-label` is caught on the button around it.
+The action runs `onsystem check` on the files, honours the [baseline](ci.md#adopting-it-in-an-existing-codebase), and reports the findings on the lines the pull request changed: as annotations on those lines, and as a table in the job summary (GitHub shows at most ten annotations of each kind per step). It fails the job when one of them is an error. Findings on lines the pull request did not touch are counted in the summary, not reported, so an existing codebase can turn the check on before it is clean.
+
+A hunk that only deletes lines counts the line before it and the line after it. A button with no accessible name is reported on the line of its tag name (`<Button`), so removing its `aria-label`, or the visually hidden text inside it, is caught only when that was on the `<Button` line or the line after it. Prettier puts each attribute of a long tag on its own line, so the `aria-label` is often further down, and then the check passes the pull request:
+
+```diff
+   <Button
+     variant="ghost"
+     size="icon"
+-    aria-label="Delete row"
+     onClick={onDelete}
+   >
+     <Trash2 />
+   </Button>
+```
+
+The finding is counted in the summary with the findings on other lines. To fail on it too, check every line against a [baseline](#gate-the-whole-codebase-with-a-baseline).
 
 Install the dependencies first, as above: without them the props of components that wrap a library (Radix, React Aria) are unknown, and `no-unknown-prop` skips those components. The default checkout is enough: the action fetches the history it needs to find where the pull request branched off. `merge_group` makes it run in a merge queue too, which a required check needs if the branch uses one.
 
