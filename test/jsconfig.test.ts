@@ -8,6 +8,7 @@ import { loadConfig } from '../src/config.js';
 import { DesignSystemHost, fingerprint } from '../src/design-system.js';
 import { readProjectConfig } from '../src/extract/program.js';
 import { fixture, load, TSCONFIG } from './helpers.js';
+import { muiPackage } from './mui-fixture.js';
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
@@ -102,6 +103,15 @@ export default function Page() {
 }
 `;
 
+/** What a build, a test run and a static folder leave next to a JavaScript app's sources. */
+const BUILD_OUTPUT = {
+  'build/static/js/main.js': UTILS,
+  'coverage/lcov-report/sorter.js': UTILS,
+  'dist/assets/index-abc.js': UTILS,
+  'out/_next/chunk.js': UTILS,
+  'public/sw.js': UTILS,
+};
+
 /** A shadcn/ui app in JavaScript: the alias lives in jsconfig.json, components are .jsx. */
 function jsApp(src = '') {
   return {
@@ -179,6 +189,14 @@ describe('a JavaScript app with jsconfig.json', () => {
     expect(stdout).toContain('  tsconfig     jsconfig.json\n');
   });
 
+  it('names jsconfig.json when the ui alias does not resolve through it', async () => {
+    const root = fixture({ ...jsApp(), 'jsconfig.json': json({ compilerOptions: {} }) });
+    const { stdout } = await run(['inspect', '--explain', '--no-cache'], root);
+    expect(stdout).toContain(
+      'components.json: the ui alias @/components/ui resolves through neither jsconfig.json paths nor a workspace package',
+    );
+  });
+
   it('rebuilds the cached model when jsconfig.json changes', async () => {
     const root = fixture(jsApp());
     const config = await loadConfig({ root });
@@ -203,18 +221,67 @@ describe('a JavaScript app with jsconfig.json', () => {
       'jsconfig.json': JSCONFIG,
       'app/page.jsx': PAGE,
       'lib/utils.js': UTILS,
+      ...BUILD_OUTPUT,
     });
     const project = readProjectConfig(root);
     expect(project.configFile).toBe(path.join(root, 'jsconfig.json'));
     expect(project.configFiles).toEqual([path.join(root, 'jsconfig.json')]);
     expect(project.paths).toEqual({ '@/*': ['./*'] });
-    expect(project.pathsBase).toBe(root);
+    // TypeScript writes it with forward slashes, on Windows too.
+    expect(path.resolve(project.pathsBase)).toBe(root);
     expect(project.options.allowJs).toBe(true);
     // No `include`: TypeScript's default for a jsconfig.json takes the .js and .jsx files.
+    // No `exclude`: the build output is left out, as it is without a config.
     expect(project.fileNames.map((f) => path.relative(root, f)).sort()).toEqual([
       path.join('app', 'page.jsx'),
       path.join('lib', 'utils.js'),
     ]);
+  });
+
+  it('keeps the exclude a jsconfig.json sets, or extends', () => {
+    const own = fixture({
+      'jsconfig.json': json({ ...JSON.parse(JSCONFIG), exclude: ['node_modules', 'legacy'] }),
+      'app/page.jsx': PAGE,
+      'legacy/old.js': UTILS,
+      'dist/assets/index-abc.js': UTILS,
+    });
+    const extended = fixture({
+      'jsconfig.base.json': json({ exclude: ['node_modules', 'legacy'] }),
+      'jsconfig.json': json({ ...JSON.parse(JSCONFIG), extends: './jsconfig.base.json' }),
+      'app/page.jsx': PAGE,
+      'legacy/old.js': UTILS,
+      'dist/assets/index-abc.js': UTILS,
+    });
+    for (const root of [own, extended]) {
+      const project = readProjectConfig(root);
+      expect(project.fileNames.map((f) => path.relative(root, f)).sort()).toEqual([
+        path.join('app', 'page.jsx'),
+        path.join('dist', 'assets', 'index-abc.js'),
+      ]);
+    }
+  });
+
+  it("reads an MUI theme from the app's sources, not from a stale bundle", async () => {
+    const theme = (palette: string) =>
+      `import { createTheme } from '@mui/material/styles';\nexport const theme = createTheme({ palette: { ${palette} } });\n`;
+    const root = fixture(
+      {
+        'package.json': json({
+          name: 'mui-js-app',
+          dependencies: { '@mui/material': '^9.4.0', react: '^19.0.0' },
+        }),
+        'jsconfig.json': JSCONFIG,
+        'src/theme.js': theme("primary: { main: '#1976d2' }"),
+        // An unminified bundle from an earlier build, with the theme as it was then.
+        'dist/assets/index-abc.js': theme(
+          "primary: { main: '#ff0000' }, teal: { main: '#00ff00' }",
+        ),
+        ...muiPackage(),
+      },
+      { nodeModules: true },
+    );
+    const ds = await load(root);
+    expect(ds.tokens.map((t) => [t.name, t.value])).toEqual([['primary.main', '#1976d2']]);
   });
 
   it('reloads when jsconfig.json changes', async () => {
