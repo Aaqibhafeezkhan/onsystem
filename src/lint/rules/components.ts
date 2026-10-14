@@ -5,7 +5,7 @@ import ts from 'typescript';
 import type { ComponentInfo, PropInfo, TextEdit } from '../../types.js';
 import { propertyName } from '../../extract/cva.js';
 import { toPosix } from '../../util/paths.js';
-import { closest } from '../../util/strings.js';
+import { closest, editDistance } from '../../util/strings.js';
 import {
   asFunction,
   attributeLiterals,
@@ -368,7 +368,10 @@ export const noUnknownComponent: Rule = {
 
 // ─── no-unknown-prop ────────────────────────────────────────────────────────
 
-/** Prop names from other libraries → the conventional name in shadcn-style systems. */
+/**
+ * Prop names from other libraries → the conventional name in shadcn-style systems, which mean the
+ * same thing there, so the rename is a fix.
+ */
 const PROP_SYNONYMS: Record<string, string[]> = {
   variant: [
     'tone',
@@ -388,9 +391,20 @@ const PROP_SYNONYMS: Record<string, string[]> = {
   disabled: ['isDisabled'],
   required: ['isRequired'],
   open: ['isOpen', 'opened', 'visible', 'show', 'shown'],
-  onOpenChange: ['onClose', 'onDismiss', 'onToggle', 'onOpen', 'onVisibleChange'],
-  asChild: ['as', 'component', 'render'],
+  onOpenChange: ['onVisibleChange'],
 };
+
+/**
+ * Handlers other libraries call on one side of a change, against `onOpenChange`, which runs on
+ * open and on close with the new state: renamed, `onClose={() => setOpen(false)}` would keep a
+ * dialog shut. The message shows the check to add instead of offering the rename.
+ */
+const OPEN_CHANGE_HANDLERS = new Map([
+  ['onClose', '{ if (!open) … }'],
+  ['onDismiss', '{ if (!open) … }'],
+  ['onOpen', '{ if (open) … }'],
+  ['onToggle', '…'],
+]);
 
 /**
  * Props that mean the same thing in different conventions: native elements and Radix on one
@@ -409,19 +423,87 @@ const PROP_EQUIVALENTS: string[][] = [
   ['indeterminate', 'isIndeterminate'],
 ];
 
+/** Props other libraries compose with, which no prop of a similar spelling stands in for. */
+const FOREIGN_COMPOSITION = new Set(['href', 'as', 'component']);
+
 /**
  * Radix composes with `asChild` and a child element, Base UI with a `render`
- * element; shadcn/ui ships both, and agents mix them up. Renaming the prop is
- * not enough, so this explains the other way instead of offering a fix.
+ * element; shadcn/ui ships both, and agents mix them up, or bring `as`, `component`
+ * or `href` from other libraries. Renaming the prop is not enough (`asChild` is a
+ * boolean, and a button with an `href` is still no link), so this explains the
+ * other way instead of offering a fix.
  */
-function compositionHint(name: string, known: Set<string>, tag: string): string | undefined {
-  if (name === 'asChild' && known.has('render')) {
-    return `Base UI components compose with render instead: <${tag} render={<Link href="…" />}>…</${tag}>.`;
+function compositionHint(
+  name: string,
+  known: Set<string>,
+  tag: string,
+): { prop: string; text: string } | undefined {
+  const radix = `compose with asChild and a single child`;
+  const radixExample = `<${tag} asChild><Link href="…">…</Link></${tag}>`;
+  const base = `compose with render`;
+  const baseExample = `<${tag} render={<Link href="…" />}>…</${tag}>`;
+  if (name === 'href') {
+    if (known.has('asChild')) {
+      return { prop: 'asChild', text: `For a link, Radix components ${radix}: ${radixExample}.` };
+    }
+    if (known.has('render')) {
+      return { prop: 'render', text: `For a link, Base UI components ${base}: ${baseExample}.` };
+    }
+    return undefined;
   }
-  if (name === 'render' && known.has('asChild')) {
-    return `Radix components compose with asChild and a single child instead: <${tag} asChild><Link href="…">…</Link></${tag}>.`;
+  if (['asChild', 'as', 'component'].includes(name) && known.has('render')) {
+    return { prop: 'render', text: `Base UI components ${base} instead: ${baseExample}.` };
+  }
+  if (['render', 'as', 'component'].includes(name) && known.has('asChild')) {
+    return { prop: 'asChild', text: `Radix components ${radix} instead: ${radixExample}.` };
   }
   return undefined;
+}
+
+/** `onClick`, `onValueChange`: a handler, whose arguments a spelling match does not tell. */
+const HANDLER = /^on[A-Z]/;
+
+/**
+ * The prop an unknown one most likely means, and whether the rename is safe as a fix: an
+ * equivalent, a synonym or the same name in other case (`onclick`, `tabindex`) means the same,
+ * and so does an own prop one edit away (`varient`, `onPres`). A forwarded attribute of a
+ * similar spelling is only named, since one letter can make another prop (`disable` is
+ * `disabled`, but `href` is not `ref`). `ref`, own or forwarded, and forwarded handlers, whose
+ * events differ (`onValueChange` is not `onVolumeChange`), are not guessed by spelling at all,
+ * and neither is anything for `href`, `as` or `component` (`ref`, `is`), which compose.
+ */
+function guessProp(
+  name: string,
+  own: readonly string[],
+  known: Set<string>,
+): { prop: string; fix: boolean } | undefined {
+  if (FOREIGN_COMPOSITION.has(name)) return undefined;
+  const equivalents = PROP_EQUIVALENTS.find((group) => group.includes(name)) ?? [];
+  const equivalent =
+    equivalents.find((other) => other !== name && own.includes(other)) ??
+    equivalents.find((other) => other !== name && known.has(other));
+  if (equivalent) return { prop: equivalent, fix: true };
+  const synonym = Object.entries(PROP_SYNONYMS).find(
+    ([target, aliases]) => known.has(target) && aliases.includes(name),
+  )?.[0];
+  if (synonym) return { prop: synonym, fix: true };
+  if (OPEN_CHANGE_HANDLERS.has(name) && known.has('onOpenChange')) {
+    return { prop: 'onOpenChange', fix: false };
+  }
+  const lower = name.toLowerCase();
+  const recased = [...known].find((prop) => prop.toLowerCase() === lower);
+  if (recased) return { prop: recased, fix: true };
+  const typo = closest(
+    name,
+    own.filter((prop) => prop !== 'ref'),
+  );
+  if (typo) return { prop: typo, fix: editDistance(lower, typo.toLowerCase()) <= 1 };
+  const similar = closest(
+    name,
+    [...known].filter((prop) => prop !== 'ref' && !HANDLER.test(prop)),
+    0.25,
+  );
+  return similar ? { prop: similar, fix: false } : undefined;
 }
 
 export const noUnknownProp: Rule = {
@@ -456,40 +538,37 @@ export const noUnknownProp: Rule = {
           context.report({
             start: attribute.name.getStart(context.sourceFile),
             end: attribute.name.end,
-            message: `<${element.tag}> has no prop "${name}". ${composition}`,
-            suggestion: name === 'asChild' ? 'render' : 'asChild',
+            message: `<${element.tag}> has no prop "${name}". ${composition.text}`,
+            suggestion: composition.prop,
           });
           continue;
         }
-        const equivalents = PROP_EQUIVALENTS.find((group) => group.includes(name)) ?? [];
-        const equivalent =
-          equivalents.find((other) => other !== name && own.includes(other)) ??
-          equivalents.find((other) => other !== name && known.has(other));
-        const synonym = Object.entries(PROP_SYNONYMS).find(
-          ([target, aliases]) => known.has(target) && aliases.includes(name),
-        )?.[0];
-        const guess = equivalent ?? synonym ?? closest(name, own) ?? closest(name, known, 0.25);
-        const prop = guess ? component.props.find((p) => p.name === guess) : undefined;
+        const guess = guessProp(name, own, known);
+        const prop = guess ? component.props.find((p) => p.name === guess.prop) : undefined;
         const values = prop?.values?.length
           ? ` (${prop.values.map((v) => `"${v}"`).join(' | ')})`
           : '';
+        const handler = guess?.prop === 'onOpenChange' ? OPEN_CHANGE_HANDLERS.get(name) : undefined;
         const valueOk =
           !prop?.values || literalValues(attribute).every((l) => prop.values?.includes(l.text));
         // Renaming `isOpen` to `open` next to an existing `open` would duplicate it.
-        const taken = guess !== undefined && findAttribute(element, guess) !== undefined;
+        const taken = guess !== undefined && findAttribute(element, guess.prop) !== undefined;
         context.report({
           start: attribute.name.getStart(context.sourceFile),
           end: attribute.name.end,
           message:
             `<${element.tag}> has no prop "${name}".` +
-            (guess ? ` Did you mean "${guess}"${values}?` : ''),
-          suggestion: guess,
+            (guess ? ` Did you mean "${guess.prop}"${values}?` : '') +
+            (handler
+              ? ` It is called with the new open state, on open as well as on close: onOpenChange={(open) => ${handler}}.`
+              : ''),
+          suggestion: guess?.prop,
           fix:
-            guess && valueOk && !taken
+            guess?.fix && valueOk && !taken
               ? [
                   {
                     range: [attribute.name.getStart(context.sourceFile), attribute.name.end],
-                    text: guess,
+                    text: guess.prop,
                   },
                 ]
               : undefined,
@@ -516,20 +595,93 @@ const VALUE_GROUPS: string[][] = [
   ['warning', 'caution', 'warn', 'yellow', 'amber', 'pending'],
   ['info', 'information', 'note', 'notice', 'blue'],
   ['link', 'anchor', 'href', 'inline'],
-  ['sm', 'small', 's', 'xs', 'compact', 'tiny'],
+  // Size steps: other names for the same step.
+  ['xs', 'xsmall', 'x-small', 'extra-small'],
+  ['sm', 'small', 's', 'compact', 'tiny'],
   ['md', 'medium', 'm', 'default', 'normal', 'regular', 'base'],
   ['lg', 'large', 'l', 'big'],
+  ['xl', 'xlarge', 'x-large', 'extra-large', 'huge'],
   ['icon', 'iconOnly', 'icon-only', 'square', 'icon-button'],
 ];
 
-export function suggestValue(value: string, allowed: readonly string[]): string | undefined {
-  const lower = value.toLowerCase();
-  for (const group of VALUE_GROUPS) {
-    if (!group.includes(lower)) continue;
-    const match = group.find((member) => member !== lower && allowed.includes(member));
-    if (match) return match;
+/**
+ * A value with the x's of its size step counted, so two spellings of one step compare equal:
+ * `xxl` and `2xl` both give `2xl`, `icon-XXS` and `icon-2xs` both give `icon-2xs`.
+ */
+function stepSpelling(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(
+      /(^|-)(x{2,})([sl])$/,
+      (_, start: string, xs: string, end: string) => `${start}${xs.length}x${end}`,
+    );
+}
+
+/** {@link VALUE_GROUPS} spelled as {@link stepSpelling} spells a value, to compare the two. */
+const SPELLED_GROUPS = VALUE_GROUPS.map((group) => group.map(stepSpelling));
+
+/**
+ * An allowed value that means the same: the same step spelled another way (`xxl` → `2xl`,
+ * `XL` → `xl`), or a synonym (`danger` → `destructive`, `small` → `sm`). A group is searched
+ * in its own order, not the scale's: TypeScript orders a union by when the program first met
+ * each literal, so another file can reorder the scale, and `positive` must stay `success` on
+ * a scale that also has `active`.
+ */
+function synonymValue(value: string, allowed: readonly string[]): string | undefined {
+  const spelling = stepSpelling(value);
+  const same = allowed.find((member) => member !== value && stepSpelling(member) === spelling);
+  if (same) return same;
+  for (const group of SPELLED_GROUPS) {
+    if (!group.includes(spelling)) continue;
+    for (const member of group) {
+      if (member === spelling) continue;
+      const match = allowed.find((candidate) => stepSpelling(candidate) === member);
+      if (match) return match;
+    }
   }
-  return closest(value, allowed, 0.5);
+  return undefined;
+}
+
+/**
+ * The step a size one past an end of the scale stands next to, with its x's counted and its
+ * prefix kept: `2xl` → `xl`, `3xl` → `2xl`, `2xs` → `xs`, `xs` → `sm`, `icon-2xl` → `icon-xl`.
+ */
+function stepInside(spelling: string): string | undefined {
+  const match = /^(.*-)?(\d*)x([sl])$/.exec(spelling);
+  if (!match) return undefined;
+  const prefix = match[1] ?? '';
+  const end = match[3];
+  if (!match[2]) return end === 's' ? `${prefix}sm` : undefined;
+  const count = Number(match[2]);
+  if (count < 2) return undefined;
+  return `${prefix}${count === 2 ? '' : count - 1}x${end}`;
+}
+
+/**
+ * The end of the scale a size one step past it stands next to, under whichever name the scale
+ * gives it: `2xl` or `xxl` → `xl`, `3xl` → `2xl` or `xxl`, `xs` → `sm` or `small`, `icon-xxl`
+ * → `icon-xl`. It renders another size than the one written, so it is named in the message
+ * but not fixed.
+ */
+function nextStep(value: string, allowed: readonly string[]): string | undefined {
+  const step = stepInside(stepSpelling(value));
+  if (!step) return undefined;
+  return allowed.find((member) => stepSpelling(member) === step) ?? synonymValue(step, allowed);
+}
+
+/** The step of a size scale a value names, alone or at its end: `xs`, `lg`, `2xl`, `icon-sm`. */
+const SIZE_STEP = /(?:^|-)(\d*x*[sml]|sm|md|lg)$/i;
+
+/**
+ * An allowed value spelled close to `value`, for the message only: it may be another value
+ * altogether. Two steps of a size scale are never guessed from each other, since one letter
+ * there is another size (`xl` and `xs`, `icon-xl` and `icon-xs`).
+ */
+function spelledLike(value: string, allowed: readonly string[]): string | undefined {
+  const guess = closest(value, allowed, 0.5);
+  const step = SIZE_STEP.exec(value)?.[1]?.toLowerCase();
+  const guessStep = guess ? SIZE_STEP.exec(guess)?.[1]?.toLowerCase() : undefined;
+  return step && guessStep && step !== guessStep ? undefined : guess;
 }
 
 export const noUnknownVariant: Rule = {
@@ -548,7 +700,11 @@ export const noUnknownVariant: Rule = {
         if (!prop?.values) continue;
         for (const literal of literalValues(attribute)) {
           if (prop.values.includes(literal.text)) continue;
-          const guess = suggestValue(literal.text, prop.values);
+          const synonym = synonymValue(literal.text, prop.values);
+          const guess =
+            synonym ??
+            nextStep(literal.text, prop.values) ??
+            spelledLike(literal.text, prop.values);
           const start = literal.getStart(context.sourceFile) + 1;
           const end = literal.end - 1;
           context.report({
@@ -559,7 +715,7 @@ export const noUnknownVariant: Rule = {
               `Allowed: ${prop.values.join(', ')}.` +
               (guess ? ` Did you mean "${guess}"?` : ''),
             suggestion: guess ? `${name}="${guess}"` : undefined,
-            fix: guess ? [{ range: [start, end], text: guess }] : undefined,
+            fix: synonym ? [{ range: [start, end], text: synonym }] : undefined,
           });
         }
       }

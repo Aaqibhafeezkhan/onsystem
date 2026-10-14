@@ -1679,6 +1679,136 @@ import Link from "next/link"
     expect(applyFixes(code, d ? [d] : [])).toContain('<Input aria-invalid={!!error} />');
   });
 
+  it('fixes no prop into one that means something else', () => {
+    // `href` on a button is not a typo of `ref`, nor `onValueChange` of `onVolumeChange`; `as`
+    // and `component` are not the boolean `asChild`; and `onOpenChange` runs on open too, so
+    // `onClose={() => setOpen(false)}` renamed would keep the dialog shut.
+    const code = `${IMPORTS}import { Input } from "@/components/ui/input"
+import { Dialog } from "@/components/ui/dialog"
+import Link from "next/link"
+export const A = () => (
+  <>
+    <Button href="/docs">Docs</Button>
+    <Card href={url}>Plan</Card>
+    <Input onValueChange={setName} />
+    <Button as="a">Docs</Button>
+    <Button component={Link}>Docs</Button>
+    <Dialog onClose={() => setOpen(false)} />
+    <Dialog onOpen={track} />
+  </>
+)`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.source, d.suggestion])).toEqual([
+      ['href', 'asChild'],
+      ['href', undefined],
+      ['onValueChange', undefined],
+      ['as', 'asChild'],
+      ['component', 'asChild'],
+      ['onClose', 'onOpenChange'],
+      ['onOpen', 'onOpenChange'],
+    ]);
+    expect(findings.filter((d) => d.fix)).toEqual([]);
+    expect(applyFixes(code, findings)).toBe(code);
+    const radix =
+      'Radix components compose with asChild and a single child instead: <Button asChild><Link href="…">…</Link></Button>.';
+    expect(findings.map((d) => d.message)).toEqual([
+      '<Button> has no prop "href". For a link, Radix components compose with asChild and a single child: <Button asChild><Link href="…">…</Link></Button>.',
+      '<Card> has no prop "href".',
+      '<Input> has no prop "onValueChange".',
+      `<Button> has no prop "as". ${radix}`,
+      `<Button> has no prop "component". ${radix}`,
+      '<Dialog> has no prop "onClose". Did you mean "onOpenChange"? It is called with the new open state, on open as well as on close: onOpenChange={(open) => { if (!open) … }}.',
+      '<Dialog> has no prop "onOpen". Did you mean "onOpenChange"? It is called with the new open state, on open as well as on close: onOpenChange={(open) => { if (open) … }}.',
+    ]);
+  });
+
+  it('points href and as at render on Base UI, without a fix', async () => {
+    const base = await load(fixture(BASE_UI, { nodeModules: true }));
+    const code = `import { Button } from "@/components/ui/button"
+<><Button href="/docs">Docs</Button><Button as="a">Docs</Button></>`;
+    const findings = base.check(code).diagnostics.filter((d) => d.ruleId === rule);
+    expect(findings.map((d) => [d.message, d.suggestion, d.fix])).toEqual([
+      [
+        '<Button> has no prop "href". For a link, Base UI components compose with render: <Button render={<Link href="…" />}>…</Button>.',
+        'render',
+        undefined,
+      ],
+      [
+        '<Button> has no prop "as". Base UI components compose with render instead: <Button render={<Link href="…" />}>…</Button>.',
+        'render',
+        undefined,
+      ],
+    ]);
+  });
+
+  it('fixes a misspelled own prop or a miscased one, and only names other close matches', () => {
+    const code = `${IMPORTS}<Button varient="ghost" onclick={save} tabindex={0} disable>Save</Button>`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['varient', 'variant', 'variant'],
+      ['onclick', 'onClick', 'onClick'],
+      ['tabindex', 'tabIndex', 'tabIndex'],
+      // An attribute the component forwards, guessed by spelling: one letter can be another prop.
+      ['disable', 'disabled', undefined],
+    ]);
+    expect(findings[3]?.message).toBe('<Button> has no prop "disable". Did you mean "disabled"?');
+  });
+
+  it('guesses no ref from href, nor is from as, on a component that takes ref as its own prop', async () => {
+    // React 19 components take `ref` as a plain prop, and these compose neither with asChild nor
+    // with render, so there is no hint to give: `href` is not a typo of `ref`, nor `as` of `is`.
+    const system = await load(
+      fixture(
+        {
+          'tsconfig.json': TSCONFIG,
+          'components/ui/button.tsx': `import * as React from "react"
+type ButtonProps = {
+  ref?: React.Ref<HTMLButtonElement>
+  variant?: "default" | "ghost"
+  onPress?: () => void
+  children?: React.ReactNode
+}
+export function Button({ ref, onPress, ...props }: ButtonProps) {
+  return <button ref={ref} onClick={onPress} {...props} />
+}`,
+          'components/ui/tile.tsx': `import * as React from "react"
+interface TileProps extends React.HTMLAttributes<HTMLDivElement> {
+  ref?: React.Ref<HTMLDivElement>
+}
+export function Tile({ ref, ...props }: TileProps) {
+  return <div ref={ref} {...props} />
+}`,
+        },
+        { nodeModules: true },
+      ),
+    );
+    const code = `import { Button } from "@/components/ui/button"
+import { Tile } from "@/components/ui/tile"
+<>
+  <Button href="/docs">Docs</Button>
+  <Tile href="/docs" as="section" component="section" />
+  <Button onPres={save}>Save</Button>
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['href', undefined, undefined],
+      ['href', undefined, undefined],
+      ['as', undefined, undefined],
+      ['component', undefined, undefined],
+      // An own handler one letter off is the same handler.
+      ['onPres', 'onPress', 'onPress'],
+    ]);
+    expect(findings.slice(0, 4).map((d) => d.message)).toEqual([
+      '<Button> has no prop "href".',
+      '<Tile> has no prop "href".',
+      '<Tile> has no prop "as".',
+      '<Tile> has no prop "component".',
+    ]);
+    expect(applyFixes(code, findings.slice(0, 4))).toBe(code);
+  });
+
   it('skips components whose props could not be fully resolved', async () => {
     const acme = await loadOnce(ACME_ROOT);
     expect(
@@ -1704,6 +1834,38 @@ describe('no-unknown-variant', () => {
     expect(applyFixes(code, diagnostics)).toContain('<Button variant="destructive" size="sm">');
   });
 
+  it('maps a synonym in the order of its group, not the order of the scale', async () => {
+    // TypeScript orders a union by when the program first met each literal, so another file
+    // can change the scale's order. `active` and `success` are in one group; `success` leads it.
+    const status = `export function Status(props: { variant?: "active" | "success" | "inactive" }) {
+  return <span />
+}`;
+    const alert = `export function Alert(props: { variant?: "success" | "error" }) {
+  return <div />
+}`;
+    const code = `import { Status } from "@/components/ui/status"
+<>
+  <Status variant="positive" />
+  <Status variant="green" />
+  <Status variant="done" />
+</>`;
+    const programs: Record<string, string>[] = [
+      { 'components/ui/status.tsx': status },
+      { 'components/ui/alert.tsx': alert, 'components/ui/status.tsx': status },
+    ];
+    for (const files of programs) {
+      const system = await load(fixture({ 'tsconfig.json': TSCONFIG, ...files }));
+      const findings = system
+        .check(code, 'app/page.tsx')
+        .diagnostics.filter((d) => d.ruleId === rule);
+      expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+        ['"positive"', 'variant="success"', 'success'],
+        ['"green"', 'variant="success"', 'success'],
+        ['"done"', 'variant="success"', 'success'],
+      ]);
+    }
+  });
+
   it('checks every branch of a conditional value', () => {
     const diagnostics = check(`${IMPORTS}<Button variant={on ? "primary" : "ghost"} />`, rule);
     expect(diagnostics).toHaveLength(1);
@@ -1720,6 +1882,187 @@ describe('no-unknown-variant', () => {
 
   it('accepts valid and dynamic values', () => {
     expect(check(`${IMPORTS}<Button variant="outline" size={size} />`, rule)).toEqual([]);
+  });
+
+  it('never guesses one size from another by spelling, and fixes only the same step', async () => {
+    // shadcn/ui's current button has `xs` but no `xl`, one letter apart at the two ends of the scale.
+    const system = await load(
+      fixture({
+        'tsconfig.json': TSCONFIG,
+        'components/ui/button.tsx': `export function Button(props: {
+  size?: "default" | "xs" | "sm" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg"
+  children?: unknown
+}) {
+  return <button>{props.children as string}</button>
+}`,
+        'components/ui/avatar.tsx': `export function Avatar(props: { size?: "sm" | "md" | "lg" | "xl" }) {
+  return <span />
+}`,
+        'components/ui/chip.tsx': `export function Chip(props: { size?: "small" | "medium" | "large" }) {
+  return <span />
+}`,
+      }),
+    );
+    const code = `import { Avatar } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Chip } from "@/components/ui/chip"
+<>
+  <Button size="xl">Save</Button>
+  <Button size="icon-xl">A</Button>
+  <Button size="xxs">B</Button>
+  <Avatar size="xlarge" />
+  <Avatar size="2xl" />
+  <Avatar size="xs" />
+  <Chip size="xs" />
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['"xl"', undefined, undefined],
+      ['"icon-xl"', undefined, undefined],
+      // A step past the end of a scale is named next to that end, but renders another size.
+      ['"xxs"', 'size="xs"', undefined],
+      // Another name for the same step is fixed.
+      ['"xlarge"', 'size="xl"', 'xl'],
+      ['"2xl"', 'size="xl"', undefined],
+      ['"xs"', 'size="sm"', undefined],
+      ['"xs"', 'size="small"', undefined],
+    ]);
+    // The allowed values, without a guess.
+    expect(findings[0]?.message).toMatch(
+      /^"xl" is not a valid size for <Button>\. Allowed: [\w, -]+\.$/,
+    );
+    expect(findings[4]?.message).toBe(
+      '"2xl" is not a valid size for <Avatar>. Allowed: sm, md, lg, xl. Did you mean "xl"?',
+    );
+    expect(applyFixes(code, findings)).toBe(code.replace('"xlarge"', '"xl"'));
+  });
+
+  it('reads xxl as 2xl and xxs as 2xs, whichever way the scale spells them', async () => {
+    const system = await load(
+      fixture({
+        'tsconfig.json': TSCONFIG,
+        // One scale counts its x's, the other repeats them.
+        'components/ui/badge.tsx': `export function Badge(props: {
+  size?: "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "icon-2xl"
+}) {
+  return <span />
+}`,
+        'components/ui/tag.tsx': `export function Tag(props: {
+  size?: "xxs" | "xs" | "sm" | "md" | "lg" | "xl" | "xxl" | "icon-xxl"
+}) {
+  return <span />
+}`,
+      }),
+    );
+    const code = `import { Badge } from "@/components/ui/badge"
+import { Tag } from "@/components/ui/tag"
+<>
+  <Badge size="2xl" />
+  <Badge size="2xs" />
+  <Badge size="xxl" />
+  <Badge size="xxs" />
+  <Badge size="XXL" />
+  <Badge size="icon-xxl" />
+  <Badge size="xxxl" />
+  <Badge size="3xs" />
+  <Tag size="xxl" />
+  <Tag size="xxs" />
+  <Tag size="2xl" />
+  <Tag size="2xs" />
+  <Tag size="2XL" />
+  <Tag size="icon-2xl" />
+  <Tag size="3xl" />
+  <Tag size="xxxs" />
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    // The same step in the other spelling, or in other case, is fixed to the scale's own spelling.
+    // One step past an end is named next to that end, in the scale's spelling, without a fix.
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['"xxl"', 'size="2xl"', '2xl'],
+      ['"xxs"', 'size="2xs"', '2xs'],
+      ['"XXL"', 'size="2xl"', '2xl'],
+      ['"icon-xxl"', 'size="icon-2xl"', 'icon-2xl'],
+      ['"xxxl"', 'size="2xl"', undefined],
+      ['"3xs"', 'size="2xs"', undefined],
+      ['"2xl"', 'size="xxl"', 'xxl'],
+      ['"2xs"', 'size="xxs"', 'xxs'],
+      ['"2XL"', 'size="xxl"', 'xxl'],
+      ['"icon-2xl"', 'size="icon-xxl"', 'icon-xxl'],
+      ['"3xl"', 'size="xxl"', undefined],
+      ['"xxxs"', 'size="xxs"', undefined],
+    ]);
+    expect(findings[2]?.message).toBe(
+      '"XXL" is not a valid size for <Badge>. Allowed: 2xs, xs, sm, md, lg, xl, 2xl, icon-2xl. Did you mean "2xl"?',
+    );
+    const fixed = applyFixes(code, findings);
+    expect(fixed).toContain('<Badge size="2xl" />\n  <Badge size="2xs" />\n  <Badge size="2xl" />');
+    expect(fixed).toContain('<Tag size="xxl" />\n  <Tag size="xxs" />\n  <Tag size="xxl" />');
+    expect(fixed).toContain('<Badge size="xxxl" />\n  <Badge size="3xs" />');
+    expect(fixed).toContain('<Tag size="3xl" />\n  <Tag size="xxxs" />');
+  });
+
+  it('names a prefixed size one step past the end next to that end, as it does a plain one', async () => {
+    const system = await load(
+      fixture({
+        'tsconfig.json': TSCONFIG,
+        'components/ui/fab.tsx': `export function Fab(props: {
+  size?: "sm" | "md" | "lg" | "xl" | "icon-sm" | "icon-lg" | "icon-xl"
+}) {
+  return <button />
+}`,
+      }),
+    );
+    const code = `import { Fab } from "@/components/ui/fab"
+<>
+  <Fab size="xxl" />
+  <Fab size="icon-xxl" />
+  <Fab size="icon-2xl" />
+  <Fab size="xs" />
+  <Fab size="icon-xs" />
+  <Fab size="icon-md" />
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['"xxl"', 'size="xl"', undefined],
+      ['"icon-xxl"', 'size="icon-xl"', undefined],
+      ['"icon-2xl"', 'size="icon-xl"', undefined],
+      ['"xs"', 'size="sm"', undefined],
+      ['"icon-xs"', 'size="icon-sm"', undefined],
+      // Not past an end, so there is no end to name, and a size is never guessed by spelling.
+      ['"icon-md"', undefined, undefined],
+    ]);
+    expect(applyFixes(code, findings)).toBe(code);
+  });
+
+  it('fixes a value written in other case', () => {
+    const code = `${IMPORTS}<Button variant="Ghost" size="SM">x</Button>`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['variant="ghost"', 'ghost'],
+      ['size="sm"', 'sm'],
+    ]);
+    expect(applyFixes(code, findings)).toBe(
+      `${IMPORTS}<Button variant="ghost" size="sm">x</Button>`,
+    );
+  });
+
+  it('names a value spelled close to an allowed one without fixing it', () => {
+    const code = `${IMPORTS}<Button variant="destructve" size="smal">x</Button>`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.suggestion, d.fix])).toEqual([
+      ['variant="destructive"', undefined],
+      ['size="sm"', undefined],
+    ]);
+    expect(findings[0]?.message).toBe(
+      '"destructve" is not a valid variant for <Button>. Allowed: default, destructive, outline, secondary, ghost, link. Did you mean "destructive"?',
+    );
+    expect(applyFixes(code, findings)).toBe(code);
   });
 });
 
