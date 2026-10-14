@@ -287,7 +287,7 @@ function architecture() {
   parts.push(
     runs(
       [
-        { text: 'Used by  ', fill: C.subtle, font: F.monoMedium },
+        { text: 'Clients:  ', fill: C.subtle, font: F.monoMedium },
         { text: 'Claude Code · Cursor · VS Code · any MCP client', fill: C.fgSoft },
         { text: '   and   ', fill: C.subtle },
         { text: 'CI (GitHub annotations, exit codes)', fill: C.fgSoft },
