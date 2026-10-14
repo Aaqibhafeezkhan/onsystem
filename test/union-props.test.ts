@@ -66,6 +66,8 @@ interface SingleProps {
   collapsible?: boolean
   size: "sm" | "md"
   tone?: "plain"
+  density: "compact" | "cozy"
+  marker?: undefined
 }
 interface MultipleProps {
   type: "multiple"
@@ -73,6 +75,8 @@ interface MultipleProps {
   onValueChange?(value: string[]): void
   size?: "lg"
   tone?: string
+  density?: never
+  marker?: "dot" | "bar"
 }
 export declare const Root: React.ForwardRefExoticComponent<(SingleProps | MultipleProps) & React.RefAttributes<HTMLDivElement>>
 `,
@@ -107,6 +111,17 @@ export function Accordion(props: React.ComponentProps<typeof AccordionPrimitive.
     });
     // One member takes any string, so the prop has no closed set of values.
     expect(prop(accordion, 'tone').values).toBeUndefined();
+    // A member that rules the prop out (`?: never`, `?: undefined`) adds nothing to it.
+    expect(prop(accordion, 'density')).toMatchObject({
+      type: '"compact" | "cozy"',
+      values: ['compact', 'cozy'],
+      required: false,
+    });
+    expect(prop(accordion, 'marker')).toMatchObject({
+      type: '"dot" | "bar"',
+      values: ['dot', 'bar'],
+      required: false,
+    });
   });
 
   it('accepts a value from any member and reports one that no member allows', async () => {
@@ -114,12 +129,19 @@ export function Accordion(props: React.ComponentProps<typeof AccordionPrimitive.
     expect(
       messages(
         ds,
-        `${imports}<><Accordion type="multiple" size="lg" tone="loud">x</Accordion><Accordion type="single" size="sm" collapsible>y</Accordion></>`,
+        `${imports}<><Accordion type="multiple" size="lg" tone="loud" marker="dot">x</Accordion><Accordion type="single" size="sm" density="cozy" collapsible>y</Accordion></>`,
       ),
     ).toEqual([]);
-    expect(messages(ds, `${imports}<Accordion type="many" size="xl">x</Accordion>`)).toEqual([
+    expect(
+      messages(
+        ds,
+        `${imports}<Accordion type="many" size="xl" density="loose" marker="square">x</Accordion>`,
+      ),
+    ).toEqual([
       'no-unknown-variant: "many" is not a valid type for <Accordion>. Allowed: single, multiple.',
       'no-unknown-variant: "xl" is not a valid size for <Accordion>. Allowed: sm, md, lg.',
+      'no-unknown-variant: "loose" is not a valid density for <Accordion>. Allowed: compact, cozy.',
+      'no-unknown-variant: "square" is not a valid marker for <Accordion>. Allowed: dot, bar.',
     ]);
   });
 });

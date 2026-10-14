@@ -763,10 +763,18 @@ function describeProp(
   origin: string,
 ): PropInfo {
   const { checker } = context;
+  // A member that rules the prop out (`size?: never`, `size?: undefined`, the usual way to make
+  // props mutually exclusive) allows nothing, so it adds nothing to the type or the values.
+  const allows = (symbol: ts.Symbol): boolean =>
+    !(
+      checker.getNonNullableType(checker.getTypeOfSymbolAtLocation(symbol, location)).flags &
+      ts.TypeFlags.Never
+    );
+  const members = symbols.some(allows) ? symbols.filter(allows) : symbols;
   // Each member's type as printed, and whether it is a function type.
   const printed = new Map<string, boolean>();
   let values: string[] | undefined = [];
-  for (const symbol of symbols) {
+  for (const symbol of members) {
     const declared = checker.getTypeOfSymbolAtLocation(symbol, location);
     const type = checker.getNonNullableType(declared);
     // Print the declared type so aliases such as `ReactNode` survive, then drop
@@ -801,7 +809,7 @@ function describeProp(
     kind: 'prop',
   };
   if (values) prop.values = unique(values);
-  const documented = symbols.find((s) => s.getDocumentationComment(checker).length) ?? symbols[0];
+  const documented = members.find((s) => s.getDocumentationComment(checker).length) ?? members[0];
   const description = documented
     ? ts.displayPartsToString(documented.getDocumentationComment(checker)).trim()
     : '';
