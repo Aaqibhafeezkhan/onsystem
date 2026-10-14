@@ -125,8 +125,8 @@ Rates get 95% [Wilson score intervals](https://en.wikipedia.org/wiki/Binomial_pr
 - **The prompt asks for the design system.** Every arm is told to use the project's components and tokens. A prompt that does not ask would likely show larger effects; this one is the conservative case, and the same as v1.
 - **The scorers' blind spots.** `tsc` sees invented APIs, not hardcoded values. onsystem sees both but is the tool under test; its precision on the corpus is in `corpus/labels.json`. Neither judges whether the UI does what was asked; only the blind labels do, and only on a sample.
 - **onsystem counts what it feeds back.** The MCP server's `check_ui` and the hook give the agent the same errors that `onsystem check` counts afterwards, so the arms with either end close to zero partly by construction. No run added a suppression comment or changed a file other than its own.
-- **dub, as of onsystem 0.5.0.** 0.5.0 found no color tokens in dub, so the color rules stayed quiet there in every arm. dub keeps its tokens in a shared Tailwind config package, which onsystem reads since [#107](https://github.com/dgesteves/onsystem/pull/107), and re-scoring these outputs with it raises dub's count in every arm. A rerun on the released version is planned.
-- **Chart tokens for status colors.** `settings-card` (chatbot) and `plan-summary-card` (saas-starter) ask for a small green status label in a design system with no success token. With onsystem, agents often used a `chart-*` token for the green (24 of 24 runs with all three, 0 of 24 without onsystem), which onsystem counts as clean. Those two tasks hold 91 of the 203 errors without onsystem.
+- **dub, as of onsystem 0.5.0.** 0.5.0 found no color tokens in dub, so the color rules stayed quiet there in every arm. dub keeps its tokens in a shared Tailwind config package, which onsystem reads since [#107](https://github.com/dgesteves/onsystem/pull/107), merged after 0.6.0, and re-scoring these outputs with it raises dub's count in every arm. A rerun on the released version is planned.
+- **Chart tokens for status colors.** `settings-card` (chatbot) and `plan-summary-card` (saas-starter) ask for a small green status label in a design system with no success token. With onsystem, agents often used a `chart-*` token for the green (24 of 24 runs with all three, 0 of 24 without onsystem), which onsystem counts as clean. Those two tasks hold 91 of the 203 errors without onsystem. `release-badges` (shadcn-website) asks for status labels in green, blue and amber, and its design system has no success token either; fewer runs used a `chart-*` token there (2 of 12 with all three, 5 of 12 with the MCP server alone, 0 of 12 without onsystem).
 - **A small blind sample.** 12 files per arm are too few to confirm or contradict onsystem's count. Every violation the labeller found with the hook or with all three is a palette color in a dub file where dub has a token, which 0.5.0 did not read.
 - **Repositories and tasks.** Five open-source React and Tailwind projects and twenty single-file tasks. Editing existing screens, other frameworks and multi-file work are not covered. The repositories and their tasks may be in some models' training data.
 - **The skill and hook arms mention the MCP tools** they do not include, as shipped.
@@ -196,7 +196,7 @@ Keys are read from those environment variables only, by name, and never printed 
 ```
 <out>/
   results.md, results.json, runs.csv   tables and one row per run
-  notes.md                             caveats written by hand; report puts them above the tables
+  notes.md                             caveats kept next to the run; report puts them above the tables
   run-info.json                        matrix, seed, onsystem and Node versions, prepared repositories
   runs/<run>/result.json               scores, findings, tsc diagnostics, usage, cost
   runs/<run>/files/...                 every file the run created or changed

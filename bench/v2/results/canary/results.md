@@ -1,6 +1,6 @@
 # Results: canary
 
-12 runs (11 done, 1 max-calls), onsystem 0.5.0, started 2026-10-12T12:56:15.174Z. Rates with 95% Wilson intervals; errors per run and differences with 95% cluster-bootstrap intervals (tasks resampled, 10,000 draws, seed 1). Method: [README](../README.md).
+12 runs (11 done, 1 max-calls), onsystem 0.5.0, started 2026-10-12T12:56:15.174Z. Rates with 95% Wilson intervals; errors per run and differences with 95% cluster-bootstrap intervals (tasks resampled, 10,000 draws, seed 1). Method: [README](../../README.md).
 
 | Model | Arm | Runs | Created | `tsc` passes | onsystem clean | Accepted | onsystem errors / run | Cost / run | Calls | Hook blocks | MCP calls |
 | --- | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |

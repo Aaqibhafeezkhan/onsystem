@@ -275,6 +275,10 @@ describe('the README', () => {
     // independent labels are a small sample.
     expect(help).toContain('the MCP server and the hook show the agent the same errors');
     expect(help).toContain('`chart-*` tokens');
+    // Three tasks, not two: bench/v2's Threats to validity names them and counts their runs.
+    expect(help).toContain(
+      'In tasks that ask for a green status label in a design system with no success token',
+    );
     expect(help).toContain(
       `The blind labels by an AI reviewer, ${String([...labelled][0])} files per arm, are too few to confirm the count either way`,
     );

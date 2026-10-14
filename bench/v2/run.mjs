@@ -506,11 +506,12 @@ function report(out) {
       .map(([s, n]) => `${n} ${s}`)
       .join(
         ', ',
-      )}), onsystem ${info.onsystem ?? '?'}, started ${info.startedAt ?? '?'}. Rates with 95% Wilson intervals; errors per run and differences with 95% cluster-bootstrap intervals (tasks resampled, 10,000 draws, seed 1). Method: [README](../README.md).`,
+      )}), onsystem ${info.onsystem ?? '?'}, started ${info.startedAt ?? '?'}. Rates with 95% Wilson intervals; errors per run and differences with 95% cluster-bootstrap intervals (tasks resampled, 10,000 draws, seed 1). Method: [README](../../README.md).`,
     '',
   ];
-  // What the tables cannot show (the version's blind spots, how a number was reached), written
-  // by hand in <out>/notes.md, goes above them, so rebuilding the tables keeps it.
+  // What the tables cannot show (the version's blind spots, how a number was reached) is kept
+  // next to the run in <out>/notes.md, which report does not generate. It goes above the
+  // tables, so rebuilding them keeps it.
   const notes = path.join(out, 'notes.md');
   if (fs.existsSync(notes)) lines.push(fs.readFileSync(notes, 'utf8').trim(), '');
   lines.push(renderMarkdown(rows, diffs));

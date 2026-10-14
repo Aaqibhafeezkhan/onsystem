@@ -19,7 +19,7 @@ const readme = read(path.join(v2, 'README.md'));
 const threats = flat(
   readme.slice(readme.indexOf('### Threats to validity'), readme.indexOf('## Sizes')),
 );
-// Caveats written by hand, which `run.mjs report` puts into results.md.
+// Caveats kept next to the run, which `run.mjs report` does not write but puts into results.md.
 const notesFile = path.join(out, 'notes.md');
 const notes = fs.existsSync(notesFile) ? read(notesFile) : '';
 const info = JSON.parse(read(path.join(out, 'run-info.json'))) as { onsystem: string };
@@ -73,6 +73,23 @@ describe('bench/v2 results', () => {
     }
   });
 
+  it("results.md's relative links, the method link included, open files that exist", () => {
+    for (const name of fs.readdirSync(path.join(v2, 'results'))) {
+      const file = path.join(v2, 'results', name, 'results.md');
+      if (!fs.existsSync(file)) continue;
+      const links = [...read(file).matchAll(/\]\(([^)\s]+)\)/g)]
+        .map((m) => m[1] ?? '')
+        .filter((href) => !/^(?:https?:|#)/.test(href));
+      expect(links, name).toContain('../../README.md');
+      for (const href of links) {
+        expect(
+          fs.existsSync(path.resolve(path.dirname(file), href.split('#')[0] ?? '')),
+          href,
+        ).toBe(true);
+      }
+    }
+  });
+
   it('results.md carries the notes, so a new report keeps them', () => {
     expect(notes).not.toBe('');
     const results = read(path.join(out, 'results.md'));
@@ -108,41 +125,61 @@ describe('bench/v2 results', () => {
   });
 
   it('counts the runs that used a chart token for a green status label', () => {
-    // The two tasks that ask for a small green status label in a design system with no success
-    // token: chatbot's and saas-starter's globals.css at the pinned commits define chart-1 to
-    // chart-5 and no green or success color.
+    // The tasks that ask for a green status label in a design system with no success token:
+    // chatbot's and saas-starter's globals.css, and shadcn-ui's apps/v4 globals.css and
+    // legacy-themes.css, at the pinned commits define chart-1 to chart-5 and no green or success
+    // color. The first two ask for one small green label; release-badges asks for green, blue and
+    // amber ones.
     const tasks = (
       JSON.parse(read(path.join(v2, 'config/tasks.json'))) as {
         tasks: { id: string; repo: string; prompt: string }[];
       }
     ).tasks;
+    const prompt = (repo: string, task: string) =>
+      tasks.find((t) => t.id === task && t.repo === repo)?.prompt;
     const green = [
       { repo: 'chatbot', task: 'settings-card' },
       { repo: 'saas-starter', task: 'plan-summary-card' },
     ];
-    for (const { repo, task } of green) {
-      expect(tasks.find((t) => t.id === task && t.repo === repo)?.prompt).toContain(
-        "small green '",
-      );
-    }
-    const inGreen = runs.filter((r) => green.some((g) => g.task === r.task && g.repo === r.repo));
+    for (const { repo, task } of green) expect(prompt(repo, task)).toContain("small green '");
+    const badges = { repo: 'shadcn-website', task: 'release-badges' };
+    expect(prompt(badges.repo, badges.task)).toContain("'New' in green");
+
     const chart = /\b(?:bg|text|border|fill|stroke|ring|outline|decoration)-chart-\d|--chart-\d/;
-    const used = (arm: string) => {
-      const list = inGreen.filter((r) => r.arm === arm);
-      return `${String(list.filter((r) => chart.test(r.text)).length)} of ${String(list.length)}`;
-    };
+    const of = (list: typeof runs) =>
+      `${String(list.filter((r) => chart.test(r.text)).length)} of ${String(list.length)}`;
+    const inTasks = (named: { repo: string; task: string }[]) =>
+      runs.filter((r) => named.some((g) => g.task === r.task && g.repo === r.repo));
+    const used = (named: { repo: string; task: string }[], arm: string) =>
+      of(inTasks(named).filter((r) => r.arm === arm));
+
+    // Every task that asks for something green and has a run with a chart token is named, so the
+    // text cannot leave one out.
+    const withChart = tasks
+      .filter((t) => /\bgreen\b/.test(t.prompt))
+      .filter((t) => runs.some((r) => r.repo === t.repo && r.task === t.id && chart.test(r.text)))
+      .map((t) => `${t.repo}/${t.id}`)
+      .sort();
+    expect(withChart).toEqual([...green, badges].map(({ repo, task }) => `${repo}/${task}`).sort());
+
     const none = runs.filter((r) => r.arm === 'none');
     const errors = (list: Result[]) => list.reduce((n, r) => n + r.onsystemErrors, 0);
-    const greenErrors = errors(none.filter((r) => inGreen.includes(r)));
+    const greenErrors = errors(none.filter((r) => inTasks(green).includes(r)));
 
     for (const text of [threats, flat(notes)]) {
       expect(text).toContain('`settings-card` (chatbot)');
       expect(text).toContain('`plan-summary-card` (saas-starter)');
       expect(text).toContain(
-        `(${used('all')} runs with all three, ${used('none')} without onsystem), which onsystem counts as clean`,
+        `(${used(green, 'all')} runs with all three, ${used(green, 'none')} without onsystem), which onsystem counts as clean`,
       );
       expect(text).toContain(
         `Those two tasks hold ${String(greenErrors)} of the ${String(errors(none))} errors without onsystem.`,
+      );
+      expect(text).toContain(
+        '`release-badges` (shadcn-website) asks for status labels in green, blue and amber, and its design system has no success token either',
+      );
+      expect(text).toContain(
+        `fewer runs used a \`chart-*\` token there (${used([badges], 'all')} with all three, ${used([badges], 'mcp')} with the MCP server alone, ${used([badges], 'none')} without onsystem)`,
       );
     }
   });
