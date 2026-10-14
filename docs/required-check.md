@@ -28,13 +28,14 @@ jobs:
 
 The action runs `onsystem check` on the files, honours the [baseline](ci.md#adopting-it-in-an-existing-codebase), and reports the findings on the lines the pull request changed: as annotations on those lines, and as a table in the job summary (GitHub shows at most ten annotations of each kind per step). It fails the job when one of them is an error. Findings on lines the pull request did not touch are counted in the summary, not reported, so an existing codebase can turn the check on before it is clean.
 
-A hunk that only deletes lines counts the line before it and the line after it. A button with no accessible name is reported on the line of its tag name (`<Button`), so removing its `aria-label`, or the visually hidden text inside it, is caught only when that was on the `<Button` line or the line after it. Prettier puts each attribute of a long tag on its own line, so the `aria-label` is often further down, and then the check passes the pull request:
+A hunk that only deletes lines counts the line before it and the line after it. A button with no accessible name is reported on the line of its tag name (`<Button`), so removing its `aria-label`, or the visually hidden text inside it, is caught when that was on the `<Button` line or the line after it, or when the pull request also changes the `<Button` line. Prettier puts each attribute of a long tag on its own line, so the `aria-label` is often further down. When the tag fits on one line without it, Prettier joins the tag onto the `<Button` line and the removal is caught. When the tag is still too long for one line, the check passes the pull request:
 
 ```diff
    <Button
      variant="ghost"
      size="icon"
 -    aria-label="Delete row"
+     className="text-muted-foreground hover:text-destructive"
      onClick={onDelete}
    >
      <Trash2 />

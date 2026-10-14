@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { format } from 'prettier';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { onChangedLines, parseDiff } from '../action/check.mjs';
@@ -11,7 +12,8 @@ import { DEMO_ROOT, fixture, loadOnce } from './helpers.js';
 // What the Action's changed-lines gate (action/check.mjs) reports when a pull request removes a
 // button's accessible name, and whether docs/required-check.md says so: the demo's design system
 // checks the file after the change, git diff gives the changed lines with the Action's own flags,
-// and onChangedLines splits the findings the way the Action does.
+// and onChangedLines splits the findings the way the Action does. The cases that say they are
+// Prettier's layout are checked against Prettier with its default width of 80 columns.
 
 const RULE = 'icon-button-accessible-name';
 const FILE = 'app/row-actions.tsx';
@@ -86,15 +88,32 @@ function gate(before: string[], after: string[]) {
       .map((d) => ({ ...d, file: FILE }));
   // The pull request is what takes the name away.
   expect(named(before)).toEqual([]);
-  expect(named(after)).toHaveLength(1);
-  return onChangedLines(named(after), parseDiff(diff));
+  const findings = named(after);
+  expect(findings).toHaveLength(1);
+  return onChangedLines(findings, parseDiff(diff));
 }
 
 /** `lines` without the ones `drop` matches. */
 const without = (lines: string[], drop: RegExp) => lines.filter((line) => !drop.test(line));
 
+/** The lines of `code` without their indentation. */
+const unindented = (code: string) => code.split('\n').map((line) => line.trim());
+
+/** The lines Prettier writes for a component that returns `jsx`, without their indentation. */
+async function prettier(jsx: string[]): Promise<string[]> {
+  // component() writes no semicolons; everything else is Prettier's default.
+  return unindented(await format(component(jsx), { parser: 'typescript', semi: false }));
+}
+
+/** Checks that Prettier keeps the line breaks of a component that returns `jsx`. */
+async function expectPrettierKeeps(jsx: string[]) {
+  expect(await prettier(jsx), 'Prettier lays this out differently').toEqual(
+    unindented(component(jsx)),
+  );
+}
+
 describe('the changed-lines gate on a removed accessible name', () => {
-  it('catches it when the tag is on one line, or the name sat on the line after the tag name', () => {
+  it('catches it when the tag is on one line, or the name sat on the line after the tag name', async () => {
     const oneLine = (label: string) => [
       `<Button variant="ghost" size="icon"${label} onClick={onDelete}>`,
       '  <Trash2 />',
@@ -105,11 +124,33 @@ describe('the changed-lines gate on a removed accessible name', () => {
       outside: [],
     });
 
+    // Without the label the rest of the tag fits on one line, so Prettier joins it onto the
+    // `<Button` line, which then changes with the removal.
+    const multiLine = [
+      '<Button',
+      '  variant="ghost"',
+      '  size="icon"',
+      '  aria-label="Delete row"',
+      '  onClick={onDelete}',
+      '>',
+      '  <Trash2 />',
+      '</Button>',
+    ];
+    await expectPrettierKeeps(multiLine);
+    expect(await prettier(without(multiLine, /aria-label/))).toEqual(
+      unindented(component(oneLine(''))),
+    );
+    expect(gate(multiLine, oneLine(''))).toMatchObject({
+      reported: [{ ruleId: RULE, line: 7 }],
+      outside: [],
+    });
+
     const labelFirst = [
       '<Button',
       '  aria-label="Delete row"',
       '  variant="ghost"',
       '  size="icon"',
+      '  className="text-muted-foreground hover:text-destructive"',
       '  onClick={onDelete}',
       '>',
       '  <Trash2 />',
@@ -121,20 +162,24 @@ describe('the changed-lines gate on a removed accessible name', () => {
     });
   });
 
-  it('misses it further down a multi-line tag, and below the icon', () => {
-    // Prettier puts each attribute of a long tag on its own line. The finding is on the
-    // `<Button` line; a deletion counts only the lines either side of it.
-    const prettier = [
+  it('misses it further down a multi-line tag, and below the icon', async () => {
+    // Prettier puts each attribute of a long tag on its own line, and the tag stays too long
+    // for one line without the label. The finding is on the `<Button` line; a deletion counts
+    // only the lines either side of it.
+    const longTag = [
       '<Button',
       '  variant="ghost"',
       '  size="icon"',
       '  aria-label="Delete row"',
+      '  className="text-muted-foreground hover:text-destructive"',
       '  onClick={onDelete}',
       '>',
       '  <Trash2 />',
       '</Button>',
     ];
-    expect(gate(prettier, without(prettier, /aria-label/))).toMatchObject({
+    await expectPrettierKeeps(longTag);
+    await expectPrettierKeeps(without(longTag, /aria-label/));
+    expect(gate(longTag, without(longTag, /aria-label/))).toMatchObject({
       reported: [],
       outside: [{ ruleId: RULE, line: 7 }],
     });
@@ -151,7 +196,7 @@ describe('the changed-lines gate on a removed accessible name', () => {
     });
   });
 
-  it("matches docs/required-check.md's example of a removal the check passes", () => {
+  it("matches docs/required-check.md's example of a removal the check passes", async () => {
     const doc = fs.readFileSync(
       path.join(import.meta.dirname, '..', 'docs/required-check.md'),
       'utf8',
@@ -161,6 +206,9 @@ describe('the changed-lines gate on a removed accessible name', () => {
     const lines = (example ?? '').split('\n');
     const side = (keep: string) =>
       lines.filter((line) => line[0] === ' ' || line[0] === keep).map((line) => line.slice(1));
+    // The doc says Prettier writes it this way, before and after the removal.
+    await expectPrettierKeeps(side('-'));
+    await expectPrettierKeeps(side('+'));
     const { reported, outside } = gate(side('-'), side('+'));
     expect(reported).toEqual([]);
     expect(outside).toHaveLength(1);
