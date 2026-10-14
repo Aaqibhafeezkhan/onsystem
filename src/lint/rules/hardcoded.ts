@@ -149,6 +149,7 @@ export const noHardcodedColor: Rule = {
           // `shadow-[0_1px_2px_#000]`: report the color inside, but no class can replace it 1:1.
           const literal = whole ? { text: value, color: whole } : findColorLiterals(value)[0];
           if (!literal || allow.has(literal.text.toLowerCase())) continue;
+          listed.color = literal.color;
           listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
@@ -170,6 +171,7 @@ export const noHardcodedColor: Rule = {
           const whole = parseColor(value);
           const literal = whole ? { text: value, color: whole } : findColorLiterals(value)[0];
           if (!literal || allow.has(literal.text.toLowerCase())) continue;
+          listed.color = literal.color;
           listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
@@ -188,6 +190,7 @@ export const noHardcodedColor: Rule = {
         if (palette && !tokens.colorKeys.has(palette.key)) {
           const color = parseColor(palette.value);
           if (!color) continue;
+          listed.color = color;
           listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
@@ -456,9 +459,11 @@ function statusTooClose(
   return `${token.name}${inMode} is close too (${distance}), and it is a status color, so this is not applied automatically: use ${statusAdvice} if the color shows a status, otherwise ${advice || found.name}.`;
 }
 
-/** A class in a class list, with its finding if it has one. */
+/** A class in a class list, with its hardcoded color and its finding if it has them. */
 interface ListedClass {
   value: string;
+  /** The color the class hardcodes (`bg-[#fff]`, `bg-neutral-100`), which no mode changes. */
+  color?: Oklch | undefined;
   report?: Report | undefined;
 }
 
@@ -468,7 +473,10 @@ interface ListedClass {
  * `bg-primary hover:bg-primary`, and the hover would change nothing. The state class gives way
  * first; a base class does when the state class already has the token it would get. `dark:` is
  * no such condition: dark classes are compared with the tokens' dark values, where the same
- * token is right.
+ * token is right. Two hardcoded classes of the same color keep their fixes: the condition
+ * changed nothing before either (`border-red-500 focus:border-red-500` keeps an error border red
+ * on focus), and a hardcoded color is the same in every mode. A token class is not: the class
+ * list's `bg-primary` is another color in dark mode than a `hover:bg-[#171717]` next to it.
  */
 function keepStatesApart(list: readonly ListedClass[]): void {
   const after = (listed: ListedClass) => listed.report?.fix?.[0]?.text ?? listed.value;
@@ -478,7 +486,7 @@ function keepStatesApart(list: readonly ListedClass[]): void {
       const edit = report?.fix?.[0]?.text;
       if (!report || edit === undefined) continue;
       for (const other of list) {
-        if (other === listed) continue;
+        if (other === listed || sameColor(listed.color, other.color)) continue;
         const [state, base] = pass === 'state' ? [edit, after(other)] : [after(other), edit];
         const conditions = conditionsBetween(parseUtility(state), parseUtility(base));
         if (!conditions) continue;
@@ -500,15 +508,52 @@ function keepStatesApart(list: readonly ListedClass[]): void {
   }
 }
 
+/** Whether two hardcoded colors are the same, so that one in place of the other changes nothing. */
+function sameColor(a: Oklch | undefined, b: Oklch | undefined): boolean {
+  return a !== undefined && b !== undefined && colorDistance(a, b) < SAME_COLOR;
+}
+
 /**
  * The conditions (`hover:`) under which `state` applies and `base` does too, when both are the
- * same color: undefined when they are not, or `state` adds no condition but `dark:`.
+ * same color: undefined when they are not, or `state` adds no condition but `dark:`, or styles
+ * another element (`placeholder:`, `prose-a:`), whose color the base class does not set.
  */
 function conditionsBetween(state: Utility, base: Utility): string | undefined {
   if (state.base !== base.base || state.modifier !== base.modifier) return undefined;
   if (!base.variants.every((variant) => state.variants.includes(variant))) return undefined;
   const added = state.variants.filter((v) => v !== 'dark' && !base.variants.includes(v));
+  if (added.some(stylesAnother)) return undefined;
   return added.length ? `${added.join(':')}:` : undefined;
+}
+
+/** Variants for a pseudo-element or other elements than the one the class is on. */
+const OTHER_ELEMENT = new Set([
+  '*',
+  '**',
+  'after',
+  'backdrop',
+  'before',
+  'details-content',
+  'file',
+  'first-letter',
+  'first-line',
+  'marker',
+  'placeholder',
+  'selection',
+]);
+
+/**
+ * Whether a variant styles something else than the element: a pseudo-element (`placeholder:`),
+ * children (`*:`), the typography plugin's elements (`prose-a:`), or an arbitrary selector that
+ * goes on from `&` (`[&>svg]:`, `[&_a]:`, `[&::after]:`), not one that only narrows it
+ * (`[&:hover]:`, `[.dark_&]:`).
+ */
+function stylesAnother(variant: string): boolean {
+  if (OTHER_ELEMENT.has(variant) || variant.startsWith('prose-')) return true;
+  const selector = /^\[(.*)\]$/.exec(variant)?.[1];
+  if (!selector?.includes('&')) return false;
+  const after = selector.slice(selector.lastIndexOf('&') + 1).replace(/\([^()]*\)|\[[^\]]*\]/g, '');
+  return /[_>+~]|::/.test(after);
 }
 
 /**
