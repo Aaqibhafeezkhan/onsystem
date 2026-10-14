@@ -28,7 +28,7 @@ The plugin is the fastest way to keep Claude on your design system. It bundles t
 
 - **Errors come back to be fixed.** The hook runs after the file is written. It exits with Claude Code's blocking-error code, and the findings, each with its fix, go to Claude, which corrects the file before moving on.
 - **Warnings don't.** They reach Claude as a note, without blocking.
-- **Only what Claude just changed.** After an Edit it lists the findings on the edited lines and only counts older ones. It honours a [baseline](ci.md#adopting-it-in-an-existing-codebase).
+- **Only what Claude just changed.** After an Edit it lists the findings on the lines the edit changed, not the unchanged lines it repeats around them, and only counts older ones. When it can't tell which lines those are (the new text is in the file more than once, or a formatter rewrote it), it passes the findings on as a note and doesn't block. It honours a [baseline](ci.md#adopting-it-in-an-existing-codebase).
 - **Quiet where there is nothing to check.** It stays silent in projects without design-system components (tokens alone don't count), so installing the plugin for every project is safe.
 - **The design system's own files are left alone.** Like `check`, it skips them: an edit to `components/ui/button.tsx` changes the design system, which is a call for you and your reviewers rather than a lint error.
 - **It says when it can't check.** When the CLI can't run (npx can't fetch it because of a [min-release-age policy](troubleshooting.md#a-min-release-age-policy-blocks-npx), a private registry or no network, or the config is broken), it says so once per session and project, as a message to you, and never blocks the edit.
