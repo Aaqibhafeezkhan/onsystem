@@ -14,7 +14,7 @@ import type {
 } from '../types.js';
 import { relativePath, toPosix } from '../util/paths.js';
 import { isPascalCase, truncate, unique } from '../util/strings.js';
-import { classText, findVariantDefinitions, type VariantDefinition } from './cva.js';
+import { classText, findVariantDefinitions, propertyName, type VariantDefinition } from './cva.js';
 import {
   createProgram,
   isProjectFile,
@@ -395,13 +395,19 @@ function buildComponent(context: FileContext, candidate: Candidate): ComponentIn
   // takes as props: React Aria's checkbox sizes its inner box, while documenso's Button
   // already has a `size` that its spinner's `loaderVariants` must not add classes to.
   const own = new Set(primary.flatMap((d) => d.variants.map((v) => v.name)));
+  const adds = (name: string) => !own.has(name) && props.some((p) => p.name === name);
   const variants = mergeVariants([
     ...primary.flatMap((d) => d.variants),
-    ...nested
-      .flatMap((d) => d.variants)
-      .filter((v) => !own.has(v.name) && props.some((p) => p.name === v.name)),
+    ...nested.flatMap((d) => d.variants).filter((v) => adds(v.name)),
   ]);
-  mergeVariantProps(props, variants);
+  const layouts = new Map<string, Layout>();
+  for (const definition of definitions) {
+    for (const [name, layout] of variantLayouts(definition)) {
+      if (!primary.includes(definition) && !adds(name)) continue;
+      layouts.set(name, [...(layouts.get(name) ?? []), ...layout]);
+    }
+  }
+  mergeVariantProps(props, variants, layouts);
   applyDestructuredDefaults(props, param);
 
   const position = sourceFile.getLineAndCharacterOfPosition(candidate.declaration.getStart());
@@ -926,11 +932,64 @@ function mergeVariants(variants: VariantInfo[]): VariantInfo[] {
   return [...merged.values()];
 }
 
-/** Adds or enriches variant props from cva/tv definitions (works without type info). */
-function mergeVariantProps(props: PropInfo[], variants: VariantInfo[]): void {
+/**
+ * A variant's keys in the order its cva/tv literal lists them, with `undefined` where the literal
+ * takes values it does not list: a spread (`{ ...base, brand: "…" }`), a key that is not a
+ * literal (`[Tone.Info]`) or that names a variable (`{ sm }`), and, first in every variant, tv's
+ * `extend`, which adds its base's values.
+ */
+type Layout = (string | undefined)[];
+
+/** The layout of each variant a cva/tv definition declares, read as `parseDefinition` reads it. */
+function variantLayouts(definition: VariantDefinition): Map<string, Layout> {
+  const layouts = new Map<string, Layout>();
+  const [first, second] = definition.node.arguments;
+  const config = second ?? first;
+  if (!config || !ts.isObjectLiteralExpression(config)) return layouts;
+  const named = (name: string) =>
+    config.properties.find((p) => !ts.isSpreadAssignment(p) && propertyName(p.name) === name);
+  const variants = named('variants');
+  if (!variants || !ts.isPropertyAssignment(variants)) return layouts;
+  if (!ts.isObjectLiteralExpression(variants.initializer)) return layouts;
+  const extended = named('extend') !== undefined;
+  for (const prop of variants.initializer.properties) {
+    if (!ts.isPropertyAssignment(prop) || !ts.isObjectLiteralExpression(prop.initializer)) continue;
+    const name = propertyName(prop.name);
+    if (name === undefined) continue;
+    const layout: Layout = extended ? [undefined] : [];
+    for (const option of prop.initializer.properties) {
+      layout.push(ts.isPropertyAssignment(option) ? propertyName(option.name) : undefined);
+    }
+    layouts.set(name, layout);
+  }
+  return layouts;
+}
+
+/** `values` in a layout's order, those it does not list where it takes them (or last). */
+function ordered(values: string[], layout: Layout): string[] {
+  const unlisted = values.filter((v) => !layout.includes(v));
+  const placed = layout.flatMap((key) =>
+    key === undefined ? unlisted : values.includes(key) ? [key] : [],
+  );
+  return unique(layout.includes(undefined) ? placed : [...placed, ...unlisted]);
+}
+
+/**
+ * Adds or enriches variant props from cva/tv definitions (works without type info). A prop the
+ * checker types as a set of strings keeps that set: the literal can take values it does not list
+ * (`{ ...base, brand }`, tv's `extend`) and only gives their order. Without one, the literal's
+ * keys are the values, unless it does not list them all: then the prop takes any value.
+ */
+function mergeVariantProps(
+  props: PropInfo[],
+  variants: VariantInfo[],
+  layouts: Map<string, Layout>,
+): void {
   for (const variant of variants) {
     const isBoolean = variant.values.every((v) => v === 'true' || v === 'false');
+    const layout = layouts.get(variant.name) ?? variant.values;
     const existing = props.find((p) => p.name === variant.name);
+    const typed = existing?.values;
     const prop: PropInfo = existing ?? {
       name: variant.name,
       type: isBoolean ? 'boolean' : variant.values.map((v) => JSON.stringify(v)).join(' | '),
@@ -938,8 +997,15 @@ function mergeVariantProps(props: PropInfo[], variants: VariantInfo[]): void {
       kind: 'variant',
     };
     prop.kind = 'variant';
-    if (!isBoolean) {
+    if (typed?.length) {
       // The checker orders union members arbitrarily; the cva config order is the meaningful one.
+      prop.values = ordered(typed, layout);
+      prop.type = prop.values.map((v) => JSON.stringify(v)).join(' | ');
+      variant.values = [...prop.values];
+    } else if (layout.includes(undefined)) {
+      // The literal does not list every value and nothing else does: the prop takes any value.
+      if (!existing) prop.type = 'string';
+    } else if (!isBoolean) {
       prop.values = [...variant.values];
       prop.type = variant.values.map((v) => JSON.stringify(v)).join(' | ');
     }
