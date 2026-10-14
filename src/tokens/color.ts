@@ -80,8 +80,22 @@ export function parseColor(
   return parsed ? toOklch(parsed) : undefined;
 }
 
+/** A color's opacity, from 0 (transparent) to 1 (opaque). */
+function opacity(color: Oklch): number {
+  return color.alpha ?? 1;
+}
+
+/**
+ * How much a difference in opacity weighs against ΔE, which leaves it out. Translucency is
+ * part of what a color does (an overlay, a tint, a frosted header), so a token more than
+ * 0.02 apart in opacity is never close (5 × 0.02 is CLOSE_COLOR): `bg-[#e7000b33]`, the red
+ * at 20%, is not `bg-destructive`. One step of an 8-digit hex (1/255) is still the same color.
+ */
+const OPACITY_WEIGHT = 5;
+
+/** ΔE between two colors, plus their difference in opacity. */
 export function colorDistance(a: Oklch, b: Oklch): number {
-  return okDistance(a, b);
+  return okDistance(a, b) + OPACITY_WEIGHT * Math.abs(opacity(a) - opacity(b));
 }
 
 export function toHex(color: Oklch): string {
@@ -193,4 +207,26 @@ export function sameHue(
 /** Formats a ΔE value the way it reads best in a diagnostic. */
 export function formatDeltaE(deltaE: number): string {
   return deltaE < 0.0005 ? 'exact match' : `ΔE ${deltaE.toFixed(3)}`;
+}
+
+/** `opaque`, `20% opaque` or `transparent`, to the nearest percent. */
+function formatOpacity(color: Oklch): string {
+  const percent = Math.round(opacity(color) * 100);
+  return percent === 100 ? 'opaque' : percent === 0 ? 'transparent' : `${String(percent)}% opaque`;
+}
+
+/**
+ * When a token's value (`token`) and a color differ in opacity, a sentence that says so:
+ * `destructive is opaque, and this color is 20% opaque.`
+ */
+export function formatOpacityGap(color: Oklch, token: Oklch, name: string): string | undefined {
+  const [own, its] = [formatOpacity(color), formatOpacity(token)];
+  return own === its ? undefined : `${name} is ${its}, and this color is ${own}.`;
+}
+
+/** ΔE between a color and a token's value, which `formatOpacityGap` completes. */
+export function formatDistance(color: Oklch, token: Oklch): string {
+  const deltaE = okDistance(color, token);
+  if (deltaE < 0.0005 && formatOpacityGap(color, token, '')) return 'same color';
+  return formatDeltaE(deltaE);
 }
