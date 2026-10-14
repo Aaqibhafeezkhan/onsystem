@@ -187,8 +187,9 @@ export function Eyebrow({ children }: { children: ReactNode }) {
 export const TSC_RULES = new Set(['no-unknown-variant', 'no-unknown-prop', 'no-unknown-component']);
 
 /**
- * The rules on the finding card, in the order agents broke them in the benchmark: palette
- * colors, then native elements the design system wraps, then an API it lacks.
+ * The rules on the finding card: palette colors and native elements the design system wraps,
+ * the two rules behind every finding in the v2 benchmark, then an API it lacks, which the
+ * benchmark never recorded.
  */
 const CARD_RULES = ['no-hardcoded-color', 'prefer-design-system-component', 'no-unknown-variant'];
 

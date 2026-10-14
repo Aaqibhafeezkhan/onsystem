@@ -120,9 +120,11 @@ function Hero() {
         aria-hidden="true"
       />
       <div className="relative mx-auto w-full max-w-6xl px-4 pt-12 pb-12 sm:px-6 sm:pt-16 lg:pt-20">
-        {/* Wide: the copy and the calls to action on the left, the card on the right. Phones: the
-            copy, the card, then the calls to action. */}
-        <div className="grid items-start gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_28rem] xl:grid-cols-[minmax(0,1fr)_32rem]">
+        {/* Wide: the copy, the calls to action and the install tabs on the left, the card on the
+            right; the last row takes what the card needs beyond the left column, so the left
+            column stays together. Phones: the copy and the calls to action first, so the first
+            screen has an action on it, then the card, then the install tabs. */}
+        <div className="grid items-start gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_28rem] lg:grid-rows-[auto_auto_1fr] xl:grid-cols-[minmax(0,1fr)_32rem]">
           <div className="min-w-0">
             <h1 className="text-[2.15rem] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-fg sm:text-5xl lg:text-[3.15rem]">
               Keeps coding agents on your design system.
@@ -133,7 +135,6 @@ function Hero() {
               your design-system package; every app in your monorepo gets it.
             </p>
           </div>
-          <FindingCard className="lg:row-span-2 lg:mt-1.5" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <CheckCommand />
@@ -154,12 +155,13 @@ function Hero() {
               Try it in the browser
               <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
             </Link>
-            <InstallTabs />
           </div>
+          <FindingCard className="lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-1.5" />
+          <InstallTabs />
         </div>
         <ProofRow />
 
-        <div id="demo" className="mt-14 scroll-mt-20 sm:mt-16">
+        <div className="mt-14 sm:mt-16">
           <LoopDemo
             prompt={demo.prompt}
             file={demo.file}
@@ -316,7 +318,9 @@ function InstallTabs() {
     </div>
   );
   return (
-    <div className="mt-6">
+    // A grid item of the first screen: 24 px under the calls to action on wide screens, as one
+    // block with them, and under the card on phones.
+    <div className="min-w-0 lg:-mt-2">
       <Tabs
         label="Install for"
         // No-break spaces keep each label on one line; the row fits beside the card from 1024 px.

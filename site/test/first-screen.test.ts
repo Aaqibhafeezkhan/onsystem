@@ -8,10 +8,12 @@ import { describe, expect, it } from 'vitest';
 
 import Home, { metadata } from '@/app/page';
 import { STEPS } from '@/components/loop-demo';
+import { slug } from '@/components/markdown-blocks';
 import { benchmark, corpus, demo, designSystem } from '@/lib/data';
 import { HOME_CARD, HomeCard } from '@/lib/og';
 import type { Preset } from '@/lib/playground';
 import { applyFixes } from '@/lib/playground-edits';
+import { DOCS_FILES } from '@/lib/site';
 
 // The home page's first screen (ROADMAP-v2 section 3.8), the demo it leads into, and the social
 // card drawn from the same finding card.
@@ -38,10 +40,10 @@ const flat = (html: string) =>
 const words = (value: string) => value.split(/\s+/).filter(Boolean).length;
 
 const home = renderToStaticMarkup(createElement(Home));
-// Everything above the loop demo, whose window is titled "~/acme-app", after the JSON-LD.
+// Everything above the loop demo, after the JSON-LD.
 const firstScreen = home.slice(
   home.indexOf('</script>', home.indexOf('<main')),
-  home.indexOf('~/acme-app'),
+  home.indexOf('data-loop-demo'),
 );
 
 /** The findings `tsc` reports as well: an invalid variant, an unknown prop, a missing member. */
@@ -51,7 +53,10 @@ const finding = (ruleId: string) => {
   if (!found) throw new Error(`the demo draft has no ${ruleId} finding`);
   return found;
 };
-/** The card's findings, in the order the benchmark saw them most: color, native element, API. */
+/**
+ * The card's findings: palette color and native element, the two rules the v2 benchmark saw, then
+ * an API the design system lacks.
+ */
 const CARD = [
   finding('no-hardcoded-color'),
   finding('prefer-design-system-component'),
@@ -62,7 +67,26 @@ const strip = `tsc ${String(demo.findings.filter((f) => TSC.has(f.ruleId)).lengt
 describe('the first screen', () => {
   it('is in front of the loop demo', () => {
     expect(firstScreen).toContain('<h1');
-    expect(home.indexOf('~/acme-app')).toBeGreaterThan(0);
+    expect(home.indexOf('data-loop-demo')).toBeGreaterThan(0);
+    expect(home.slice(home.indexOf('data-loop-demo'))).toContain('~/acme-app');
+  });
+
+  it('puts the calls to action before the card, so a phone’s first screen has one', () => {
+    const at = (marker: string) => {
+      const index = firstScreen.indexOf(marker);
+      expect(index, marker).toBeGreaterThan(-1);
+      return index;
+    };
+    // One column below 1024 px, in this order: the copy, the calls to action, the card, the tabs.
+    expect(at('data-hero-command')).toBeGreaterThan(at('</h1>'));
+    expect(at('Try it in the browser')).toBeGreaterThan(at('data-hero-command'));
+    expect(at('data-finding-card')).toBeGreaterThan(at('Try it in the browser'));
+    expect(at('role="tablist"')).toBeGreaterThan(at('data-finding-card'));
+    // Wide screens put the card beside all three, from the top.
+    const card = /<figure[^>]*data-finding-card[^>]*>/.exec(firstScreen)?.[0] ?? '';
+    expect(card).toMatch(/\blg:col-start-2\b/);
+    expect(card).toMatch(/\blg:row-start-1\b/);
+    expect(card).toMatch(/\blg:row-span-3\b/);
   });
 
   it('says what it checks in 45 words or fewer, leading with what the benchmark measured', () => {
@@ -177,6 +201,23 @@ describe('the rest of the home page', () => {
     expect(text(/<thead[\s\S]*?<\/thead>/.exec(section)?.[0] ?? '')).toMatch(
       /onsystem.*@shadcn\/lint/,
     );
+  });
+
+  it('links only to sections the docs have', () => {
+    const files = new Map(Object.entries(DOCS_FILES).map(([file, page]) => [page, file]));
+    const links = [...home.matchAll(/href="(\/[^"#]*)#([^"]+)"/g)]
+      .map(([, page = '', anchor = '']) => ({ page, anchor, file: files.get(page) }))
+      .filter((link) => link.file);
+    expect(links.length).toBeGreaterThan(5);
+    for (const { page, anchor, file } of links) {
+      const markdown = read(`docs/${String(file)}`).replace(/^```[\s\S]*?^```/gm, '');
+      const ids = [...markdown.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)].map((m) => slug(m[1] ?? ''));
+      // #144 adds "## Code from shadcn registries" to docs/configuration.md; until it merges, the
+      // first screen's link to it has no section to land on. Once any heading there names
+      // registries, this link has to resolve like every other.
+      if (anchor === 'code-from-shadcn-registries' && !/^#+ .*registr/im.test(markdown)) continue;
+      expect(ids, `${page}#${anchor}`).toContain(anchor);
+    }
   });
 
   it('says how to adopt it in one sentence, and links what the agent sees', () => {
