@@ -5,6 +5,8 @@
 // - Errors: exit 2 with the findings on stderr, which Claude Code shows to
 //   Claude so it fixes them before moving on. For an Edit, only findings on
 //   the lines it changed are listed; older ones are counted, not pushed.
+//   When the hook cannot tell which lines an Edit changed, the findings it
+//   may have caused go back as a non-blocking note instead.
 // - Warnings only: exit 0 with `additionalContext`, a non-blocking note.
 // - Clean file, other files, or a project without design-system components
 //   (tokens alone are not one): exit 0 silently.
@@ -103,11 +105,9 @@ if (!Array.isArray(results)) process.exit(0);
 const diagnostics = results.flatMap((r) => (Array.isArray(r?.diagnostics) ? r.diagnostics : []));
 if (!diagnostics.length) process.exit(0);
 
-// An Edit is held to the lines it touched; a Write wrote the whole file.
-const touched = touchedLines(input);
-const inScope = touched
-  ? diagnostics.filter((d) => touched.some(([from, to]) => d.line >= from && d.line <= to))
-  : diagnostics;
+// An Edit is held to the lines it changed; a Write wrote the whole file.
+const edited = editedLines(input);
+const inScope = edited?.lines ? diagnostics.filter((d) => edited.lines.has(d.line)) : diagnostics;
 const elsewhere = diagnostics.length - inScope.length;
 if (!inScope.length) process.exit(0);
 
@@ -127,7 +127,9 @@ const note = elsewhere
   ? `\n(${elsewhere} other ${elsewhere === 1 ? 'finding' : 'findings'} elsewhere in the file predate this edit; leave them unless asked.)`
   : '';
 
-if (errors) {
+// An Edit the hook cannot place never blocks: its findings, errors included, go back as a note.
+const unplaced = edited?.placed === false;
+if (errors && !unplaced) {
   process.stderr.write(
     `${name}: this change breaks the project's design system (onsystem check). ` +
       'Fix these errors before moving on; get_component and get_tokens list the valid props, variants and tokens.\n\n' +
@@ -135,11 +137,14 @@ if (errors) {
   );
   process.exit(2);
 }
+const lead = unplaced
+  ? `onsystem check: findings in ${name} that this edit may not have caused, since the hook could not tell which lines it changed. Fix the ones it introduced and leave the rest unless asked.`
+  : `onsystem check: warnings in ${name}. Prefer the suggested scale values and tokens.`;
 process.stdout.write(
   JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PostToolUse',
-      additionalContext: `onsystem check: warnings in ${name}. Prefer the suggested scale values and tokens.\n${shown.join('\n')}${note}`,
+      additionalContext: `${lead}\n${shown.join('\n')}${note}`,
     },
   }),
 );
@@ -249,23 +254,93 @@ function installedCli(dir) {
   }
 }
 
-/** 1-based line ranges an Edit's new text occupies now, or undefined to check the whole file. */
-function touchedLines(payload) {
+/**
+ * The 1-based lines an Edit changed, or undefined for the whole file (a Write). Lines it
+ * repeats unchanged from old_string are not its own. `placed` is false when the hook cannot
+ * tell where the edit is: its new text is in the file more than once, or no longer as written
+ * (a formatter rewrote it); `lines` are then the lines it may be on, or undefined for any.
+ */
+function editedLines(payload) {
   if (payload.tool_name !== 'Edit') return undefined;
-  const replacement = payload.tool_input?.new_string;
-  if (typeof replacement !== 'string' || !replacement.trim()) return undefined;
+  const { old_string: before, new_string: after } = payload.tool_input ?? {};
+  if (typeof after !== 'string') return undefined;
+  // Removing text adds no finding of its own.
+  if (!after.trim()) return { lines: new Set(), placed: true };
   let text;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
   } catch {
-    return undefined;
+    return { lines: undefined, placed: false };
   }
-  const ranges = [];
-  for (let at = text.indexOf(replacement); at !== -1; at = text.indexOf(replacement, at + 1)) {
-    const from = text.slice(0, at).split('\n').length;
-    ranges.push([from, from + replacement.split('\n').length - 1]);
+  // Claude Code's own diff of the edit, while the file still matches it.
+  const patched = patchLines(payload.tool_response?.structuredPatch, text.split('\n'));
+  if (patched) return { lines: patched, placed: true };
+  const replacement = after.replace(/\r\n/g, '\n');
+  const changed =
+    typeof before === 'string'
+      ? changedLines(before.replace(/\r\n/g, '\n').split('\n'), replacement.split('\n'))
+      : replacement.split('\n').map((_, i) => i);
+  const lines = new Set();
+  let matches = 0;
+  // One pass over the file: lines are counted from the previous match, not from the top.
+  for (
+    let at = text.indexOf(replacement), line = 1, counted = 0;
+    at !== -1;
+    at = text.indexOf(replacement, at + 1)
+  ) {
+    for (; counted < at; counted++) if (text.charCodeAt(counted) === 10) line++;
+    matches++;
+    for (const offset of changed) lines.add(line + offset);
   }
-  return ranges.length ? ranges : undefined;
+  return matches ? { lines, placed: matches === 1 } : { lines: undefined, placed: false };
+}
+
+/** The new-file lines a structuredPatch adds, if every line it shows is still in the file there. */
+function patchLines(hunks, current) {
+  if (!Array.isArray(hunks) || !hunks.length) return undefined;
+  const added = new Set();
+  for (const hunk of hunks) {
+    if (!Number.isInteger(hunk?.newStart) || !Array.isArray(hunk.lines)) return undefined;
+    let line = hunk.newStart;
+    for (const entry of hunk.lines) {
+      if (typeof entry !== 'string') return undefined;
+      const [kind, text] = [entry[0], entry.slice(1).replace(/\r$/, '')];
+      if (kind === '-' || kind === '\\') continue;
+      if ((kind !== '+' && kind !== ' ') || current[line - 1] !== text) return undefined;
+      if (kind === '+') added.add(line);
+      line++;
+    }
+  }
+  return added;
+}
+
+/** Indexes of the lines of `after` that a line diff from `before` adds or changes. */
+function changedLines(before, after) {
+  // Too big to diff: every line counts.
+  if (before.length * after.length > 1_000_000) return after.map((_, j) => j);
+  // common[i * width + j]: the longest common subsequence of before[i..] and after[j..].
+  const width = after.length + 1;
+  const common = new Uint32Array((before.length + 1) * width);
+  for (let i = before.length - 1; i >= 0; i--) {
+    for (let j = after.length - 1; j >= 0; j--) {
+      common[i * width + j] =
+        before[i] === after[j]
+          ? common[(i + 1) * width + j + 1] + 1
+          : Math.max(common[(i + 1) * width + j], common[i * width + j + 1]);
+    }
+  }
+  const changed = [];
+  for (let i = 0, j = 0; j < after.length;) {
+    if (i < before.length && before[i] === after[j]) {
+      i++;
+      j++;
+    } else if (i < before.length && common[(i + 1) * width + j] >= common[i * width + j + 1]) {
+      i++;
+    } else {
+      changed.push(j++);
+    }
+  }
+  return changed;
 }
 
 async function readInput() {
