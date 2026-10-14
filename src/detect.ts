@@ -1267,16 +1267,36 @@ export class PackageFinder {
 }
 
 /**
- * A monorepo root: a pnpm-workspace.yaml, `workspaces` in package.json (npm, Yarn, Bun),
- * a lerna.json with `packages`, or an nx.json. Turborepo runs on the package manager's
- * workspaces, so its roots are among these.
+ * A monorepo root: a pnpm-workspace.yaml whose `packages` name more than the root,
+ * `workspaces` in package.json (npm, Yarn, Bun), a lerna.json with `packages`, or an nx.json.
+ * Turborepo runs on the package manager's workspaces, so its roots are among these. pnpm 11
+ * keeps its settings in a pnpm-workspace.yaml in a single app too (`allowBuilds`, as
+ * create-next-app --use-pnpm leaves it), and reads one without `packages`, or with only
+ * `- '.'`, as the root alone: that is not a monorepo.
  */
 export function isWorkspaceRoot(dir: string): boolean {
-  if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return true;
+  if (pnpmWorkspacePackages(dir).length) return true;
   if (fs.existsSync(path.join(dir, 'nx.json'))) return true;
   const pkg = readJson(path.join(dir, 'package.json'));
   if (pkg !== undefined && pkg.workspaces !== undefined) return true;
   return Array.isArray(readJson(path.join(dir, 'lerna.json'))?.packages);
+}
+
+/**
+ * The `packages` of the pnpm-workspace.yaml in `dir` when they name a package other than the
+ * root (`.`); none otherwise, and none without the file: then it holds only settings.
+ */
+function pnpmWorkspacePackages(dir: string): string[] {
+  let list: string[];
+  try {
+    list = pnpmPackages(fs.readFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'utf8'));
+  } catch {
+    return [];
+  }
+  const beyondRoot = list.some(
+    (p) => !p.startsWith('!') && path.posix.normalize(toPosix(p).replace(/\/+$/, '')) !== '.',
+  );
+  return beyondRoot ? list : [];
 }
 
 /** The nearest workspace root at or above `start`. */
@@ -1354,7 +1374,8 @@ export interface WorkspacePatterns {
 
 /**
  * `packages` from pnpm-workspace.yaml, `workspaces` from package.json (npm, Yarn, Bun), or
- * `packages` from lerna.json, in that order of precedence.
+ * `packages` from lerna.json, in that order of precedence. A pnpm-workspace.yaml that names
+ * no package beyond the root holds only settings, so the next source decides.
  */
 export function workspacePatterns(dir: string): WorkspacePatterns {
   const split = (list: string[], source: string): WorkspacePatterns => ({
@@ -1362,10 +1383,8 @@ export function workspacePatterns(dir: string): WorkspacePatterns {
     exclude: list.filter((p) => p.startsWith('!')).map((p) => toPosix(p.slice(1))),
     source,
   });
-  const yaml = path.join(dir, 'pnpm-workspace.yaml');
-  if (fs.existsSync(yaml)) {
-    return split(pnpmPackages(fs.readFileSync(yaml, 'utf8')), 'pnpm-workspace.yaml');
-  }
+  const pnpm = pnpmWorkspacePackages(dir);
+  if (pnpm.length) return split(pnpm, 'pnpm-workspace.yaml');
   const workspaces = readJson(path.join(dir, 'package.json'))?.workspaces;
   const list = Array.isArray(workspaces) ? workspaces : asRecord(workspaces).packages;
   if (Array.isArray(list)) {
@@ -1419,12 +1438,13 @@ export function workspacePackageDirs(root: string, nx = true): string[] {
 
 /**
  * The `packages` list of a pnpm-workspace.yaml, block (`- apps/*`, indented or
- * not) or flow (`[apps/*, packages/*]`) style, with comments. Only that key is
- * read, so this stays a few lines rather than a YAML parser.
+ * not) or flow (`[apps/*, packages/*]`) style, with comments, a quoted key or a
+ * leading byte order mark. Only that key is read, so this stays a few lines
+ * rather than a YAML parser.
  */
 export function pnpmPackages(text: string): string[] {
-  const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((line) => /^packages\s*:/.test(line));
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^(['"]?)packages\1\s*:/.test(line));
   if (start === -1) return [];
   const uncomment = (s: string) => s.replace(/(?:^|\s)#.*$/, '').trim();
   const unquote = (s: string) => s.trim().replace(/^(['"])(.*)\1$/, '$2');
