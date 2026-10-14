@@ -7,8 +7,16 @@ import { main, type Io } from '../src/cli.js';
 import type { DesignSystem } from '../src/design-system.js';
 import { applyFixes } from '../src/lint/index.js';
 import { TAILWIND_PALETTE } from '../src/lint/tailwind-palette.js';
-import { parseColor, STATUS_HUE_TOLERANCE, toHex } from '../src/tokens/color.js';
+import {
+  HUE_TOLERANCE,
+  hueDistance,
+  isTinted,
+  parseColor,
+  STATUS_HUE_TOLERANCE,
+  toHex,
+} from '../src/tokens/color.js';
 import { fixture, load } from './helpers.js';
+import { blocks, section } from './markdown.js';
 
 // docs/tokens.md#status-colors, where the no-token-hue warning sends people: the CSS that gives a
 // stock shadcn/ui theme success, warning and info tokens. This pastes the section's CSS into the
@@ -22,21 +30,6 @@ const stock = fs.readFileSync(
   path.join(import.meta.dirname, 'fixtures/shadcn-neutral/globals.css'),
   'utf8',
 );
-
-/** The text under `## <heading>`, up to the next `## ` heading. */
-function section(markdown: string, heading: string): string {
-  const start = markdown.indexOf(`\n## ${heading}\n`);
-  if (start === -1) throw new Error(`no "## ${heading}" section`);
-  const end = markdown.indexOf('\n## ', start + 1);
-  return markdown.slice(start, end === -1 ? undefined : end);
-}
-
-/** The fenced code blocks of one language. */
-function blocks(markdown: string, lang: string): string[] {
-  return [...markdown.matchAll(new RegExp(`\`\`\`${lang}[^\\n]*\\n([\\s\\S]*?)\`\`\``, 'g'))].map(
-    (m) => m[1] ?? '',
-  );
-}
 
 /** WCAG 2 contrast ratio of two CSS colors, in sRGB. */
 function contrast(a: string, b: string): number {
@@ -133,28 +126,124 @@ describe('the status colors recipe (docs/tokens.md)', () => {
     }
   });
 
-  it('names the token for the other shades of its hue, and warns on a pale yellow, as it says', () => {
-    const finding = (cls: string) => after.check(`<p className="${cls}" />`).diagnostics[0];
-    // A green tint now gets an error that names success.
-    const green = finding('bg-green-100');
-    expect(green?.severity).toBe('error');
-    expect(green?.message).toContain('nearest is success');
-    // Every green shade of Tailwind's palette is within 8° of success.
-    for (const shade of [50, 100, 200, 300, 400, 500, 600, 800, 900, 950]) {
-      expect(finding(`bg-green-${shade}`)?.message, `bg-green-${shade}`).toMatch(/success/);
+  it('reports a color in one of three bands by its hue, as the section lists them', () => {
+    for (const band of [
+      `**Within ${String(STATUS_HUE_TOLERANCE)}°:** an error that names the token.`,
+      `**From ${String(STATUS_HUE_TOLERANCE)}° to ${String(HUE_TOLERANCE)}°:** an error that names the status token and offers no fix`,
+      `**Beyond ${String(HUE_TOLERANCE)}°:** the warning stays.`,
+    ]) {
+      expect(docs).toContain(band);
     }
-    // Yellow's pale shades are too far in hue from yellow-700: still the warning.
-    expect(docs).toContain(`within ${String(STATUS_HUE_TOLERANCE)}° of a status token's hue`);
+    const finding = (cls: string) => {
+      const found = after.check(`<p className="${cls}" />`).diagnostics;
+      expect(found, cls).toHaveLength(1);
+      return found[0];
+    };
+    // Within 8°: every green, light and dark, names success; only the shade it copies is fixed.
+    for (const mode of ['', 'dark:']) {
+      for (const shade of Object.keys(TAILWIND_PALETTE.green ?? {})) {
+        const green = finding(`${mode}bg-green-${shade}`);
+        expect([shade, green?.severity]).toEqual([shade, 'error']);
+        expect(green?.message, `${mode}bg-green-${shade}`).toMatch(/\bsuccess\b/);
+      }
+    }
+    // The shade next to it: suggested, not applied.
+    expect(docs).toContain('not applied (`text-green-800`)');
+    const next = finding('text-green-800');
+    expect([next?.severity, next?.suggestion, next?.fix]).toEqual([
+      'error',
+      'text-success',
+      undefined,
+    ]);
+    // The other shades: the token's name, and no fix.
+    const far = finding('text-green-600');
+    expect([far?.severity, far?.suggestion, far?.fix]).toEqual(['error', undefined, undefined]);
+    expect(far?.message).toContain('nearest is success');
+    // From 8° to 15°: an error with no fix, unless another token is nearer.
+    const between = finding('bg-yellow-600');
+    expect(docs).toContain(`\`${between?.message.split('. ')[1]?.split(';')[0] ?? '?'}\``);
+    const blue = parseColor(TAILWIND_PALETTE.blue?.[400] ?? '');
+    const info = parseColor(TAILWIND_PALETTE.blue?.[600] ?? '');
+    if (!blue || !info) throw new Error('no blue');
+    expect(hueDistance(blue, info)).toBeGreaterThan(STATUS_HUE_TOLERANCE);
+    expect(hueDistance(blue, info)).toBeLessThan(HUE_TOLERANCE);
+    expect(finding('text-blue-400')?.message).toContain('Nearest is info');
+    expect(finding('bg-blue-400')?.message).toContain('No token has this hue.');
+  });
+
+  it('turns two yellows into errors and keeps the warning on the others, as it says', () => {
     const hue = (shade: number) =>
       Math.round(parseColor(TAILWIND_PALETTE.yellow?.[shade] ?? '')?.h ?? NaN);
     expect(docs).toContain(
       `(${String(hue(100))}° at yellow-100, ${String(hue(800))}° at yellow-800)`,
     );
-    const yellow = finding('bg-yellow-100');
-    expect(yellow?.severity).toBe('warning');
-    expect(yellow?.message).toContain('No token has this hue.');
-    expect(docs).toContain('`bg-warning/10`');
-    expect(finding('bg-warning/10')).toBeUndefined();
+    expect(docs).toContain(`\`warning\` at yellow-700's ${String(hue(700))}°`);
+    const finding = (cls: string) => after.check(`<p className="${cls}" />`).diagnostics[0];
+    const onStock = (cls: string) => before.check(`<p className="${cls}" />`).diagnostics[0];
+
+    // Errors with no fix, 9° off, where the stock theme warned.
+    expect(docs).toContain(
+      '`bg-yellow-600` and `bg-yellow-900` without `dark:` are 9° off: they become errors',
+    );
+    const errors = [600, 900];
+    for (const shade of errors) {
+      const cls = `bg-yellow-${String(shade)}`;
+      expect(onStock(cls)?.severity, cls).toBe('warning');
+      const found = finding(cls);
+      expect([cls, found?.severity, found?.suggestion, found?.fix]).toEqual([
+        cls,
+        'error',
+        undefined,
+        undefined,
+      ]);
+      expect(found?.message).toContain('Nearest is warning');
+      expect(found?.message).toContain('a status color 9° away in hue');
+    }
+    // The warning stays.
+    expect(docs).toContain('Shades yellow-50 to yellow-500 and yellow-950 keep the warning');
+    const warnings = [50, 100, 200, 300, 400, 500, 950];
+    for (const shade of warnings) {
+      const cls = `bg-yellow-${String(shade)}`;
+      const found = finding(cls);
+      expect([cls, found?.severity]).toEqual([cls, 'warning']);
+      expect(found?.message).toContain('No token has this hue.');
+    }
+    // The rest of the scale is within 8°: yellow-700 is the token, yellow-800 is suggested.
+    const rest = Object.keys(TAILWIND_PALETTE.yellow ?? {})
+      .map(Number)
+      .filter((shade) => !errors.includes(shade) && !warnings.includes(shade));
+    expect(rest).toEqual([700, 800]);
+    expect(finding('bg-yellow-700')?.fix).toBeDefined();
+    expect([finding('bg-yellow-800')?.suggestion, finding('bg-yellow-800')?.fix]).toEqual([
+      'bg-warning',
+      undefined,
+    ]);
+    // What to write instead has no finding.
+    for (const token of ['text-warning', 'bg-warning', 'bg-warning/10']) {
+      expect(docs).toContain(`\`${token}\``);
+      expect(finding(token), token).toBeUndefined();
+    }
+  });
+
+  it('says which colors change hue the most from shade to shade', () => {
+    expect(docs).toContain('change hue from shade to shade, yellow and amber the most');
+    // The widest spread of hue across a family's shades, among families that are hues, not grays.
+    const spread = Object.entries(TAILWIND_PALETTE)
+      .map(([family, shades]) => {
+        const colors = Object.values(shades).map((value) => parseColor(value));
+        if (!colors.every((c) => c && isTinted(c))) return [family, -1] as const;
+        let most = 0;
+        for (const a of colors)
+          for (const b of colors) if (a && b) most = Math.max(most, hueDistance(a, b));
+        return [family, most] as const;
+      })
+      .sort((a, b) => b[1] - a[1]);
+    expect(
+      spread
+        .slice(0, 2)
+        .map(([family]) => family)
+        .sort(),
+    ).toEqual(['amber', 'yellow']);
   });
 });
 

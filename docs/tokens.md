@@ -132,4 +132,10 @@ The values are Tailwind v4's green-700, yellow-700 and blue-600 in light mode, a
 <p className="border-info/50 text-info">Your invoice is on its way.</p>
 ```
 
-With the tokens in place, `check` treats these colors as it treats `destructive` ([how fixes are chosen](rules.md#how-fixes-are-chosen)): a color within 8° of a status token's hue gets an error that names the token, with the token as the fix when the color is the same or close (`text-green-700` becomes `text-success`, `dark:text-green-400` becomes `dark:text-success`). Tailwind's colors change hue from shade to shade, yellow the most (103° at yellow-100, 62° at yellow-800), so a pale `bg-yellow-100` still gets the warning: write a tint as the token with an opacity, `bg-warning/10`.
+With the tokens in place, `check` judges a green, yellow or blue against them as it judges a red against `destructive` ([how fixes are chosen](rules.md)). What it reports depends on how far the color's hue is from a status token's:
+
+- **Within 8°:** an error that names the token. The shade the token copies gets the token as its fix (`text-green-700` becomes `text-success`, `dark:text-green-400` becomes `dark:text-success`). A shade next to it gets the token as a suggestion that is not applied (`text-green-800`), and the other shades get the token's name and no fix. All of Tailwind's greens are in this band, in light and dark mode.
+- **From 8° to 15°:** an error that names the status token and offers no fix, such as `Nearest is warning (ΔE 0.132), a status color 9° away in hue`. When another token, such as a gray, is nearer, the warning stays instead.
+- **Beyond 15°:** the warning stays.
+
+Tailwind's colors change hue from shade to shade, yellow and amber the most (103° at yellow-100, 62° at yellow-800). With `warning` at yellow-700's 66°, `bg-yellow-600` and `bg-yellow-900` without `dark:` are 9° off: they become errors, which the Claude Code hook blocks, where the stock theme only warned. Shades yellow-50 to yellow-500 and yellow-950 keep the warning. In both cases, write the token: `text-warning` or `bg-warning` for the color, and the token with an opacity for a tint, `bg-warning/10`.

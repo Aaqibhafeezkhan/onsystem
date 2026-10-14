@@ -59,17 +59,17 @@ The root stays one project, as before, when it has a design system of its own (a
 }
 ```
 
-| Field                 | Default                                                                                                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `components`          | [Detected](#zero-config), else `components/ui/**/*.{tsx,jsx}`, `src/components/ui/**/*.{tsx,jsx}`                                                                                            |
-| `exclude`             | `**/*.{test,spec,stories}.{ts,tsx,js,jsx}`, `**/__{tests,stories,mocks}__/**`, `**/*.d.ts`. A list replaces these, so repeat the ones to keep; `node_modules` is always left out             |
-| `tokens`              | Detected, else `app/globals.css`, `src/app/globals.css`, `styles/globals.css`, `src/styles/globals.css`, `src/index.css`, `app/app.css`, `**/*.tokens.json`; and the stylesheets they import |
-| `docs`                | `docs/components/**/*.{md,mdx}` and `.md`/`.mdx` files next to the components                                                                                                                |
-| `importPath`          | Inferred from package `exports` (`@acme/ui/button`), then `tsconfig` `paths` (`@/components/ui/button`). `@acme/ui/{path}` suggests each file by its path in its package                     |
-| `includeDesignSystem` | `false`: `check` skips the component files themselves ([CI](ci.md))                                                                                                                          |
-| `tsconfig`            | `tsconfig.json` in the root                                                                                                                                                                  |
-| `libraries`           | Every [published library](#published-libraries-mui) onsystem reads that the project depends on (`mui`). `false` reads none; a list such as `["mui"]` reads only those                        |
-| `overrides`           | None. Each entry's `rules` apply over `rules` to the files its `files` globs match, relative to the root; later entries win. Unknown keys and rules are named with the closest valid one     |
+| Field                 | Default                                                                                                                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components`          | [Detected](#zero-config), else `components/ui/**/*.{tsx,jsx}`, `src/components/ui/**/*.{tsx,jsx}`                                                                                                              |
+| `exclude`             | `**/*.{test,spec,stories}.{ts,tsx,js,jsx}`, `**/__{tests,stories,mocks}__/**`, `**/*.d.ts`. A list replaces these, so repeat the ones to keep; `node_modules` is left out either way unless a pattern names it |
+| `tokens`              | Detected, else `app/globals.css`, `src/app/globals.css`, `styles/globals.css`, `src/styles/globals.css`, `src/index.css`, `app/app.css`, `**/*.tokens.json`; and the stylesheets they import                   |
+| `docs`                | `docs/components/**/*.{md,mdx}` and `.md`/`.mdx` files next to the components                                                                                                                                  |
+| `importPath`          | Inferred from package `exports` (`@acme/ui/button`), then `tsconfig` `paths` (`@/components/ui/button`). `@acme/ui/{path}` suggests each file by its path in its package                                       |
+| `includeDesignSystem` | `false`: `check` skips the component files themselves ([CI](ci.md))                                                                                                                                            |
+| `tsconfig`            | `tsconfig.json` in the root                                                                                                                                                                                    |
+| `libraries`           | Every [published library](#published-libraries-mui) onsystem reads that the project depends on (`mui`). `false` reads none; a list such as `["mui"]` reads only those                                          |
+| `overrides`           | None. Each entry's `rules` apply over `rules` to the files its `files` globs match, relative to the root; later entries win. Unknown keys and rules are named with the closest valid one                       |
 
 Paths and globs are relative to the root and use forward slashes. Windows-style backslashes (`components\ui\**\*.tsx`, `.\tsconfig.app.json`) are read as separators, except in a pattern that already uses `/`, where `\` escapes glob syntax (`app/\(marketing\)/**`). A `tsconfig` that does not exist is a config error rather than a silent fallback.
 
@@ -99,7 +99,7 @@ CLI flags override the file: `--root`, `--config`, `--components`, `--tokens`, `
 }
 ```
 
-Every component the folder's files export counts, helpers too: with all of signoff-ui listed, the `Img` in its `lib/primitives.tsx` is suggested in place of a native `<img>` in your code. To leave a folder's helpers out, list its top level only (`components/signoff-ui/*.{tsx,jsx}`); `check` then reads `lib/` as your code.
+Every component the folder's files export counts, helpers too: with all of signoff-ui listed, the `Img` in its `lib/primitives.tsx` is suggested in place of a native `<img>` in your code. To leave a folder's helpers out, list its top level only (`components/signoff-ui/*.{tsx,jsx}`) and turn the rules off for the rest of the folder with an `overrides` entry like the one below, with `"files": ["components/signoff-ui/lib/**"]`. Without that entry, `check` reads `lib/` as your code and reports its files.
 
 **Or turn the rules off for it** in `overrides`. Nothing in its files is reported, by `check`, the hook or `check_ui`, and zero config still finds the design system, but agents do not learn the registry's components:
 

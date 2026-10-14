@@ -10,6 +10,7 @@ import { main, type Io } from '../src/cli.js';
 import { DEFAULT_EXCLUDE, RULE_IDS } from '../src/config.js';
 import { createServer } from '../src/server/index.js';
 import { fixture, load, TSCONFIG } from './helpers.js';
+import { blocks, section } from './markdown.js';
 
 // docs/configuration.md#code-from-shadcn-registries: what to do with the folders `npx shadcn add`
 // fills from other registries. A shadcn/ui app with signoff-ui's and AI Elements' folders is
@@ -19,19 +20,10 @@ import { fixture, load, TSCONFIG } from './helpers.js';
 const docsDir = path.join(import.meta.dirname, '../docs');
 const configuration = fs.readFileSync(path.join(docsDir, 'configuration.md'), 'utf8');
 
-/** The text under `## <heading>`, up to the next `## ` heading. */
-function section(markdown: string, heading: string): string {
-  const start = markdown.indexOf(`\n## ${heading}\n`);
-  if (start === -1) throw new Error(`no "## ${heading}" section`);
-  const end = markdown.indexOf('\n## ', start + 1);
-  return markdown.slice(start, end === -1 ? undefined : end);
-}
-
 /** The section's JSON configs, in order. */
 function configs(): Record<string, unknown>[] {
-  const text = section(configuration, 'Code from shadcn registries');
-  return [...text.matchAll(/```json[^\n]*\n([\s\S]*?)```/g)].map(
-    (m) => JSON.parse(m[1] ?? '') as Record<string, unknown>,
+  return blocks(section(configuration, 'Code from shadcn registries'), 'json').map(
+    (json) => JSON.parse(json) as Record<string, unknown>,
   );
 }
 
@@ -193,15 +185,23 @@ describe('code from shadcn registries (docs/configuration.md)', () => {
     );
   });
 
-  it("with a folder's top level only, leaves its helpers out and checks them as app code", async () => {
+  it("with a folder's top level only and its helpers in `overrides`, leaves the helpers out", async () => {
     expect(configuration).toContain('(`components/signoff-ui/*.{tsx,jsx}`)');
-    const [config] = configs();
+    expect(configuration).toContain('`"files": ["components/signoff-ui/lib/**"]`');
+    const [config, offConfig] = configs();
     const globs = (config?.components as string[]).map((g) =>
       g === 'components/signoff-ui/**/*.{tsx,jsx}' ? 'components/signoff-ui/*.{tsx,jsx}' : g,
     );
-    const { reported, messages } = await check(app({ components: globs }), '.');
-    expect(reported).toEqual(['app/page.tsx', PRIMITIVES]);
-    expect(messages.some((m) => m.includes('<Img>'))).toBe(false);
+    const [off] = (offConfig?.overrides ?? []) as { files: string[]; rules: object }[];
+    const overrides = [{ ...off, files: ['components/signoff-ui/lib/**'] }];
+    const both = await check(app({ ...config, components: globs, overrides }), '.');
+    expect(both.reported).toEqual(['app/page.tsx']);
+    expect(both.messages).toEqual(['<DiffReview> has no prop "tone".']);
+    expect(both.text).toContain('3 design-system files skipped');
+    // Without the `overrides` entry, `lib/` is checked as app code and its files are reported.
+    const alone = await check(app({ ...config, components: globs }), '.');
+    expect(alone.reported).toEqual(['app/page.tsx', PRIMITIVES]);
+    expect(alone.messages.some((m) => m.includes('<Img>'))).toBe(false);
   });
 
   it('with the rules off in `overrides`, reports nothing there, in check or check_ui', async () => {
