@@ -370,6 +370,11 @@ function reportColor(
   const same = sameValue.length ? `, same value as ${sameValue.map((t) => t.name).join(', ')}` : '';
   const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';
   const found = `${token.name}${inMode} (${formatDeltaE(nearest.distance)}${same})`;
+  const tinted = input.tinted ?? isTinted(input.color);
+  // No token has the color's hue (a status green in a stock shadcn/ui theme). Naming the nearest,
+  // a gray or another hue's token (`chart-2` in a chart), led agents to swap the meaning away, so
+  // the message names none and leaves two ways out, as a warning.
+  const noHue = !close && reason === 'hue' && tinted;
   let message: string;
   if (close) {
     message = `${input.what}. ${nearest.distance < SAME_COLOR ? 'Matches token' : 'Nearest token'} ${found}`;
@@ -377,9 +382,10 @@ function reportColor(
     if (variant) message += `, or use ${variant}`;
     message += '.';
     if (held) message += ` ${held}`;
+  } else if (noHue) {
+    message = `${input.what}. ${NO_TOKEN_HAS_HUE}`;
   } else {
-    const tinted = input.tinted ?? isTinted(input.color);
-    message = `${input.what}. ${noMatch(reason, role, tinted, nearest.candidate.color, found, hueOff)}${meantForAnother(otherRole, mode)} Pick the semantic token that fits.`;
+    message = `${input.what}. ${noMatch(reason, role, found, hueOff)}${meantForAnother(otherRole, mode)} Pick the semantic token that fits.`;
   }
   const owner =
     !variant && input.prefix && input.element
@@ -394,8 +400,17 @@ function reportColor(
     message,
     suggestion: close ? (variant ?? replacement) : undefined,
     fix: close && edit && !held ? [{ range: [input.start, input.end], text: edit }] : undefined,
+    severity: noHue ? 'warning' : undefined,
   });
 }
+
+/**
+ * When no token has the color's hue: add one, or keep the color and say why. Between JSX
+ * children a `//` line is text, which suppresses nothing and renders, so that place gets the
+ * `{/* *\/}` form.
+ */
+const NO_TOKEN_HAS_HUE =
+  'No token has this hue. Add a token for it to the theme, such as `--success` for a status color, or keep this color and give the reason on the line above: `// onsystem-disable-next-line no-hardcoded-color -- <reason>` (between JSX children, `{/* onsystem-disable-next-line no-hardcoded-color -- <reason> */}`).';
 
 /**
  * The most Tailwind v3 and v4 differ on one shade, in ΔE: 0.036 for fuchsia-600,
@@ -489,12 +504,13 @@ const ROLE_WORDS: Record<ColorRole, string> = {
   line: 'borders',
 };
 
-/** Why no token replaces the color, naming the nearest one (`found`). */
+/**
+ * Why no token replaces the color, naming the nearest one (`found`). A tinted color
+ * with no token of its hue gets `NO_TOKEN_HAS_HUE` instead, which names none.
+ */
 function noMatch(
   reason: ColorSuggestion['reason'],
   role: ColorRole | undefined,
-  tinted: boolean,
-  token: Oklch,
   found: string,
   hueOff: number | undefined,
 ): string {
@@ -504,10 +520,7 @@ function noMatch(
   if (reason === 'scoped') {
     return `Nearest is ${found}, a token one part of the UI uses (not this one).`;
   }
-  if (reason === 'hue') {
-    if (!tinted) return `No gray token is close; nearest is ${found}, which is tinted.`;
-    return `No token has this hue; nearest is ${found}, ${isTinted(token) ? 'another hue' : 'a gray'}.`;
-  }
+  if (reason === 'hue') return `No gray token is close; nearest is ${found}, which is tinted.`;
   if (reason === 'role' && role)
     return `No close token is meant for ${ROLE_WORDS[role]}; nearest is ${found}.`;
   return `No close token; nearest is ${found}.`;
