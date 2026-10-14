@@ -2,15 +2,20 @@
 // written here. scripts/generate.mjs checks each against the demo design system and fails
 // the build when one stops showing what its description promises.
 
+// Apply all on this one must end on code a design-system team would merge: everything it uses
+// imported (a rename fix adds no import), and no component restyled with classes (a rename fix
+// keeps the native element's classes). generate.mjs checks both.
 export const deleteDialog = `import { X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 
 export function DeleteProjectDialog({
   open,
@@ -21,16 +26,17 @@ export function DeleteProjectDialog({
 }) {
   return (
     <Dialog isOpen={open} onOpenChange={onClose}>
-      <DialogContent className="rounded-[14px]">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-red-600">Delete project?</DialogTitle>
+          <DialogTitle>Delete project?</DialogTitle>
           <Dialog.Description>Type the project name to confirm.</Dialog.Description>
         </DialogHeader>
-        <input className="px-[10px] py-2" placeholder="acme-web" />
+        <p className="text-sm text-red-600">Its deployments are deleted too.</p>
+        <input placeholder="acme-web" />
         <div className="mt-[18px] flex justify-end gap-2">
-          <button onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X />
-          </button>
+          </Button>
           <Button variant="error">Delete</Button>
         </div>
       </DialogContent>

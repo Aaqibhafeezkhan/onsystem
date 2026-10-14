@@ -1,27 +1,41 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 import { Headline, HeadlineStats } from '@/components/benchmark-summary';
-import { Code, CodeBody } from '@/components/code';
-import { CodeTabs } from '@/components/code-tabs';
-import { ArrowRightIcon, CheckIcon } from '@/components/icons';
+import { CodeBody } from '@/components/code';
+import { Line } from '@/components/code-line';
+import { CodeScroll } from '@/components/code-scroll';
+import { CopyButton } from '@/components/copy-button';
+import { ArrowRightIcon, ArrowUpRightIcon, CheckIcon } from '@/components/icons';
 import { InstallPanel, StarButton } from '@/components/install';
 import { LoopDemo } from '@/components/loop-demo';
 import { InlineMarkdown } from '@/components/markdown';
-import { Eyebrow, InlineCode, Section, SubSection, TextLink } from '@/components/section';
-import { headline, headlineShort } from '@/lib/benchmark';
+import { InlineCode, Section, SubSection, TextLink } from '@/components/section';
+import { Tabs } from '@/components/tabs';
+import { count } from '@/lib/benchmark';
 import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
-import { formatJson, inline } from '@/lib/format-json';
 import { pageMetadata } from '@/lib/metadata';
-import { HOME_CARD } from '@/lib/og';
+import { findingCard, HOME_CARD, TSC_RULES } from '@/lib/og';
 import { highlight } from '@/lib/render-code';
-import { AUTHOR, docsHref, NPM, REPO, repoLink, SITE_URL } from '@/lib/site';
+import {
+  AUTHOR,
+  CURSOR_INSTALL,
+  docsHref,
+  NPM,
+  NPX,
+  PLUGIN_COMMANDS,
+  REGISTRY,
+  REPO,
+  repoLink,
+  SITE_URL,
+  VSCODE_INSTALL,
+} from '@/lib/site';
 
 const title = 'onsystem: keeps coding agents on your design system';
 // 160 characters at most: search results cut longer descriptions off.
 const description =
-  'Keeps coding agents on your design system: catches invented components, props, variants and tokens, has the agent fix them, and gates PRs. Local, zero config.';
+  'Keeps coding agents on your design system: catches palette colors, native elements and APIs your system lacks, at every edit and PR, with the fix. Runs locally.';
 
 // The home page's own title, canonical URL and cards; the root layout sets none of them.
 export const metadata: Metadata = {
@@ -73,7 +87,7 @@ export default function Home() {
   );
 }
 
-// ─── Hero and the loop ──────────────────────────────────────────────────────
+// ─── The first screen and the loop ─────────────────────────────────────────
 
 /** The primary call to action: the quickstart. */
 function GetStarted() {
@@ -88,8 +102,16 @@ function GetStarted() {
   );
 }
 
+/** What a visitor runs first: findings with fixes on their own app, nothing installed or written. */
+const CHECK = 'npx -y onsystem check .';
+
+/** The commands from docs/clients.md and docs/required-check.md (test/first-screen.test.ts checks). */
+const CODEX =
+  'codex plugin marketplace add dgesteves/onsystem\ncodex plugin add onsystem@dgesteves';
+const ACTION = '- uses: dgesteves/onsystem@v0';
+const MARKETPLACE = 'https://github.com/marketplace/actions/onsystem-design-system-check';
+
 function Hero() {
-  const result = headline(benchmark);
   return (
     <div className="relative">
       <div className="glow pointer-events-none absolute inset-x-0 top-0 h-180" aria-hidden="true" />
@@ -97,54 +119,47 @@ function Hero() {
         className="grid-lines pointer-events-none absolute inset-x-0 top-0 h-160"
         aria-hidden="true"
       />
-      <div className="relative mx-auto w-full max-w-6xl px-4 pt-14 pb-12 sm:px-6 sm:pt-20 lg:pt-24">
-        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_28.5rem] lg:gap-14">
-          <div>
-            {/* Lines break only after a separator, and balance so the last item is not alone. */}
-            <Eyebrow className="text-balance">
-              {['Claude Code hook', 'CI check', 'MCP server', 'MIT'].map((item, i) => (
-                <Fragment key={item}>
-                  {i > 0 && '\u00a0· '}
-                  <span className="whitespace-nowrap">{item}</span>
-                </Fragment>
-              ))}
-            </Eyebrow>
-            <h1 className="mt-5 text-[2.15rem] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-fg sm:text-5xl lg:text-[3.15rem]">
+      <div className="relative mx-auto w-full max-w-6xl px-4 pt-12 pb-12 sm:px-6 sm:pt-16 lg:pt-20">
+        {/* Wide: the copy and the calls to action on the left, the card on the right. Phones: the
+            copy, the card, then the calls to action. */}
+        <div className="grid items-start gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_28rem] xl:grid-cols-[minmax(0,1fr)_32rem]">
+          <div className="min-w-0">
+            <h1 className="text-[2.15rem] leading-[1.08] font-semibold tracking-[-0.03em] text-balance text-fg sm:text-5xl lg:text-[3.15rem]">
               Keeps coding agents on your design system.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-fg-soft sm:text-xl">
-              It knows your real components, props, variants and tokens, catches the moment an agent
-              invents one and has it fix it, and the same check gates your PRs. Local, zero config,
-              works alongside{' '}
-              <TextLink href="https://github.com/shadcn-ui/lint">@shadcn/lint</TextLink>.
+              Catches palette colors, native elements and APIs your design system lacks in
+              agent-written React, at every edit and pull request, with the fix. Set it up once in
+              your design-system package; every app in your monorepo gets it.
             </p>
-            <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-muted sm:text-base">
-              In Claude Code, the plugin&apos;s hook checks each file right after it is written and
-              hands the errors back, each with its fix. Other agents run{' '}
-              <InlineCode>check_ui</InlineCode> on their own output, and the CI check gates whatever
-              they wrote. Built for design-system and platform teams with a React design-system
-              package; a shadcn/ui app works with no config at all.
-            </p>
-            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
-              <GetStarted />
-              <StarButton />
-              <Link
-                href="/benchmark"
-                className="group text-sm font-medium text-fg-soft transition-colors hover:text-fg"
-              >
-                {`${headlineShort(benchmark)} (${result.perArm} runs per arm, ${result.models} `}
-                {/* The arrow stays with the last word when the line wraps. */}
-                <span className="whitespace-nowrap">
-                  models)
-                  <ArrowRightIcon className="ml-1.5 inline size-4 -translate-y-px text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
-                </span>
-              </Link>
-            </div>
           </div>
-          <InstallPanel className="lg:mt-2" />
+          <FindingCard className="lg:row-span-2 lg:mt-1.5" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <CheckCommand />
+              <GetStarted />
+            </div>
+            <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-muted">
+              See what it finds in your app. No install, no config. Items from other shadcn
+              registries count as your code until you set them apart:{' '}
+              <TextLink href="/docs/configuration#code-from-shadcn-registries">
+                Code from shadcn registries
+              </TextLink>
+              .
+            </p>
+            <Link
+              href="/playground"
+              className="group mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
+            >
+              Try it in the browser
+              <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+            </Link>
+            <InstallTabs />
+          </div>
         </div>
+        <ProofRow />
 
-        <div className="mt-14 sm:mt-20">
+        <div id="demo" className="mt-14 scroll-mt-20 sm:mt-16">
           <LoopDemo
             prompt={demo.prompt}
             file={demo.file}
@@ -195,8 +210,230 @@ function Hero() {
   );
 }
 
-/** The demo's findings that `tsc` reports too: an invalid variant, an unknown prop, a missing member. */
-const TSC_RULES = new Set(['no-unknown-variant', 'no-unknown-prop', 'no-unknown-component']);
+/** The command to copy, as a terminal line with its copy button. */
+function CheckCommand() {
+  return (
+    <div
+      data-hero-command=""
+      className="code flex h-9.5 max-w-full min-w-0 items-center gap-2 rounded-lg border border-line-strong bg-code pr-1 pl-3.5 text-[13.5px]"
+    >
+      <code className="min-w-0 truncate">
+        <span className="out-prompt" aria-hidden="true">
+          $
+        </span>{' '}
+        <span className="text-fg">{CHECK}</span>
+      </code>
+      <CopyButton text={CHECK} label="Copy the check command" bare />
+    </div>
+  );
+}
+
+/**
+ * Three of the demo draft's findings as the agent gets them, with the line it wrote, and what
+ * `tsc` reports of the whole draft. The social card draws the same card (lib/og.tsx).
+ */
+function FindingCard({ className = '' }: { className?: string }) {
+  const card = findingCard();
+  const tsx = (code: string, mark?: { start: number; end: number }) =>
+    highlight(code, 'tsx', { marks: mark ? [{ ...mark, kind: 'error' }] : [] }).lines[0] ?? [];
+  const row = (line: number, code: ReactNode) => (
+    <span className="flex gap-3">
+      <span className="w-6 shrink-0 text-right text-subtle select-none" aria-hidden="true">
+        {line}
+      </span>
+      <span>{code}</span>
+    </span>
+  );
+  return (
+    <figure
+      data-finding-card=""
+      className={`code-block min-w-0 shadow-[0_32px_100px_-40px_var(--site-shadow)] ${className}`}
+    >
+      <div className="code-bar pr-4">
+        <span className="code-title">{card.file}</span>
+        <span className="shrink-0 out-accent">check_ui</span>
+      </div>
+      {/* Source code scrolls rather than wraps: a phone shows each finding's span, and the rest
+          of a long line is a swipe away. */}
+      <CodeScroll className="code code-body p-0 text-[12px] leading-[1.65]">
+        <span className="block min-w-max divide-y divide-line/70">
+          {card.findings.map((f) => (
+            <span key={f.ruleId} className="grid gap-1 px-3.5 py-3.5 sm:px-4">
+              <code className="grid gap-0.5">
+                {f.ruleId === 'prefer-design-system-component' &&
+                  row(card.imports.line, <Line segments={tsx(card.imports.code)} />)}
+                {row(f.line, <Line segments={tsx(f.code, f.mark)} />)}
+              </code>
+              <span className="flex items-baseline gap-x-2 pl-9 text-[11.5px]">
+                <span className={f.severity === 'error' ? 'out-error' : 'out-warn'}>
+                  {f.severity === 'error' ? 'error' : 'warn'}
+                </span>
+                <span className="out-accent">{f.ruleId}</span>
+              </span>
+              <span className="block pl-9">
+                <span className="out-string">{f.found}</span>
+                <span className="out-dim"> → </span>
+                <span className="out-success">{f.fix}</span>
+              </span>
+            </span>
+          ))}
+        </span>
+      </CodeScroll>
+      <figcaption className="flex items-center gap-2 border-t border-line bg-chrome px-4 py-2.5 font-mono text-[12px] text-fg-soft">
+        <CheckIcon className="size-4 shrink-0 text-success" aria-hidden="true" />
+        <span>
+          <span className="text-muted">
+            tsc {card.tsc}/{card.total}
+          </span>
+          {' · '}
+          <span className="text-success">
+            onsystem {card.total}/{card.total}
+          </span>
+          {' on this draft'}
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
+
+/** One command or one-click link per agent, and the CI check. */
+function InstallTabs() {
+  const note = (children: ReactNode) => (
+    <p className="border-b border-line/70 px-4 py-2.5 text-[13px] leading-relaxed text-muted">
+      {children}
+    </p>
+  );
+  const oneClick = (href: string, label: string, children: ReactNode) => (
+    <div className="grid gap-3 px-4 py-3.5">
+      <a
+        href={href}
+        className="group inline-flex min-h-11 w-fit items-center gap-2 rounded-lg border border-line bg-raised-2 px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:border-line-strong hover:bg-raised-3"
+      >
+        {label}
+        <ArrowUpRightIcon className="size-4 shrink-0 text-subtle transition-colors group-hover:text-cyan" />
+      </a>
+      <p className="text-[13px] leading-relaxed text-muted">{children}</p>
+    </div>
+  );
+  return (
+    <div className="mt-6">
+      <Tabs
+        label="Install for"
+        // No-break spaces keep each label on one line; the row fits beside the card from 1024 px.
+        labels={['Claude\u00a0Code', 'Cursor', 'VS\u00a0Code', 'Codex', 'Other\u00a0MCP', 'CI']}
+        copies={[PLUGIN_COMMANDS, undefined, undefined, CODEX, NPX, ACTION]}
+      >
+        {[
+          <Fragment key="claude-code">
+            {note(
+              <>
+                Installs the MCP server (shows the agent your components and tokens) and hook
+                (checks every edit), with the skill.{' '}
+                <TextLink href={docsHref('claude-code-plugin')}>The plugin</TextLink>
+              </>,
+            )}
+            <CodeBody code={PLUGIN_COMMANDS} lang="text" />
+          </Fragment>,
+          <Fragment key="cursor">
+            {oneClick(
+              CURSOR_INSTALL,
+              'Add the MCP server to Cursor',
+              <>
+                With your workspace as its root.{' '}
+                <TextLink href={docsHref('cursor-and-vs-code')}>The config to commit</TextLink>
+              </>,
+            )}
+          </Fragment>,
+          <Fragment key="vs-code">
+            {oneClick(
+              VSCODE_INSTALL,
+              'Add the MCP server to VS Code',
+              <>
+                With your workspace as its root.{' '}
+                <TextLink href={docsHref('cursor-and-vs-code')}>The config to commit</TextLink>
+              </>,
+            )}
+          </Fragment>,
+          <Fragment key="codex">
+            {note(
+              <>
+                The MCP server and the skill, from the same marketplace as the Claude Code plugin.{' '}
+                <TextLink href={docsHref('setup')}>Other agents</TextLink>
+              </>,
+            )}
+            <CodeBody code={CODEX} lang="sh" />
+          </Fragment>,
+          <Fragment key="other">
+            {note(
+              <>
+                Any client that starts servers over stdio.{' '}
+                <TextLink href={docsHref('other-clients')}>A config for each</TextLink>
+              </>,
+            )}
+            <CodeBody code={`$ ${NPX}`} lang="sh" />
+          </Fragment>,
+          <Fragment key="action">
+            {note(
+              <>
+                Checks the lines each pull request changes, and fails on errors.{' '}
+                <TextLink href={docsHref('required-check')}>The workflow</TextLink>
+              </>,
+            )}
+            <CodeBody code={ACTION} lang="yaml" />
+          </Fragment>,
+        ]}
+      </Tabs>
+    </div>
+  );
+}
+
+/** Measured or checkable items only, from the generated data. */
+function ProofRow() {
+  const item = 'flex items-start gap-2.5 text-[13.5px] leading-snug text-muted';
+  const dot = <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-cyan" aria-hidden="true" />;
+  return (
+    <ul
+      data-proof-row=""
+      className="mt-12 grid gap-x-8 gap-y-3 border-t border-line pt-6 sm:grid-cols-2 lg:mt-14 lg:grid-cols-5"
+    >
+      <li className={item}>
+        {dot}
+        <span>{demo.checkMs.toFixed(1)} ms to check the demo file. No model calls.</span>
+      </li>
+      <li className={item}>
+        {dot}
+        <span>
+          Checked nightly on{' '}
+          <TextLink href={repoLink('corpus', 'tree')}>{corpus.repos} public repos</TextLink>, pinned
+          by commit.
+        </span>
+      </li>
+      <li className={item}>
+        {dot}
+        <span>
+          shadcn/ui, <TextLink href={docsHref('zero-config')}>your own package</TextLink>, or MUI.
+        </span>
+      </li>
+      <li className={item}>
+        {dot}
+        <span>
+          <TextLink href={REGISTRY}>MCP Registry</TextLink> ·{' '}
+          <TextLink href={MARKETPLACE}>GitHub Marketplace</TextLink>
+        </span>
+      </li>
+      <li className={item}>
+        {dot}
+        <Link
+          href="/benchmark"
+          className="group font-medium text-fg-soft transition-colors hover:text-fg"
+        >
+          Benchmark: {count(benchmark.runs)} agent runs, {benchmark.models.length} models
+          <ArrowRightIcon className="ml-1 inline size-4 -translate-y-px text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+        </Link>
+      </li>
+    </ul>
+  );
+}
 
 function Problem() {
   const errors = demo.errorCount + demo.warningCount;
@@ -509,174 +746,154 @@ function HowItWorks() {
           </p>
         </Card>
       </div>
-      <AgentView />
+      {/* The tools' responses on the demo design system are on /docs/tools. */}
+      <p className="mt-6 text-[15px] leading-relaxed text-muted">
+        <Link
+          href={docsHref('tools')}
+          className="group font-medium text-fg-soft transition-colors hover:text-fg"
+        >
+          What the agent sees: each tool&apos;s response on the demo design{' '}
+          <span className="whitespace-nowrap">
+            system
+            <ArrowRightIcon className="ml-1.5 inline size-4 -translate-y-px text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+          </span>
+        </Link>
+      </p>
     </Section>
-  );
-}
-
-/** A tool call as a prompt line: `> get_component { "name": "Badge" }`. */
-function callLine(tool: string, args: Record<string, unknown>): string {
-  return `> ${tool} ${inline(args)}`;
-}
-
-function AgentView() {
-  const sample = (tool: string) => tools.samples.find((s) => s.tool === tool);
-  const component = sample('get_component');
-  const check = sample('check_ui');
-  const hook = `⏺ Write(app/promo/page.tsx)
-  ⎿  PostToolUse hook: app/promo/page.tsx breaks the project's design system
-     1:58 error [no-hardcoded-color] Hardcoded color \`bg-[#f5f5f5]\` → \`bg-muted\`.
-     1:77 error [prefer-design-system-component] Native <button> where the design system has <Button>.
-     …
-⏺ The hook flagged five issues. Looking up Button and the color tokens before fixing.
-⏺ onsystem - get_component (MCP)(name: "Button")
-⏺ Write(app/promo/page.tsx)   →   <Button variant="destructive"> on bg-muted, hook passes`;
-  const code = check?.args.code;
-  return (
-    <SubSection
-      id="agent-view"
-      title="What the agent sees"
-      lead={
-        <p>
-          Compact Markdown for the model, with JSON <InlineCode>structuredContent</InlineCode> for
-          programs. These are the server&apos;s responses on the demo design system, captured when
-          this site was built.
-        </p>
-      }
-    >
-      <div className="grid gap-4 lg:grid-cols-2">
-        {component && (
-          <div className="relative min-w-0 lg:row-span-2">
-            <Code
-              code={`${callLine('get_component', component.args)}\n\n${component.output}`}
-              lang="text"
-              title="get_component"
-              className="flex flex-col lg:absolute lg:inset-0"
-              bodyClassName="max-h-[30rem] min-h-0 flex-1 lg:max-h-none"
-            />
-          </div>
-        )}
-        {check && typeof code === 'string' && (
-          <CodeTabs
-            title="check_ui"
-            label="check_ui response"
-            labels={['Markdown', 'structuredContent']}
-          >
-            <CodeBody
-              parts={[
-                {
-                  code: '> check_ui code:',
-                  lang: 'text',
-                },
-                { code, lang: 'tsx' },
-                { code: `\n${check.output}`, lang: 'text' },
-              ]}
-            />
-            <CodeBody code={formatJson(check.structured)} lang="json" className="max-h-[26rem]" />
-          </CodeTabs>
-        )}
-        <Code code={hook} lang="text" title="Claude Code, with the plugin's hook" />
-      </div>
-    </SubSection>
   );
 }
 
 // ─── Positioning ────────────────────────────────────────────────────────────
 
-function Column({
-  title,
-  tone,
-  items,
-}: {
-  title: string;
-  tone: 'cyan' | 'muted';
-  items: React.ReactNode[];
-}) {
-  return (
-    <div className="rounded-2xl border border-line bg-raised p-5 sm:p-6">
-      <h3
-        className={`text-[15px] font-semibold ${tone === 'cyan' ? 'text-cyan-bright' : 'text-fg'}`}
-      >
-        {title}
-      </h3>
-      <ul className="mt-4 grid gap-2.5 text-[14px] leading-relaxed text-muted">
-        {items.map((item, i) => (
-          <li key={i} className="flex gap-2.5">
-            <CheckIcon
-              className={`mt-0.75 size-4 shrink-0 ${tone === 'cyan' ? 'text-cyan' : 'text-subtle'}`}
-            />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+/** A check mark, or a dash, with what it means for screen readers. */
+function Has({ yes, who }: { yes: boolean; who: string }) {
+  return yes ? (
+    <>
+      <CheckIcon className="mx-auto size-4 text-success" aria-hidden="true" />
+      <span className="sr-only">{who}: yes</span>
+    </>
+  ) : (
+    <>
+      <span className="text-subtle" aria-hidden="true">
+        –
+      </span>
+      <span className="sr-only">{who}: no</span>
+    </>
   );
 }
 
 function ShadcnLint() {
+  // [what, onsystem, @shadcn/lint]: a check mark, a dash, or what to say in the cell.
+  const rows: [React.ReactNode, boolean | string, boolean | string][] = [
+    [
+      <>
+        Raw colors in classes and inline styles (<InlineCode>bg-[#ef4444]</InlineCode>)
+      </>,
+      true,
+      true,
+    ],
+    [
+      <>
+        Arbitrary values (<InlineCode>p-[13px]</InlineCode>, <InlineCode>rounded-[7px]</InlineCode>)
+      </>,
+      true,
+      true,
+    ],
+    [
+      <>
+        Native elements the design system wraps (<InlineCode>&lt;button&gt;</InlineCode> →{' '}
+        <InlineCode>&lt;Button&gt;</InlineCode>)
+      </>,
+      true,
+      false,
+    ],
+    [
+      <>
+        Components, props and variant values your design system lacks (
+        <InlineCode>&lt;Card.Header&gt;</InlineCode>, <InlineCode>tone</InlineCode>,{' '}
+        <InlineCode>&quot;danger&quot;</InlineCode>)
+      </>,
+      true,
+      false,
+    ],
+    ['Icon-only buttons without an accessible name', true, false],
+    ['Restyling a component with classes it should not take', false, true],
+    ['Unknown and dynamic classes', false, true],
+    ['Per-component contracts you write', false, true],
+    [
+      'Each edit in Claude Code, and your components and tokens for the agent over MCP',
+      true,
+      false,
+    ],
+    [
+      'Tailwind v3, design-system packages, and apps that import one from a workspace package',
+      true,
+      false,
+    ],
+    ['Svelte and Vue', false, true],
+    [
+      <>
+        Reads a shadcn/ui project through <InlineCode>components.json</InlineCode>
+      </>,
+      true,
+      true,
+    ],
+    ['Runs as', 'ESLint 9 and 10', 'ESLint 9.30+, Oxlint'],
+  ];
+  const cell = (value: boolean | string, who: string) =>
+    typeof value === 'string' ? (
+      <span className="text-[12.5px] text-fg-soft">{value}</span>
+    ) : (
+      <Has yes={value} who={who} />
+    );
   return (
     <Section
       id="shadcn-lint"
       eyebrow="Alongside @shadcn/lint"
-      title="Different layers. Running both is a sensible setup."
+      title="Different layers. Run both."
       lead={
         <p>
           <TextLink href="https://github.com/shadcn-ui/lint">@shadcn/lint</TextLink> is a linter: it
           polices the classes written against a component and the theme, in React, Svelte and Vue,
-          on Tailwind v4. onsystem checks that the components, props and variant values the agent
-          used exist, and in Claude Code has the agent fix them right after the edit.
+          on Tailwind v4. onsystem checks agent-written React against your design system at the edit
+          and in CI, and hands the agent the fix.
         </p>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Column
-          title="Both"
-          tone="muted"
-          items={[
-            <>
-              Read your components and theme through <InlineCode>components.json</InlineCode> in a
-              shadcn/ui project
-            </>,
-            <>
-              Flag raw colors in classes (<InlineCode>bg-[#ef4444]</InlineCode>) and inline styles
-            </>,
-            <>
-              Flag arbitrary values (<InlineCode>p-[13px]</InlineCode>,{' '}
-              <InlineCode>rounded-[7px]</InlineCode>)
-            </>,
-            'Run as ESLint rules: onsystem in ESLint 9 and 10, @shadcn/lint in 9.30+',
-          ]}
-        />
-        <Column
-          title="onsystem adds"
-          tone="cyan"
-          items={[
-            'A Claude Code hook that checks each file after it is written and has the agent fix what it invented, and the same check in CI',
-            <>
-              Components, props and variant values that do not exist (
-              <InlineCode>&lt;Card.Header&gt;</InlineCode>, <InlineCode>tone</InlineCode>,{' '}
-              <InlineCode>&quot;danger&quot;</InlineCode>)
-            </>,
-            <>
-              Native elements the design system wraps (<InlineCode>&lt;button&gt;</InlineCode> →{' '}
-              <InlineCode>&lt;Button&gt;</InlineCode>)
-            </>,
-            'Icon-only buttons without an accessible name',
-            'Ground truth before the agent writes, over MCP, and check_ui as a tool for any agent',
-            'Tailwind v3 as well as v4, design-system packages, and apps that import one from a workspace package',
-          ]}
-        />
-        <Column
-          title="@shadcn/lint adds"
-          tone="muted"
-          items={[
-            'Restyling a component with classes it should not take',
-            'Unknown and dynamic classes',
-            'Per-component contracts you write',
-            'Svelte and Vue, as well as React',
-            'Runs as Oxlint rules',
-          ]}
-        />
+      <div className="overflow-hidden rounded-xl border border-line bg-raised">
+        <table className="w-full text-left text-[14px] leading-relaxed">
+          <caption className="sr-only">What onsystem and @shadcn/lint each check</caption>
+          <thead className="font-mono text-[11px] tracking-[0.12em] text-subtle uppercase">
+            <tr className="border-b border-line">
+              <th scope="col" className="px-4 py-2.5 font-medium">
+                Check
+              </th>
+              <th
+                scope="col"
+                className="w-24 px-2 py-2.5 text-center font-medium normal-case sm:w-36"
+              >
+                onsystem
+              </th>
+              <th
+                scope="col"
+                className="w-24 px-2 py-2.5 pr-4 text-center font-medium normal-case sm:w-36"
+              >
+                @shadcn/lint
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line/60">
+            {rows.map(([what, ours, theirs], i) => (
+              <tr key={i}>
+                <th scope="row" className="px-4 py-2 font-normal text-muted">
+                  {what}
+                </th>
+                <td className="px-2 py-2 text-center">{cell(ours, 'onsystem')}</td>
+                <td className="px-2 py-2 pr-4 text-center">{cell(theirs, '@shadcn/lint')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </Section>
   );
@@ -764,14 +981,7 @@ function WorksWith() {
 
 function Adoption() {
   // midday's dashboard, as the corpus snapshot records it.
-  const n = (value: number) => value.toLocaleString('en-US');
-  const { findings, flagged, files } = corpus.baseline;
-  const baseline = `$ npx -y onsystem check src --update-baseline
-Baseline: ${n(findings)} findings in ${n(flagged)} files → onsystem.baseline.json
-
-$ npx -y onsystem check src
-No new problems in ${n(files)} files (${n(findings)} in the baseline).`;
-  const ci = `- run: npx onsystem check . --format github --require-design-system`;
+  const { findings } = corpus.baseline;
   return (
     <Section
       id="baseline"
@@ -779,37 +989,16 @@ No new problems in ${n(files)} files (${n(findings)} in the baseline).`;
       title="An existing codebase fails only on new findings."
       lead={
         <p>
-          An established app can start with hundreds of findings: midday&apos;s dashboard has{' '}
-          {n(findings)}. Record them once, commit the file, and <InlineCode>check</InlineCode> fails
-          only on what is new.
+          Record the findings already there in a baseline once (midday&apos;s dashboard has{' '}
+          {findings.toLocaleString('en-US')}), and <InlineCode>check</InlineCode> fails only on new
+          ones:{' '}
+          <TextLink href={docsHref('adopting-it-in-an-existing-codebase')}>
+            adopting it in an existing codebase
+          </TextLink>
+          .
         </p>
       }
-    >
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <Code code={baseline} lang="sh" title="Baseline" copy="Copy the baseline commands" />
-        <div className="grid content-start gap-4">
-          <ul className="grid gap-2.5 text-[14.5px] leading-relaxed text-muted">
-            {[
-              'Entries are keyed by file, rule and the offending text, with a count, not by line: edits elsewhere in a file do not invalidate them.',
-              'When findings get fixed, check says so and prints the command that drops them, which locks the progress in.',
-              'The baseline is for the CLI: check_ui still shows the agent every finding in the file it is editing.',
-            ].map((item) => (
-              <li key={item} className="flex gap-2.5">
-                <span className="mt-2.5 size-1 shrink-0 rounded-full bg-cyan" aria-hidden="true" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-          <Code code={ci} lang="yaml" title=".github/workflows/ci.yml" copy="Copy the CI step" />
-          <p className="text-[14px] leading-relaxed text-muted">
-            <InlineCode>--format github</InlineCode> turns findings into pull request annotations.{' '}
-            <InlineCode>--require-design-system</InlineCode> fails the job when the globs stop
-            matching, so CI cannot pass by checking nothing.{' '}
-            <TextLink href={docsHref('ci')}>More on CI</TextLink>.
-          </p>
-        </div>
-      </div>
-    </Section>
+    />
   );
 }
 
@@ -829,8 +1018,8 @@ function FinalCta() {
             Hold your agent to the design system you already have.
           </h2>
           <p className="mt-4 max-w-xl text-base leading-relaxed text-muted sm:text-[17px]">
-            Install it, then run <InlineCode>npx -y onsystem inspect</InlineCode> in your app to see
-            what it found. If it gets something wrong on your codebase, an issue with the snippet is
+            Run <InlineCode>{CHECK}</InlineCode> in your app to see what it finds, with no install
+            and no config. If it gets something wrong on your codebase, an issue with the snippet is
             the most useful thing you can send.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">

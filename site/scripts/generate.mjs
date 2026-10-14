@@ -57,10 +57,15 @@ const draft = fs
 const result = ds.check(draft, demoFile);
 assert.ok(result.errorCount > 0, 'the demo draft should have errors');
 
-// What the agent writes after reading the findings: the mechanical fixes, plus the three
-// it has to decide itself (a Badge variant, moving the inline style to classes, the import).
-const fixed = applyFixes(draft, result.diagnostics)
+// What the agent writes after reading the findings: the mechanical fixes, plus the four it
+// has to decide itself (a Badge variant, a Button variant for Cancel in place of the classes
+// the native button had, moving the inline style to classes, the import).
+const fixedByRules = applyFixes(draft, result.diagnostics);
+const cancel = /<Button className="[^"]*">\s*Cancel\s*<\/Button>/;
+assert.match(fixedByRules, cancel, 'the renamed Cancel button should keep its classes');
+const fixed = fixedByRules
   .replace('tone="warning"', 'variant="destructive"')
+  .replace(cancel, '<Button variant="outline">Cancel</Button>')
   .replace(
     ' style={{ color: "var(--muted-foreground)", marginTop: 6 }}',
     ' className="mt-1.5 text-muted-foreground"',
@@ -75,6 +80,31 @@ assert.equal(
   0,
   `the corrected demo should be clean, got ${JSON.stringify(after.diagnostics, null, 2)}`,
 );
+assertIdiomatic(fixed, 'the corrected demo');
+
+/**
+ * What check_ui does not catch yet in code it calls clean: a component used without its import
+ * (a rename fix adds none), or a component with variants restyled with classes.
+ */
+function assertIdiomatic(code, what) {
+  const imported = new Set(
+    [...code.matchAll(/import\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
+      m[1].split(',').map((name) => name.trim()),
+    ),
+  );
+  for (const [, tag] of code.matchAll(/<([A-Z]\w*)/g)) {
+    assert.ok(imported.has(tag), `${what} uses <${tag}> without importing it`);
+  }
+  const withVariants = new Set(
+    ds
+      .roots()
+      .filter((c) => c.variants.length)
+      .map((c) => c.name),
+  );
+  for (const [, tag] of code.matchAll(/<([A-Z]\w*)\b[^>]*\sclassName=/g)) {
+    assert.ok(!withVariants.has(tag), `${what} restyles <${tag}> with classes`);
+  }
+}
 
 /** The short "found → fix" form the transcript shows for each finding. */
 function shortForm(d) {
@@ -265,6 +295,11 @@ for (const preset of presets) {
   );
   console.log(`  preset ${preset.id}: ${errorCount} errors, ${warningCount} warnings`);
 }
+// Apply all on the Dialog leaves nothing to report and nothing a reviewer would send back.
+const dialogPreset = presets.find((p) => p.id === 'delete-dialog');
+const dialogFixed = applyFixes(dialogPreset.code, dialogPreset.result.diagnostics);
+assert.deepEqual(portableDs.check(dialogFixed, PLAYGROUND_FILE).diagnostics, []);
+assertIdiomatic(dialogFixed, 'the Dialog after Apply all');
 write('playground.json', { file: PLAYGROUND_FILE, presets });
 
 // ─── What the agent sees: the real MCP server over stdio ────────────────────
