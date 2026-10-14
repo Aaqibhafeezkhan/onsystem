@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { ReactNode } from 'react';
 
-import { bench, demo } from '@/lib/data';
+import { demo, type Demo, type Finding } from '@/lib/data';
 
 /**
  * Open Graph images, drawn with next/og from the same generated data as the pages: the
@@ -183,9 +183,75 @@ export function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
-/** The loop as a terminal: the draft, check_ui's findings with their fixes, then clean. */
-export function SessionPanel({ width }: { width: number }) {
-  const mono = { fontFamily: 'Geist Mono', fontSize: 15 };
+/** The demo's findings that `tsc` reports too: an invalid variant, an unknown prop, a missing member. */
+export const TSC_RULES = new Set(['no-unknown-variant', 'no-unknown-prop', 'no-unknown-component']);
+
+/**
+ * The rules on the finding card: palette colors and native elements the design system wraps,
+ * the two rules behind every finding in the v2 benchmark, then an API it lacks, which the
+ * benchmark never recorded.
+ */
+const CARD_RULES = ['no-hardcoded-color', 'prefer-design-system-component', 'no-unknown-variant'];
+
+/** One finding on the card: the line the agent wrote, and where on it the finding is. */
+export interface CardFinding extends Finding {
+  /** The draft's line, without its indentation. */
+  code: string;
+  /** The finding's span on `code`. */
+  mark: { start: number; end: number };
+}
+
+/**
+ * The finding card on the home page's first screen and its social card, from the demo draft:
+ * one finding per rule in {@link CARD_RULES}, the import the native element's fix relies on, and
+ * how many of the draft's problems `tsc` reports next to check_ui.
+ */
+export function findingCard(source: Demo = demo) {
+  const lines = source.draft.split('\n');
+  const lineStart = (line: number) =>
+    lines.slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0);
+  const findings: CardFinding[] = CARD_RULES.map((ruleId) => {
+    const found = source.findings.find((f) => f.ruleId === ruleId);
+    if (!found) throw new Error(`The demo draft has no ${ruleId} finding for the finding card`);
+    const raw = lines[found.line - 1] ?? '';
+    const code = raw.trim();
+    const offset = lineStart(found.line) + raw.length - raw.trimStart().length;
+    const start = Math.max(0, found.start - offset);
+    return { ...found, code, mark: { start, end: Math.min(code.length, found.end - offset) } };
+  });
+  // The component the native element becomes, and the line that imports it.
+  const native = findings.find((f) => f.ruleId === 'prefer-design-system-component');
+  const component = /^<(\w+)>$/.exec(native?.fix ?? '')?.[1] ?? '';
+  const importAt = lines.findIndex((line) =>
+    new RegExp(`^import \\{[^}]*\\b${component}\\b[^}]*\\} from `).test(line),
+  );
+  if (!component || importAt < 0) {
+    throw new Error(`The demo draft does not import ${component || 'the component'} it should use`);
+  }
+  const total = source.findings.length;
+  const tsc = source.findings.filter((f) => TSC_RULES.has(f.ruleId)).length;
+  return {
+    file: source.file,
+    findings,
+    imports: { line: importAt + 1, code: lines[importAt] ?? '' },
+    tsc,
+    total,
+    strip: `tsc ${String(tsc)}/${String(total)} · onsystem ${String(total)}/${String(total)} on this draft`,
+  };
+}
+
+/** The finding card as the social card draws it: dark, mono, the marked span in magenta. */
+function FindingPanel({ width }: { width: number }) {
+  const card = findingCard();
+  const mono = { fontFamily: 'Geist Mono', fontSize: 13.5 };
+  const numbered = (line: number, children: ReactNode) => (
+    <div style={{ display: 'flex', gap: 14, whiteSpace: 'pre' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', width: 22, color: C.subtle }}>
+        {line}
+      </div>
+      {children}
+    </div>
+  );
   return (
     <div
       style={{
@@ -196,85 +262,66 @@ export function SessionPanel({ width }: { width: number }) {
         border: `1px solid ${C.line}`,
         backgroundColor: 'rgba(20,24,29,0.92)',
         overflow: 'hidden',
+        ...mono,
       }}
     >
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 8,
+          justifyContent: 'space-between',
           padding: '12px 18px',
           borderBottom: `1px solid ${C.line}`,
           backgroundColor: '#11151a',
+          fontSize: 13,
+          color: C.subtle,
         }}
       >
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.lineStrong }}
-          />
-        ))}
-        <span style={{ ...mono, fontSize: 13, color: C.subtle, marginLeft: 12 }}>
-          ~/acme-app · agent session
-        </span>
+        <span>{card.file}</span>
+        <span style={{ color: C.cyanBright }}>onsystem · check_ui</span>
       </div>
-      <div
-        style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px', ...mono }}
-      >
-        <div style={{ display: 'flex', gap: 10, color: C.fg }}>
-          <span style={{ color: C.cyan }}>›</span>
-          <span>{demo.prompt}</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8, color: C.muted }}>
-          <span>Write</span>
-          <span style={{ color: C.fgSoft }}>{demo.file}</span>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <span style={{ color: C.cyanBright }}>onsystem · check_ui</span>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            borderRadius: 10,
-            border: `1px solid ${C.line}`,
-            backgroundColor: C.raised2,
-            padding: '10px 14px',
-            gap: 5,
-            fontSize: 13.5,
-          }}
-        >
-          <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-            <span style={{ color: C.magentaSoft }}>{demo.errorCount} errors</span>
-            <span style={{ color: C.subtle }}>·</span>
-            <span style={{ color: C.cyan }}>{demo.warningCount} warnings</span>
-            <span style={{ color: C.subtle }}>each with a fix</span>
-          </div>
-          {demo.findings.map((f, i) => (
-            <div
-              key={i}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' }}
-            >
-              <div
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: f.severity === 'error' ? C.magenta : C.cyan,
-                  flexShrink: 0,
-                }}
-              />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '16px 18px' }}>
+        {card.findings.map((f) => (
+          <div key={f.ruleId} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {f.ruleId === 'prefer-design-system-component' &&
+              numbered(
+                card.imports.line,
+                <span style={{ color: C.muted }}>{card.imports.code}</span>,
+              )}
+            {numbered(
+              f.line,
+              <div style={{ display: 'flex', color: C.fgSoft }}>
+                <span>{f.code.slice(0, f.mark.start)}</span>
+                <span style={{ color: C.magentaSoft, borderBottom: `2px solid ${C.magenta}` }}>
+                  {f.code.slice(f.mark.start, f.mark.end)}
+                </span>
+                <span>{f.code.slice(f.mark.end)}</span>
+              </div>,
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 36 }}>
+              <Dot error={f.severity === 'error'} />
+              <span style={{ color: C.subtle }}>{f.ruleId}</span>
+            </div>
+            <div style={{ display: 'flex', paddingLeft: 54, whiteSpace: 'pre' }}>
               <span style={{ color: C.fgSoft }}>{f.found}</span>
-              <span style={{ color: C.subtle }}>→</span>
+              <span style={{ color: C.subtle }}>{' → '}</span>
               <span style={{ color: C.cyanBright }}>{f.fix}</span>
             </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ color: C.cyanBright }}>check_ui</span>
-          <Check size={18} />
-          <span style={{ color: C.fgSoft }}>No design-system problems</span>
-        </div>
+          </div>
+        ))}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '12px 18px',
+          borderTop: `1px solid ${C.line}`,
+          backgroundColor: '#11151a',
+          color: C.fgSoft,
+        }}
+      >
+        <Check size={18} />
+        <span>{card.strip}</span>
       </div>
     </div>
   );
@@ -284,10 +331,16 @@ export function SessionPanel({ width }: { width: number }) {
 export const HOME_CARD = {
   path: '/og/home',
   size: { width: 1280, height: 640 },
-  alt: 'onsystem keeps coding agents on your design system. An agent session where check_ui lists 8 errors and 3 warnings, each with a fix, and the corrected file comes back clean; 10/10 clean components with the plugin, 6/10 without.',
+  alt: homeCardAlt(),
 };
 
-/** The home card, also the GitHub social preview: the claim, the benchmark and the loop. */
+function homeCardAlt(): string {
+  const card = findingCard();
+  const pairs = card.findings.map((f) => `${f.found} → ${f.fix}`).join(', ');
+  return `onsystem keeps coding agents on your design system. A finding card from an agent's draft: ${pairs}, each with its line and rule; tsc reports ${String(card.tsc)} of its ${String(card.total)} problems, onsystem all ${String(card.total)}.`;
+}
+
+/** The home card, also the GitHub social preview: the claim, and the first screen's finding card. */
 export function HomeCard({
   width,
   height,
@@ -297,47 +350,45 @@ export function HomeCard({
   height: number;
   footer: string;
 }) {
-  const [model] = bench.models;
   return (
     <Frame width={width} height={height} footer={footer}>
       <div style={{ display: 'flex', width: '100%', gap: 48, alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 22 }}>
-          <Eyebrow>Claude Code hook · CI check · MCP</Eyebrow>
+          <Eyebrow>MCP server · hook · CI check</Eyebrow>
           <div
             style={{
               display: 'flex',
               fontSize: 46,
               fontWeight: 600,
-              lineHeight: 1.12,
+              lineHeight: 1.1,
               letterSpacing: -1.2,
             }}
           >
             Keeps coding agents on your design system.
           </div>
-          {model && (
-            <div style={{ display: 'flex', flexDirection: 'column', marginTop: 8 }}>
-              <span
-                style={{
-                  fontSize: 84,
-                  fontWeight: 600,
-                  lineHeight: 1,
-                  color: C.cyan,
-                  letterSpacing: -2,
-                }}
-              >
-                {model.plugin.clean}/{model.plugin.runs}
-              </span>
-              <span style={{ marginTop: 14, fontSize: 22, color: C.fgSoft }}>
-                clean components with the plugin
-              </span>
-              <span style={{ marginTop: 4, fontSize: 22, color: C.muted }}>
-                {model.base.clean}/{model.base.runs} without ({model.name.replace('Claude ', '')},
-                vercel/ai-chatbot)
-              </span>
-            </div>
-          )}
+          <div style={{ display: 'flex', fontSize: 23, lineHeight: 1.4, color: C.muted }}>
+            Palette colors, native elements and APIs your design system lacks, caught at every edit
+            and pull request, with the fix.
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignSelf: 'flex-start',
+              gap: 10,
+              marginTop: 6,
+              padding: '10px 16px',
+              borderRadius: 10,
+              border: `1px solid ${C.lineStrong}`,
+              backgroundColor: C.raised,
+              fontFamily: 'Geist Mono',
+              fontSize: 20,
+            }}
+          >
+            <span style={{ color: C.subtle }}>$</span>
+            <span style={{ color: C.fg }}>npx -y onsystem check .</span>
+          </div>
         </div>
-        <SessionPanel width={Math.round(width * 0.43)} />
+        <FindingPanel width={Math.round(width * 0.44)} />
       </div>
     </Frame>
   );

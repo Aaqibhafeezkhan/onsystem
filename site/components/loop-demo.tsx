@@ -30,15 +30,15 @@ export interface LoopDemoProps {
   warningCount: number;
 }
 
-const STEPS = [
+export const STEPS = [
   { label: 'Write', caption: 'The agent writes the card from what it learned in training.' },
   { label: 'check_ui', caption: 'It runs check_ui on the file. Every finding comes with a fix.' },
   {
     label: 'Fix',
     caption:
-      'It applies the fixes, and makes the calls a linter leaves to it: which Badge variant, where the inline style goes.',
+      'It applies the fixes, and makes the calls a linter leaves to it: which Badge and Button variants, where the inline style goes.',
   },
-  { label: 'Clean', caption: 'check_ui again: nothing left for code review to catch.' },
+  { label: 'Clean', caption: 'check_ui again: no design-system errors left.' },
 ] as const;
 
 type Step = 0 | 1 | 2 | 3;
@@ -162,6 +162,7 @@ export function LoopDemo({
   return (
     <div
       ref={root}
+      data-loop-demo=""
       className="overflow-hidden rounded-2xl border border-line bg-raised shadow-[0_40px_120px_-40px_var(--site-shadow)]"
     >
       {/* Window chrome, with the pane switch on small screens */}

@@ -103,11 +103,11 @@ describe('init in a design-system package', () => {
       'This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json", also added to "files"), which every app that depends on @acme/kit reads when it has no config of its own.',
     );
     expect(init.stdout).toContain(
-      'Apps that install @acme/kit from a registry get only what "files" in package.json publishes, which leaves out src/ (4 component or token files)',
+      'Apps that install @acme/kit from a registry get only what "files" in package.json publishes, which leaves out src/ (3 component files and 1 token file)',
     );
     expect(init.stdout).toContain('Wrote onsystem.config.json, package.json, ONSYSTEM.md.');
     expect(init.stdout).toContain(
-      'An app that depends on @acme/kit now finds it with no config of its own: run `npx onsystem inspect` in one to see it, and give its team ONSYSTEM.md.',
+      'A workspace app that depends on @acme/kit now finds it with no config of its own: run `npx onsystem inspect` in one to see it, and give its team ONSYSTEM.md. An app that installs @acme/kit from a registry gets no component checks until "files" publishes src/.',
     );
     const manifest = read(path.join(kit, 'package.json'));
     expect(manifest.onsystem).toBe('./onsystem.config.json');

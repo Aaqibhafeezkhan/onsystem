@@ -35,15 +35,9 @@ describe('the home page', () => {
     );
   });
 
-  it('nests "On real codebases" and "What the agent sees" under their sections', () => {
-    for (const [parent, child] of [
-      ['benchmark', 'real-codebases'],
-      ['how-it-works', 'agent-view'],
-    ] as const) {
-      const section = new RegExp(`<section id="${parent}"[\\s\\S]*?<section id="${child}"`);
-      expect(html).toMatch(section);
-      expect(html).toMatch(new RegExp(`<h3 id="${child}-title"`));
-    }
+  it('nests "On real codebases" under its section', () => {
+    expect(html).toMatch(/<section id="benchmark"[\s\S]*?<section id="real-codebases"/);
+    expect(html).toMatch(/<h3 id="real-codebases-title"/);
   });
 });
 

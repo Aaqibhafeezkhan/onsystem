@@ -9,7 +9,9 @@
 //   may have caused go back as a non-blocking note instead.
 // - Warnings only: exit 0 with `additionalContext`, a non-blocking note.
 // - Clean file, other files, or a project without design-system components
-//   (tokens alone are not one): exit 0 silently.
+//   (tokens alone are not one) and without a config: exit 0 silently. A project
+//   in a monorepo whose root has a config takes that config on, so it is checked
+//   (by the accessibility rule, for one), as `check .` at the root checks it.
 // - The CLI cannot run (npx fails, a min-release-age policy, offline, a private
 //   registry, a broken config): exit 0 with a one-time notice, once per session
 //   and project, on stderr and as a `systemMessage` the user sees. It never
@@ -29,6 +31,14 @@
 // It reads the project's files and writes nothing but markers in the system temp
 // folder, for the one-time notice and the pause; the only network access is npm's,
 // when npx needs the registry.
+// The check runs from the file's project folder, the nearest one with a config, a
+// components.json, a package.json or a project.json. In a monorepo whose root has a config or
+// a baseline (`init` at the root writes both), it runs from the root, as `check .` there does,
+// so the root's rules and baseline apply; the file is still checked by its own project. It
+// stays in the project folder when the project keeps a baseline of its own, as a CI job per
+// app does, and when the root is one project with a design system of its own (its config sets
+// `components`, or it has a components.json or components/ui), which `check` there would hold
+// every file to.
 // ONSYSTEM_BIN points at another CLI script, ONSYSTEM_NPX at another npx script,
 // and ONSYSTEM_HOOK_TIMEOUT (milliseconds) shortens the time limit, for tests.
 // DESIGN_SYSTEM_MCP_BIN, ONSYSTEM_BIN's name before the rename, still works, with
@@ -70,6 +80,15 @@ const PROJECT_FILES = [
   // An Nx project without a package.json of its own.
   'project.json',
 ];
+// The config files `check` reads in the folder it runs from, in the order it looks for them.
+const CONFIG_FILES = PROJECT_FILES.filter((f) => f.includes('.config.'));
+// The baseline `check` reads in the folder it runs from, under its name from before the rename too.
+const BASELINE_FILES = ['onsystem.baseline.json', 'design-system-mcp.baseline.json'];
+// Where zero config looks for a project's own components (DEFAULT_COMPONENTS in src/config.ts).
+const DEFAULT_COMPONENT_DIRS = ['components/ui', 'src/components/ui'];
+// The primitives libraries a flat src/ of components wraps (PRIMITIVES in src/detect.ts).
+const PRIMITIVES =
+  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
 const BIN = process.env.ONSYSTEM_BIN || process.env.DESIGN_SYSTEM_MCP_BIN || undefined;
 
 const input = await readInput();
@@ -81,7 +100,9 @@ const sessionDir =
     ? input.cwd
     : (process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
 const file = path.resolve(sessionDir, filePath);
-const root = projectRoot(path.dirname(file)) ?? sessionDir;
+const project = projectRoot(path.dirname(file));
+// Where `check` runs: the project's folder, or the monorepo root whose config or baseline covers it.
+const root = (project && monorepoRoot(project)) ?? project ?? sessionDir;
 // Forward slashes, as the CLI prints paths, on Windows too.
 const name = path.relative(root, file).split(path.sep).join('/') || file;
 if (!process.env.ONSYSTEM_BIN && process.env.DESIGN_SYSTEM_MCP_BIN) {
@@ -91,7 +112,8 @@ if (!process.env.ONSYSTEM_BIN && process.env.DESIGN_SYSTEM_MCP_BIN) {
     if (code === 0) once('env-notice', text, () => fs.writeSync(2, `${text}\n`));
   });
 }
-const cli = resolveCli(root);
+// The project's own install, which may be in the project's node_modules rather than the root's.
+const cli = resolveCli(project ?? root);
 if (!cli.argv) cannotRun('npx was not found next to this Node.js.');
 // npm could not reach the registry, or npx ran out of time, less than OFFLINE_PAUSE ago: the
 // notice has been shown, and npx would wait as long again.
@@ -227,9 +249,13 @@ function check(npm) {
   const [command, ...args] = cli.npx
     ? [...cli.argv, ...npm, '--yes', `${PACKAGE}@${VERSION}`]
     : cli.argv;
+  // Relative to the folder it runs in, which the CLI sees by its real path: an absolute path
+  // through a symlink (macOS's /tmp) would fall outside it, and outside every project in it.
+  const relative = path.relative(root, file);
+  const target = relative && !path.isAbsolute(relative) ? `.${path.sep}${relative}` : file;
   return spawnSync(
     command,
-    [...args, 'check', file, '--format', 'json', '--quiet-without-design-system'],
+    [...args, 'check', target, '--format', 'json', '--quiet-without-design-system'],
     {
       cwd: root,
       encoding: 'utf8',
@@ -320,6 +346,192 @@ function projectRoot(dir) {
   for (let current = dir; ; current = path.dirname(current)) {
     if (PROJECT_FILES.some((f) => fs.existsSync(path.join(current, f)))) return current;
     if (current === path.dirname(current)) return undefined;
+  }
+}
+
+/**
+ * The monorepo root to run `check` from for a file in `dir`, its project folder: the nearest
+ * workspace root at or above `dir`, when it has a config or a baseline and `check` reads it as
+ * its projects. `check` there finds the file's project as the hook does, then adds the root's
+ * config (to a project without its own) and the root's baseline. None when `dir` is the root
+ * itself, keeps a baseline of its own, the root has neither file, or the root is one project
+ * with a design system of its own. The home folder is never one.
+ */
+function monorepoRoot(dir) {
+  if (BASELINE_FILES.some((f) => fs.existsSync(path.join(dir, f)))) return undefined;
+  const home = os.homedir();
+  for (let up = dir; up !== path.dirname(up); up = path.dirname(up)) {
+    if (up === home || !isWorkspaceRoot(up)) continue;
+    if (up === dir) return undefined;
+    const config = configFile(up);
+    if (!config && !BASELINE_FILES.some((f) => fs.existsSync(path.join(up, f)))) return undefined;
+    return isOneProject(up, config) ? undefined : up;
+  }
+  return undefined;
+}
+
+/**
+ * The config file `check` reads in `dir`: the first of CONFIG_FILES there, else the JSON file
+ * its package.json names in its `onsystem` field, as a design-system package declares one.
+ */
+function configFile(dir) {
+  const named = CONFIG_FILES.map((f) => path.join(dir, f)).find((f) => fs.existsSync(f));
+  if (named) return named;
+  const declared = readJson(path.join(dir, 'package.json'))?.onsystem;
+  if (typeof declared !== 'string' || !declared.endsWith('.json')) return undefined;
+  const file = path.resolve(dir, declared);
+  return fs.existsSync(file) ? file : undefined;
+}
+
+/**
+ * Whether `check` at `dir`, a monorepo root, reads it as one project with a design system of
+ * its own rather than as its projects (loadTarget in src/workspace.ts): its config sets
+ * `components`, or zero config finds components at the root. `check` there would hold every
+ * file below the root to the root's design system, another project's own components included,
+ * so the hook stays in the file's project. Read cheaply, and leaning to one project: where zero
+ * config would look counts, without following it to the component files.
+ */
+function isOneProject(dir, config) {
+  if (config && setsComponents(config)) return true;
+  // A components.json, or components in the default folders.
+  if (fs.existsSync(path.join(dir, 'components.json'))) return true;
+  if (DEFAULT_COMPONENT_DIRS.some((d) => holdsComponent(path.join(dir, d)))) return true;
+  const pkg = readJson(path.join(dir, 'package.json'));
+  if (!pkg) return false;
+  // The root's own exports.
+  if (pkg.exports !== undefined) return true;
+  if (typeof pkg.main === 'string' && /^\.?\/?(?:dist|build|lib)\//.test(pkg.main)) return true;
+  const dependencies = { ...pkg.dependencies, ...pkg.devDependencies };
+  // A workspace package it depends on, named like a design system (@acme/ui).
+  const designSystem = Object.entries(dependencies).some(
+    ([name, spec]) => isDesignSystemName(name) && isWorkspacePackage(dir, name, spec),
+  );
+  if (designSystem) return true;
+  // A flat src/ of PascalCase components on a primitives library, as React Aria's starter has.
+  return (
+    Object.keys({ ...dependencies, ...pkg.peerDependencies }).some((n) => PRIMITIVES.test(n)) &&
+    listDir(path.join(dir, 'src')).some(
+      (e) => e.isFile() && /^[A-Z][A-Za-z0-9]*\.[jt]sx$/.test(e.name),
+    )
+  );
+}
+
+/**
+ * Whether the config file `file` sets `components`. A JavaScript or TypeScript config gives its
+ * fields only when run, so any mention counts. Broken JSON does not: `check` from the root
+ * reports it, once, without blocking the edit.
+ */
+function setsComponents(file) {
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return false;
+  }
+  if (!file.endsWith('.json')) return /\bcomponents\b/.test(text);
+  try {
+    return JSON.parse(text)?.components !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether `dir` holds a .tsx or .jsx file, at any depth outside node_modules. */
+function holdsComponent(dir) {
+  return listDir(dir).some((e) =>
+    e.isDirectory()
+      ? e.name !== 'node_modules' && holdsComponent(path.join(dir, e.name))
+      : /\.[jt]sx$/.test(e.name),
+  );
+}
+
+function listDir(dir) {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+/** A package name like a design system's (isDesignSystemName in src/detect.ts): @acme/ui, acme-ui. */
+function isDesignSystemName(name) {
+  const base = name.slice(name.lastIndexOf('/') + 1);
+  return (
+    /^(?:ui|ui-kit|uikit|ui-react|react-ui|design-system|ds|components|primitives)$/.test(base) ||
+    /-(?:ui|ui-kit|design-system)$/.test(base)
+  );
+}
+
+/**
+ * Whether the dependency `name` of `dir` is a workspace package: `workspace:` in its version, or
+ * linked into node_modules from outside one. Zero config reads only those, not installed packages.
+ */
+function isWorkspacePackage(dir, name, spec) {
+  if (typeof spec === 'string' && spec.startsWith('workspace:')) return true;
+  try {
+    const linked = fs.realpathSync(path.join(dir, 'node_modules', name));
+    return !path.relative(fs.realpathSync(dir), linked).split(path.sep).includes('node_modules');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A monorepo root, as `check` reads one (isWorkspaceRoot in src/detect.ts): a pnpm-workspace.yaml
+ * whose `packages` name more than the root, `workspaces` in package.json, an nx.json, or a
+ * lerna.json with `packages`. A pnpm-workspace.yaml with settings alone is a single app's.
+ */
+function isWorkspaceRoot(dir) {
+  const beyondRoot = (p) =>
+    !p.startsWith('!') && path.posix.normalize(p.replace(/\\/g, '/').replace(/\/+$/, '')) !== '.';
+  if (pnpmPackages(dir).some(beyondRoot)) return true;
+  if (fs.existsSync(path.join(dir, 'nx.json'))) return true;
+  if (readJson(path.join(dir, 'package.json'))?.workspaces !== undefined) return true;
+  return Array.isArray(readJson(path.join(dir, 'lerna.json'))?.packages);
+}
+
+/** The `packages` list of the pnpm-workspace.yaml in `dir`, block or flow style, as `check` reads it. */
+function pnpmPackages(dir) {
+  let text;
+  try {
+    text = fs.readFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'utf8');
+  } catch {
+    return [];
+  }
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const start = lines.findIndex((line) => /^(['"]?)packages\1\s*:/.test(line));
+  if (start === -1) return [];
+  const uncomment = (s) => s.replace(/(?:^|\s)#.*$/, '').trim();
+  const unquote = (s) => s.trim().replace(/^(['"])(.*)\1$/, '$2');
+  const inline = uncomment(lines[start].slice(lines[start].indexOf(':') + 1));
+  if (inline.startsWith('[')) {
+    let flow = inline;
+    for (let i = start + 1; !flow.includes(']') && i < lines.length; i++) {
+      flow += ` ${uncomment(lines[i])}`;
+    }
+    const end = flow.indexOf(']');
+    return flow
+      .slice(1, end === -1 ? undefined : end)
+      .split(',')
+      .map(unquote)
+      .filter(Boolean);
+  }
+  const items = [];
+  for (const line of lines.slice(start + 1)) {
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const item = /^\s*-\s*(.*)$/.exec(line);
+    if (item) items.push(unquote(uncomment(item[1])));
+    // The next top-level key ends the list.
+    else if (/^\S/.test(line)) break;
+  }
+  return items.filter(Boolean);
+}
+
+function readJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return undefined;
   }
 }
 

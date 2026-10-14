@@ -60,7 +60,7 @@ describe('Apply all, on each draft', () => {
     });
     expect(rows).toEqual([
       ['danger-zone', 'Apply 9 fixes', '2 need a decision'],
-      ['delete-dialog', 'Apply 10 fixes', '0 need a decision'],
+      ['delete-dialog', 'Apply 7 fixes', '0 need a decision'],
       ['snippet', 'Apply 5 fixes', '1 needs a decision'],
       ['members', 'Apply 0 fixes', '0 need a decision'],
     ]);
@@ -75,7 +75,7 @@ describe('Apply all, on each draft', () => {
       });
     expect(summaries).toEqual([
       'Applied 9 fixes. 2 need a decision.',
-      'Applied 10 fixes. No findings left.',
+      'Applied 7 fixes. No findings left.',
       'Applied 5 fixes. 1 needs a decision.',
     ]);
   });
@@ -94,7 +94,7 @@ describe('Apply all, on each draft', () => {
         fixes: 9,
         clicks: ['variant="default"', 'Move `marginTop: 6` to className `mt-1.5`'],
       },
-      'delete-dialog': { fixes: 10, clicks: [] },
+      'delete-dialog': { fixes: 7, clicks: [] },
       snippet: { fixes: 5, clicks: ['Remove `bg-blue-600` (`variant` sets the background)'] },
       members: { fixes: 0, clicks: [] },
     });

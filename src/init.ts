@@ -10,7 +10,12 @@ import {
   type ResolvedConfig,
 } from './config.js';
 import { componentFiles, tokenFiles } from './design-system.js';
-import { declaredConfig, isDesignSystemName, PACKAGE_FIELD } from './detect.js';
+import {
+  declaredConfig,
+  type DesignSystemPackage,
+  isDesignSystemName,
+  PACKAGE_FIELD,
+} from './detect.js';
 import { matchesGlob, relativePath } from './util/paths.js';
 import { NAME } from './version.js';
 import { loadTarget } from './workspace.js';
@@ -97,6 +102,8 @@ export async function init(
   const relative = (abs: string) => relativePath(root, abs);
   // An app on a design-system package that declares its config needs none of its own.
   const inherited = options.force ? undefined : config.designSystemPackage;
+  // With --force, the config written here is read instead of the package's.
+  const replaced = options.force ? config.designSystemPackage : undefined;
   if (inherited) {
     notes.push(
       `This project takes on the config ${inherited.name} declares in its package.json (${relativePath(io.cwd, inherited.config) || inherited.config}), so it needs none of its own; nothing was written. Pass --force to write one, which is read instead.`,
@@ -136,12 +143,20 @@ export async function init(
   } else if ((await componentFiles(config)).length) {
     // Nothing detected, but the default folders hold components (`components/ui` without a
     // components.json), as `check` and `inspect` find them: spell out the ones that match.
+    // With --force in an app, they are the folders a design-system package's config names.
+    const declared = replaced && config.configured;
     const matching: string[] = [];
     for (const glob of config.components) {
       if ((await componentFiles({ ...config, components: [glob] })).length) matching.push(glob);
     }
-    notes.push(`Found the design system in the default folders: ${matching.join(', ')}.`);
+    notes.push(
+      declared
+        ? `Found the design system through the config ${replaced.name} declares: ${matching.join(', ')}.`
+        : `Found the design system in the default folders: ${matching.join(', ')}.`,
+    );
     file.components = matching;
+    // Imported as the package's config says, not by a path into it.
+    if (declared && config.importPath) file.importPath = config.importPath;
     const tokens = (await tokenFiles(config)).map(relative);
     if (tokens.length) file.tokens = tokens;
   } else {
@@ -191,10 +206,16 @@ export async function init(
     fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
     written.push(CONFIG_FILE);
   }
+  if (replaced) {
+    // What the project reads now, next to what it took on.
+    const own = (await loadTarget({ ...configOptions, config: undefined })).config;
+    notes.push(await replacedNote(replaced, config, own, io.cwd));
+  }
+  let registry: Unshipped | undefined;
   if (designSystem && manifest && name) {
     written.push(...declarePackage(root, manifest, name, options.force, notes));
-    const shipped = await unshipped(config, manifest.json);
-    if (shipped) notes.push(shipped);
+    registry = await unshipped(config, manifest.json);
+    if (registry) notes.push(...registry.notes);
   }
   for (const note of notes) io.stdout(note);
   if (written.length) {
@@ -277,7 +298,9 @@ export async function init(
     commit.length > 1 ? `${commit.slice(0, -1).join(', ')} and ${commit.at(-1) ?? ''}` : commit[0];
   io.stdout(
     designSystem && name
-      ? `Next: commit ${files}. An app that depends on ${name} now finds it with no config of its own: run \`npx ${NAME} inspect\` in one to see it, and give its team ${GUIDE_FILE}.`
+      ? registry
+        ? `Next: commit ${files}. A workspace app that depends on ${name} now finds it with no config of its own: run \`npx ${NAME} inspect\` in one to see it, and give its team ${GUIDE_FILE}. An app that installs ${name} from a registry ${registry.next}.`
+        : `Next: commit ${files}. An app that depends on ${name} now finds it with no config of its own: run \`npx ${NAME} inspect\` in one to see it, and give its team ${GUIDE_FILE}.`
       : `Next: ${files ? `commit ${files}, and ` : ''}run \`npx ${NAME} check . --format github --require-design-system\` in CI.`,
   );
   return 0;
@@ -355,26 +378,120 @@ function declarePackage(
   return written;
 }
 
+/** What apps that install a design-system package from a registry miss, for its team. */
+interface Unshipped {
+  notes: string[];
+  /** Ends the next steps: `An app that installs @acme/ui from a registry …`. */
+  next: string;
+}
+
 /**
  * What apps that install the package from a registry will not find: the component and token
- * files its `files` list leaves out of the published package. Undefined for a private package,
- * one without a `files` list (npm then ships everything), or when nothing is left out.
+ * files its `files` list leaves out of the published package, and those outside the package
+ * (`../tailwind-config/theme.css`), which an installed package's config cannot reach. Undefined
+ * for a private package, or when they find every file. Without a `files` list, npm publishes
+ * everything in the package.
  */
 async function unshipped(
   config: ResolvedConfig,
   json: Record<string, unknown>,
-): Promise<string | undefined> {
-  if (json.private === true || !Array.isArray(json.files)) return undefined;
-  const files = json.files as unknown[];
-  const relative = [...(await componentFiles(config)), ...(await tokenFiles(config))]
-    .map((f) => relativePath(config.root, f))
-    .filter((f) => !f.startsWith('../'));
-  const missing = relative.filter((f) => !ships(files, f));
-  if (!missing.length) return undefined;
-  const folders = [
-    ...new Set(missing.map((f) => (f.includes('/') ? `${f.slice(0, f.indexOf('/'))}/` : f))),
+): Promise<Unshipped | undefined> {
+  if (json.private === true) return undefined;
+  const name = typeof json.name === 'string' ? json.name : 'the package';
+  const files = Array.isArray(json.files) ? (json.files as unknown[]) : undefined;
+  const relative = (abs: string[]) => abs.map((f) => relativePath(config.root, f));
+  const components = relative(await componentFiles(config));
+  const tokens = relative(await tokenFiles(config));
+  const outside = (f: string) => f.startsWith('../');
+  const left = (list: string[]) =>
+    files ? list.filter((f) => !outside(f) && !ships(files, f)) : [];
+  const missing = { components: left(components), tokens: left(tokens) };
+  const away = { components: components.filter(outside), tokens: tokens.filter(outside) };
+  // With every component file left out, the component rules know no component in those apps.
+  const noComponents =
+    components.length > 0 &&
+    missing.components.length + away.components.length === components.length;
+  // `(3 component files and 1 token file). Those apps do not know the components or tokens in it…`
+  const lost = (lists: { components: string[]; tokens: string[] }, one: boolean) => {
+    const c = lists.components.length;
+    const t = lists.tokens.length;
+    const kinds = andList([
+      ...(c ? [count(c, 'component file')] : []),
+      ...(t ? [count(t, 'token file')] : []),
+    ]);
+    const what = andList([...(c ? ['components'] : []), ...(t ? ['tokens'] : [])], 'or');
+    const checks =
+      c && noComponents
+        ? `: they get no component, prop, variant or native-element checks, and \`${NAME} check --require-design-system\` fails in them`
+        : '';
+    return `(${kinds}). Those apps do not know the ${what} in ${one ? 'it' : 'them'}${checks}.`;
+  };
+
+  const notes: string[] = [];
+  const top = (f: string) => (f.includes('/') ? `${f.slice(0, f.indexOf('/'))}/` : f);
+  const folders = [...new Set([...missing.components, ...missing.tokens].map(top))];
+  if (folders.length) {
+    const one = folders.length === 1;
+    notes.push(
+      `Apps that install ${name} from a registry get only what "files" in package.json publishes, which leaves out ${andList(folders)} ${lost(missing, one)} Add ${one ? 'it' : 'them'} to "files" for them; workspace apps read the sources either way.`,
+    );
+  }
+  const beyond = [...away.components, ...away.tokens];
+  if (beyond.length) {
+    const one = beyond.length === 1;
+    notes.push(
+      `Apps that install ${name} from a registry read only the files in it, so they skip ${andList(beyond)}, outside the package ${lost(away, one)} Workspace apps read ${one ? 'it' : 'them'}. To give installed apps what ${one ? 'it holds' : 'they hold'}, keep a copy in the package, publish it, and name the copy in the config instead.`,
+    );
+  }
+  if (!notes.length) return undefined;
+  return {
+    notes,
+    next:
+      noComponents && missing.components.length
+        ? `gets no component checks until "files" publishes ${andList([...new Set(missing.components.map(top))])}`
+        : `does not read ${andList([...folders, ...beyond])}`,
+  };
+}
+
+/**
+ * Said when --force writes a config in an app that took on a design-system package's: the new
+ * one is read instead, and what it does not take from the package. `taken` is the config the
+ * app took on, `own` the one it reads now.
+ */
+async function replacedNote(
+  pkg: DesignSystemPackage,
+  taken: ResolvedConfig,
+  own: ResolvedConfig,
+  cwd: string,
+): Promise<string> {
+  const lacks = async (list: (c: ResolvedConfig) => Promise<string[]>) => {
+    const kept = new Set((await list(own)).map((f) => path.resolve(f)));
+    return (await list(taken)).some((f) => !kept.has(path.resolve(f)));
+  };
+  const components = await lacks(componentFiles);
+  const importPath = taken.importPath !== undefined && own.importPath === undefined;
+  const tokens = await lacks(tokenFiles);
+  const declared = relativePath(cwd, pkg.config) || pkg.config;
+  const replaced = `This project took on the config ${pkg.name} declares (${declared}); with --force it has one of its own, which is read instead, so ${pkg.name}'s rules and later changes to its config no longer reach it.`;
+  if (!components && !importPath && !tokens) return replaced;
+  const effects = andList([
+    ...(components ? [`does not know ${pkg.name}'s components`] : []),
+    ...(importPath && !components
+      ? [`does not match imports from ${pkg.name} to its components`]
+      : []),
+    ...(tokens ? [`does not read ${pkg.name}'s tokens`] : []),
+  ]);
+  // What the package's config spells out can be copied; what zero config found there cannot.
+  const fields = [
+    ...(components ? ['"components"'] : []),
+    ...(importPath || (components && taken.importPath !== undefined) ? ['"importPath"'] : []),
+    ...(tokens ? ['"tokens"'] : []),
   ];
-  return `Apps that install ${typeof json.name === 'string' ? json.name : 'the package'} from a registry get only what "files" in package.json publishes, which leaves out ${folders.join(', ')} (${count(missing.length, 'component or token file')}): they will not find those. Add ${folders.length === 1 ? 'it' : 'them'} to "files" for them; workspace apps read the sources either way.`;
+  const copy =
+    (!components || taken.configured === true) && (!tokens || taken.tokensDetected !== true)
+      ? `copy ${andList(fields)} from ${declared} into ${CONFIG_FILE}, or `
+      : '';
+  return `${replaced} It ${effects}: ${copy}delete ${CONFIG_FILE} to take on ${pkg.name}'s config again.`;
 }
 
 /** Whether npm's `files` list publishes `file`, a path relative to the package. */
@@ -439,4 +556,11 @@ function consumerGuide(name: string): string {
 
 function count(n: number, word: string): string {
   return `${n.toLocaleString('en-US')} ${n === 1 ? word : `${word}s`}`;
+}
+
+/** `a`, `a and b`, `a, b and c` (or `or`). */
+function andList(items: readonly string[], conjunction = 'and'): string {
+  return items.length > 1
+    ? `${items.slice(0, -1).join(', ')} ${conjunction} ${items.at(-1) ?? ''}`
+    : items.join('');
 }
