@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
-import { isWorkspaceRoot } from '../src/detect.js';
+import { isWorkspaceRoot, pnpmPackages, workspacePatterns } from '../src/detect.js';
 import { loadTarget } from '../src/workspace.js';
 import { fixture, TSCONFIG } from './helpers.js';
 
@@ -97,6 +97,50 @@ describe('a pnpm-workspace.yaml that lists no packages', () => {
     expect(isWorkspaceRoot(root('packages: [apps/*, packages/*]\n'))).toBe(true);
   });
 
+  it('is not a workspace root when its packages name only the root', () => {
+    const root = (yaml: string) =>
+      fixture({ 'package.json': json({ name: 'app' }), 'pnpm-workspace.yaml': yaml });
+    // pnpm 9's workaround for settings in a single app; pnpm 11 lists the root alone.
+    expect(isWorkspaceRoot(root(`packages:\n  - '.'\n${SETTINGS_ONLY}`))).toBe(false);
+    expect(isWorkspaceRoot(root("packages: ['./']\n"))).toBe(false);
+    expect(isWorkspaceRoot(root("packages:\n  - .\n  - '!apps/*'\n"))).toBe(false);
+    // The root and more, as onsystem's own pnpm-workspace.yaml has it.
+    expect(isWorkspaceRoot(root('packages:\n  - .\n  - examples/*\n  - site\n'))).toBe(true);
+  });
+
+  it('reads a packages key that is quoted or follows a byte order mark', () => {
+    expect(pnpmPackages('\uFEFFpackages:\n  - apps/*\n')).toEqual(['apps/*']);
+    expect(pnpmPackages('"packages":\n  - apps/*\n')).toEqual(['apps/*']);
+    expect(pnpmPackages("'packages': [apps/*, packages/*]\n")).toEqual(['apps/*', 'packages/*']);
+    expect(pnpmPackages('"packages\':\n  - apps/*\n')).toEqual([]);
+    const root = (yaml: string) =>
+      fixture({ 'package.json': json({ name: 'root' }), 'pnpm-workspace.yaml': yaml });
+    expect(isWorkspaceRoot(root('\uFEFFpackages:\n  - apps/*\n'))).toBe(true);
+    expect(isWorkspaceRoot(root('"packages":\n  - apps/*\n'))).toBe(true);
+  });
+
+  it('leaves package.json workspaces to declare the packages', async () => {
+    const root = fixture({
+      'package.json': json({ name: 'root', private: true, workspaces: ['packages/*'] }),
+      'pnpm-workspace.yaml': SETTINGS_ONLY,
+      'packages/ui/package.json': json({ name: '@acme/ui' }),
+      'packages/ui/src/button.tsx':
+        'export function Button(props: { variant?: "default" | "outline" }) { return <button /> }\n',
+      'packages/web/package.json': json({ name: 'web' }),
+    });
+    expect(isWorkspaceRoot(root)).toBe(true);
+    expect(workspacePatterns(root)).toEqual({
+      include: ['packages/*'],
+      exclude: [],
+      source: 'package.json workspaces',
+    });
+    const { workspace } = await loadTarget({ root });
+    expect(workspace?.source).toBe('package.json workspaces');
+    const out = await inspect(root);
+    expect(out).toContain('(package.json workspaces)');
+    expect(out).not.toContain('pnpm-workspace.yaml');
+  });
+
   it('leaves a single app one project, read as it is without the file', async () => {
     const root = fixture(NEXT_APP);
     const without = await inspect(root);
@@ -133,7 +177,7 @@ describe('a pnpm-workspace.yaml that lists no packages', () => {
     });
     const without = await inspect(root);
     expect(without).toContain(
-      'config   node_modules/@acme/kit/onsystem.config.json (declared by @acme/kit)',
+      `config   ${path.join('node_modules', '@acme', 'kit', 'onsystem.config.json')} (declared by @acme/kit)`,
     );
     expect(without).toContain('detected installed package @acme/kit');
 
