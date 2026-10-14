@@ -22,11 +22,12 @@ export function Headline({ benchmark }: { benchmark: Benchmark }) {
   const h = headline(benchmark);
   return (
     <>
-      design-system rule violations per run went from{' '}
-      <strong className="font-semibold text-fg">{h.from}</strong> to{' '}
+      design-system rule violations per run, as onsystem {h.version}&apos;s own check counts them,
+      went from <strong className="font-semibold text-fg">{h.from}</strong> to{' '}
       <strong className="font-semibold text-cyan">{h.to}</strong> with onsystem&apos;s skill, MCP
-      server and hook, with no change in <InlineCode>tsc</InlineCode> pass rate or cost per run (
-      {h.runs} runs, {h.models} models, {h.providers} providers, {h.repos} repositories)
+      server and hook, with no measurable change in <InlineCode>tsc</InlineCode> pass rate or cost
+      per run ({h.perArm} runs per arm, {h.models} models, {h.providers} providers, {h.repos}{' '}
+      repositories)
     </>
   );
 }
@@ -74,7 +75,8 @@ export function HeadlineStats({ benchmark }: { benchmark: Benchmark }) {
     <dl className="grid gap-4 md:grid-cols-3">
       <Stat
         id="violations"
-        label="Rule violations per run"
+        // The scorer's name, as tsc's is on the next card: the tool under test counts these.
+        label={`onsystem ${benchmark.onsystem} errors per run`}
         before={perRun(none.onsystemErrors.value)}
         after={perRun(all.onsystemErrors.value)}
         note={`difference ${signedPerRun(d.onsystemErrors.value)} ${signedPerRunInterval(d.onsystemErrors)}; without onsystem ${perRunInterval(none.onsystemErrors)}`}

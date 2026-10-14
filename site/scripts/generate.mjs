@@ -432,10 +432,18 @@ for (const arm of ARM_NAMES) pooled('all models', arm);
 const v2RunCount = ARM_NAMES.reduce((n, arm) => n + pooled('all models', arm).runs, 0);
 
 // The headline, checked here so the page cannot state it once the results stop saying it:
-// fewer errors with all three parts, no change in tsc passes (the paired difference's interval
-// holds 0), and the same cost per run (inside the interval of the run without onsystem).
+// fewer errors with all three parts, no measurable change in tsc passes (the paired
+// difference's interval holds 0), the same cost per run (inside the interval of the run
+// without onsystem), and the same number of runs in every arm (it says how many per arm).
 const none = pooled('all models', 'none');
 const all = pooled('all models', 'all');
+for (const arm of ARM_NAMES) {
+  assert.equal(
+    pooled('all models', arm).runs,
+    none.runs,
+    `${arm} should have as many runs as none`,
+  );
+}
 const allDelta = v2Results.deltas.find((d) => d.model === 'all models' && d.arm === 'all');
 assert.ok(allDelta, 'results.json has no paired difference for all models, all');
 assert.ok(all.onsystemErrors.value < none.onsystemErrors.value, 'all should have fewer errors');

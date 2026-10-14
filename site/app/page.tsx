@@ -10,7 +10,7 @@ import { InstallPanel, StarButton } from '@/components/install';
 import { LoopDemo } from '@/components/loop-demo';
 import { InlineMarkdown } from '@/components/markdown';
 import { Eyebrow, InlineCode, Section, SubSection, TextLink } from '@/components/section';
-import { headline } from '@/lib/benchmark';
+import { headline, headlineShort } from '@/lib/benchmark';
 import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
 import { formatJson, inline } from '@/lib/format-json';
 import { pageMetadata } from '@/lib/metadata';
@@ -132,10 +132,10 @@ function Hero() {
                 href="/benchmark"
                 className="group text-sm font-medium text-fg-soft transition-colors hover:text-fg"
               >
-                {`Rule violations per run: ${result.from} → ${result.to} over ${result.runs} `}
+                {`${headlineShort(benchmark)} (${result.perArm} runs per arm, ${result.models} `}
                 {/* The arrow stays with the last word when the line wraps. */}
                 <span className="whitespace-nowrap">
-                  runs
+                  models)
                   <ArrowRightIcon className="ml-1.5 inline size-4 -translate-y-px text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
                 </span>
               </Link>
@@ -341,17 +341,16 @@ function RealCodebases() {
           <p>
             <InlineMarkdown text={intro} />
           </p>
+          {/* No false-positive rate until a sample can give one: test/claims.test.ts checks. */}
           <p className="mt-3">
-            How often it is wrong is measured, not guessed: the{' '}
-            <TextLink href={repoLink('corpus', 'tree')}>corpus</TextLink> runs{' '}
-            <InlineCode>check</InlineCode> on {corpus.repos} public repositories pinned by commit (
-            {corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct findings) and
-            compares the findings with labels. In a random sample of {corpus.sample},{' '}
-            {corpus.truePositives} are clearly right, {corpus.debatable} debatable and{' '}
-            {corpus.falsePositives} false positives (
-            {((corpus.falsePositives / corpus.sample) * 100).toFixed(1)}%); weighted by run and
-            rule, about {(corpus.weightedRate * 100).toFixed(1)}% of all findings are false
-            positives.
+            How often it is wrong: the <TextLink href={repoLink('corpus', 'tree')}>corpus</TextLink>{' '}
+            runs <InlineCode>check</InlineCode> on {corpus.repos} public repositories pinned by
+            commit ({corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct findings)
+            and compares the findings with labels made by an AI reviewer. Those labels do not give a
+            false-positive rate for all findings yet: the runs and rules they cover hold under half
+            of the findings, and most of the false positives they found have been fixed, so what is
+            left under-counts them. The rate will come from a fresh seeded sample, published with
+            its confidence interval and who labelled it.
           </p>
         </>
       }

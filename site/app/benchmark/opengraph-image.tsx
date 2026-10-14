@@ -1,13 +1,12 @@
 import { ImageResponse } from 'next/og';
 
-import { ARM_LABELS, count, perRun, row } from '@/lib/benchmark';
+import { ARM_LABELS, headline, headlineShort, perRun, row } from '@/lib/benchmark';
 import { benchmark } from '@/lib/data';
 import { C, ogFonts, PageCard, Panel } from '@/lib/og';
 
-const none = row(benchmark, 'all models', 'none');
-const all = row(benchmark, 'all models', 'all');
+const h = headline(benchmark);
 
-export const alt = `The onsystem benchmark: design-system rule violations per run went from ${perRun(none.onsystemErrors.value)} to ${perRun(all.onsystemErrors.value)} with onsystem's skill, MCP server and hook, over ${count(benchmark.runs)} runs.`;
+export const alt = `The onsystem benchmark: design-system rule violations per run, as onsystem ${h.version}'s own check counts them, went from ${h.from} to ${h.to} with onsystem's skill, MCP server and hook, over ${h.perArm} runs per arm.`;
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -19,11 +18,13 @@ export default async function Image() {
     <PageCard
       {...size}
       eyebrow={`Benchmark · ${benchmark.date}`}
-      title={`Rule violations per run: ${perRun(none.onsystemErrors.value)} → ${perRun(all.onsystemErrors.value)}`}
-      lead={`With onsystem's skill, MCP server and hook. No change in tsc pass rate or cost per run. ${count(benchmark.runs)} runs, ${String(benchmark.models.length)} models, ${String(benchmark.providers.length)} providers, ${String(benchmark.repos.length)} repositories.`}
+      title={headlineShort(benchmark)}
+      lead={`Counted by onsystem's own check, without it and with its skill, MCP server and hook. No measurable change in tsc pass rate or cost per run. ${h.perArm} runs per arm, ${h.models} models, ${h.providers} providers, ${h.repos} repositories.`}
       aside={
         <Panel>
-          <span style={{ color: C.subtle, fontSize: 14 }}>rule violations per run, all models</span>
+          <span style={{ color: C.subtle, fontSize: 14 }}>
+            onsystem {h.version} errors per run, all models
+          </span>
           {benchmark.arms.map((arm) => {
             const value = row(benchmark, 'all models', arm).onsystemErrors.value;
             return (
