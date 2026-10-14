@@ -448,12 +448,12 @@ describe('the rest of the site', () => {
     expect(home).toContain('href="/benchmark"');
   });
 
-  it('says on the home page’s link whose count the headline is, and over how many runs', () => {
+  it('links it from the home page’s first screen with no figure, only its size', () => {
     const home = renderToStaticMarkup(createElement(Home));
-    // The first link to /benchmark is the one under the hero's buttons.
+    // The first link to /benchmark is the one in the first screen's proof row.
     const link = /<a[^>]*href="\/benchmark"[^>]*>([\s\S]*?)<\/a>/.exec(home)?.[1] ?? '';
     expect(text(link)).toBe(
-      `onsystem ${version} errors per run: 0.85 → 0.00 (${String(none.runs)} runs per arm, ${String(modelIds.length)} models)`,
+      `Benchmark: ${runs.toLocaleString('en-US')} agent runs, ${String(modelIds.length)} models`,
     );
   });
 
