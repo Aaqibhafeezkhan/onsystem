@@ -606,12 +606,12 @@ export default function BenchmarkPage() {
             <Prose>
               {/* What the labels say about the headline: test/benchmark.test.ts checks it. */}
               <p data-labels="scope" className="mt-5">
-                With {perArm} files per arm, these labels are too few to confirm the headline either
-                way. Every violation the labeller counted in the hook and all arms is a Tailwind
-                palette color in dub, where onsystem {benchmark.onsystem} found no color tokens to
-                check it against; releases after 0.6.0 read dub&apos;s tokens from its shared
-                Tailwind config (<TextLink href={PR_107}>#107</TextLink>). Outside dub, it counted
-                violations only in files written without onsystem.
+                These labels are too few to confirm the headline either way. Every violation the
+                labeller counted in the hook and all arms is a Tailwind palette color in dub, where
+                onsystem {benchmark.onsystem} found no color tokens to check it against;{' '}
+                <TextLink href={PR_107}>#107</TextLink>, merged after the 0.6.0 release, makes
+                onsystem read dub&apos;s tokens from its shared Tailwind config. Outside dub, the
+                labeller counted violations only in files written without onsystem.
               </p>
               <p data-labels="agreement" className="mt-3">
                 Per file, onsystem and the labeller both found a problem in {labels.agreement.both},
@@ -696,9 +696,10 @@ export default function BenchmarkPage() {
                           {repo.name === 'dub' && (
                             <>
                               {' '}
-                              That is what onsystem {benchmark.onsystem} found; releases after 0.6.0
-                              read dub&apos;s tokens from its shared Tailwind config (
-                              <TextLink href={PR_107}>#107</TextLink>).
+                              That is what onsystem {benchmark.onsystem} found;{' '}
+                              <TextLink href={PR_107}>#107</TextLink>, merged after the 0.6.0
+                              release, makes onsystem read dub&apos;s tokens from its shared
+                              Tailwind config.
                             </>
                           )}
                         </td>

@@ -438,10 +438,11 @@ const v2RunCount = ARM_NAMES.reduce((n, arm) => n + pooled('all models', arm).ru
 const none = pooled('all models', 'none');
 const all = pooled('all models', 'all');
 for (const arm of ARM_NAMES) {
+  const { runs } = pooled('all models', arm);
   assert.equal(
-    pooled('all models', arm).runs,
+    runs,
     none.runs,
-    `${arm} should have as many runs as none`,
+    `${arm} has ${String(runs)} runs and none has ${String(none.runs)}: the headline quotes runs per arm (headline().perArm in lib/benchmark.ts, and every caller that prints it), so reword those before changing this check`,
   );
 }
 const allDelta = v2Results.deltas.find((d) => d.model === 'all models' && d.arm === 'all');

@@ -239,17 +239,28 @@ describe('/benchmark', () => {
     expect(outside('none')).toBeGreaterThan(0);
     for (const arm of arms.slice(1)) expect(outside(arm), arm).toBe(0);
     expect(text(/<p data-labels="scope"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '')).toBe(
-      `With ${String(perArm)} files per arm, these labels are too few to confirm the headline either way. Every violation the labeller counted in the hook and all arms is a Tailwind palette color in dub, where onsystem ${version} found no color tokens to check it against; releases after 0.6.0 read dub's tokens from its shared Tailwind config (#107). Outside dub, it counted violations only in files written without onsystem.`,
+      `These labels are too few to confirm the headline either way. Every violation the labeller counted in the hook and all arms is a Tailwind palette color in dub, where onsystem ${version} found no color tokens to check it against; #107, merged after the 0.6.0 release, makes onsystem read dub's tokens from its shared Tailwind config. Outside dub, the labeller counted violations only in files written without onsystem.`,
     );
   });
 
-  it('says that onsystem 0.5.0 found no color tokens in dub, and that later releases do', () => {
+  it('says that onsystem 0.5.0 found no color tokens in dub, and that #107, merged since, reads them', () => {
     // The repositories table's row for dub.
     const dub = /<tr>(?:(?!<\/tr>)[\s\S])*?>dubinc\/dub<[\s\S]*?<\/tr>/.exec(html);
     expect(text(dub?.[0] ?? '')).toContain(
-      `no color tokens found, so the color rules stay quiet here and the component, prop and variant rules do the work. That is what onsystem ${version} found; releases after 0.6.0 read dub's tokens from its shared Tailwind config (#107).`,
+      `no color tokens found, so the color rules stay quiet here and the component, prop and variant rules do the work. That is what onsystem ${version} found; #107, merged after the 0.6.0 release, makes onsystem read dub's tokens from its shared Tailwind config.`,
     );
     expect(dub?.[0]).toContain('href="https://github.com/dgesteves/onsystem/pull/107"');
+    // "Merged after the 0.6.0 release": 0.6.0's notes do not have it, and it is a pending
+    // changeset or in a later release's notes.
+    const root = path.join(import.meta.dirname, '../..');
+    const releases = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8').split(/^## /m);
+    const at = releases.findIndex((section) => section.startsWith('0.6.0\n'));
+    expect(at).toBeGreaterThan(0);
+    expect(releases[at]).not.toContain('/pull/107)');
+    expect(
+      fs.existsSync(path.join(root, '.changeset/shared-tailwind-config.md')) ||
+        releases.slice(1, at).some((section) => section.includes('/pull/107)')),
+    ).toBe(true);
   });
 
   it('says that a chart token passes for a status color in onsystem’s count', () => {

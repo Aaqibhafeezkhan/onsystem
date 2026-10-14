@@ -19,7 +19,7 @@ export default async function Image() {
       {...size}
       eyebrow={`Benchmark · ${benchmark.date}`}
       title={headlineShort(benchmark)}
-      lead={`Counted by onsystem's own check, without it and with its skill, MCP server and hook. No measurable change in tsc pass rate or cost per run. ${h.perArm} runs per arm, ${h.models} models, ${h.providers} providers, ${h.repos} repositories.`}
+      lead={`Counted by onsystem's own check, in runs without onsystem and with its skill, MCP server and hook. No measurable change in tsc pass rate or cost per run. ${h.perArm} runs per arm, ${h.models} models, ${h.providers} providers, ${h.repos} repositories.`}
       aside={
         <Panel>
           <span style={{ color: C.subtle, fontSize: 14 }}>
