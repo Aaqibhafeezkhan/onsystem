@@ -477,7 +477,9 @@ function fromComponentsJson(
     const pkgDir = name ? packages.find(name) : undefined;
     const pkg = pkgDir ? readJson(path.join(pkgDir, 'package.json')) : undefined;
     if (!name || !pkgDir || !pkg) {
-      note(`the ui alias ${ui} resolves through neither tsconfig paths nor a workspace package`);
+      // Name the config whose paths were read: jsconfig.json in a JavaScript app.
+      const from = project.configFile ? path.basename(project.configFile) : 'tsconfig';
+      note(`the ui alias ${ui} resolves through neither ${from} paths nor a workspace package`);
       return undefined;
     }
     imports = exportMappings(root, pkgDir, pkg);
