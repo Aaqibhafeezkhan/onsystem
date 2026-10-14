@@ -70,57 +70,110 @@ describe('the README', () => {
     }
   });
 
-  it('quotes the false-positive rate the corpus snapshot and labels give', () => {
+  // The corpus paragraph: what was checked, what the labels cover, and a false-positive rate only
+  // when a sample can give one for all findings.
+  const corpus = () => {
     const labels = JSON.parse(read('corpus/labels.json')) as Label[];
     const snapshot = JSON.parse(read('corpus/snapshot.json')) as Snapshot;
     const repos = JSON.parse(read('corpus/repos.json')) as Repos;
+    const random = labels.filter((l) => l.sample === 'random');
     // The random sample, among the findings the snapshot says are still reported.
-    const sample = labels.filter((l) => l.sample === 'random' && snapshot.labels[labelKey(l)]);
-    const fp = sample.filter((l) => l.verdict === 'FP').length;
-    const debatable = sample.filter((l) => l.verdict === 'D').length;
-    const right = sample.filter((l) => l.verdict === 'TP').length;
+    const sample = random.filter((l) => snapshot.labels[labelKey(l)]);
     // A run with a config of its own checks the same files as another run: not counted twice.
     const rechecks = new Set(
       repos.repos.flatMap((r) => r.runs.filter((run) => run.config).map((run) => run.name)),
     );
     let distinct = 0;
-    // Weighted by each run's and rule's share of the findings, as scripts/corpus.mjs reports it.
+    // Distinct findings in a run and rule with at least one label in the sample.
     let covered = 0;
-    let weighted = 0;
     let unknown = 0;
     let unknownInFlowise = 0;
     // A run from a monorepo root counts only the findings it adds to the runs from its projects.
     for (const [run, { rules, added }] of Object.entries(snapshot.runs)) {
       for (const [rule, counts] of Object.entries(added ?? rules)) {
         const n = counts.errors + counts.warnings;
-        if (!rechecks.has(run)) distinct += n;
+        if (!rechecks.has(run)) {
+          distinct += n;
+          if (sample.some((l) => l.run === run && l.rule === rule)) covered += n;
+        }
         if (/^no-unknown-(component|prop|variant)$/.test(rule)) {
           unknown += n;
           if (run === 'flowise-ui') unknownInFlowise += n;
         }
-        const stratum = sample.filter((l) => l.run === run && l.rule === rule);
-        if (!stratum.length) continue;
-        covered += n;
-        weighted += (n * stratum.filter((l) => l.verdict === 'FP').length) / stratum.length;
       }
     }
-    const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+    return { snapshot, repos, random, sample, distinct, covered, unknown, unknownInFlowise };
+  };
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  // The paragraph's percentages: the coverage it states, and any rate.
+  const paragraph = /\*\*How often it is wrong\.\*\*.*/.exec(readme)?.[0] ?? '';
+
+  it('quotes the corpus size and how much of it the labelled sample covers', () => {
+    const { snapshot, repos, random, sample, distinct, covered, unknown, unknownInFlowise } =
+      corpus();
     const text = readme.replace(/\s+/g, ' ');
     expect(text).toContain(`on ${String(repos.repos.length)} public repositories pinned by commit`);
     expect(text).toContain(
       `${String(Object.keys(snapshot.runs).length)} runs, ${distinct.toLocaleString('en-US')} distinct findings`,
     );
     expect(text).toContain(
-      `In a random sample of ${String(sample.length)} findings, ${String(right)} are clearly right (${pct(right / sample.length)}), ${String(debatable)} are debatable and ${String(fp)} are false positives (${pct(fp / sample.length)})`,
+      `the runs and rules it has labels for hold ${pct(covered / distinct)} of them`,
     );
-    expect(text).toContain(`about ${pct(weighted / covered)} are false positives`);
+    // A fix that removes a finding takes its label out of the sample: most were false positives.
+    const fp = random.filter((l) => l.verdict === 'FP');
+    const fixed = fp.filter((l) => !sample.includes(l));
+    expect(text).toContain(
+      `${String(fixed.length)} of its ${String(fp.length)} false positives were fixed`,
+    );
     // Invented components, props and variants: MUI's Flowise has most of them.
     const unknownSample = sample.filter((l) => /^no-unknown-/.test(l.rule));
     expect(text).toContain(
       `those three rules have ${String(unknown)} findings in the corpus, ${String(unknownInFlowise)} of them in Flowise, an MUI app`,
     );
-    expect(text).toContain(`the ${String(unknownSample.length)} in the sample are all right`);
+    expect(text).toContain(`the ${String(unknownSample.length)} still in the sample are all right`);
     expect(unknownSample.every((l) => l.verdict === 'TP')).toBe(true);
+  });
+
+  it('quotes no false-positive rate until a random sample covers the findings and is intact', () => {
+    const { random, sample, distinct, covered } = corpus();
+    // A rate from the sample speaks only for the runs and rules it has labels for, so it needs
+    // labels where the findings are (at least 80% of them, as CONTRIBUTING.md says). And once
+    // the false positives a sample found are fixed, the labels left behind under-count them.
+    const coverage = covered / distinct;
+    const fixed = random.length - sample.length;
+    const state = `the random sample covers ${pct(coverage)} of ${distinct.toLocaleString('en-US')} distinct findings, and ${String(fixed)} of its ${String(random.length)} labels are no longer reported`;
+    console.info(`corpus labels: ${state}`);
+    const quotable = coverage >= 0.8 && fixed === 0;
+    // Any percentage besides the coverage is a rate. When one is quotable, test it here.
+    const rates = [...paragraph.matchAll(/\d+(?:\.\d+)?%/g)]
+      .map((m) => m[0])
+      .filter((p) => p !== pct(coverage));
+    expect(paragraph).not.toBe('');
+    expect(quotable ? [] : rates, `no rate to quote: ${state}`).toEqual([]);
+  });
+
+  it('says who made the corpus labels, and never that they were made by hand', () => {
+    // PR #98: the labels in corpus/labels.json were not all made by hand.
+    const files = [
+      'README.md',
+      'CONTRIBUTING.md',
+      'site/lib/faq.ts',
+      ...fs
+        .readdirSync(path.join(root, 'docs'))
+        .filter((file) => file.endsWith('.md'))
+        .map((file) => `docs/${file}`),
+    ];
+    const hits = files.flatMap((file) =>
+      read(file)
+        .split('\n')
+        .flatMap((line, i) =>
+          /hand[- ]label|label(?:l?ed)? by hand|human[- ]label/i.test(line)
+            ? [`${file}:${String(i + 1)}`]
+            : [],
+        ),
+    );
+    expect(hits).toEqual([]);
+    expect(paragraph).toContain('labels made by an AI reviewer');
   });
 
   it('quotes the benchmark results in bench/agents', () => {
