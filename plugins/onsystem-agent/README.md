@@ -15,7 +15,7 @@ There is no hook: the format has none. The [Claude Code plugin](../onsystem) che
 
 ## What data it touches
 
-Everything runs on your machine. The server reads the project's component files, stylesheets, token files, docs, `package.json`, `tsconfig` and config file, and writes only its cache. It makes no network requests and no model calls, needs no API key, and sends nothing anywhere; npx downloads the package from the npm registry the first time.
+Everything runs on your machine. The server reads the project's component files, stylesheets, token files, docs, `package.json`, `tsconfig` and config file, and writes only its cache. It makes no network requests and no model calls, needs no API key, and sends nothing anywhere. npx does: each time it starts the server, it asks the npm registry about the package, and downloads it the first time and on each new version. Offline, it starts the server from npm's cache only after npm gives up on the registry, over a minute later.
 
 ## Install
 
