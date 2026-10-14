@@ -15,7 +15,7 @@ import { slug } from '@/components/markdown-blocks';
 import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import index from '@/generated/ask-index.json';
-import { ASK_BUDGET, askCount, askEnabled } from '@/lib/ask';
+import { ASK_BUDGET, askCount, askEnabled, MCP_TOOLS } from '@/lib/ask';
 import { ruleCatalog } from '@/lib/data';
 import { DOCS_MCP } from '@/lib/docs-mcp';
 import { FAQ } from '@/lib/faq';
@@ -117,7 +117,10 @@ async function rpc(
   );
   const text = await response.text();
   const json = text.trimStart().startsWith('{') ? text : (/^data: (.*)$/m.exec(text)?.[1] ?? '');
-  return { status: response.status, body: JSON.parse(json) as { result: RpcResult } };
+  return {
+    status: response.status,
+    body: JSON.parse(json) as { result: RpcResult; error?: { code: number; message: string } },
+  };
 }
 
 /** A 2026-07-28 request: no initialize, and the version and the client in every `_meta`. */
@@ -204,10 +207,54 @@ describe('/api/mcp', () => {
     });
   });
 
-  it('lists search, fetch and list_pages', async () => {
+  it('counts no call to a tool it does not have, and logs none of the name', async () => {
+    const long = 'x'.repeat(20_000);
+    const personal = 'how do I reset my password for jane@example.com';
+    const answers = [
+      await rpc('tools/call', { name: long, arguments: {} }),
+      await rpc('tools/call', { name: personal, arguments: {} }),
+      await modern('tools/call', { name: personal, arguments: {} }),
+      await rpc('tools/call', { name: 42, arguments: {} }),
+    ];
+    // ondocs answers each with a JSON-RPC error in a 200, before its rate limit, and runs nothing.
+    for (const { status, body } of answers) {
+      expect(status).toBe(200);
+      expect(body.error?.message).toMatch(/^Unknown tool/);
+    }
+    expect(counted()).toEqual([]);
+    const logged = JSON.stringify(info.mock.calls);
+    expect(logged).not.toContain('xxxxxxxx');
+    expect(logged).not.toContain('jane@example.com');
+  });
+
+  it('counts no tool call whose arguments are not an object, which runs nothing', async () => {
+    const { status, body } = await rpc('tools/call', { name: 'search', arguments: 'baseline' });
+    expect(status).toBe(200);
+    expect(body.result.isError).toBe(true);
+    expect(counted()).toEqual([]);
+    // ondocs reads a null `arguments` as {}, and runs the tool.
+    await rpc('tools/call', { name: 'list_pages', arguments: null });
+    expect(counted()).toEqual([
+      { counter: 'mcp', method: 'tools/call', tool: 'list_pages', client: null, status: 200 },
+    ]);
+  });
+
+  it('counts no connection it answers with an error', async () => {
+    // server/discover without MCP 2026-07-28's _meta is a method ondocs does not have.
+    const { status, body } = await rpc('server/discover', {
+      clientInfo: { name: 'test', version: '1.0.0' },
+    });
+    expect(status).toBe(200);
+    expect(body.error?.message).toMatch(/^Method not found/);
+    expect(counted()).toEqual([]);
+  });
+
+  it('lists search, fetch and list_pages, the only tool names it counts', async () => {
     const { body } = await rpc('tools/list');
     const names = (body.result.tools ?? []).map((tool) => tool.name);
     expect(names).toEqual(expect.arrayContaining(['search', 'fetch', 'list_pages']));
+    // A tool a new ondocs adds is counted once it is in MCP_TOOLS too.
+    expect(new Set(names)).toEqual(MCP_TOOLS);
   });
 
   it('finds the baseline section when searched for it', async () => {
@@ -282,9 +329,34 @@ describe('/api/ask', () => {
     expect(ASK_BUDGET.message).toContain(DOCS_MCP.url);
   });
 
-  it('logs a counter line for each answer, with the tokens it spent, and not the question', () => {
-    const source = fs.readFileSync(path.join(import.meta.dirname, '../lib/ask.ts'), 'utf8');
-    expect(source).toContain('onFinish: (event) => {');
+  it('logs a counter line for each answer it streams, and not the question', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    // Nothing in the docs matches, so ondocs says it does not know, without a model call.
+    const model = vi.fn(() => Promise.reject(new Error('No model calls in tests.')));
+    vi.stubGlobal('fetch', model);
+    const unanswerable = () =>
+      askRoute(
+        new Request(`${SITE_URL}/api/ask`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.10' },
+          body: JSON.stringify({ question: 'Does plugh frobnicate the xyzzy?' }),
+        }),
+      );
+    for (let asked = 0; asked < 2; asked++) {
+      const response = await unanswerable();
+      expect(response.status).toBe(200);
+      await response.text();
+    }
+    expect(model).not.toHaveBeenCalled();
+    expect(counted()).toEqual([
+      { counter: 'ask', cached: false, refused: true, lowConfidence: false, tokens: 0 },
+      // Asked again, it is answered from memory.
+      { counter: 'ask', cached: true, refused: true, lowConfidence: false, tokens: 0 },
+    ]);
+    expect(JSON.stringify(info.mock.calls)).not.toContain('xyzzy');
+  });
+
+  it('counts the tokens an answer and its follow-up spent, and leaves out the question', () => {
     const answer = {
       id: 'a1',
       question: 'How do I install it?',
