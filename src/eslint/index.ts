@@ -41,7 +41,14 @@ const designSystems = new Map<string, { version: string; ds: DesignSystem }>();
  */
 const passes = new WeakMap<SourceCode, { outcome: Outcome; reported: boolean }>();
 
-type Outcome = { result: CheckResult } | { skipped: true } | { error: string };
+/**
+ * A checked file's findings, with `fromSystem`: whether an import specifier in that file leads
+ * to the design system.
+ */
+type Outcome =
+  | { result: CheckResult; fromSystem: (specifier: string) => boolean }
+  | { skipped: true }
+  | { error: string };
 
 /** `settings.onsystem`: where the project and its config are, when finding them from ESLint's cwd is not right. */
 export interface Settings {
@@ -75,8 +82,11 @@ function run(cwd: string, file: string, text: string, settings: Settings): Outco
     designSystems.set(response.root, entry);
   }
   if (!entry) return { error: `no design system loaded for ${response.root}` };
-  const result = entry.ds.check(text, relativePath(entry.ds.root, file));
-  return result.skipped ? { skipped: true } : { result };
+  const { ds } = entry;
+  const relative = relativePath(ds.root, file);
+  const result = ds.check(text, relative);
+  if (result.skipped) return { skipped: true };
+  return { result, fromSystem: (specifier) => ds.lint.isDesignSystemImport(specifier, relative) };
 }
 
 /** The part of an ESLint AST node this file reads; JSX nodes are not in ESTree's types. */
@@ -88,11 +98,16 @@ interface AstNode {
 }
 
 /**
- * The name an edit gives a JSX tag when that name is not in scope there: `Button` for
- * `<button>` → `<Button>` in a file that does not import it. Applied, such a rename leaves a
- * file that does not compile.
+ * The name an edit gives a JSX tag when that name does not mean the component there: `Button`
+ * for `<button>` → `<Button>` in a file that does not import it, imports it as a type only, or
+ * imports another `Button` from outside the design system. Applied, such a rename leaves a file
+ * that does not compile.
  */
-function unboundRename(sourceCode: SourceCode, edit: TextEdit): string | undefined {
+function unboundRename(
+  sourceCode: SourceCode,
+  edit: TextEdit,
+  fromSystem: (specifier: string) => boolean,
+): string | undefined {
   // A lowercase name is an intrinsic element, never a binding.
   if (!edit.text.includes('.') && /^[a-z]/.test(edit.text)) return;
   const [start, end] = edit.range;
@@ -108,12 +123,29 @@ function unboundRename(sourceCode: SourceCode, edit: TextEdit): string | undefin
     scope;
     scope = scope.upper
   ) {
-    const variable = scope.set.get(name);
-    // An import or declaration, not a global of the environment (the DOM's `Image`), and a
-    // value: `import type { Button }` or `type Button = …` does not make <Button> compile.
-    if (variable?.defs.length && !variable.defs.every(typeOnly)) return;
+    // Types live apart from values: `import type { Button }` or `type Button = …` does not make
+    // <Button> compile, and a value further out is still the one the tag means. A global of the
+    // environment (the DOM's `Image`) has no definition at all.
+    const values = scope.set.get(name)?.defs.filter((def) => !typeOnly(def)) ?? [];
+    if (!values.length) continue;
+    // The innermost value of that name is what the tag means.
+    return values.some((def) => isComponent(def, fromSystem)) ? undefined : edit.text;
   }
   return edit.text;
+}
+
+/**
+ * Whether a value binding can be the component a rename names: an import from the design
+ * system, or a function, class, variable or parameter of the file. Not an import of the same
+ * name from elsewhere (`Table<TData>` from @tanstack/react-table without `type`, an app's own
+ * `Label`), nor an enum or a namespace.
+ */
+function isComponent(def: Scope.Definition, fromSystem: (specifier: string) => boolean): boolean {
+  if (def.type === 'ImportBinding') {
+    const source = (def.parent as { source?: { value?: unknown } } | null)?.source?.value;
+    return typeof source === 'string' && fromSystem(source);
+  }
+  return ['FunctionName', 'ClassName', 'Variable', 'Parameter'].includes(def.type);
 }
 
 /**
@@ -159,9 +191,10 @@ function createRule(id: RuleId, description: string): Rule.RuleModule {
             const fix: Rule.ReportFixer = (fixer) =>
               edits.map((e) => fixer.replaceTextRange(e.range, e.text));
             // `eslint --fix` and fix-on-save apply fixes unasked, so a rename to a component the
-            // file does not import yet is a suggestion: the message names the import to add.
+            // file does not import yet (or imports another thing of that name) is a suggestion:
+            // the message names the import to add.
             const unbound = edits
-              .map((e) => unboundRename(context.sourceCode, e))
+              .map((e) => unboundRename(context.sourceCode, e, outcome.fromSystem))
               .find((name) => name !== undefined);
             context.report({
               loc: {

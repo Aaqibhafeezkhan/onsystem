@@ -51,6 +51,10 @@ const APP = {
   'components/ui/textarea.tsx': dropIn('Textarea', 'textarea'),
   'components/ui/card.tsx': `${dropIn('Card', 'div')}${dropIn('CardHeader', 'div')}`,
   'components/ui/dialog.tsx': `export function Dialog(props: { children?: React.ReactNode }) {\n  return <>{props.children}</>\n}\n${dropIn('DialogContent', 'div')}`,
+  'components/ui/table.tsx': dropIn('Table', 'table'),
+  // The app's own modules, outside the design system, with names the design system also has.
+  'lib/grid/types.ts': `export interface Table<TData> {\n  getRows(): TData[]\n}\n`,
+  'components/issues/label.tsx': `export function Label(props: { name: string; color: string }) {\n  return <span style={{ color: props.color }}>{props.name}</span>\n}\n`,
   // What an agent writes before it knows the design system, with nothing imported.
   'app/sign-up.tsx': `export function SignUp() {
   return (
@@ -101,8 +105,39 @@ export function NewLabel(props: { onAdd?: (button: Button) => void }) {
   )
 }
 `,
-  // The components are imported: the renames are safe.
-  'app/upgrade.tsx': `import { Button } from "@/components/ui/button"
+  // A type of the same name imported from elsewhere, without `type` (@tanstack/react-table's
+  // `Table<TData>`): <Table> would not compile either.
+  'app/data-grid.tsx': `import { Table } from "@/lib/grid/types"
+
+export function DataGrid<TData extends { id: string }>(props: { table: Table<TData> }) {
+  return (
+    <table className="w-full">
+      <tbody>
+        {props.table.getRows().map((row) => (
+          <tr key={row.id}>
+            <td>{row.id}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+`,
+  // An app component of the same name (an issue-label chip), not the design system's Label:
+  // <Label htmlFor> would not compile either.
+  'app/edit-label.tsx': `import { Label } from "@/components/issues/label"
+
+export function EditLabel(props: { name: string; color: string }) {
+  return (
+    <form>
+      <Label name={props.name} color={props.color} />
+      <label htmlFor="label-name">Name</label>
+    </form>
+  )
+}
+`,
+  // The components are imported, by a relative path or an alias: the renames are safe.
+  'app/upgrade.tsx': `import { Button } from "../components/ui/button"
 import { Card, CardHeader } from "@/components/ui/card"
 
 export function Upgrade() {
@@ -173,6 +208,8 @@ describe('eslint --fix', () => {
         'app/billing.tsx',
         'app/save.tsx',
         'app/labels.tsx',
+        'app/data-grid.tsx',
+        'app/edit-label.tsx',
       ] as const) {
         expect(read(file)).toBe(APP[file]);
       }
@@ -182,8 +219,13 @@ describe('eslint --fix', () => {
 
   it('offers a rename to a component the file does not import as a suggestion', async () => {
     const root = fixture(APP, { nodeModules: true });
-    const [billing, labels, save, signUp] = await eslint(root, false).lintFiles([
+    const [billing, dataGrid, editLabel, labels, save, signUp] = await eslint(
+      root,
+      false,
+    ).lintFiles([
       'app/billing.tsx',
+      'app/data-grid.tsx',
+      'app/edit-label.tsx',
       'app/labels.tsx',
       'app/save.tsx',
       'app/sign-up.tsx',
@@ -208,6 +250,9 @@ describe('eslint --fix', () => {
     expect(renames(labels)).toEqual(
       ['Label', 'Button'].map((name) => suggested('prefer-design-system-component', name)),
     );
+    // The same name imported from outside the design system is not the component.
+    expect(renames(dataGrid)).toEqual([suggested('prefer-design-system-component', 'Table')]);
+    expect(renames(editLabel)).toEqual([suggested('prefer-design-system-component', 'Label')]);
     // The message names the import to add.
     expect(signUp?.messages[0]?.message).toContain(
       'Use <Label> (import { Label } from "@/components/ui/label")',
