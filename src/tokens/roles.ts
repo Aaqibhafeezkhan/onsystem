@@ -188,13 +188,26 @@ function roleKey(token: Token): string {
   return key === 'sidebar' ? 'background' : key.replace(/^sidebar-/, '');
 }
 
+/**
+ * First name segments of text colors, whatever follows: Dub's `content-muted` is
+ * its muted text, not a muted surface, and Material's `on-surface` is the text on one.
+ */
+const FOREGROUND_FAMILIES = new Set(['content', 'on']);
+
 /** What a token is for, from its name: shadcn/ui's conventions and common DTCG names. */
 function kindOf(key: string): Kind {
   const segments = key.split('-');
+  if (FOREGROUND_FAMILIES.has(segments[0] ?? '')) return 'foreground';
   for (const [kind, words] of KIND_WORDS) {
     if (segments.some((s) => words.includes(s))) return kind;
   }
   return 'other';
+}
+
+/** The role a token is made for, from its name (`text` for `content-muted`); undefined for `brand` or `destructive`. */
+export function tokenRole(token: Token): ColorRole | undefined {
+  const kind = kindOf(roleKey(token));
+  return kind === 'foreground' ? 'text' : kind === 'other' ? undefined : kind;
 }
 
 /** Tokens made for each role, in the order to prefer them when their values tie. */

@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import { propertyName } from '../../extract/cva.js';
 import {
+  colorDistance,
   findColorLiterals,
   formatDeltaE,
   isNamedColor,
@@ -11,12 +12,19 @@ import {
   type Oklch,
 } from '../../tokens/color.js';
 import type { ColorSuggestion } from '../../tokens/index.js';
-import { colorRole, scopesIn, type ColorRole, type ScopedFamily } from '../../tokens/roles.js';
+import {
+  colorRole,
+  scopesIn,
+  tokenRole,
+  type ColorRole,
+  type ScopedFamily,
+} from '../../tokens/roles.js';
 import { formatPx, lengthToPx } from '../../tokens/units.js';
 import { cssReference } from '../../tokens/usage.js';
 import type { Token } from '../../types.js';
 import { attributeName, literalValues, valueBranches, type JsxNode } from '../analyze.js';
 import type { Rule, RuleContext } from '../context.js';
+import { TAILWIND_PALETTE } from '../tailwind-palette.js';
 import {
   COLOR_PREFIXES,
   NEGATIVE_PREFIXES,
@@ -178,6 +186,7 @@ export const noHardcodedColor: Rule = {
             what: `\`${token.value}\` is Tailwind's default palette, not a design-system color`,
             color,
             tinted: !palette.gray,
+            palette: palette.key,
             prefix: palette.prefix,
             place: 'class',
             utility,
@@ -289,6 +298,8 @@ function reportColor(
     color: Oklch;
     /** A hue rather than a gray, when the source says so (`bg-sky-50` is blue, however pale). */
     tinted?: boolean;
+    /** The default-palette color the class names (`neutral-600`), whose shade a fix must keep. */
+    palette?: string;
     /** Tailwind prefix to build the replacement class with (`bg`, `text`, `border-t`). */
     prefix: string | undefined;
     /**
@@ -313,12 +324,24 @@ function reportColor(
     mode,
   });
   if (!suggestion) return;
-  const { match, nearest, reason, sameValue, hueOff } = suggestion;
+  const { match, nearest, reason, sameValue, hueOff, otherRole } = suggestion;
   const token = nearest.candidate.token;
 
   const cls = input.prefix && token.tailwind ? `${input.prefix}-${token.tailwind}` : undefined;
   const cssVar = cssReference(token);
   const close = match !== undefined;
+  // A palette class names a shade on a designed scale. A token closer to another shade of it
+  // (Dub's `content-default`, neutral-700, for `text-neutral-600`) would change the color, so it
+  // is suggested but not applied. One of the same shade is applied even when not exact: Tailwind
+  // v3's red-600 (#dc2626), which a v3 project's tokens copy, is ΔE 0.030 from v4's.
+  const shade =
+    close && input.palette && nearest.distance >= SAME_COLOR
+      ? nearestShade(
+          input.palette,
+          (mode && nearest.candidate.modes?.[mode]) || nearest.candidate.color,
+        )
+      : undefined;
+  const reshade = shade?.steps ? shade : undefined;
   const variant = cls && input.element ? variantApplying(context, input.element, cls) : undefined;
 
   let replacement: string | undefined;
@@ -354,9 +377,13 @@ function reportColor(
     if (advice) message += ` → ${advice}`;
     if (variant) message += `, or use ${variant}`;
     message += '.';
+    if (reshade) {
+      const steps = Math.abs(reshade.steps);
+      message += ` That is ${steps === 1 ? 'one shade' : `${String(steps)} shades`} ${reshade.steps > 0 ? 'darker' : 'lighter'} (${reshade.key}), so it is not applied automatically.`;
+    }
   } else {
     const tinted = input.tinted ?? isTinted(input.color);
-    message = `${input.what}. ${noMatch(reason, role, tinted, nearest.candidate.color, found, hueOff)} Pick the semantic token that fits.`;
+    message = `${input.what}. ${noMatch(reason, role, tinted, nearest.candidate.color, found, hueOff)}${meantForAnother(otherRole, mode)} Pick the semantic token that fits.`;
   }
   const owner =
     !variant && input.prefix && input.element
@@ -370,8 +397,48 @@ function reportColor(
     end: input.end,
     message,
     suggestion: close ? (variant ?? replacement) : undefined,
-    fix: close && edit ? [{ range: [input.start, input.end], text: edit }] : undefined,
+    fix: close && edit && !reshade ? [{ range: [input.start, input.end], text: edit }] : undefined,
   });
+}
+
+/** Tailwind's default palette as colors: family → its shades, lightest first. */
+const PALETTE_SHADES = new Map<string, [shade: string, color: Oklch][]>();
+
+/**
+ * The shade of a palette class's family nearest to `color`, and how many steps
+ * it is from the class's own (positive when darker): Dub's `content-default`
+ * (#404040) is `neutral-700`, one step darker than `text-neutral-600`.
+ */
+function nearestShade(key: string, color: Oklch): { key: string; steps: number } | undefined {
+  const [family = '', own = ''] = key.split('-');
+  let shades = PALETTE_SHADES.get(family);
+  if (!shades) {
+    shades = [];
+    for (const [shade, value] of Object.entries(TAILWIND_PALETTE[family] ?? {})) {
+      const parsed = parseColor(value);
+      if (parsed) shades.push([shade, parsed]);
+    }
+    PALETTE_SHADES.set(family, shades);
+  }
+  const from = shades.findIndex(([shade]) => shade === own);
+  let to = -1;
+  let best = Infinity;
+  shades.forEach(([, value], index) => {
+    const distance = colorDistance(color, value);
+    if (distance < best) [to, best] = [index, distance];
+  });
+  const nearest = shades[to];
+  return from === -1 || !nearest ? undefined : { key: `${family}-${nearest[0]}`, steps: to - from };
+}
+
+/** `content-subtle has this color (exact match), but it is meant for text.` */
+function meantForAnother(other: ColorSuggestion['otherRole'], mode: string | undefined): string {
+  if (!other) return '';
+  const { token } = other.candidate;
+  const role = tokenRole(token);
+  const how = other.distance < SAME_COLOR ? 'has this color' : 'is close';
+  const inMode = mode && token.modes?.[mode] !== undefined ? ` in ${mode} mode` : '';
+  return ` ${token.name} ${how}${inMode} (${formatDeltaE(other.distance)}), but it is meant for ${role ? ROLE_WORDS[role] : 'another role'}.`;
 }
 
 const ROLE_WORDS: Record<ColorRole, string> = {

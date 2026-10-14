@@ -336,7 +336,8 @@ describe('no-hardcoded-color on a stock shadcn/ui theme', () => {
   it('picks the token whose role fits the utility, never a sidebar or chart token', () => {
     const cases: [string, string | undefined][] = [
       ['text-gray-500', 'text-muted-foreground'],
-      ['text-gray-900', 'text-foreground'],
+      // foreground is gray-950's shade, one darker than gray-900: suggested, not applied.
+      ['text-gray-900', undefined],
       ['bg-gray-100', 'bg-muted'],
       ['border-gray-200', 'border-border'],
       ['bg-zinc-900', 'bg-primary'],
@@ -355,6 +356,7 @@ describe('no-hardcoded-color on a stock shadcn/ui theme', () => {
     expect(suggest(`<p className="bg-yellow-100" />`)[0]?.message).toContain(
       'No token has this hue; nearest is muted (ΔE 0.071, same value as accent, secondary), a gray.',
     );
+    expect(suggest(`<p className="text-gray-900" />`)[0]?.suggestion).toBe('text-foreground');
   });
 
   it('names the role’s token for color attributes and styles', () => {

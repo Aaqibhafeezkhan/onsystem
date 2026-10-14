@@ -164,6 +164,11 @@ export interface ColorSuggestion {
   reason?: 'far' | 'hue' | 'role' | 'status' | 'scoped' | undefined;
   /** With reason `status`: how far apart the hues are, in degrees. */
   hueOff?: number | undefined;
+  /**
+   * With reason `role`: a token that is close and of the same hue but made for
+   * another role (`content-muted`, a text color, for a border), when it is not the nearest.
+   */
+  otherRole?: Nearest<ColorCandidate> | undefined;
   /** Other tokens with the nearest one's value. */
   sameValue: Token[];
 }
@@ -346,13 +351,24 @@ export class TokenIndex {
       const hueOff = Math.round(hueDistance(color, valueOf(named.candidate)));
       return { nearest, reason: 'status', hueOff, sameValue };
     }
+    // A close token made for another role is named after a far one made for this role, but it
+    // is why there is no match: Dub's `content-subtle` has the color of `border-neutral-500`.
+    const other = pool
+      .filter((s) => s.hue && !s.foreign && s.fit.tier === 2 && s.distance < CLOSE_COLOR)
+      .sort(byDistance)[0];
     const reason = !named.hue
       ? 'hue'
       : named.distance >= CLOSE_COLOR
-        ? 'far'
+        ? other
+          ? 'role'
+          : 'far'
         : named.foreign
           ? 'scoped'
           : 'role';
+    if (reason === 'role' && other && other !== named) {
+      const otherRole = { candidate: other.candidate, distance: other.distance };
+      return { nearest, reason, otherRole, sameValue };
+    }
     return { nearest, reason, sameValue };
   }
 
