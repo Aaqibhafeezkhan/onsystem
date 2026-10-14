@@ -123,9 +123,11 @@ export async function init(
         `"components" is left to zero config: it found ${config.components.length} files through the package's exports, which it keeps following as the package changes.`,
       );
     } else {
-      // The detected globs, spelled out; a package imported by one name keeps it.
+      // The detected globs, spelled out; a package imported by one name keeps it. A pattern
+      // (`@acme/ui/components/*`) is no import: zero config keeps giving each file its own.
       file.components = config.components;
-      if ([...specifiers][0]) file.importPath = [...specifiers][0];
+      const [specifier] = specifiers;
+      if (specifier && !specifier.includes('*')) file.importPath = specifier;
       // Docs found next to the detected components stay found.
       const docs = config.docs.filter((d) => !DEFAULT_DOCS.includes(d));
       if (docs.length) file.docs = [...DEFAULT_DOCS, ...docs];
