@@ -1267,16 +1267,27 @@ export class PackageFinder {
 }
 
 /**
- * A monorepo root: a pnpm-workspace.yaml, `workspaces` in package.json (npm, Yarn, Bun),
- * a lerna.json with `packages`, or an nx.json. Turborepo runs on the package manager's
- * workspaces, so its roots are among these.
+ * A monorepo root: a pnpm-workspace.yaml with `packages`, `workspaces` in package.json (npm,
+ * Yarn, Bun), a lerna.json with `packages`, or an nx.json. Turborepo runs on the package
+ * manager's workspaces, so its roots are among these. pnpm 11 keeps its settings in a
+ * pnpm-workspace.yaml in a single app too (`allowBuilds`, as create-next-app --use-pnpm
+ * leaves it), and reads one without `packages` as the root alone: that is not a monorepo.
  */
 export function isWorkspaceRoot(dir: string): boolean {
-  if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) return true;
+  if (pnpmWorkspacePackages(dir).length) return true;
   if (fs.existsSync(path.join(dir, 'nx.json'))) return true;
   const pkg = readJson(path.join(dir, 'package.json'));
   if (pkg !== undefined && pkg.workspaces !== undefined) return true;
   return Array.isArray(readJson(path.join(dir, 'lerna.json'))?.packages);
+}
+
+/** The `packages` of the pnpm-workspace.yaml in `dir`, none without one. */
+function pnpmWorkspacePackages(dir: string): string[] {
+  try {
+    return pnpmPackages(fs.readFileSync(path.join(dir, 'pnpm-workspace.yaml'), 'utf8'));
+  } catch {
+    return [];
+  }
 }
 
 /** The nearest workspace root at or above `start`. */
