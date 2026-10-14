@@ -21,8 +21,9 @@ const FAIL_ON = ['error', 'warning', 'none'];
 
 /**
  * The lines `git diff --unified=0` shows as added or changed, per file on the new side. A hunk
- * that only deletes marks the lines either side of the gap, so removing an `aria-label` counts
- * as a change to the element around it.
+ * that only deletes marks the lines either side of the gap. That catches a removed `aria-label`
+ * only when it was on the line of the tag name, where the finding is, or the line after it: one
+ * further down a multi-line tag is missed (docs/required-check.md, test/required-check.test.ts).
  *
  * @param {string} diff
  * @returns {ChangedLines}
