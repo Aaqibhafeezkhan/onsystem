@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import { fixture } from './helpers.js';
 
@@ -14,13 +14,18 @@ const { version: VERSION } = JSON.parse(
   fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'),
 ) as { version: string };
 const PINNED = ['--yes', `onsystem@${VERSION}`];
+// The hook's time limit in these tests, shortened from 55 seconds.
+const LIMIT = 3_000;
 
 // Stands in for npx, and for a project's own install: logs the arguments before `check` (npm's
 // flags and the package, for npx), then acts out what npm does by file name.
 // - cached.tsx: the package is in npm's cache, and the registry cannot be reached.
 // - stale.tsx: npm's cached list of versions is older than this release; the registry answers.
 // - down.tsx: the package is not cached, and the registry cannot be reached.
-// - hang.tsx: npm waits on a registry that never answers, until the hook stops it.
+// - broken.tsx: the package is cached and the CLI runs, but the project's config is invalid; the
+//   registry cannot be reached. The project's folder has "network" in its name, as npm's errors do.
+// - hang.tsx: it never finishes, until the hook stops it at its time limit.
+// - killed.tsx: it is stopped from outside, as when the system runs out of memory.
 const STUB = `import fs from 'node:fs';
 const args = process.argv.slice(2);
 const at = args.indexOf('check');
@@ -44,8 +49,14 @@ if (name === 'stale.tsx') {
   process.exit(1);
 }
 if (name === 'down.tsx') unreachable();
-if (name === 'hang.tsx') process.kill(process.pid, 'SIGTERM');
-console.log(JSON.stringify([{ file, diagnostics: [] }]));
+if (name === 'broken.tsx') {
+  if (!offline) unreachable();
+  console.error('Invalid config in /work/network-app/onsystem.config.json:\\n✖ Unrecognized key: "rule"');
+  process.exit(2);
+}
+if (name === 'hang.tsx') setInterval(() => {}, 1_000);
+else if (name === 'killed.tsx') process.kill(process.pid, 'SIGKILL');
+else console.log(JSON.stringify([{ file, diagnostics: [] }]));
 `;
 
 describe('check-ui hook: npm and the registry', () => {
@@ -55,11 +66,16 @@ describe('check-ui hook: npm and the registry', () => {
     'node_modules/onsystem/package.json': '{"name":"onsystem","bin":{"onsystem":"cli.mjs"}}',
     'node_modules/onsystem/cli.mjs': STUB,
   });
+  // The hook's markers, in the system temp folder: removed after the tests, like the fixtures.
+  const markers: string[] = [];
+  afterAll(() => {
+    for (const marker of markers.splice(0)) fs.rmSync(marker, { force: true });
+  });
 
   /**
    * A Claude Code session in `root`: `edit` runs the hook on a Write of `app/<file>`, `runs`
    * lists the stand-in's starts so far, and `pause` is the hook's marker after npm could not
-   * reach the registry.
+   * reach the registry or npx ran out of time.
    */
   function session(root = project) {
     const id = randomUUID();
@@ -78,6 +94,7 @@ describe('check-ui hook: npm and the registry', () => {
         env: {
           ...withoutBin(process.env),
           ONSYSTEM_NPX: path.join(project, 'npx.mjs'),
+          ONSYSTEM_HOOK_TIMEOUT: String(LIMIT),
           STUB_LOG: log,
         },
       });
@@ -90,12 +107,10 @@ describe('check-ui hook: npm and the registry', () => {
         .filter(Boolean)
         .map((line) => JSON.parse(line) as string[]);
     // Named as the hook names its markers: per session and project.
-    const pause = path.join(
-      os.tmpdir(),
-      'onsystem',
-      `offline-${createHash('sha256').update(`${id}\0${root}`).digest('hex').slice(0, 16)}`,
-    );
-    return { edit, runs, pause };
+    const key = createHash('sha256').update(`${id}\0${root}`).digest('hex').slice(0, 16);
+    const marker = (kind: string) => path.join(os.tmpdir(), 'onsystem', `${kind}-${key}`);
+    markers.push(marker('offline'), marker('hook-notice'));
+    return { edit, runs, pause: marker('offline') };
   }
   const silent = { code: 0, stdout: '', stderr: '' };
   const notice = (stdout: string) =>
@@ -150,19 +165,54 @@ describe('check-ui hook: npm and the registry', () => {
     expect(session().edit('cached.tsx').code).toBe(2);
   });
 
-  // The stand-in stops itself with a signal, as the hook's timeout stops npx; Windows has none.
+  it('reports a failure of the CLI itself at once, without asking the registry', () => {
+    // npm ran the cached CLI, which found the config invalid: the registry would not change that,
+    // and offline, asking it would only wait for npm to give up and hide the real cause.
+    const { edit, runs, pause } = session();
+    const broken = edit('broken.tsx');
+    expect(broken.code).toBe(0);
+    const text = notice(broken.stdout);
+    expect(text).toContain(
+      'not being checked against the design system: Invalid config in /work/network-app/onsystem.config.json:',
+    );
+    expect(text).toContain('Fix the config, or run `onsystem inspect` to see the problem.');
+    expect(text).not.toContain('registry');
+    expect(runs()).toEqual([['--prefer-offline', ...PINNED]]);
+    // Not npm's failure: no pause, and the next edit checks again, once the config is fixed.
+    expect(fs.existsSync(pause)).toBe(false);
+    expect(edit('broken.tsx')).toEqual(silent);
+    expect(edit('cached.tsx').code).toBe(2);
+    expect(runs()).toHaveLength(3);
+  });
+
+  it("does not claim a cause when npx runs out of time, and doesn't wait again", () => {
+    // npm waiting for an unreachable registry, a slow download or a slow check look the same.
+    const { edit, runs, pause } = session();
+    const hang = edit('hang.tsx');
+    expect(hang.code).toBe(0);
+    expect(notice(hang.stdout)).toContain(
+      `: it did not finish within ${LIMIT / 1000} seconds; npm may not have reached the registry (offline?). Install it in the project`,
+    );
+    expect(runs()).toEqual([['--prefer-offline', ...PINNED]]);
+    expect(fs.existsSync(pause)).toBe(true);
+    expect(edit('hang.tsx')).toEqual(silent);
+    expect(runs()).toHaveLength(1);
+  });
+
+  // A signal from outside; Windows has none.
   it.skipIf(process.platform === 'win32')(
-    'says the registry could not be reached when npx runs out of time',
+    'does not take a CLI stopped from outside for a timeout',
     () => {
-      const { edit, runs } = session();
-      const hang = edit('hang.tsx');
-      expect(hang.code).toBe(0);
-      expect(notice(hang.stdout)).toContain(
-        ': npm could not reach the registry within 55 seconds (offline?). Install it in the project',
+      const { edit, runs, pause } = session();
+      const killed = edit('killed.tsx');
+      expect(killed.code).toBe(0);
+      expect(notice(killed.stdout)).toContain(
+        ': it was stopped by SIGKILL. Install it in the project',
       );
       expect(runs()).toHaveLength(1);
-      expect(edit('hang.tsx')).toEqual(silent);
-      expect(runs()).toHaveLength(1);
+      expect(fs.existsSync(pause)).toBe(false);
+      expect(edit('killed.tsx')).toEqual(silent);
+      expect(runs()).toHaveLength(2);
     },
   );
 
@@ -174,10 +224,10 @@ describe('check-ui hook: npm and the registry', () => {
     expect(edit('down.tsx').code).toBe(0);
     expect(edit('down.tsx')).toEqual(silent);
     expect(runs()).toEqual([[], [], []]);
-    if (process.platform !== 'win32') {
-      const hang = session(installed).edit('hang.tsx');
-      expect(notice(hang.stdout)).toContain(': it did not finish within 55 seconds. Run `onsystem');
-    }
+    const hang = session(installed).edit('hang.tsx');
+    expect(notice(hang.stdout)).toContain(
+      `: it did not finish within ${LIMIT / 1000} seconds. Run \`onsystem`,
+    );
   });
 });
 
