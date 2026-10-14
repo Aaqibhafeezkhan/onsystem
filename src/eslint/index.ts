@@ -13,7 +13,7 @@
  */
 import path from 'node:path';
 
-import type { ESLint, Linter, Rule, SourceCode } from 'eslint';
+import type { ESLint, Linter, Rule, Scope, SourceCode } from 'eslint';
 
 import {
   DEFAULT_SEVERITY,
@@ -23,7 +23,7 @@ import {
 } from '../config.js';
 import { DesignSystem } from '../design-system.js';
 import { RULES } from '../lint/index.js';
-import type { CheckResult } from '../types.js';
+import type { CheckResult, TextEdit } from '../types.js';
 import { relativePath } from '../util/paths.js';
 import { NAME, VERSION } from '../version.js';
 import { loadSync } from './bridge.js';
@@ -79,12 +79,56 @@ function run(cwd: string, file: string, text: string, settings: Settings): Outco
   return result.skipped ? { skipped: true } : { result };
 }
 
+/** The part of an ESLint AST node this file reads; JSX nodes are not in ESTree's types. */
+interface AstNode {
+  type: string;
+  range: [number, number];
+  parent?: AstNode | null;
+  name?: unknown;
+}
+
+/**
+ * The name an edit gives a JSX tag when that name is not in scope there: `Button` for
+ * `<button>` → `<Button>` in a file that does not import it. Applied, such a rename leaves a
+ * file that does not compile.
+ */
+function unboundRename(sourceCode: SourceCode, edit: TextEdit): string | undefined {
+  // A lowercase name is an intrinsic element, never a binding.
+  if (!edit.text.includes('.') && /^[a-z]/.test(edit.text)) return;
+  const [start, end] = edit.range;
+  // The offset finds the innermost node: `Card` inside the tag name `Card.Header`.
+  let node = sourceCode.getNodeByRangeIndex(start) as AstNode | null;
+  while (node && (node.range[0] !== start || node.range[1] !== end)) node = node.parent ?? null;
+  const tag = node?.parent;
+  if (!node || !tag || !['JSXOpeningElement', 'JSXClosingElement'].includes(tag.type)) return;
+  if (tag.name !== node) return;
+  const name = edit.text.split('.')[0] ?? edit.text;
+  for (
+    let scope: Scope.Scope | null = sourceCode.getScope(node as unknown as Rule.Node);
+    scope;
+    scope = scope.upper
+  ) {
+    const variable = scope.set.get(name);
+    // An import or declaration, not a global of the environment (the DOM's `Image`), and a
+    // value: `import type { Button }` does not make <Button> compile.
+    if (variable?.defs.length && !variable.defs.every(typeOnlyImport)) return;
+  }
+  return edit.text;
+}
+
+/** `import type { Button }` or `import { type Button }` (typescript-eslint's `importKind`). */
+function typeOnlyImport(def: Scope.Definition): boolean {
+  const kind = (node: unknown) => (node as { importKind?: string } | null)?.importKind;
+  return def.type === 'ImportBinding' && (kind(def.node) === 'type' || kind(def.parent) === 'type');
+}
+
 function createRule(id: RuleId, description: string): Rule.RuleModule {
   return {
     meta: {
       type: 'problem',
       docs: { description, url: `${RULES_PAGE}#${id}` },
       fixable: 'code',
+      hasSuggestions: true,
       schema: [],
     },
     create(context) {
@@ -107,16 +151,25 @@ function createRule(id: RuleId, description: string): Rule.RuleModule {
           }
           for (const d of outcome.result.diagnostics) {
             if (d.ruleId !== id) continue;
-            const edits = d.fix;
+            const edits = d.fix ?? [];
+            const fix: Rule.ReportFixer = (fixer) =>
+              edits.map((e) => fixer.replaceTextRange(e.range, e.text));
+            // `eslint --fix` and fix-on-save apply fixes unasked, so a rename to a component the
+            // file does not import yet is a suggestion: the message names the import to add.
+            const unbound = edits
+              .map((e) => unboundRename(context.sourceCode, e))
+              .find((name) => name !== undefined);
             context.report({
               loc: {
                 start: { line: d.line, column: d.column - 1 },
                 end: { line: d.endLine, column: d.endColumn - 1 },
               },
               message: d.message,
-              ...(edits?.length
-                ? { fix: (fixer) => edits.map((e) => fixer.replaceTextRange(e.range, e.text)) }
-                : {}),
+              ...(!edits.length
+                ? {}
+                : unbound
+                  ? { suggest: [{ desc: `Rename to <${unbound}>, then import it`, fix }] }
+                  : { fix }),
             });
           }
         },
