@@ -605,15 +605,21 @@ function extractProps(
   // what the checker gives for the bare parameter is not the list.
   if (candidate.fn?.typeParameters?.length && dependsOnTypeParameter(type)) openProps = true;
 
-  const own = new Map<string, { symbol: ts.Symbol; requiredIn: number; origin: string }>();
+  const own = new Map<string, { symbols: ts.Symbol[]; requiredIn: number; origin: string }>();
   for (const t of types) {
     if (checker.getIndexInfosOfType(t).length) openProps = true;
     for (const symbol of checker.getPropertiesOfType(t)) {
       const entry = own.get(symbol.getName()) ?? {
-        symbol,
+        symbols: [],
         requiredIn: 0,
         origin: originOf(symbol),
       };
+      // Each member of a union declares the prop its own way, and the prop takes what any of
+      // them allows: Radix's Accordion has `type: "single"` in one, `type: "multiple"` in the
+      // other. The parts of an unresolved intersection keep the first, as before.
+      if (!entry.symbols.length || (type.isUnion() && !entry.symbols.includes(symbol))) {
+        entry.symbols.push(symbol);
+      }
       if (!(symbol.flags & ts.SymbolFlags.Optional)) entry.requiredIn++;
       own.set(symbol.getName(), entry);
     }
@@ -635,9 +641,9 @@ function extractProps(
   );
 
   const props: PropInfo[] = [];
-  for (const [name, { symbol, requiredIn, origin }] of own) {
+  for (const [name, { symbols, requiredIn, origin }] of own) {
     if (summarised.has(origin)) continue;
-    props.push(describeProp(context, name, symbol, location, requiredIn === types.length, origin));
+    props.push(describeProp(context, name, symbols, location, requiredIn === types.length, origin));
   }
 
   const inherits: InheritedProps[] = [];
@@ -646,7 +652,7 @@ function extractProps(
     const key = registerPropSet(context.propSets, names);
     const from = origin === 'react' ? inheritedLabel(context, typeNode) : origin;
     const deprecated = names.filter((name) => {
-      const symbol = own.get(name)?.symbol;
+      const symbol = own.get(name)?.symbols[0];
       return symbol?.getJsDocTags(checker).some((tag) => tag.name === 'deprecated');
     });
     inherits.push({
@@ -744,37 +750,71 @@ export function originOf(symbol: ts.Symbol): string {
   return pkg;
 }
 
+/**
+ * A prop that several members of a union declare takes what any of them allows: its type is
+ * the union of theirs, and so are its values when each declares a set of string literals.
+ */
 function describeProp(
   context: FileContext,
   name: string,
-  symbol: ts.Symbol,
+  symbols: ts.Symbol[],
   location: ts.Node,
   required: boolean,
   origin: string,
 ): PropInfo {
   const { checker } = context;
-  const declared = checker.getTypeOfSymbolAtLocation(symbol, location);
-  const type = checker.getNonNullableType(declared);
-  // Print the declared type so aliases such as `ReactNode` survive, then drop
-  // the `undefined` that optional props carry.
-  const printed = checker
-    .typeToString(
-      declared,
-      undefined,
-      ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope,
-    )
-    .replace(/^(?:(?:undefined|null) \| )+|(?: \| (?:undefined|null))+$/g, '');
+  // A member that rules the prop out (`size?: never`, `size?: undefined`, the usual way to make
+  // props mutually exclusive) allows nothing, so it adds nothing to the type or the values.
+  const allows = (symbol: ts.Symbol): boolean =>
+    !(
+      checker.getNonNullableType(checker.getTypeOfSymbolAtLocation(symbol, location)).flags &
+      ts.TypeFlags.Never
+    );
+  const members = symbols.some(allows) ? symbols.filter(allows) : symbols;
+  // Each member's type as printed, and whether it is a function type.
+  const printed = new Map<string, boolean>();
+  let values: string[] | undefined = [];
+  for (const symbol of members) {
+    const declared = checker.getTypeOfSymbolAtLocation(symbol, location);
+    const type = checker.getNonNullableType(declared);
+    // Print the declared type so aliases such as `ReactNode` survive, then drop
+    // the `undefined` that optional props carry.
+    const text = unwrapParens(
+      checker
+        .typeToString(
+          declared,
+          undefined,
+          ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope,
+        )
+        .replace(/^(?:(?:undefined|null) \| )+|(?: \| (?:undefined|null))+$/g, ''),
+    );
+    if (text) {
+      printed.set(
+        text,
+        !type.isUnion() &&
+          (type.getCallSignatures().length > 0 || type.getConstructSignatures().length > 0),
+      );
+    }
+    const found = literalValues(type);
+    values = found && values ? [...values, ...found] : undefined;
+  }
+  // In a union, `(value: string) => void` keeps its parentheses.
+  const printedType = [...printed]
+    .map(([text, fn]) => (fn && printed.size > 1 ? `(${text})` : text))
+    .join(' | ');
   const prop: PropInfo = {
     name,
-    type: truncate(unwrapParens(printed) || 'unknown', 200),
+    type: truncate(printedType || 'unknown', 200),
     required,
     kind: 'prop',
   };
-  const values = literalValues(type);
-  if (values) prop.values = values;
-  const description = ts.displayPartsToString(symbol.getDocumentationComment(checker)).trim();
+  if (values) prop.values = unique(values);
+  const documented = members.find((s) => s.getDocumentationComment(checker).length) ?? members[0];
+  const description = documented
+    ? ts.displayPartsToString(documented.getDocumentationComment(checker)).trim()
+    : '';
   if (description) prop.description = description;
-  for (const tag of symbol.getJsDocTags(checker)) {
+  for (const tag of documented?.getJsDocTags(checker) ?? []) {
     const text = ts.displayPartsToString(tag.text).trim();
     if ((tag.name === 'default' || tag.name === 'defaultValue') && text) prop.default = text;
     if (tag.name === 'deprecated') prop.deprecated = text || true;
