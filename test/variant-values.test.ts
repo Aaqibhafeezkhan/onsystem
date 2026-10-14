@@ -19,6 +19,10 @@ function values(c: ComponentInfo): [string, string[] | undefined][] {
   return c.props.filter((p) => p.kind === 'variant').map((p) => [p.name, p.values]);
 }
 
+function types(c: ComponentInfo): [string, string][] {
+  return c.props.filter((p) => p.kind === 'variant').map((p) => [p.name, p.type]);
+}
+
 function messages(ds: DesignSystem, code: string): string[] {
   return ds.check(code, 'app/page.tsx').diagnostics.map((d) => `${d.ruleId}: ${d.message}`);
 }
@@ -125,24 +129,30 @@ export function Button({ size, children }: ButtonProps) {
 
 enum Tone { Info = "info" }
 
+const looks = { soft: "bg-muted", bold: "font-bold" }
+
 const badgeVariants = cva("rounded-full", {
   variants: {
     tone: { [Tone.Info]: "bg-blue-100", neutral: "bg-muted" },
+    look: { ...looks },
     shape: { pill: "rounded-full", square: "rounded-none" },
   },
 })
 
-export function Badge({ tone, shape }: VariantProps<typeof badgeVariants>) {
-  return <span className={badgeVariants({ tone, shape })} />
+export function Badge({ tone, look, shape }: VariantProps<typeof badgeVariants>) {
+  return <span className={badgeVariants({ tone, look, shape })} />
 }
 `,
         'components/ui/chip.tsx': `import { tv, type VariantProps } from "tailwind-variants"
 import { focusRing } from "./focus"
 
-const chip = tv({ extend: focusRing, variants: { size: { sm: "h-6" } } })
+const chip = tv({
+  extend: focusRing,
+  variants: { size: { sm: "h-6" }, inset: { true: "px-1", false: "" } },
+})
 
-export function Chip({ size }: VariantProps<typeof chip>) {
-  return <span className={chip({ size })} />
+export function Chip({ size, inset }: VariantProps<typeof chip>) {
+  return <span className={chip({ size, inset })} />
 }
 `,
       }),
@@ -151,17 +161,36 @@ export function Chip({ size }: VariantProps<typeof chip>) {
       ['variant', undefined],
       ['size', ['sm', 'lg']],
     ]);
+    expect(types(component(ds, 'Button'))).toEqual([
+      ['variant', 'string'],
+      ['size', '"sm" | "lg"'],
+    ]);
     expect(values(component(ds, 'Badge'))).toEqual([
       ['tone', undefined],
+      ['look', undefined],
       ['shape', ['pill', 'square']],
     ]);
-    expect(values(component(ds, 'Chip'))).toEqual([['size', undefined]]);
+    // A spread with no key beside it is any value, not a boolean.
+    expect(types(component(ds, 'Badge'))).toEqual([
+      ['tone', 'string'],
+      ['look', 'string'],
+      ['shape', '"pill" | "square"'],
+    ]);
+    expect(values(component(ds, 'Chip'))).toEqual([
+      ['size', undefined],
+      ['inset', undefined],
+    ]);
+    // Under `extend`, a `{ true, false }` variant is still a boolean.
+    expect(types(component(ds, 'Chip'))).toEqual([
+      ['size', 'string'],
+      ['inset', 'boolean'],
+    ]);
     expect(
       messages(
         ds,
         `import { Badge } from "@/components/ui/badge"
 import { Chip } from "@/components/ui/chip"
-${imports}<><Button variant="default" size="xl">a</Button><Badge tone="info" shape="round" /><Chip size="md" /></>`,
+${imports}<><Button variant="default" size="xl">a</Button><Badge tone="info" look="soft" shape="round" /><Chip size="md" inset /></>`,
       ),
     ).toEqual([
       'no-unknown-variant: "xl" is not a valid size for <Button>. Allowed: sm, lg.',

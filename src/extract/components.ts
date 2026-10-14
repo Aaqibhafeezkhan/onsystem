@@ -978,7 +978,8 @@ function ordered(values: string[], layout: Layout): string[] {
  * Adds or enriches variant props from cva/tv definitions (works without type info). A prop the
  * checker types as a set of strings keeps that set: the literal can take values it does not list
  * (`{ ...base, brand }`, tv's `extend`) and only gives their order. Without one, the literal's
- * keys are the values, unless it does not list them all: then the prop takes any value.
+ * keys are the values, unless it does not list them all: then the prop takes any value (or, when
+ * the keys it lists are `true`/`false`, stays a boolean).
  */
 function mergeVariantProps(
   props: PropInfo[],
@@ -986,8 +987,13 @@ function mergeVariantProps(
   layouts: Map<string, Layout>,
 ): void {
   for (const variant of variants) {
-    const isBoolean = variant.values.every((v) => v === 'true' || v === 'false');
     const layout = layouts.get(variant.name) ?? variant.values;
+    const open = layout.includes(undefined);
+    // `{ true: …, false: … }` is a boolean, under tv's `extend` too. A literal that lists no key of
+    // its own (`{ ...base }`) says nothing about what its values are.
+    const isBoolean =
+      (variant.values.length > 0 || !open) &&
+      variant.values.every((v) => v === 'true' || v === 'false');
     const existing = props.find((p) => p.name === variant.name);
     const typed = existing?.values;
     const prop: PropInfo = existing ?? {
@@ -1002,7 +1008,7 @@ function mergeVariantProps(
       prop.values = ordered(typed, layout);
       prop.type = prop.values.map((v) => JSON.stringify(v)).join(' | ');
       variant.values = [...prop.values];
-    } else if (layout.includes(undefined)) {
+    } else if (open && !isBoolean) {
       // The literal does not list every value and nothing else does: the prop takes any value.
       if (!existing) prop.type = 'string';
     } else if (!isBoolean) {
