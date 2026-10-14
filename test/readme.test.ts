@@ -16,6 +16,13 @@ interface Repos {
 }
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const readme = read('README.md');
+/** A `## heading` section of the README, up to the next one. */
+const section = (heading: string) => {
+  const start = readme.indexOf(`\n${heading}\n`);
+  expect(start, heading).toBeGreaterThan(-1);
+  const end = readme.indexOf('\n## ', start + 1);
+  return readme.slice(start, end === -1 ? undefined : end);
+};
 
 describe('the README', () => {
   // test/install.test.ts checks what each install link installs.
@@ -31,9 +38,34 @@ describe('the README', () => {
   it('links the MCP Registry badge to the server.json name, and reads the version from there', () => {
     const top = readme.slice(0, readme.indexOf('<!-- npm-readme:video -->'));
     const { name } = JSON.parse(read('server.json')) as { name: string };
-    const encoded = encodeURIComponent(name);
-    expect(top).toContain(`search%3D${encoded}%26version%3Dlatest`);
-    expect(top).toContain(`](https://registry.modelcontextprotocol.io/?q=${encoded})`);
+    // The lookup by name, not the search: the search (/v0/servers?search=) takes seconds, so
+    // shields.io gives up and the badge reads "inaccessible", and the registry's page with ?q=
+    // did not show the server.
+    const lookup = `https://registry.modelcontextprotocol.io/v0.1/servers/${encodeURIComponent(name)}/versions/latest`;
+    expect(top).toContain(
+      `url=${encodeURIComponent(lookup)}&query=${encodeURIComponent('$.server.version')}&`,
+    );
+    expect(top).toContain(`](${lookup})`);
+    expect(top).not.toContain('search%3D');
+  });
+
+  it('shows no download count', () => {
+    // npm's weekly count is mostly mirrors and bots: the deprecated placeholders 0.0.1 and
+    // 0.0.0-stage get as many downloads as the latest version (api.npmjs.org/versions/onsystem/last-week).
+    expect(readme).not.toMatch(/shields\.io\/npm\/d[wmyt]\//);
+  });
+
+  it('points GitHub Action users at the Action before the badges', () => {
+    // The Marketplace listing shows this README, which opens on the MCP server.
+    const pitch = readme.slice(0, readme.indexOf('[!['));
+    expect(pitch).toContain('`uses: dgesteves/onsystem@v0`');
+    expect(pitch).toContain('](https://onsystem.vercel.app/docs/ci)');
+  });
+
+  it('links the Quickstart to the guide for code from shadcn registries', () => {
+    expect(section('## Quickstart')).toContain(
+      '](https://onsystem.vercel.app/docs/configuration#code-from-shadcn-registries)',
+    );
   });
 
   it('links each client badge to a section of docs/clients.md', () => {
@@ -176,49 +208,77 @@ describe('the README', () => {
     expect(paragraph).toContain('labels made by an AI reviewer');
   });
 
-  it('quotes the benchmark results in bench/agents', () => {
-    const names: Record<string, string> = {
-      'haiku-4-5': 'Claude Haiku 4.5',
-      'opus-5': 'Claude Opus 5',
-    };
-    const dir = path.join(root, 'bench/agents/results');
-    let runs = 0;
-    for (const model of fs.readdirSync(dir).sort()) {
-      const results = fs.readdirSync(path.join(dir, model)).map(
-        (file) =>
-          JSON.parse(fs.readFileSync(path.join(dir, model, file), 'utf8')) as {
-            condition: string;
-            errors: number;
-            cost: number;
-          },
-      );
-      runs += results.length;
-      const of = (condition: string) => {
-        const list = results.filter((r) => r.condition === condition);
-        return {
-          clean: list.filter((r) => r.errors === 0).length,
-          runs: list.length,
-          errors: list.reduce((n, r) => n + r.errors, 0),
-          cost: Math.round(list.reduce((n, r) => n + r.cost, 0) * 100) / 100,
-        };
-      };
-      const [base, plugin] = [of('base'), of('plugin')];
-      const delta = Math.round(((plugin.cost - base.cost) / base.cost) * 100);
-      const row = readme.split('\n').find((line) => line.startsWith(`| ${String(names[model])} `));
-      expect(row, model).toBeDefined();
-      expect(
-        row
-          ?.split('|')
-          .slice(2, -1)
-          .map((cell) => cell.trim()),
-      ).toEqual([
-        `${String(base.clean)} / ${String(base.runs)}`,
-        `**${String(plugin.clean)} / ${String(plugin.runs)}**`,
-        `${String(base.errors)} → ${String(plugin.errors)}`,
-        `${delta < 0 ? '−' : '+'}${String(Math.abs(delta))}%`,
-      ]);
+  it('says the labels leave out code installed from shadcn registries', () => {
+    // vercel/chatbot keeps Vercel's AI Elements, installed from a shadcn registry, in
+    // components/ai-elements, inside the chatbot run's folders.
+    const labels = JSON.parse(read('corpus/labels.json')) as Label[];
+    expect(labels.filter((l) => /(^|\/)components\/ai-elements\//.test(l.file))).toEqual([]);
+    expect(paragraph).toContain("such as the chatbot's `components/ai-elements`, has no labels");
+    expect(paragraph).toContain(
+      '](https://onsystem.vercel.app/docs/configuration#code-from-shadcn-registries)',
+    );
+  });
+
+  it('quotes benchmark v2 with its size, the version it ran, and what its count cannot show', () => {
+    interface Rate {
+      value: number;
     }
-    expect(readme).toContain(`${String(runs)} runs (one per task, model and condition)`);
+    interface Row {
+      model: string;
+      arm: string;
+      runs: number;
+      tscPass: Rate;
+      onsystemErrors: Rate;
+    }
+    const v2 = (file: string) => JSON.parse(read(`bench/v2/${file}`)) as unknown;
+    const { info, rows, deltas } = v2('results/standard/results.json') as {
+      info: { onsystem: string; repos: Record<string, unknown> };
+      rows: Row[];
+      deltas: { model: string; arm: string; tscPass: { low: number; high: number } }[];
+    };
+    const { models } = v2('config/models.json') as { models: { id: string; provider: string }[] };
+    const { tasks } = v2('config/tasks.json') as { tasks: { repo: string }[] };
+    const key = v2('results/standard/labels/key.json') as Record<string, { arm: string }>;
+    const arms = ['none', 'skill', 'mcp', 'hook', 'all'];
+    const pooled = (arm: string) => {
+      const row = rows.find((r) => r.model === 'all models' && r.arm === arm);
+      expect(row, arm).toBeDefined();
+      return row as Row;
+    };
+    const [none, all] = [pooled('none'), pooled('all')];
+    const ids = new Set(rows.filter((r) => !r.model.endsWith(' models')).map((r) => r.model));
+    const providers = new Set([...ids].map((id) => models.find((m) => m.id === id)?.provider));
+    const perArm = new Set(arms.map((arm) => pooled(arm).runs));
+    const labelled = new Set(
+      arms.map((arm) => Object.values(key).filter((k) => k.arm === arm).length),
+    );
+    expect(perArm.size).toBe(1);
+    expect(labelled.size).toBe(1);
+    // "No measurable change": the paired difference's interval holds 0.
+    const tsc = deltas.find((d) => d.model === 'all models' && d.arm === 'all')?.tscPass;
+    expect(tsc && tsc.low <= 0 && tsc.high >= 0).toBe(true);
+
+    const pct = (rate: Rate) => `${String(Math.round(rate.value * 100))}%`;
+    const total = arms.reduce((n, arm) => n + pooled(arm).runs, 0);
+    const help = section('## Does it help?').replace(/\s+/g, ' ');
+    expect(help).toContain('[Benchmark v2](bench/v2)');
+    expect(help).toContain(
+      `${String(ids.size)} models from ${String(providers.size)} providers (Anthropic, OpenAI and Google) ${String(tasks.filter((t) => t.repo in info.repos).length)} single-file UI tasks in ${String(Object.keys(info.repos).length)} open-source repositories`,
+    );
+    expect(help).toContain(
+      `${total.toLocaleString('en-US')} runs, ${String([...perArm][0])} per arm`,
+    );
+    expect(help).toContain(
+      `Counted by onsystem ${info.onsystem}'s own check, design-system errors per run went from ${none.onsystemErrors.value.toFixed(2)} without onsystem to ${all.onsystemErrors.value.toFixed(2)} with all three, with no measurable change in the \`tsc\` pass rate (${pct(none.tscPass)} → ${pct(all.tscPass)})`,
+    );
+    // The count is onsystem's own, it rewards chart tokens used as status colors, and the
+    // independent labels are a small sample.
+    expect(help).toContain('the MCP server and the hook show the agent the same errors');
+    expect(help).toContain('`chart-*` tokens');
+    expect(help).toContain(
+      `The blind labels by an AI reviewer, ${String([...labelled][0])} files per arm, are too few to confirm the count either way`,
+    );
+    expect(help).not.toContain('bench/agents');
   });
 });
 

@@ -4,10 +4,11 @@
 
 Built for design-system and platform teams with a React design-system package; a shadcn/ui app is the zero-config demo. Formerly `@dgesteves/design-system-mcp` ([what changed](https://onsystem.vercel.app/docs/migrating)).
 
+Using the GitHub Action? `uses: dgesteves/onsystem@v0` checks the lines a pull request changed: see [CI and baselines](https://onsystem.vercel.app/docs/ci).
+
 [![CI](https://img.shields.io/github/actions/workflow/status/dgesteves/onsystem/ci.yml?branch=main&style=flat-square&label=CI&labelColor=0d0f12)](https://github.com/dgesteves/onsystem/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/onsystem?style=flat-square&labelColor=0d0f12&color=0e7490)](https://www.npmjs.com/package/onsystem)
-[![Downloads](https://img.shields.io/npm/dw/onsystem?style=flat-square&labelColor=0d0f12&color=0e7490)](https://www.npmjs.com/package/onsystem)
-[![MCP Registry](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.modelcontextprotocol.io%2Fv0%2Fservers%3Fsearch%3Dio.github.dgesteves%2Fonsystem%26version%3Dlatest&query=%24.servers%5B0%5D.server.version&prefix=v&label=MCP%20Registry&style=flat-square&labelColor=0d0f12&color=0e7490&logo=modelcontextprotocol&logoColor=white)](https://registry.modelcontextprotocol.io/?q=io.github.dgesteves%2Fonsystem)
+[![MCP Registry](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.modelcontextprotocol.io%2Fv0.1%2Fservers%2Fio.github.dgesteves%252Fonsystem%2Fversions%2Flatest&query=%24.server.version&prefix=v&label=MCP%20Registry&style=flat-square&labelColor=0d0f12&color=0e7490&logo=modelcontextprotocol&logoColor=white)](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.dgesteves%2Fonsystem/versions/latest)
 [![Cursor Directory](https://img.shields.io/badge/Cursor_Directory-Listed-0d0f12?style=flat-square&logo=cursor&logoColor=white)](https://cursor.directory/plugins/design-system-mcp)
 [![License: MIT](https://img.shields.io/github/license/dgesteves/onsystem?style=flat-square&labelColor=0d0f12&color=0e7490)](LICENSE)
 
@@ -36,7 +37,7 @@ https://github.com/user-attachments/assets/900cc1fa-387c-4e76-a524-a818521dd1a0
 
 <!-- npm-readme:image
 <p align="center">
-  <a href="https://onsystem.vercel.app"><img src=".github/assets/demo.webp" width="100%" alt="On the website, an agent drafts a settings card, check_ui finds 11 problems with a fix each and the agent applies them. Then a real Claude Code session with the plugin, where Claude looks the components up before writing and check_ui passes. Last, the benchmark: clean components go from 6 to 10 out of 10 with Claude Haiku 4.5 and from 8 to 10 with Claude Opus 5."></a>
+  <a href="https://onsystem.vercel.app"><img src=".github/assets/demo.webp" width="100%" alt="On the website, an agent drafts a settings card, check_ui finds 11 problems with a fix each and the agent applies them. Then a real Claude Code session with the plugin, where Claude looks the components up before writing and check_ui passes. Last, the benchmark."></a>
 </p>
 
 <sub>On the <a href="https://onsystem.vercel.app">website</a>, an agent drafts a settings card, <code>check_ui</code> finds 11 problems with a fix each, and the agent applies them. Then a real Claude Code session with the plugin: Claude looks the components up before writing, and <code>check_ui</code> passes. Last, the benchmark.</sub>
@@ -61,7 +62,7 @@ onsystem reads your components, `cva` and `tv` variants, parts and tokens from s
 | `no-hardcoded-spacing`           | warn    | Arbitrary padding, margin and gap (`p-[13px]` → `p-3`)                          |
 | `no-hardcoded-radius`            | warn    | Arbitrary radius (`rounded-[7px]` → `rounded-sm`)                               |
 
-**How often it is wrong.** The [corpus](corpus) job runs `check` on 12 public repositories pinned by commit (Documenso, Dub, Cal.com, midday, Flowise and others, the four monorepos also from their root, and Dub's app also with a config and with `@dub/ui` set up by `init`: 24 runs, 14,541 distinct findings) and compares the findings with labels made by an AI reviewer. Its random sample does not give a false-positive rate for all findings: the runs and rules it has labels for hold 28.0% of them, and 27 of its 30 false positives were fixed, so what is left of it under-counts them. The rate will come from a fresh seeded sample, published here with its confidence interval and who labelled it. Shipped code rarely invents components, props or variants: those three rules have 56 findings in the corpus, 55 of them in Flowise, an MUI app that passes props and values MUI's components do not take, and the 10 still in the sample are all right. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
+**How often it is wrong.** The [corpus](corpus) job runs `check` on 12 public repositories pinned by commit (Documenso, Dub, Cal.com, midday, Flowise and others, the four monorepos also from their root, and Dub's app also with a config and with `@dub/ui` set up by `init`: 24 runs, 14,541 distinct findings) and compares the findings with labels made by an AI reviewer. Its random sample does not give a false-positive rate for all findings: the runs and rules it has labels for hold 28.0% of them, and 27 of its 30 false positives were fixed, so what is left of it under-counts them. The rate will come from a fresh seeded sample, published here with its confidence interval and who labelled it. Code installed from a shadcn registry, such as the chatbot's `components/ai-elements`, has no labels yet ([Code from shadcn registries](https://onsystem.vercel.app/docs/configuration#code-from-shadcn-registries)). Shipped code rarely invents components, props or variants: those three rules have 56 findings in the corpus, 55 of them in Flowise, an MUI app that passes props and values MUI's components do not take, and the 10 still in the sample are all right. The [rules reference](https://onsystem.vercel.app/rules) shows each rule on an example and how to [suppress a finding](https://onsystem.vercel.app/rules#suppressing-findings).
 
 ## Quickstart
 
@@ -75,7 +76,7 @@ npx -y onsystem init      # write the config, and offer a baseline
 
 At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system. In a [design-system package](https://onsystem.vercel.app/docs/design-system-packages), `init` sets it up for every app that depends on it, workspace or npm, with no config in the apps.
 
-In a new create-next-app, the template page's hardcoded colors already make the first `check .` fail; `init` offers to record them as a baseline, so only new findings fail.
+In a new create-next-app, the template page's hardcoded colors already make the first `check .` fail; `init` offers to record them as a baseline, so only new findings fail. Folders installed from a shadcn registry, such as `components/ai-elements`, are someone else's code: [Code from shadcn registries](https://onsystem.vercel.app/docs/configuration#code-from-shadcn-registries) says how to check them or leave them out.
 
 **Claude Code.** The plugin brings the hook, the MCP server and a skill:
 
@@ -113,14 +114,9 @@ Findings show up as annotations on the pull request, and `--require-design-syste
 
 ## Does it help?
 
-Claude Code built the same ten components for [vercel/ai-chatbot](https://github.com/vercel/ai-chatbot), once as it ships and once with the plugin, and `check` scored what it wrote:
+[Benchmark v2](bench/v2) gave 6 models from 3 providers (Anthropic, OpenAI and Google) 20 single-file UI tasks in 5 open-source repositories, without onsystem, with its skill, MCP server or hook, and with all three: 1,200 runs, 240 per arm. Counted by onsystem 0.5.0's own check, design-system errors per run went from 0.85 without onsystem to 0.00 with all three, with no measurable change in the `tsc` pass rate (93% → 92%).
 
-| Model            | Clean without | Clean with the plugin | Design-system errors | Cost |
-| ---------------- | ------------: | --------------------: | -------------------: | ---: |
-| Claude Haiku 4.5 |        6 / 10 |           **10 / 10** |               13 → 0 | −11% |
-| Claude Opus 5    |        8 / 10 |           **10 / 10** |                5 → 0 |  +7% |
-
-It is small: one repository, Claude models only, 40 runs (one per task, model and condition), scored by the tool itself, and run before the rename. With the plugin, the agent looked components and tokens up before writing, and the hook never had to block. Read it as a direction, not a rate; the [method, per-run results and every generated file](bench/agents) are in the repository.
+That count is onsystem's own, and the MCP server and the hook show the agent the same errors to fix. In the two tasks that ask for a green status label in a design system with no success token, agents with onsystem often used `chart-*` tokens, which it counts as clean. The blind labels by an AI reviewer, 12 files per arm, are too few to confirm the count either way, and every violation they found with the hook or all three is a palette color in Dub, whose tokens 0.5.0 did not read. The [benchmark page](https://onsystem.vercel.app/benchmark) has every table, and [bench/v2](bench/v2) the method, the per-run data and every generated file.
 
 ## Docs
 

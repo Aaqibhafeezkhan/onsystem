@@ -2,6 +2,12 @@
 
 1200 runs (1122 done, 78 max-calls), onsystem 0.5.0, started 2026-10-12T13:51:31.359Z. Rates with 95% Wilson intervals; errors per run and differences with 95% cluster-bootstrap intervals (tasks resampled, 10,000 draws, seed 1). Method: [README](../README.md).
 
+**Read the onsystem columns with these.** They are onsystem 0.5.0's own count, of the same errors its MCP server and hook show the agent; `tsc` and the blind labels are the measures independent of it. More in [Threats to validity](../../README.md#threats-to-validity).
+
+- **dub, as of 0.5.0.** onsystem 0.5.0 found no color tokens in dub, so its color rules stayed quiet there in every arm. onsystem reads dub's shared Tailwind config since [#107](https://github.com/dgesteves/onsystem/pull/107), and re-scoring these outputs with it raises dub's count in every arm. A rerun on the released version is planned.
+- **Chart tokens for status colors.** `settings-card` (chatbot) and `plan-summary-card` (saas-starter) ask for a small green status label in a design system with no success token. With onsystem, agents often used a `chart-*` token for the green (24 of 24 runs with all three, 0 of 24 without onsystem), which onsystem counts as clean. Those two tasks hold 91 of the 203 errors without onsystem.
+- **Blind labels.** 12 files per arm are too few to confirm or contradict the onsystem counts. Every violation the labeller found with the hook or with all three is a palette color in a dub file where dub has a token, which 0.5.0 did not read.
+
 | Model | Arm | Runs | Created | `tsc` passes | onsystem clean | Accepted | onsystem errors / run | Cost / run | Calls | Hook blocks | MCP calls |
 | --- | --- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
 | claude-haiku-5-5 | none | 60 | 100% | 58/60 97% [89%, 99%] | 42/60 70% [57%, 80%] | 41/60 68% [56%, 79%] | 0.58 [0.20, 1.07] | $0.0041 | 6.2 | 0.00 | 0.0 |
