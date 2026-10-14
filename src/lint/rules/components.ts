@@ -423,6 +423,9 @@ const PROP_EQUIVALENTS: string[][] = [
   ['indeterminate', 'isIndeterminate'],
 ];
 
+/** Props other libraries compose with, which no prop of a similar spelling stands in for. */
+const FOREIGN_COMPOSITION = new Set(['href', 'as', 'component']);
+
 /**
  * Radix composes with `asChild` and a child element, Base UI with a `render`
  * element; shadcn/ui ships both, and agents mix them up, or bring `as`, `component`
@@ -463,16 +466,18 @@ const HANDLER = /^on[A-Z]/;
 /**
  * The prop an unknown one most likely means, and whether the rename is safe as a fix: an
  * equivalent, a synonym or the same name in other case (`onclick`, `tabindex`) means the same,
- * and so does an own prop one edit away (`varient`). A forwarded attribute of a similar spelling
- * is only named, since one letter can make another prop (`disable` is `disabled`, but `href` is
- * not `ref`); `ref` and forwarded handlers, whose events differ (`onValueChange` is not
- * `onVolumeChange`), are not guessed by spelling at all.
+ * and so does an own prop one edit away (`varient`, `onPres`). A forwarded attribute of a
+ * similar spelling is only named, since one letter can make another prop (`disable` is
+ * `disabled`, but `href` is not `ref`). `ref`, own or forwarded, and forwarded handlers, whose
+ * events differ (`onValueChange` is not `onVolumeChange`), are not guessed by spelling at all,
+ * and neither is anything for `href`, `as` or `component` (`ref`, `is`), which compose.
  */
 function guessProp(
   name: string,
   own: readonly string[],
   known: Set<string>,
 ): { prop: string; fix: boolean } | undefined {
+  if (FOREIGN_COMPOSITION.has(name)) return undefined;
   const equivalents = PROP_EQUIVALENTS.find((group) => group.includes(name)) ?? [];
   const equivalent =
     equivalents.find((other) => other !== name && own.includes(other)) ??
@@ -488,7 +493,10 @@ function guessProp(
   const lower = name.toLowerCase();
   const recased = [...known].find((prop) => prop.toLowerCase() === lower);
   if (recased) return { prop: recased, fix: true };
-  const typo = closest(name, own);
+  const typo = closest(
+    name,
+    own.filter((prop) => prop !== 'ref'),
+  );
   if (typo) return { prop: typo, fix: editDistance(lower, typo.toLowerCase()) <= 1 };
   const similar = closest(
     name,
@@ -587,14 +595,27 @@ const VALUE_GROUPS: string[][] = [
   ['warning', 'caution', 'warn', 'yellow', 'amber', 'pending'],
   ['info', 'information', 'note', 'notice', 'blue'],
   ['link', 'anchor', 'href', 'inline'],
-  // Size steps. One past an end of the scale (`xxs`, `2xl`) maps to that end when the scale has it.
-  ['xs', 'xsmall', 'x-small', 'extra-small', 'xxs', '2xs'],
-  ['sm', 'small', 's', 'xs', 'compact', 'tiny'],
+  // Size steps: other names for the same step.
+  ['xs', 'xsmall', 'x-small', 'extra-small'],
+  ['sm', 'small', 's', 'compact', 'tiny'],
   ['md', 'medium', 'm', 'default', 'normal', 'regular', 'base'],
   ['lg', 'large', 'l', 'big'],
-  ['xl', 'xlarge', 'x-large', 'extra-large', 'huge', 'xxl', '2xl'],
+  ['xl', 'xlarge', 'x-large', 'extra-large', 'huge'],
   ['icon', 'iconOnly', 'icon-only', 'square', 'icon-button'],
 ];
+
+/**
+ * A size one step past an end of the scale → the step at that end, under whichever name the
+ * scale gives it (`xs` → `sm` or `small`). It renders another size than the one written, so it
+ * is named in the message but not fixed.
+ */
+const NEXT_STEP: Record<string, string> = {
+  xxs: 'xs',
+  '2xs': 'xs',
+  xs: 'sm',
+  xxl: 'xl',
+  '2xl': 'xl',
+};
 
 /** An allowed value that means the same: `danger` → `destructive`, `small` → `sm`. */
 function synonymValue(value: string, allowed: readonly string[]): string | undefined {
@@ -605,6 +626,13 @@ function synonymValue(value: string, allowed: readonly string[]): string | undef
     if (match) return match;
   }
   return undefined;
+}
+
+/** The end of the scale a size one step past it stands next to: `2xl` → `xl`, `xs` → `small`. */
+function nextStep(value: string, allowed: readonly string[]): string | undefined {
+  const step = NEXT_STEP[value.toLowerCase()];
+  if (!step) return undefined;
+  return allowed.includes(step) ? step : synonymValue(step, allowed);
 }
 
 /** The step of a size scale a value names, alone or at its end: `xs`, `lg`, `2xl`, `icon-sm`. */
@@ -639,7 +667,10 @@ export const noUnknownVariant: Rule = {
         for (const literal of literalValues(attribute)) {
           if (prop.values.includes(literal.text)) continue;
           const synonym = synonymValue(literal.text, prop.values);
-          const guess = synonym ?? spelledLike(literal.text, prop.values);
+          const guess =
+            synonym ??
+            nextStep(literal.text, prop.values) ??
+            spelledLike(literal.text, prop.values);
           const start = literal.getStart(context.sourceFile) + 1;
           const end = literal.end - 1;
           context.report({

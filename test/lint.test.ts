@@ -1754,6 +1754,61 @@ export const A = () => (
     expect(findings[3]?.message).toBe('<Button> has no prop "disable". Did you mean "disabled"?');
   });
 
+  it('guesses no ref from href, nor is from as, on a component that takes ref as its own prop', async () => {
+    // React 19 components take `ref` as a plain prop, and these compose neither with asChild nor
+    // with render, so there is no hint to give: `href` is not a typo of `ref`, nor `as` of `is`.
+    const system = await load(
+      fixture(
+        {
+          'tsconfig.json': TSCONFIG,
+          'components/ui/button.tsx': `import * as React from "react"
+type ButtonProps = {
+  ref?: React.Ref<HTMLButtonElement>
+  variant?: "default" | "ghost"
+  onPress?: () => void
+  children?: React.ReactNode
+}
+export function Button({ ref, onPress, ...props }: ButtonProps) {
+  return <button ref={ref} onClick={onPress} {...props} />
+}`,
+          'components/ui/tile.tsx': `import * as React from "react"
+interface TileProps extends React.HTMLAttributes<HTMLDivElement> {
+  ref?: React.Ref<HTMLDivElement>
+}
+export function Tile({ ref, ...props }: TileProps) {
+  return <div ref={ref} {...props} />
+}`,
+        },
+        { nodeModules: true },
+      ),
+    );
+    const code = `import { Button } from "@/components/ui/button"
+import { Tile } from "@/components/ui/tile"
+<>
+  <Button href="/docs">Docs</Button>
+  <Tile href="/docs" as="section" component="section" />
+  <Button onPres={save}>Save</Button>
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['href', undefined, undefined],
+      ['href', undefined, undefined],
+      ['as', undefined, undefined],
+      ['component', undefined, undefined],
+      // An own handler one letter off is the same handler.
+      ['onPres', 'onPress', 'onPress'],
+    ]);
+    expect(findings.slice(0, 4).map((d) => d.message)).toEqual([
+      '<Button> has no prop "href".',
+      '<Tile> has no prop "href".',
+      '<Tile> has no prop "as".',
+      '<Tile> has no prop "component".',
+    ]);
+    expect(applyFixes(code, findings.slice(0, 4))).toBe(code);
+  });
+
   it('skips components whose props could not be fully resolved', async () => {
     const acme = await loadOnce(ACME_ROOT);
     expect(
@@ -1797,7 +1852,7 @@ describe('no-unknown-variant', () => {
     expect(check(`${IMPORTS}<Button variant="outline" size={size} />`, rule)).toEqual([]);
   });
 
-  it('never guesses one size from another by spelling', async () => {
+  it('never guesses one size from another by spelling, and fixes only the same step', async () => {
     // shadcn/ui's current button has `xs` but no `xl`, one letter apart at the two ends of the scale.
     const system = await load(
       fixture({
@@ -1811,33 +1866,45 @@ describe('no-unknown-variant', () => {
         'components/ui/avatar.tsx': `export function Avatar(props: { size?: "sm" | "md" | "lg" | "xl" }) {
   return <span />
 }`,
+        'components/ui/chip.tsx': `export function Chip(props: { size?: "small" | "medium" | "large" }) {
+  return <span />
+}`,
       }),
     );
     const code = `import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { Chip } from "@/components/ui/chip"
 <>
   <Button size="xl">Save</Button>
   <Button size="icon-xl">A</Button>
   <Button size="xxs">B</Button>
   <Avatar size="xlarge" />
   <Avatar size="2xl" />
+  <Avatar size="xs" />
+  <Chip size="xs" />
 </>`;
     const findings = system
       .check(code, 'app/page.tsx')
       .diagnostics.filter((d) => d.ruleId === rule);
-    // A step past the end of a scale maps to that end, when the scale has it.
     expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
       ['"xl"', undefined, undefined],
       ['"icon-xl"', undefined, undefined],
-      ['"xxs"', 'size="xs"', 'xs'],
+      // A step past the end of a scale is named next to that end, but renders another size.
+      ['"xxs"', 'size="xs"', undefined],
+      // Another name for the same step is fixed.
       ['"xlarge"', 'size="xl"', 'xl'],
-      ['"2xl"', 'size="xl"', 'xl'],
+      ['"2xl"', 'size="xl"', undefined],
+      ['"xs"', 'size="sm"', undefined],
+      ['"xs"', 'size="small"', undefined],
     ]);
     // The allowed values, without a guess.
     expect(findings[0]?.message).toMatch(
       /^"xl" is not a valid size for <Button>\. Allowed: [\w, -]+\.$/,
     );
-    expect(applyFixes(code, findings)).toContain('<Button size="xl">Save</Button>');
+    expect(findings[4]?.message).toBe(
+      '"2xl" is not a valid size for <Avatar>. Allowed: sm, md, lg, xl. Did you mean "xl"?',
+    );
+    expect(applyFixes(code, findings)).toBe(code.replace('"xlarge"', '"xl"'));
   });
 
   it('names a value spelled close to an allowed one without fixing it', () => {
