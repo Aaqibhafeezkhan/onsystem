@@ -72,7 +72,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke.mjs",
-    "pack-test": "node scripts/pack-test.mjs",
+    "pack-test": "node scripts/pack-test.mjs && node scripts/pack-test-eslint8.mjs",
     "assets": "node scripts/build-assets.mjs",
     "palette": "node scripts/build-palette.mjs",
     "sync-plugins": "node scripts/sync-plugins.mjs",
@@ -96,7 +96,7 @@
     "zod": "^4.6.5"
   },
   "peerDependencies": {
-    "eslint": ">=9.0.0"
+    "eslint": ">=8.57.0"
   },
   "peerDependenciesMeta": {
     "eslint": {
