@@ -12,7 +12,13 @@ const rule = 'no-hardcoded-color';
 
 /** What the message says when the theme has no token of the color's hue: both ways out. */
 const WAYS_OUT =
-  'No token has this hue. Add a token for it to the theme, such as `--success` for a status color, or keep this color and give the reason: `// onsystem-disable-next-line no-hardcoded-color -- <reason>`.';
+  'No token has this hue. Add a token for it to the theme, such as `--success` for a status color, or keep this color and give the reason on the line above: `// onsystem-disable-next-line no-hardcoded-color -- <reason>` (between JSX children, `{/* onsystem-disable-next-line no-hardcoded-color -- <reason> */}`).';
+
+/** A suppression comment the message offers, as an agent would paste it. */
+const offered = (form: RegExp): string =>
+  (WAYS_OUT.match(form)?.[1] ?? '').replace('<reason>', 'status color');
+const LINE_COMMENT = offered(/`(\/\/ onsystem-disable[^`]*)`/);
+const JSX_COMMENT = offered(/`(\{\/\* onsystem-disable[^`]*)`/);
 
 /** Naming a gray or another hue's token as the nearest pushes agents to swap a status green for it. */
 function expectNoTokenNamed(d: Diagnostic | undefined): void {
@@ -118,14 +124,41 @@ describe('no-hardcoded-color when no token has the hue', () => {
     expect(blue?.suggestion).toBe('text-brand');
   });
 
-  it('takes the comment the message offers', () => {
-    const code = `<span
-  // onsystem-disable-next-line no-hardcoded-color -- status color
+  it('takes the comments the message offers, each where it says', () => {
+    expect(LINE_COMMENT).toBe('// onsystem-disable-next-line no-hardcoded-color -- status color');
+    expect(JSX_COMMENT).toBe(
+      '{/* onsystem-disable-next-line no-hardcoded-color -- status color */}',
+    );
+    const quiet = (code: string) => shadcn.check(code, 'app/page.tsx').diagnostics;
+    // On the line above, in code and between attributes.
+    expect(
+      quiet(`${LINE_COMMENT}
+const active = "bg-green-100 text-green-800";`),
+    ).toEqual([]);
+    expect(
+      quiet(`<span
+  ${LINE_COMMENT}
   className="bg-green-100 text-green-800"
 >
   Active
-</span>`;
-    expect(shadcn.check(code, 'app/page.tsx').diagnostics).toEqual([]);
+</span>`),
+    ).toEqual([]);
+    // A badge on its own line between JSX children, where most of them sit.
+    const badge = (comment: string) => `export function Plan() {
+  return (
+    <div className="flex items-center gap-2">
+      <h3>Pro</h3>
+      ${comment}
+      <span className="bg-green-100 text-green-800">Active</span>
+    </div>
+  );
+}`;
+    expect(quiet(badge(JSX_COMMENT))).toEqual([]);
+    // There a `//` line is JSX text: it suppresses nothing (and would render), hence the other form.
+    expect(quiet(badge(LINE_COMMENT)).map((d) => [d.source, d.severity])).toEqual([
+      ['bg-green-100', 'warning'],
+      ['text-green-800', 'warning'],
+    ]);
   });
 
   it('keeps blocking colors a token has, or could have', async () => {

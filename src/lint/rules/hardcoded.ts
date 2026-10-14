@@ -404,9 +404,13 @@ function reportColor(
   });
 }
 
-/** When no token has the color's hue: add one, or keep the color and say why. */
+/**
+ * When no token has the color's hue: add one, or keep the color and say why. Between JSX
+ * children a `//` line is text, which suppresses nothing and renders, so that place gets the
+ * `{/* *\/}` form.
+ */
 const NO_TOKEN_HAS_HUE =
-  'No token has this hue. Add a token for it to the theme, such as `--success` for a status color, or keep this color and give the reason: `// onsystem-disable-next-line no-hardcoded-color -- <reason>`.';
+  'No token has this hue. Add a token for it to the theme, such as `--success` for a status color, or keep this color and give the reason on the line above: `// onsystem-disable-next-line no-hardcoded-color -- <reason>` (between JSX children, `{/* onsystem-disable-next-line no-hardcoded-color -- <reason> */}`).';
 
 /**
  * The most Tailwind v3 and v4 differ on one shade, in ΔE: 0.036 for fuchsia-600,
