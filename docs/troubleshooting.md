@@ -54,7 +54,7 @@ npm's `min-release-age` (a number of days, usually in `.npmrc`) makes npm and np
 
 `check` warns `No token has this hue` on a green, yellow or blue, such as a status badge's `bg-green-100 text-green-800`: the theme has no token of that hue, as shadcn/ui's themes have no `success`, `warning` or `info`. It is a warning: `check` exits 0 on it unless the warnings pass `--max-warnings`, and the Claude Code hook does not block.
 
-- **Add the token** to the theme: [status colors](tokens.md#status-colors) has the CSS for `success`, `warning` and `info`, light and dark. Then write `bg-success/10 text-success`.
+- **Add the token** to the theme: [status colors](tokens.md#status-colors) has the CSS for `success`, `warning` and `info`, light and dark. Then write `bg-success/10 text-success`. Other colors near those hues become errors too, a brand indigo among them: [what the recipe changes](tokens.md#what-the-recipe-changes) lists them.
 - **Or keep the color** and say why on the line above: `// onsystem-disable-next-line no-hardcoded-color -- <reason>`, or `{/* onsystem-disable-next-line no-hardcoded-color -- <reason> */}` between JSX children.
 
 ## Findings in code from a shadcn registry
