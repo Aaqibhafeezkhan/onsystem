@@ -98,24 +98,36 @@ export function modelName(benchmark: Benchmark, id: string): string {
 
 /**
  * The result in one sentence, pooled over every model: onsystem's errors per run without it
- * and with all three parts. scripts/generate.mjs fails the build if the results stop
- * supporting "no change in tsc pass rate or cost per run".
+ * and with all three parts. The tool under test counts them, in the release the benchmark ran,
+ * so wherever the result is quoted it names that release. scripts/generate.mjs fails the build
+ * if the results stop supporting "no measurable change in tsc pass rate or cost per run", or
+ * if the arms differ in size.
  */
 export function headline(benchmark: Benchmark) {
+  const none = row(benchmark, 'all models', 'none');
   return {
-    from: perRun(row(benchmark, 'all models', 'none').onsystemErrors.value),
+    from: perRun(none.onsystemErrors.value),
     to: perRun(row(benchmark, 'all models', 'all').onsystemErrors.value),
-    runs: count(benchmark.runs),
+    /** The onsystem release that ran the benchmark and counted the errors. */
+    version: benchmark.onsystem,
+    /** Runs in each arm: the headline compares two of them. */
+    perArm: count(none.runs),
     models: String(benchmark.models.length),
     providers: String(benchmark.providers.length),
     repos: String(benchmark.repos.length),
   };
 }
 
+/** The headline in a few words, saying whose count it is: "onsystem 0.5.0 errors per run: …". */
+export function headlineShort(benchmark: Benchmark): string {
+  const h = headline(benchmark);
+  return `onsystem ${h.version} errors per run: ${h.from} → ${h.to}`;
+}
+
 /** The headline as plain text, starting lower case: "design-system rule violations per run…". */
 export function headlineText(benchmark: Benchmark): string {
   const h = headline(benchmark);
-  return `design-system rule violations per run went from ${h.from} to ${h.to} with onsystem's skill, MCP server and hook, with no change in tsc pass rate or cost per run (${h.runs} runs, ${h.models} models, ${h.providers} providers, ${h.repos} repositories)`;
+  return `design-system rule violations per run, as onsystem ${h.version}'s own check counts them, went from ${h.from} to ${h.to} with onsystem's skill, MCP server and hook, with no measurable change in tsc pass rate or cost per run (${h.perArm} runs per arm, ${h.models} models, ${h.providers} providers, ${h.repos} repositories)`;
 }
 
 /** The models from the labeller's family, by name. */

@@ -5,10 +5,13 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { alt as cardAlt } from '@/app/benchmark/opengraph-image';
 import BenchmarkPage, { metadata } from '@/app/benchmark/page';
 import Home from '@/app/page';
 import sitemap from '@/app/sitemap';
 import { NAV } from '@/components/site-header';
+import { headlineShort } from '@/lib/benchmark';
+import { benchmark } from '@/lib/data';
 import { llmsTxt } from '@/lib/llms';
 
 // /benchmark against the files bench/v2's `report` wrote, read here directly rather than through
@@ -53,7 +56,7 @@ interface Delta {
 }
 
 const json = JSON.parse(fs.readFileSync(path.join(results, 'results.json'), 'utf8')) as {
-  info: { startedAt: string; repos: Record<string, unknown> };
+  info: { startedAt: string; onsystem: string; repos: Record<string, unknown> };
   rows: Row[];
   deltas: Delta[];
 };
@@ -127,22 +130,172 @@ const providers = new Set(
 const none = pooled('all models', 'none');
 const all = pooled('all models', 'all');
 const allDelta = json.deltas.find((d) => d.model === 'all models' && d.arm === 'all');
+// The release that ran the benchmark and scored it: the headline is its own count.
+const version = json.info.onsystem;
+
+// The blind labels joined with key.json: each labelled file's arm, repository and counts.
+const csvFields = (line: string) =>
+  [...line.matchAll(/(?:^|,)(?:"((?:[^"]|"")*)"|([^,]*))/g)].map(
+    (m) => m[1]?.replace(/""/g, '"') ?? m[2] ?? '',
+  );
+const [labelHeader = '', ...labelLines] = fs
+  .readFileSync(path.join(results, 'labels/labels.csv'), 'utf8')
+  .trim()
+  .split(/\r?\n/);
+const labelKey = JSON.parse(
+  fs.readFileSync(path.join(results, 'labels/key.json'), 'utf8'),
+) as Record<string, { arm: string }>;
+const labelled = labelLines
+  .filter((line) => /^S\d+,/.test(line))
+  .map((line) => {
+    const fields = csvFields(line);
+    const cell = (column: string) => fields[csvFields(labelHeader).indexOf(column)] ?? '';
+    const n = (column: string) => Number(cell(column)) || 0;
+    return {
+      arm: labelKey[cell('sample_id')]?.arm ?? '',
+      repo: cell('repo'),
+      hardcoded: n('hardcoded_values'),
+      violations:
+        n('invented_api') + n('hardcoded_values') + n('native_elements') + n('unnamed_controls'),
+    };
+  });
 
 describe('/benchmark', () => {
   it('states the headline with the numbers in results.json', () => {
     expect(runs).toBe(1200);
-    const sentence = `design-system rule violations per run went from ${two(none.onsystemErrors.value)} to ${two(all.onsystemErrors.value)} with onsystem's skill, MCP server and hook, with no change in tsc pass rate or cost per run (${runs.toLocaleString('en-US')} runs, ${String(modelIds.length)} models, ${String(providers.size)} providers, ${String(Object.keys(json.info.repos).length)} repositories)`;
+    expect(version).toBe('0.5.0');
+    // The headline compares two arms of the same size.
+    for (const arm of ['none', 'skill', 'mcp', 'hook', 'all'])
+      expect(pooled('all models', arm).runs).toBe(none.runs);
+    const sentence = `design-system rule violations per run, as onsystem ${version}'s own check counts them, went from ${two(none.onsystemErrors.value)} to ${two(all.onsystemErrors.value)} with onsystem's skill, MCP server and hook, with no measurable change in tsc pass rate or cost per run (${String(none.runs)} runs per arm, ${String(modelIds.length)} models, ${String(providers.size)} providers, ${String(Object.keys(json.info.repos).length)} repositories)`;
     expect(sentence).toBe(
-      "design-system rule violations per run went from 0.85 to 0.00 with onsystem's skill, MCP server and hook, with no change in tsc pass rate or cost per run (1,200 runs, 6 models, 3 providers, 5 repositories)",
+      "design-system rule violations per run, as onsystem 0.5.0's own check counts them, went from 0.85 to 0.00 with onsystem's skill, MCP server and hook, with no measurable change in tsc pass rate or cost per run (240 runs per arm, 6 models, 3 providers, 5 repositories)",
     );
+    // "No measurable change": the paired difference in tsc passes holds 0.
+    expect(allDelta?.tscPass.low).toBeLessThanOrEqual(0);
+    expect(allDelta?.tscPass.high).toBeGreaterThanOrEqual(0);
     const lead = /<p data-headline[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '';
     expect(text(lead)).toBe(`In the run of ${json.info.startedAt.slice(0, 10)}, ${sentence}.`);
     expect(lead).toContain('<code');
     // The description is the same result, short enough for a search result.
     expect(metadata.description).toBe(
-      `Coding agents with and without onsystem, ${json.info.startedAt.slice(0, 10)}: rule violations per run went from 0.85 to 0.00 over 1,200 runs, 6 models and 5 repositories.`,
+      `Coding agents with and without onsystem, ${json.info.startedAt.slice(0, 10)}: rule violations per run, as onsystem 0.5.0 counts them, went from 0.85 to 0.00 (240 runs per arm).`,
     );
     expect(metadata.description?.length).toBeLessThanOrEqual(160);
+  });
+
+  it('names the onsystem release that ran it, and says the tool under test scores the headline', () => {
+    const page = text(html);
+    expect(text(/<p[^>]*>Benchmark · [\s\S]*?<\/p>/.exec(html)?.[0] ?? '')).toBe(
+      `Benchmark · ${json.info.startedAt.slice(0, 10)} · onsystem ${version}`,
+    );
+    expect(page).toContain(
+      `A rule violation is an error from onsystem check that the run added to the repository, counted by onsystem ${version}, the release the benchmark ran: the tool under test scores the headline.`,
+    );
+    expect(page).toContain(
+      `onsystem is one of the scorers. The headline counts the errors of onsystem ${version}, the release under test.`,
+    );
+    expect(cardAlt).toBe(
+      `The onsystem benchmark: design-system rule violations per run, as onsystem ${version}'s own check counts them, went from 0.85 to 0.00 with onsystem's skill, MCP server and hook, over 240 runs per arm.`,
+    );
+    expect(headlineShort(benchmark)).toBe(`onsystem ${version} errors per run: 0.85 → 0.00`);
+    expect(text(/<div data-stat="violations"[\s\S]*?<\/dt>/.exec(html)?.[0] ?? '')).toBe(
+      `onsystem ${version} errors per run`,
+    );
+  });
+
+  it('says what the blind labels can and cannot say about the headline', () => {
+    const arms = ['none', 'skill', 'mcp', 'hook', 'all'];
+    const of = (arm: string) => labelled.filter((l) => l.arm === arm);
+    const perArm = of('none').length;
+    for (const arm of arms) expect(of(arm), arm).toHaveLength(perArm);
+    // Too few to confirm it either way: the intervals of none and all overlap (results.md).
+    const interval = (arm: string) =>
+      /^\| (\w+) \| \d+ \|.*\| (\d+\.\d+) \[(\d+\.\d+), (\d+\.\d+)\] \|$/
+        .exec(report.split('\n').find((l) => l.startsWith(`| ${arm} | `)) ?? '')
+        ?.slice(3)
+        .map(Number) ?? [NaN, NaN];
+    const [noneLow = NaN, noneHigh = NaN] = interval('none');
+    const [allLow = NaN, allHigh = NaN] = interval('all');
+    expect(allLow <= noneHigh && noneLow <= allHigh).toBe(true);
+    // Every violation the labeller counted with the hook and with all three is a hardcoded
+    // value in dub, and onsystem 0.5.0 saw no color tokens there.
+    for (const arm of ['hook', 'all']) {
+      expect(
+        of(arm).reduce((n, l) => n + l.violations, 0),
+        arm,
+      ).toBeGreaterThan(0);
+      for (const l of of(arm))
+        expect(l.violations, `${arm} ${l.repo}`).toBe(l.repo === 'dub' ? l.hardcoded : 0);
+    }
+    expect(benchmark.repos.find((r) => r.name === 'dub')?.designSystem).toContain(
+      'no color tokens found',
+    );
+    // Outside dub, only files written without onsystem have any.
+    const outside = (arm: string) =>
+      of(arm)
+        .filter((l) => l.repo !== 'dub')
+        .reduce((n, l) => n + l.violations, 0);
+    expect(outside('none')).toBeGreaterThan(0);
+    for (const arm of arms.slice(1)) expect(outside(arm), arm).toBe(0);
+    expect(text(/<p data-labels="scope"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '')).toBe(
+      `These labels are too few to confirm the headline either way. Every violation the labeller counted in the hook and all arms is a Tailwind palette color in dub, where onsystem ${version} found no color tokens to check it against; #107, merged after the 0.6.0 release, makes onsystem read dub's tokens from its shared Tailwind config. Outside dub, the labeller counted violations only in files written without onsystem.`,
+    );
+  });
+
+  it('says that onsystem 0.5.0 found no color tokens in dub, and that #107, merged since, reads them', () => {
+    // The repositories table's row for dub.
+    const dub = /<tr>(?:(?!<\/tr>)[\s\S])*?>dubinc\/dub<[\s\S]*?<\/tr>/.exec(html);
+    expect(text(dub?.[0] ?? '')).toContain(
+      `no color tokens found, so the color rules stay quiet here and the component, prop and variant rules do the work. That is what onsystem ${version} found; #107, merged after the 0.6.0 release, makes onsystem read dub's tokens from its shared Tailwind config.`,
+    );
+    expect(dub?.[0]).toContain('href="https://github.com/dgesteves/onsystem/pull/107"');
+    // "Merged after the 0.6.0 release": 0.6.0's notes do not have it, and it is a pending
+    // changeset or in a later release's notes.
+    const root = path.join(import.meta.dirname, '../..');
+    const releases = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8').split(/^## /m);
+    const at = releases.findIndex((section) => section.startsWith('0.6.0\n'));
+    expect(at).toBeGreaterThan(0);
+    expect(releases[at]).not.toContain('/pull/107)');
+    expect(
+      fs.existsSync(path.join(root, '.changeset/shared-tailwind-config.md')) ||
+        releases.slice(1, at).some((section) => section.includes('/pull/107)')),
+    ).toBe(true);
+  });
+
+  it('says that a chart token passes for a status color in onsystem’s count', () => {
+    // The two tasks that ask for a green status label in a theme with no success token.
+    const green = ['plan-summary-card', 'settings-card'];
+    const tasks = benchmark.tasks.filter((t) => green.includes(t.id));
+    expect(tasks.map((t) => t.repo).sort()).toEqual(['chatbot', 'saas-starter']);
+    for (const t of tasks) expect(t.prompt).toMatch(/small green '\w+' status label/);
+    const [header = '', ...lines] = fs
+      .readFileSync(path.join(results, 'runs.csv'), 'utf8')
+      .trim()
+      .split('\n');
+    const columns = header.split(',');
+    const runsOf = (arm: string) =>
+      lines
+        .map((line) => Object.fromEntries(line.split(',').map((v, i) => [columns[i] ?? '', v])))
+        .filter((r) => r.arm === arm && green.includes(r.task ?? ''));
+    const usesChartToken = (id: string) => {
+      const dir = path.join(results, 'runs', id, 'files');
+      return fs
+        .readdirSync(dir, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .some((entry) =>
+          /\bchart-\d/.test(fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8')),
+        );
+    };
+    const withAll = runsOf('all');
+    expect(withAll).toHaveLength(24);
+    expect(withAll.every((r) => usesChartToken(r.id ?? ''))).toBe(true);
+    expect(withAll.every((r) => r.onsystem_errors === '0')).toBe(true);
+    expect(runsOf('none').some((r) => usesChartToken(r.id ?? ''))).toBe(false);
+    const threats = text(/<section id="threats"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '');
+    expect(threats).toContain(
+      'A chart token passes for a status color. Two tasks ask for a small green status label in saas-starter and chatbot, whose themes have no success token. Every run of those tasks with all three parts used a chart-* token for the green, and no run without onsystem did; onsystem counts that as clean, although those tokens are meant for charts.',
+    );
   });
 
   it('shows the headline figures from the pooled rows', () => {
@@ -289,16 +442,25 @@ describe('the rest of the site', () => {
   it('keeps a summary on the home page that links to /benchmark', () => {
     const home = renderToStaticMarkup(createElement(Home));
     expect(text(home)).toContain(
-      `${two(none.onsystemErrors.value)} to ${two(all.onsystemErrors.value)} with onsystem's skill`,
+      `as onsystem ${version}'s own check counts them, went from ${two(none.onsystemErrors.value)} to ${two(all.onsystemErrors.value)} with onsystem's skill`,
     );
     expect(stat('violations', home).after).toBe(two(all.onsystemErrors.value));
     expect(home).toContain('href="/benchmark"');
   });
 
+  it('says on the home page’s link whose count the headline is, and over how many runs', () => {
+    const home = renderToStaticMarkup(createElement(Home));
+    // The first link to /benchmark is the one under the hero's buttons.
+    const link = /<a[^>]*href="\/benchmark"[^>]*>([\s\S]*?)<\/a>/.exec(home)?.[1] ?? '';
+    expect(text(link)).toBe(
+      `onsystem ${version} errors per run: 0.85 → 0.00 (${String(none.runs)} runs per arm, ${String(modelIds.length)} models)`,
+    );
+  });
+
   it('gives llms.txt the headline and the page', () => {
     const llms = llmsTxt();
     expect(llms).toContain(
-      "design-system rule violations per run went from 0.85 to 0.00 with onsystem's skill, MCP server and hook",
+      "design-system rule violations per run, as onsystem 0.5.0's own check counts them, went from 0.85 to 0.00 with onsystem's skill, MCP server and hook",
     );
     expect(llms).toContain('https://onsystem.vercel.app/benchmark');
   });

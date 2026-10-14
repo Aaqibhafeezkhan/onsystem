@@ -34,15 +34,17 @@ import {
   type LabelRate,
 } from '@/lib/data';
 import { pageMetadata } from '@/lib/metadata';
-import { docsHref, repoLink } from '@/lib/site';
+import { docsHref, REPO, repoLink } from '@/lib/site';
 
 const RESULTS = 'bench/v2/results/standard';
+/** The change that reads dub's color tokens, which the benchmarked release could not. */
+const PR_107 = `${REPO}/pull/107`;
 const top = headline(benchmark);
 
 export const metadata: Metadata = pageMetadata({
   title: 'Benchmark',
   socialTitle: 'onsystem benchmark',
-  description: `Coding agents with and without onsystem, ${benchmark.date}: rule violations per run went from ${top.from} to ${top.to} over ${top.runs} runs, ${top.models} models and ${top.repos} repositories.`,
+  description: `Coding agents with and without onsystem, ${benchmark.date}: rule violations per run, as onsystem ${top.version} counts them, went from ${top.from} to ${top.to} (${top.perArm} runs per arm).`,
   path: '/benchmark',
 });
 
@@ -495,7 +497,9 @@ export default function BenchmarkPage() {
       <div className="glow pointer-events-none absolute inset-x-0 top-0 h-140" aria-hidden="true" />
       <div className="relative mx-auto w-full max-w-6xl px-4 pt-12 pb-16 sm:px-6 sm:pt-16 sm:pb-24">
         <div className="max-w-3xl">
-          <Eyebrow>Benchmark · {benchmark.date}</Eyebrow>
+          <Eyebrow>
+            Benchmark · {benchmark.date} · onsystem {benchmark.onsystem}
+          </Eyebrow>
           <h1 className="mt-3 text-[2rem] leading-[1.1] font-semibold tracking-[-0.025em] text-balance text-fg sm:text-[2.6rem]">
             Coding agents with and without onsystem
           </h1>
@@ -509,8 +513,10 @@ export default function BenchmarkPage() {
             <TextLink href={docsHref('claude-code-plugin')}>skill</TextLink>, the{' '}
             <TextLink href={docsHref('tools')}>MCP server</TextLink>, the hook, and all three. A
             rule violation is an error from <InlineCode>onsystem check</InlineCode> that the run
-            added to the repository. <InlineCode>tsc</InlineCode> type-checks each file in its
-            project&apos;s own setup, and a sample was labelled blind by an AI reviewer.
+            added to the repository, counted by onsystem {benchmark.onsystem}, the release the
+            benchmark ran: the tool under test scores the headline. <InlineCode>tsc</InlineCode>{' '}
+            type-checks each file in its project&apos;s own setup, and a sample was labelled blind
+            by an AI reviewer.
           </p>
         </div>
 
@@ -598,7 +604,16 @@ export default function BenchmarkPage() {
               <LabelsTable />
             </div>
             <Prose>
-              <p data-labels="agreement" className="mt-5">
+              {/* What the labels say about the headline: test/benchmark.test.ts checks it. */}
+              <p data-labels="scope" className="mt-5">
+                These labels are too few to confirm the headline either way. Every violation the
+                labeller counted in the hook and all arms is a Tailwind palette color in dub, where
+                onsystem {benchmark.onsystem} found no color tokens to check it against;{' '}
+                <TextLink href={PR_107}>#107</TextLink>, merged after the 0.6.0 release, makes
+                onsystem read dub&apos;s tokens from its shared Tailwind config. Outside dub, the
+                labeller counted violations only in files written without onsystem.
+              </p>
+              <p data-labels="agreement" className="mt-3">
                 Per file, onsystem and the labeller both found a problem in {labels.agreement.both},
                 only onsystem in {labels.agreement.onsystemOnly}, only the labeller in{' '}
                 {labels.agreement.labellerOnly} and neither in {labels.agreement.neither}.
@@ -678,6 +693,15 @@ export default function BenchmarkPage() {
                         <PlainCell col="project">{repo.project}</PlainCell>
                         <td className="px-3 py-2.5 align-top text-[13px] leading-relaxed text-muted">
                           {repo.designSystem}
+                          {repo.name === 'dub' && (
+                            <>
+                              {' '}
+                              That is what onsystem {benchmark.onsystem} found;{' '}
+                              <TextLink href={PR_107}>#107</TextLink>, merged after the 0.6.0
+                              release, makes onsystem read dub&apos;s tokens from its shared
+                              Tailwind config.
+                            </>
+                          )}
                         </td>
                         <PlainCell col="typescript">{repo.typescript}</PlainCell>
                       </tr>
@@ -813,9 +837,19 @@ export default function BenchmarkPage() {
                 </li>
                 <li className="pl-1">
                   <strong className="font-semibold text-fg">onsystem is one of the scorers.</strong>{' '}
-                  The headline counts onsystem&apos;s own errors. <InlineCode>tsc</InlineCode> and
-                  the blind labels are the independent checks: <InlineCode>tsc</InlineCode> does not
-                  see hardcoded values, and the labels cover {labels.files} files.
+                  The headline counts the errors of onsystem {benchmark.onsystem}, the release under
+                  test. <InlineCode>tsc</InlineCode> and the blind labels are the independent
+                  checks: <InlineCode>tsc</InlineCode> does not see hardcoded values, and the labels
+                  cover {labels.files} files.
+                </li>
+                <li className="pl-1">
+                  <strong className="font-semibold text-fg">
+                    A chart token passes for a status color.
+                  </strong>{' '}
+                  Two tasks ask for a small green status label in saas-starter and chatbot, whose
+                  themes have no success token. Every run of those tasks with all three parts used a{' '}
+                  <InlineCode>chart-*</InlineCode> token for the green, and no run without onsystem
+                  did; onsystem counts that as clean, although those tokens are meant for charts.
                 </li>
               </ul>
               <div className="mt-2.5">
