@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 
 // The next release, as `changeset version` writes it into CHANGELOG.md and the release notes.
-// Each test reads a pending changeset and skips once a release has consumed it.
+// Each test reads a pending changeset and skips once a release has consumed it. Delete this
+// file once 0.7.0 is published: from then on every test in it skips.
 const root = path.resolve(import.meta.dirname, '..');
 const changesetPath = (name: string) => path.join(root, '.changeset', name);
 
@@ -36,6 +37,7 @@ describe.skipIf(!fs.existsSync(changesetPath('shared-tailwind-config.md')))(
       expect(summary).toContain('Upgrading from 0.6.0');
       expect(summary).toContain('onsystem check . --update-baseline');
       expect(summary).toContain('--max-warnings');
+      expect(summary).toContain('`fail-on: warning` in the Action');
       expect(summary).toContain('pin it to a commit SHA');
     });
   },
