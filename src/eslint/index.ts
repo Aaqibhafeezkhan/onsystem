@@ -110,14 +110,18 @@ function unboundRename(sourceCode: SourceCode, edit: TextEdit): string | undefin
   ) {
     const variable = scope.set.get(name);
     // An import or declaration, not a global of the environment (the DOM's `Image`), and a
-    // value: `import type { Button }` does not make <Button> compile.
-    if (variable?.defs.length && !variable.defs.every(typeOnlyImport)) return;
+    // value: `import type { Button }` or `type Button = …` does not make <Button> compile.
+    if (variable?.defs.length && !variable.defs.every(typeOnly)) return;
   }
   return edit.text;
 }
 
-/** `import type { Button }` or `import { type Button }` (typescript-eslint's `importKind`). */
-function typeOnlyImport(def: Scope.Definition): boolean {
+/**
+ * A binding that is only a type: a type alias, interface or type parameter (typescript-eslint's
+ * `Type` definition), or `import type { Button }` and `import { type Button }` (its `importKind`).
+ */
+function typeOnly(def: Scope.Definition): boolean {
+  if ((def.type as string) === 'Type') return true;
   const kind = (node: unknown) => (node as { importKind?: string } | null)?.importKind;
   return def.type === 'ImportBinding' && (kind(def.node) === 'type' || kind(def.parent) === 'type');
 }

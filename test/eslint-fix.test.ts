@@ -86,6 +86,21 @@ export const Save = (props: React.ComponentProps<typeof Button>) => (
   <button {...props} className="px-2">Save</button>
 )
 `,
+  // Types of the same names, not the components: <Label> and <Button> would not compile either.
+  'app/labels.tsx': `type Label = { name: string; color: string }
+interface Button {
+  label: Label
+}
+
+export function NewLabel(props: { onAdd?: (button: Button) => void }) {
+  return (
+    <form>
+      <label htmlFor="label-name">Label</label>
+      <button type="submit">Add</button>
+    </form>
+  )
+}
+`,
   // The components are imported: the renames are safe.
   'app/upgrade.tsx': `import { Button } from "@/components/ui/button"
 import { Card, CardHeader } from "@/components/ui/card"
@@ -153,7 +168,12 @@ describe('eslint --fix', () => {
         '<Button type="button" className="px-2">Upgrade</Button>',
       );
       // Not in scope: left as they were, so the fixes add no error.
-      for (const file of ['app/sign-up.tsx', 'app/billing.tsx', 'app/save.tsx'] as const) {
+      for (const file of [
+        'app/sign-up.tsx',
+        'app/billing.tsx',
+        'app/save.tsx',
+        'app/labels.tsx',
+      ] as const) {
         expect(read(file)).toBe(APP[file]);
       }
       expect(tsc(root)).toEqual(before.filter((e) => !e.startsWith('app/upgrade.tsx')));
@@ -162,8 +182,9 @@ describe('eslint --fix', () => {
 
   it('offers a rename to a component the file does not import as a suggestion', async () => {
     const root = fixture(APP, { nodeModules: true });
-    const [billing, save, signUp] = await eslint(root, false).lintFiles([
+    const [billing, labels, save, signUp] = await eslint(root, false).lintFiles([
       'app/billing.tsx',
+      'app/labels.tsx',
       'app/save.tsx',
       'app/sign-up.tsx',
     ]);
@@ -184,6 +205,9 @@ describe('eslint --fix', () => {
       suggested('no-unknown-component', 'CardHeader'),
     ]);
     expect(renames(save)).toEqual([suggested('prefer-design-system-component', 'Button')]);
+    expect(renames(labels)).toEqual(
+      ['Label', 'Button'].map((name) => suggested('prefer-design-system-component', name)),
+    );
     // The message names the import to add.
     expect(signUp?.messages[0]?.message).toContain(
       'Use <Label> (import { Label } from "@/components/ui/label")',
