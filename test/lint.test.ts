@@ -1679,6 +1679,81 @@ import Link from "next/link"
     expect(applyFixes(code, d ? [d] : [])).toContain('<Input aria-invalid={!!error} />');
   });
 
+  it('fixes no prop into one that means something else', () => {
+    // `href` on a button is not a typo of `ref`, nor `onValueChange` of `onVolumeChange`; `as`
+    // and `component` are not the boolean `asChild`; and `onOpenChange` runs on open too, so
+    // `onClose={() => setOpen(false)}` renamed would keep the dialog shut.
+    const code = `${IMPORTS}import { Input } from "@/components/ui/input"
+import { Dialog } from "@/components/ui/dialog"
+import Link from "next/link"
+export const A = () => (
+  <>
+    <Button href="/docs">Docs</Button>
+    <Card href={url}>Plan</Card>
+    <Input onValueChange={setName} />
+    <Button as="a">Docs</Button>
+    <Button component={Link}>Docs</Button>
+    <Dialog onClose={() => setOpen(false)} />
+    <Dialog onOpen={track} />
+  </>
+)`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.source, d.suggestion])).toEqual([
+      ['href', 'asChild'],
+      ['href', undefined],
+      ['onValueChange', undefined],
+      ['as', 'asChild'],
+      ['component', 'asChild'],
+      ['onClose', 'onOpenChange'],
+      ['onOpen', 'onOpenChange'],
+    ]);
+    expect(findings.filter((d) => d.fix)).toEqual([]);
+    expect(applyFixes(code, findings)).toBe(code);
+    const radix =
+      'Radix components compose with asChild and a single child instead: <Button asChild><Link href="…">…</Link></Button>.';
+    expect(findings.map((d) => d.message)).toEqual([
+      '<Button> has no prop "href". For a link, Radix components compose with asChild and a single child: <Button asChild><Link href="…">…</Link></Button>.',
+      '<Card> has no prop "href".',
+      '<Input> has no prop "onValueChange".',
+      `<Button> has no prop "as". ${radix}`,
+      `<Button> has no prop "component". ${radix}`,
+      '<Dialog> has no prop "onClose". Did you mean "onOpenChange"? It is called with the new open state, on open as well as on close: onOpenChange={(open) => { if (!open) … }}.',
+      '<Dialog> has no prop "onOpen". Did you mean "onOpenChange"? It is called with the new open state, on open as well as on close: onOpenChange={(open) => { if (open) … }}.',
+    ]);
+  });
+
+  it('points href and as at render on Base UI, without a fix', async () => {
+    const base = await load(fixture(BASE_UI, { nodeModules: true }));
+    const code = `import { Button } from "@/components/ui/button"
+<><Button href="/docs">Docs</Button><Button as="a">Docs</Button></>`;
+    const findings = base.check(code).diagnostics.filter((d) => d.ruleId === rule);
+    expect(findings.map((d) => [d.message, d.suggestion, d.fix])).toEqual([
+      [
+        '<Button> has no prop "href". For a link, Base UI components compose with render: <Button render={<Link href="…" />}>…</Button>.',
+        'render',
+        undefined,
+      ],
+      [
+        '<Button> has no prop "as". Base UI components compose with render instead: <Button render={<Link href="…" />}>…</Button>.',
+        'render',
+        undefined,
+      ],
+    ]);
+  });
+
+  it('fixes a misspelled own prop or a miscased one, and only names other close matches', () => {
+    const code = `${IMPORTS}<Button varient="ghost" onclick={save} tabindex={0} disable>Save</Button>`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['varient', 'variant', 'variant'],
+      ['onclick', 'onClick', 'onClick'],
+      ['tabindex', 'tabIndex', 'tabIndex'],
+      // An attribute the component forwards, guessed by spelling: one letter can be another prop.
+      ['disable', 'disabled', undefined],
+    ]);
+    expect(findings[3]?.message).toBe('<Button> has no prop "disable". Did you mean "disabled"?');
+  });
+
   it('skips components whose props could not be fully resolved', async () => {
     const acme = await loadOnce(ACME_ROOT);
     expect(
@@ -1720,6 +1795,62 @@ describe('no-unknown-variant', () => {
 
   it('accepts valid and dynamic values', () => {
     expect(check(`${IMPORTS}<Button variant="outline" size={size} />`, rule)).toEqual([]);
+  });
+
+  it('never guesses one size from another by spelling', async () => {
+    // shadcn/ui's current button has `xs` but no `xl`, one letter apart at the two ends of the scale.
+    const system = await load(
+      fixture({
+        'tsconfig.json': TSCONFIG,
+        'components/ui/button.tsx': `export function Button(props: {
+  size?: "default" | "xs" | "sm" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg"
+  children?: unknown
+}) {
+  return <button>{props.children as string}</button>
+}`,
+        'components/ui/avatar.tsx': `export function Avatar(props: { size?: "sm" | "md" | "lg" | "xl" }) {
+  return <span />
+}`,
+      }),
+    );
+    const code = `import { Avatar } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+<>
+  <Button size="xl">Save</Button>
+  <Button size="icon-xl">A</Button>
+  <Button size="xxs">B</Button>
+  <Avatar size="xlarge" />
+  <Avatar size="2xl" />
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    // A step past the end of a scale maps to that end, when the scale has it.
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['"xl"', undefined, undefined],
+      ['"icon-xl"', undefined, undefined],
+      ['"xxs"', 'size="xs"', 'xs'],
+      ['"xlarge"', 'size="xl"', 'xl'],
+      ['"2xl"', 'size="xl"', 'xl'],
+    ]);
+    // The allowed values, without a guess.
+    expect(findings[0]?.message).toMatch(
+      /^"xl" is not a valid size for <Button>\. Allowed: [\w, -]+\.$/,
+    );
+    expect(applyFixes(code, findings)).toContain('<Button size="xl">Save</Button>');
+  });
+
+  it('names a value spelled close to an allowed one without fixing it', () => {
+    const code = `${IMPORTS}<Button variant="destructve" size="smal">x</Button>`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.suggestion, d.fix])).toEqual([
+      ['variant="destructive"', undefined],
+      ['size="sm"', undefined],
+    ]);
+    expect(findings[0]?.message).toBe(
+      '"destructve" is not a valid variant for <Button>. Allowed: default, destructive, outline, secondary, ghost, link. Did you mean "destructive"?',
+    );
+    expect(applyFixes(code, findings)).toBe(code);
   });
 });
 
