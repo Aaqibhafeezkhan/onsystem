@@ -105,7 +105,7 @@ npx onsystem check . --update-baseline   # writes onsystem.baseline.json: commit
 
 Findings show up as annotations on the pull request, and `--require-design-system` fails the job when the design system is no longer found. [CI and baselines](https://onsystem.vercel.app/docs/ci) has the whole workflow. The GitHub Action, `uses: dgesteves/onsystem@v0`, annotates only the lines a pull request changed: [make it a required check on agent pull requests](https://onsystem.vercel.app/docs/required-check).
 
-**ESLint.** The same rules for ESLint 9 and 10: add `onsystem.configs.recommended` from `onsystem/eslint` to `eslint.config.mjs` ([ESLint plugin](https://onsystem.vercel.app/docs/eslint), with @shadcn/lint).
+**ESLint.** The same rules for ESLint 8.57, 9 and 10: add `onsystem.configs.recommended` from `onsystem/eslint` to `eslint.config.mjs` ([ESLint plugin](https://onsystem.vercel.app/docs/eslint), with @shadcn/lint).
 
 ## Works with @shadcn/lint
 

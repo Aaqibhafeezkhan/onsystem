@@ -1,6 +1,6 @@
 # ESLint plugin
 
-The same rules as an ESLint plugin, for ESLint 9 and 10 with a flat config, so the design system is enforced in every editor and CI job that already runs ESLint, and travels with shared configs and presets.
+The same rules as an ESLint plugin, for ESLint 8.57, 9 and 10 with a flat config, so the design system is enforced in every editor and CI job that already runs ESLint, and travels with shared configs and presets.
 
 ```sh pm
 npm install --save-dev onsystem
@@ -16,6 +16,8 @@ export default [
   onsystem.configs.recommended,
 ];
 ```
+
+On ESLint 8.57, the same `eslint.config.mjs` works. The plugin has no `.eslintrc` form: a project on ESLint 8 that is still configured with `.eslintrc` moves to a flat config first ([ESLint's migration guide](https://eslint.org/docs/latest/use/configure/migration-guide)). `onsystem check` and the GitHub Action need no ESLint at all.
 
 The recommended config turns every rule on at its [default severity](rules.md) for `.tsx` and `.jsx` files, leaving out tests and stories as `check` does. It sets no parser: the TypeScript parser your config already uses parses the files (eslint-config-next and typescript-eslint both bring one). A config without one adds it:
 
@@ -51,7 +53,7 @@ export default [
 
 The plugin loads each design system once, in a worker thread (ESLint rules run synchronously and extraction does not), and looks at its files again at most every two seconds, so an editor's ESLint server picks up a new component or variant without a restart.
 
-A few things stay with the CLI. The [baseline](ci.md#adopting-it-in-an-existing-codebase) applies to `check` only; with ESLint, use its own suppressions or `--max-warnings`. ESLint reports syntax errors itself. Which files ESLint lints is up to its config (`ignores`), where `check` leaves out what git ignores.
+A few things stay with the CLI. The [baseline](ci.md#adopting-it-in-an-existing-codebase) applies to `check` only. ESLint has its own: on ESLint 9.24 and later, `npx eslint . --suppress-all` records the findings already in the code in `eslint-suppressions.json`, which you commit, and later runs leave them out ([bulk suppressions](https://eslint.org/docs/latest/use/suppressions)). Once a recorded finding is fixed, ESLint fails the run until `npx eslint . --prune-suppressions` takes it out of the file. On older versions, use `eslint-disable` comments, or set the onsystem rules to `warn` and cap them with `--max-warnings` (it counts warnings only, and most onsystem rules default to `error`). ESLint reports syntax errors itself. Which files ESLint lints is up to its config (`ignores`), where `check` leaves out what git ignores.
 
 ## With @shadcn/lint
 
