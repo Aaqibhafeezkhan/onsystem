@@ -21,7 +21,7 @@
         "no-hardcoded-color": {
           "errors": 102,
           "warnings": 0,
-          "fixes": 60
+          "fixes": 32
         },
         "prefer-design-system-component": {
           "errors": 2,
@@ -56,7 +56,7 @@
         "no-hardcoded-color": {
           "errors": 41,
           "warnings": 0,
-          "fixes": 8
+          "fixes": 3
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -95,7 +95,7 @@
         "no-hardcoded-color": {
           "errors": 96,
           "warnings": 0,
-          "fixes": 42
+          "fixes": 40
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -137,7 +137,7 @@
         "no-hardcoded-color": {
           "errors": 1024,
           "warnings": 0,
-          "fixes": 550
+          "fixes": 541
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -175,7 +175,7 @@
         "no-hardcoded-color": {
           "errors": 283,
           "warnings": 0,
-          "fixes": 90
+          "fixes": 63
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -219,7 +219,7 @@
         "no-hardcoded-color": {
           "errors": 283,
           "warnings": 0,
-          "fixes": 90
+          "fixes": 63
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -262,7 +262,7 @@
         "no-hardcoded-color": {
           "errors": 10188,
           "warnings": 0,
-          "fixes": 8180
+          "fixes": 6593
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -293,7 +293,7 @@
         "no-hardcoded-color": {
           "errors": 282,
           "warnings": 0,
-          "fixes": 156
+          "fixes": 133
         },
         "prefer-design-system-component": {
           "errors": 15,
@@ -324,7 +324,7 @@
         "no-hardcoded-color": {
           "errors": 10101,
           "warnings": 0,
-          "fixes": 8180
+          "fixes": 6593
         },
         "prefer-design-system-component": {
           "errors": 973,
@@ -356,7 +356,7 @@
         "no-hardcoded-color": {
           "errors": 10188,
           "warnings": 0,
-          "fixes": 8180
+          "fixes": 6593
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -412,7 +412,7 @@
         "no-hardcoded-color": {
           "errors": 10470,
           "warnings": 0,
-          "fixes": 8336
+          "fixes": 6726
         },
         "prefer-design-system-component": {
           "errors": 1015,
@@ -447,7 +447,7 @@
         "no-hardcoded-color": {
           "errors": 2,
           "warnings": 0,
-          "fixes": 2
+          "fixes": 0
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -486,7 +486,7 @@
         "no-hardcoded-color": {
           "errors": 5,
           "warnings": 0,
-          "fixes": 3
+          "fixes": 0
         },
         "no-hardcoded-spacing": {
           "errors": 0,
@@ -617,7 +617,7 @@
         "no-hardcoded-color": {
           "errors": 9,
           "warnings": 0,
-          "fixes": 5
+          "fixes": 0
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -661,7 +661,7 @@
         "no-hardcoded-color": {
           "errors": 214,
           "warnings": 0,
-          "fixes": 109
+          "fixes": 73
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -721,7 +721,7 @@
         "no-hardcoded-color": {
           "errors": 11,
           "warnings": 0,
-          "fixes": 11
+          "fixes": 7
         },
         "no-hardcoded-spacing": {
           "errors": 0,
@@ -860,7 +860,7 @@
         "no-hardcoded-color": {
           "errors": 397,
           "warnings": 0,
-          "fixes": 122
+          "fixes": 82
         },
         "no-hardcoded-radius": {
           "errors": 0,
