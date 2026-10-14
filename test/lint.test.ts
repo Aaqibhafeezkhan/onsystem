@@ -169,7 +169,9 @@ describe('no-hardcoded-color', () => {
       const [d] = check(`<div className="bg-[${value}]" />`, rule);
       expect(d?.fix).toBeUndefined();
       expect(d?.suggestion).toBeUndefined();
-      expect(d?.message).toContain(`No token has this hue; nearest is ${nearest} (ΔE`);
+      expect(d?.severity).toBe('warning');
+      expect(d?.message).toContain('No token has this hue. Add a token for it to the theme');
+      expect(d?.message).not.toContain(nearest);
     }
     // A pale gray is still a gray.
     expect(check(`<div className="bg-[#f5f5f5]" />`, rule)[0]?.suggestion).toBe('bg-muted');
@@ -242,7 +244,8 @@ describe('no-hardcoded-color', () => {
 
   it('declines to auto-fix when no token is close, and points at variants', () => {
     const [d] = check(`<div className="bg-[#2563eb]" />`, rule);
-    expect(d?.message).toContain('No token has this hue; nearest is ring (ΔE 0.269), a gray.');
+    expect(d?.message).toContain('No token has this hue. Add a token for it to the theme');
+    expect(d?.message).not.toContain('ring');
     expect(d?.fix).toBeUndefined();
     const [far] = check(`<div className="bg-[#404040]" />`, rule);
     expect(far?.message).toContain('No close token; nearest is primary (ΔE 0.166, same value as');
@@ -354,7 +357,7 @@ describe('no-hardcoded-color on a stock shadcn/ui theme', () => {
       expect(d?.message).not.toMatch(/\b(?:sidebar|chart)-/);
     }
     expect(suggest(`<p className="bg-yellow-100" />`)[0]?.message).toContain(
-      'No token has this hue; nearest is muted (ΔE 0.071, same value as accent, secondary), a gray.',
+      'No token has this hue. Add a token for it to the theme',
     );
     expect(suggest(`<p className="text-gray-900" />`)[0]?.suggestion).toBe('text-foreground');
   });

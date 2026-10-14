@@ -224,7 +224,8 @@ describe('the ESLint plugin', () => {
       }),
       'components/ui/button.tsx': BUTTON,
       'app/globals.css': TOKENS,
-      'app/page.tsx': RED,
+      // Black, not RED: check reports a hue no token has as a warning, and ESLint's config sets severity.
+      'app/page.tsx': RED.replace('#ff0000', '#000000'),
     });
     // Skipped, with a warning on stderr: zero config reads the app, with no error on the file.
     const expected = ['app/page.tsx:1:38 onsystem/no-hardcoded-color error'];

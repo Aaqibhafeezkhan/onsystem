@@ -146,7 +146,7 @@ describe('onsystem init', () => {
     );
     expect(stdout).toContain('Wrote onsystem.config.json.');
     expect(stdout).toContain(
-      'Dry run of `onsystem check .`: 1 error and 0 warnings in 1 of 1 file. By rule: no-hardcoded-color 1.',
+      'Dry run of `onsystem check .`: 0 errors and 1 warning in 1 of 1 file. By rule: no-hardcoded-color 1.',
     );
     expect(stdout).toContain('Baseline: 1 finding in 1 file → onsystem.baseline.json');
     expect(fs.existsSync(path.join(root, 'onsystem.baseline.json'))).toBe(true);
