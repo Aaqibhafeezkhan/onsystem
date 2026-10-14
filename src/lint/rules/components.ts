@@ -605,34 +605,61 @@ const VALUE_GROUPS: string[][] = [
 ];
 
 /**
- * A size one step past an end of the scale → the step at that end, under whichever name the
- * scale gives it (`xs` → `sm` or `small`). It renders another size than the one written, so it
- * is named in the message but not fixed.
+ * A value with the x's of its size step counted, so two spellings of one step compare equal:
+ * `xxl` and `2xl` both give `2xl`, `icon-XXS` and `icon-2xs` both give `icon-2xs`.
  */
-const NEXT_STEP: Record<string, string> = {
-  xxs: 'xs',
-  '2xs': 'xs',
-  xs: 'sm',
-  xxl: 'xl',
-  '2xl': 'xl',
-};
+function stepSpelling(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(
+      /(^|-)(x{2,})([sl])$/,
+      (_, start: string, xs: string, end: string) => `${start}${xs.length}x${end}`,
+    );
+}
 
-/** An allowed value that means the same: `danger` → `destructive`, `small` → `sm`. */
+/** {@link VALUE_GROUPS} spelled as {@link stepSpelling} spells a value, to compare the two. */
+const SPELLED_GROUPS = VALUE_GROUPS.map((group) => group.map(stepSpelling));
+
+/**
+ * An allowed value that means the same: the same step spelled another way (`xxl` → `2xl`,
+ * `XL` → `xl`), or a synonym (`danger` → `destructive`, `small` → `sm`).
+ */
 function synonymValue(value: string, allowed: readonly string[]): string | undefined {
-  const lower = value.toLowerCase();
-  for (const group of VALUE_GROUPS) {
-    if (!group.includes(lower)) continue;
-    const match = group.find((member) => member !== lower && allowed.includes(member));
+  const spelling = stepSpelling(value);
+  const same = allowed.find((member) => member !== value && stepSpelling(member) === spelling);
+  if (same) return same;
+  for (const group of SPELLED_GROUPS) {
+    if (!group.includes(spelling)) continue;
+    const match = allowed.find((member) => {
+      const memberSpelling = stepSpelling(member);
+      return memberSpelling !== spelling && group.includes(memberSpelling);
+    });
     if (match) return match;
   }
   return undefined;
 }
 
-/** The end of the scale a size one step past it stands next to: `2xl` → `xl`, `xs` → `small`. */
+/**
+ * The step a size one past an end of the scale stands next to, with its x's counted:
+ * `2xl` → `xl`, `3xl` → `2xl`, `2xs` → `xs`, `xs` → `sm`.
+ */
+function stepInside(spelling: string): string | undefined {
+  if (spelling === 'xs') return 'sm';
+  const match = /^(\d+)x([sl])$/.exec(spelling);
+  const count = Number(match?.[1]);
+  if (!match || count < 2) return undefined;
+  return `${count === 2 ? '' : count - 1}x${match[2]}`;
+}
+
+/**
+ * The end of the scale a size one step past it stands next to, under whichever name the scale
+ * gives it: `2xl` or `xxl` → `xl`, `3xl` → `2xl` or `xxl`, `xs` → `sm` or `small`. It renders
+ * another size than the one written, so it is named in the message but not fixed.
+ */
 function nextStep(value: string, allowed: readonly string[]): string | undefined {
-  const step = NEXT_STEP[value.toLowerCase()];
+  const step = stepInside(stepSpelling(value));
   if (!step) return undefined;
-  return allowed.includes(step) ? step : synonymValue(step, allowed);
+  return allowed.find((member) => stepSpelling(member) === step) ?? synonymValue(step, allowed);
 }
 
 /** The step of a size scale a value names, alone or at its end: `xs`, `lg`, `2xl`, `icon-sm`. */

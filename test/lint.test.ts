@@ -1907,6 +1907,84 @@ import { Chip } from "@/components/ui/chip"
     expect(applyFixes(code, findings)).toBe(code.replace('"xlarge"', '"xl"'));
   });
 
+  it('reads xxl as 2xl and xxs as 2xs, whichever way the scale spells them', async () => {
+    const system = await load(
+      fixture({
+        'tsconfig.json': TSCONFIG,
+        // One scale counts its x's, the other repeats them.
+        'components/ui/badge.tsx': `export function Badge(props: {
+  size?: "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "icon-2xl"
+}) {
+  return <span />
+}`,
+        'components/ui/tag.tsx': `export function Tag(props: {
+  size?: "xxs" | "xs" | "sm" | "md" | "lg" | "xl" | "xxl" | "icon-xxl"
+}) {
+  return <span />
+}`,
+      }),
+    );
+    const code = `import { Badge } from "@/components/ui/badge"
+import { Tag } from "@/components/ui/tag"
+<>
+  <Badge size="2xl" />
+  <Badge size="2xs" />
+  <Badge size="xxl" />
+  <Badge size="xxs" />
+  <Badge size="XXL" />
+  <Badge size="icon-xxl" />
+  <Badge size="xxxl" />
+  <Badge size="3xs" />
+  <Tag size="xxl" />
+  <Tag size="xxs" />
+  <Tag size="2xl" />
+  <Tag size="2xs" />
+  <Tag size="2XL" />
+  <Tag size="icon-2xl" />
+  <Tag size="3xl" />
+  <Tag size="xxxs" />
+</>`;
+    const findings = system
+      .check(code, 'app/page.tsx')
+      .diagnostics.filter((d) => d.ruleId === rule);
+    // The same step in the other spelling, or in other case, is fixed to the scale's own spelling.
+    // One step past an end is named next to that end, in the scale's spelling, without a fix.
+    expect(findings.map((d) => [d.source, d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['"xxl"', 'size="2xl"', '2xl'],
+      ['"xxs"', 'size="2xs"', '2xs'],
+      ['"XXL"', 'size="2xl"', '2xl'],
+      ['"icon-xxl"', 'size="icon-2xl"', 'icon-2xl'],
+      ['"xxxl"', 'size="2xl"', undefined],
+      ['"3xs"', 'size="2xs"', undefined],
+      ['"2xl"', 'size="xxl"', 'xxl'],
+      ['"2xs"', 'size="xxs"', 'xxs'],
+      ['"2XL"', 'size="xxl"', 'xxl'],
+      ['"icon-2xl"', 'size="icon-xxl"', 'icon-xxl'],
+      ['"3xl"', 'size="xxl"', undefined],
+      ['"xxxs"', 'size="xxs"', undefined],
+    ]);
+    expect(findings[2]?.message).toBe(
+      '"XXL" is not a valid size for <Badge>. Allowed: 2xs, xs, sm, md, lg, xl, 2xl, icon-2xl. Did you mean "2xl"?',
+    );
+    const fixed = applyFixes(code, findings);
+    expect(fixed).toContain('<Badge size="2xl" />\n  <Badge size="2xs" />\n  <Badge size="2xl" />');
+    expect(fixed).toContain('<Tag size="xxl" />\n  <Tag size="xxs" />\n  <Tag size="xxl" />');
+    expect(fixed).toContain('<Badge size="xxxl" />\n  <Badge size="3xs" />');
+    expect(fixed).toContain('<Tag size="3xl" />\n  <Tag size="xxxs" />');
+  });
+
+  it('fixes a value written in other case', () => {
+    const code = `${IMPORTS}<Button variant="Ghost" size="SM">x</Button>`;
+    const findings = check(code, rule);
+    expect(findings.map((d) => [d.suggestion, d.fix?.[0]?.text])).toEqual([
+      ['variant="ghost"', 'ghost'],
+      ['size="sm"', 'sm'],
+    ]);
+    expect(applyFixes(code, findings)).toBe(
+      `${IMPORTS}<Button variant="ghost" size="sm">x</Button>`,
+    );
+  });
+
   it('names a value spelled close to an allowed one without fixing it', () => {
     const code = `${IMPORTS}<Button variant="destructve" size="smal">x</Button>`;
     const findings = check(code, rule);
