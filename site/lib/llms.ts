@@ -108,6 +108,7 @@ export function llmsFullTxt(): string {
           (rule) =>
             `### ${rule.id} (${rule.severity} by default)\n\n${rule.description}\n\nCatches: ${rule.catches}\n\nSuggests: ${rule.suggests}\n\nWhy it matters: ${rule.why}\n\nExample:\n\n\`\`\`tsx\n${rule.bad.trimEnd()}\n\`\`\`\n\n${rule.findings.map((f) => `- ${String(f.line)}:${String(f.column)} ${f.severity}: ${f.message}`).join('\n')}\n\nFixed:\n\n\`\`\`tsx\n${rule.good.trimEnd()}\n\`\`\``,
         ),
+        `### Known limits\n\n${ruleCatalog.limits}`,
         `### How fixes are chosen\n\n${ruleCatalog.details}`,
         `### Suppressing findings\n\n${ruleCatalog.suppression}`,
       ].join('\n\n'),

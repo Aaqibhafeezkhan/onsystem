@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import BenchmarkPage from '@/app/benchmark/page';
 import Home from '@/app/page';
+import { ruleCatalog } from '@/lib/data';
 import { llmsFullTxt, llmsTxt } from '@/lib/llms';
 import { SITE_URL } from '@/lib/site';
 
@@ -171,5 +172,28 @@ describe('llms-full.txt', () => {
     expect(faq).toContain('\n### How often is it wrong?\n');
     expect(faq).toContain('\n### Is the Claude Code plugin safe to install everywhere?\n');
     expect(faq).toContain(`](${SITE_URL}/docs/configuration#zero-config)`);
+  });
+
+  it('has the known limits from docs/rules.md, after the rules, as /rules has them', () => {
+    // #166 put "Known limits" on /rules; llms-full.txt went on from the rules to "How fixes are
+    // chosen", so an agent reading it never learned which class strings are not checked.
+    const rules = section('Rules');
+    // A heading under Rules, at whatever level the section nests its rules and notes.
+    const at = (heading: string) => rules.search(new RegExp(`\\n#+ ${heading}[\\n ]`));
+    const start = at('Known limits');
+    expect(start).toBeGreaterThan(-1);
+    const end = rules.slice(start + 1).search(/\n#+ /);
+    const limits = rules.slice(start, end === -1 ? undefined : start + 1 + end);
+    expect(limits).toContain('`className={statusStyles[status]}`');
+    // The whole section, by its text, with links that work outside the site.
+    expect(plain(limits)).toContain(plain(ruleCatalog.limits));
+    expect(limits).toContain(`](${SITE_URL}/docs/how-it-works#limits)`);
+    expect(limits).not.toMatch(/\]\((?!https:\/\/)/);
+    // Where docs/rules.md and /rules have it: after the last rule, before the other sections.
+    const last = at(ruleCatalog.rules.at(-1)?.id ?? '-');
+    expect(last).toBeGreaterThan(-1);
+    expect(start).toBeGreaterThan(last);
+    expect(start).toBeLessThan(at('How fixes are chosen'));
+    expect(start).toBeLessThan(at('Suppressing findings'));
   });
 });
