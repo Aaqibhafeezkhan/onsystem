@@ -792,8 +792,25 @@ function calleeNames(expression: ts.Expression): string[] {
 
 type HandlerAction = 'Remove' | 'Clear' | 'Close';
 
-/** What one call or handler reference does, by its name: `removeAssertion`, `onClose`, `setOpen(false)`. */
+/** The words that name each action in a function's name. */
+const ACTION_WORDS: [HandlerAction, readonly string[]][] = [
+  ['Remove', ['remove', 'delete']],
+  ['Clear', ['clear', 'reset']],
+  ['Close', ['close', 'dismiss', 'hide']],
+];
+
+/** Calls that tidy up around the action rather than name it: `clearTimeout(timer)`. */
+const HOUSEKEEPING =
+  /^(?:clearTimeout|clearInterval|clearImmediate|removeEventListener|removeListener)$/;
+
+/**
+ * What one call or handler reference does, by its name: `removeAssertion`, `onClose`,
+ * `setOpen(false)`. A name with words of two actions (`closeDeleteDialog`, `hideRemoveConfirm`) or
+ * with `cancel` (`onCancelDelete`) says none.
+ */
 function actionOf(names: string[], argument?: ts.Expression): HandlerAction | undefined {
+  const last = names.at(-1) ?? '';
+  if (HOUSEKEEPING.test(last)) return undefined;
   const words = names.flatMap((name) => name.split(/(?=[A-Z])|_/)).map((w) => w.toLowerCase());
   if (
     argument?.kind === ts.SyntaxKind.FalseKeyword &&
@@ -802,19 +819,22 @@ function actionOf(names: string[], argument?: ts.Expression): HandlerAction | un
     return 'Close';
   }
   // A state setter names state, not an action: `setDeleteTarget(null)`.
-  if (/^set[A-Z]/.test(names.at(-1) ?? '')) return undefined;
-  if (words.some((w) => w === 'remove' || w === 'delete')) return 'Remove';
-  if (words.some((w) => w === 'clear' || w === 'reset')) return 'Clear';
-  if (words.some((w) => w === 'close' || w === 'dismiss' || w === 'hide')) return 'Close';
-  return undefined;
+  if (/^set[A-Z]/.test(last) || words.includes('cancel')) return undefined;
+  const actions = ACTION_WORDS.filter(([, named]) => words.some((w) => named.includes(w)));
+  return actions.length === 1 ? actions[0]?.[0] : undefined;
 }
 
 /**
  * What a button's `onClick` (or React Aria's `onPress`) does, by the names of the functions it
- * calls or passes: removing wins over clearing, and clearing over closing, so a handler that
- * removes a row and closes a popover removes.
+ * calls or passes, and whether that is sure: only when every name says the same action. A close
+ * button that also tidies up (`form.reset(); setOpen(false)`) or a button that removes a row and
+ * closes a popover is named "Close", or "Remove" when it removes and clears, without a fix.
+ * Callbacks inside the handler run later, on their own events (`mutate(id, { onSuccess: () =>
+ * toast.dismiss() })`), so they do not count.
  */
-function handlerAction(attributes: readonly ts.JsxAttribute[]): HandlerAction | undefined {
+function handlerAction(
+  attributes: readonly ts.JsxAttribute[],
+): { action: HandlerAction; sure: boolean } | undefined {
   const found = new Set<HandlerAction>();
   for (const attribute of attributes) {
     if (!/^on(?:Click|Press)$/.test(attributeName(attribute))) continue;
@@ -830,11 +850,14 @@ function handlerAction(attributes: readonly ts.JsxAttribute[]): HandlerAction | 
         if (action) found.add(action);
       }
       ts.forEachChild(node, (child) => {
-        stack.push(child);
+        if (!ts.isFunctionLike(child)) stack.push(child);
       });
     }
   }
-  return (['Remove', 'Clear', 'Close'] as const).find((action) => found.has(action));
+  const [only] = found;
+  if (!only) return undefined;
+  if (found.size === 1) return { action: only, sure: true };
+  return { action: found.has('Close') ? 'Close' : 'Remove', sure: false };
 }
 
 /**
@@ -865,9 +888,10 @@ function iconLabel(
     return { label: toggles ? 'Toggle' : label, fixed: false };
   }
   if (label === 'Close') {
-    const action = handlerAction(attributes);
-    if (action) return { label: action, fixed: true };
-    return { label, fixed: tags.some((tag) => CLOSE_PART.test(tag)) };
+    // A close part closes, whatever else its onClick does (`form.reset()`).
+    if (tags.some((tag) => CLOSE_PART.test(tag))) return { label, fixed: true };
+    const handler = handlerAction(attributes);
+    return handler ? { label: handler.action, fixed: handler.sure } : { label, fixed: false };
   }
   if (label === 'More options') {
     return { label, fixed: tags.some((tag) => MENU_TRIGGER.test(tag)) };

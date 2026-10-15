@@ -2342,6 +2342,8 @@ export function NavWorkspaces({ workspaces }: { workspaces: { name: string }[] }
       `() => { form.trigger(); fields.remove(i) }`,
       `() => onDelete?.(id)`,
       `() => deleteMutation.mutate({ id })`,
+      // A callback inside the handler runs on its own event, after the button's action.
+      `() => deleteMutation.mutate({ id }, { onSuccess: () => onClose() })`,
     ]) {
       expect(guess(`<Button size="icon" onClick={${handler}}><X /></Button>`), handler).toEqual([
         ['aria-label="Remove"', 'fixed'],
@@ -2360,17 +2362,43 @@ export function NavWorkspaces({ workspaces }: { workspaces: { name: string }[] }
       `<Button size="icon" onClick={() => setShowDeleteModal(false)}><X /></Button>`,
       `<Button size="icon" onClick={() => props.onOpenChange?.(false)}><XIcon /></Button>`,
       `<Button size="icon" onClick={() => toast.dismiss(id)}><X /></Button>`,
+      // A toast's close button that stops its timer: clearing a timeout tidies up.
+      `<Button size="icon" onClick={() => { window.clearTimeout(timer); onClose() }}><X /></Button>`,
+      `<Button size="icon" onClick={() => { onClose(); removeEventListener("keydown", onKey) }}><X /></Button>`,
       `<DialogClose asChild><Button variant="ghost" size="icon"><X /></Button></DialogClose>`,
+      // A close part closes, whatever else its onClick does.
+      `<Dialog.Close asChild><button onClick={() => form.reset()}><X /></button></Dialog.Close>`,
+      `<DialogClose asChild><Button size="icon" onClick={() => clearSelection()}><X /></Button></DialogClose>`,
+      `<SheetClose asChild><Button size="icon" onClick={() => { reset(); onRemove() }}><X /></Button></SheetClose>`,
     ]) {
       expect(guess(code), code).toEqual([['aria-label="Close"', 'fixed']]);
     }
-    // Nothing says what it does: a state setter names state, not an action.
+    // Nothing says what it does: a state setter names state, not an action; a name with words of
+    // two actions, or with "cancel", names none; a callback inside the handler does not count.
     for (const code of [
       `<Button size="icon"><X /></Button>`,
       `<Button size="icon" onClick={handleClick}><X /></Button>`,
       `<Button size="icon" onClick={() => setDeleteTarget(null)}><X /></Button>`,
+      `<Button size="icon" onClick={closeDeleteDialog}><X /></Button>`,
+      `<Button size="icon" onClick={onCancelDelete}><X /></Button>`,
+      `<Button size="icon" onClick={() => hideRemoveConfirm()}><X /></Button>`,
+      `<Button size="icon" onClick={() => mutate(id, { onSuccess: () => toast.dismiss() })}><X /></Button>`,
+      `<Button size="icon" onClick={() => mutate(id, { onSettled() { closeSheet() } })}><X /></Button>`,
     ]) {
       expect(guess(code), code).toEqual([['aria-label="Close"', 'not fixed']]);
+    }
+    // A handler that does two of these is named, without a fix: a close button that clears its
+    // form, or a button that removes a row and closes its popover.
+    for (const [handler, label] of [
+      [`() => { form.reset(); setOpen(false) }`, 'Close'],
+      [`() => { reset(); onClose() }`, 'Close'],
+      [`() => { onOpenChange(false); resetState() }`, 'Close'],
+      [`() => { onClose(); removeTag(tag) }`, 'Close'],
+      [`() => { removeFile(file); clearPreview() }`, 'Remove'],
+    ]) {
+      expect(guess(`<Button size="icon" onClick={${handler}}><X /></Button>`), handler).toEqual([
+        [`aria-label="${label}"`, 'not fixed'],
+      ]);
     }
     // A trash can still deletes, whatever its handler is called.
     expect(guess(`<Button size="icon" onClick={() => remove(index)}><Trash2 /></Button>`)).toEqual([
