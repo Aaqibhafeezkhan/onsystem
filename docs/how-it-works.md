@@ -55,7 +55,7 @@ These tools work at different layers, and several combine well:
 - Styling is checked in Tailwind classes, `style` objects (including style functions and each branch of a conditional value) and color attributes. CSS-in-JS (styled-components, Emotion), CSS Modules and plain stylesheets are not.
 - Fix suggestions are Tailwind classes when a Tailwind theme maps the token (`@theme`, or a v3 `tailwind.config`), otherwise `var(--token)` (`hsl(var(--token))` or `rgb(var(--token))` for v3 channels). A v3 config is read without running it, so colors computed in code are not seen.
 - Colors are compared in the base theme and, for `dark:` classes, the dark mode. Other modes (`[data-theme="brand"]`) are listed by `get_tokens` but not used to match.
-- Linting is per file and syntactic. Class names built at runtime (`` `bg-${color}-500` ``) are not checked, and spread props are trusted.
+- Linting is per file and syntactic. Class names built at runtime (`` `bg-${color}-500` ``) are not checked, and spread props are trusted. Class strings are read in `className`, `class` and the arguments of `cn`, `clsx`, `cva` and the like; one kept in a variable, an object map or a helper's return value is not followed yet (`className={statusStyles[status]}`), nor are classes in other props (`tw`) or palette colors written as their CSS variable (`bg-[var(--color-green-50)]`).
 - `no-unknown-prop` is skipped for components whose props type does not fully resolve (dependencies not installed).
 - Composition is inferred from naming and static members; other patterns need explicit exports.
 - A UI package imported by path is read from what the app already imports (in its first 5,000 source files), so components nobody imports yet are not offered.
