@@ -79,6 +79,7 @@ export function ruleFromHash(hash: string, ids: readonly string[]): string | nul
 export const DOCS_FILES: Record<string, string> = {
   'quickstart.md': '/docs',
   'plugin.md': '/docs/plugin',
+  'rollout.md': '/docs/rollout',
   'ci.md': '/docs/ci',
   'required-check.md': '/docs/required-check',
   'clients.md': '/docs/clients',
@@ -100,6 +101,7 @@ const SECTIONS: Record<string, string> = {
   'cursor-and-vs-code': '/docs/clients#cursor-and-vs-code',
   'other-clients': '/docs/clients#other-clients',
   'claude-code-plugin': '/docs/plugin',
+  rollout: '/docs/rollout',
   tools: '/docs/tools',
   rules: '/rules',
   'suppressing-findings': '/rules#suppressing-findings',

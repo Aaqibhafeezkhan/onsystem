@@ -51,6 +51,14 @@ const PAGES = [
       'The hook that checks each UI file right after Claude writes it and hands the errors back, the MCP server and a skill: what each does, runs and touches.',
   },
   {
+    href: '/docs/rollout',
+    group: 'Get started',
+    source: 'docs/rollout.md',
+    title: 'Roll out to a team',
+    description:
+      'The files a team commits, in order: a pinned version, a baseline with code owners, the plugin in project settings, MCP configs, ESLint and the required check.',
+  },
+  {
     href: '/docs/ci',
     group: 'Gate PRs',
     source: 'docs/ci.md',

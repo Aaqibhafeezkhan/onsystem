@@ -995,11 +995,7 @@ function Adoption() {
         <p>
           Record the findings already there in a baseline once (midday&apos;s dashboard has{' '}
           {findings.toLocaleString('en-US')}), and <InlineCode>check</InlineCode> fails only on new
-          ones:{' '}
-          <TextLink href={docsHref('adopting-it-in-an-existing-codebase')}>
-            adopting it in an existing codebase
-          </TextLink>
-          .
+          ones: <TextLink href={docsHref('rollout')}>rolling it out to a team</TextLink>.
         </p>
       }
     />

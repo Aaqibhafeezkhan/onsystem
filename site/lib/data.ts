@@ -243,6 +243,7 @@ export interface RuleCatalog {
 export interface Docs {
   quickstart: string;
   plugin: string;
+  rollout: string;
   ci: string;
   requiredCheck: string;
   clients: string;
