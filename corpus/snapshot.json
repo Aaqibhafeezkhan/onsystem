@@ -137,7 +137,7 @@
         "no-hardcoded-color": {
           "errors": 874,
           "warnings": 150,
-          "fixes": 499
+          "fixes": 492
         },
         "no-hardcoded-radius": {
           "errors": 0,

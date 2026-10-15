@@ -11,6 +11,7 @@ import {
   parseColor,
   sameHue,
   STATUS_HUE_TOLERANCE,
+  STATUS_MARGIN,
   type Oklch,
 } from './color.js';
 import { cssSheetTokens, readCssSheet, type CssSheet } from './css.js';
@@ -171,6 +172,12 @@ export interface ColorSuggestion {
   otherRole?: Nearest<ColorCandidate> | undefined;
   /** Other tokens with the nearest one's value. */
   sameValue: Token[];
+  /**
+   * With a match that is no status color: a close status color of the color's hue that is
+   * about as near (within STATUS_MARGIN), so the color may mean that status (a red error
+   * message next to a rose brand), and the match is no sure fix.
+   */
+  closeStatus?: Nearest<ColorCandidate> | undefined;
 }
 
 export interface NearestLength extends Nearest<LengthCandidate> {
@@ -345,7 +352,24 @@ export class TokenIndex {
       )
       .map((s) => s.candidate.token);
     const nearest = { candidate: named.candidate, distance: named.distance };
-    if (match) return { match: nearest, nearest, sameValue };
+    if (match) {
+      const status = match.status
+        ? undefined
+        : pool
+            .filter(
+              (s) =>
+                s.status &&
+                s.looseHue &&
+                tinted &&
+                !s.foreign &&
+                s.fit.tier < 2 &&
+                s.distance < CLOSE_COLOR &&
+                s.distance - match.distance < STATUS_MARGIN,
+            )
+            .sort(byDistance)[0];
+      const closeStatus = status && { candidate: status.candidate, distance: status.distance };
+      return { match: nearest, nearest, sameValue, closeStatus };
+    }
     // The nearest token of the same hue comes first, so another hue means the design system has none.
     if (!named.hue && named.status && named.looseHue && tinted) {
       const hueOff = Math.round(hueDistance(color, valueOf(named.candidate)));
