@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { ConfigError } from './config.js';
+import { ConfigError, RULE_IDS } from './config.js';
 import type { CheckResult, Diagnostic } from './types.js';
 
 export const BASELINE_FILE = 'onsystem.baseline.json';
@@ -15,6 +15,10 @@ export const LEGACY_BASELINE_FILE = 'design-system-mcp.baseline.json';
  */
 export interface Baseline {
   version: 1;
+  /** The onsystem version that recorded the findings. */
+  onsystem?: string;
+  /** The rules that ran when the findings were recorded. */
+  rules?: string[];
   files: Record<string, Record<string, Record<string, number>>>;
 }
 
@@ -32,13 +36,23 @@ export function findingKey(diagnostic: Diagnostic): string {
   return (/^(['"`])(.*)\1$/.exec(text)?.[2] ?? text).slice(0, 200);
 }
 
-/** The baseline's entries, or undefined when the file does not exist. */
-export function readBaseline(file: string): Entries | undefined {
+/** A baseline as read: its entries, and what recorded them when the file says. */
+export interface BaselineData {
+  entries: Entries;
+  onsystem?: string | undefined;
+  /** Undefined in a baseline written before onsystem recorded which rules ran. */
+  rules?: ReadonlySet<string> | undefined;
+}
+
+/** The baseline, or undefined when the file does not exist. */
+export function readBaseline(file: string): BaselineData | undefined {
   let text: string;
   try {
     text = fs.readFileSync(file, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    // ENOTDIR: a folder in the path is a file, so there is no baseline there either.
+    const { code } = error as NodeJS.ErrnoException;
+    if (code === 'ENOENT' || code === 'ENOTDIR') return undefined;
     throw new ConfigError(`Could not read baseline ${file}: ${(error as Error).message}`);
   }
   const invalid = (why: string) =>
@@ -53,6 +67,15 @@ export function readBaseline(file: string): Entries | undefined {
   }
   if (!isObject(parsed) || parsed.version !== 1) throw invalid('expected "version": 1');
   if (!isObject(parsed.files)) throw invalid('"files" must be an object');
+  if (parsed.onsystem !== undefined && typeof parsed.onsystem !== 'string') {
+    throw invalid('"onsystem" must be a version string');
+  }
+  if (
+    parsed.rules !== undefined &&
+    !(Array.isArray(parsed.rules) && parsed.rules.every((rule) => typeof rule === 'string'))
+  ) {
+    throw invalid('"rules" must be a list of rule ids');
+  }
 
   const entries: Entries = new Map();
   for (const [name, rules] of Object.entries(parsed.files)) {
@@ -71,7 +94,11 @@ export function readBaseline(file: string): Entries | undefined {
     }
     entries.set(name, byRule);
   }
-  return entries;
+  return {
+    entries,
+    onsystem: parsed.onsystem,
+    rules: parsed.rules ? new Set(parsed.rules) : undefined,
+  };
 }
 
 export interface BaselineMatch {
@@ -160,6 +187,69 @@ export function updateBaseline(
   return next;
 }
 
+/**
+ * The baseline without the entries a run over `checked` (file → its findings) shows no longer
+ * occur: a checked file keeps at most as many of each finding as it still has, plus its entries
+ * for `disabled` rules, and files the run did not check keep theirs while they still exist under
+ * `root`. Nothing is added, so a new finding stays new, unlike with `updateBaseline`.
+ */
+export function pruneBaseline(
+  previous: Entries,
+  checked: ReadonlyMap<string, Diagnostic[]>,
+  root: string,
+  disabled: (file: string) => ReadonlySet<string>,
+): Entries {
+  const next: Entries = new Map();
+  for (const [file, rules] of previous) {
+    const diagnostics = checked.get(file);
+    if (!diagnostics) {
+      if (fs.existsSync(path.resolve(root, file))) next.set(file, rules);
+      continue;
+    }
+    const found = new Map<string, number>();
+    for (const diagnostic of diagnostics) {
+      const id = `${diagnostic.ruleId}\0${findingKey(diagnostic)}`;
+      found.set(id, (found.get(id) ?? 0) + 1);
+    }
+    const off = disabled(file);
+    const kept = new Map<string, Map<string, number>>();
+    for (const [rule, sources] of rules) {
+      if (off.has(rule)) {
+        kept.set(rule, sources);
+        continue;
+      }
+      const left = new Map<string, number>();
+      for (const [source, count] of sources) {
+        const still = Math.min(count, found.get(`${rule}\0${source}`) ?? 0);
+        if (still) left.set(source, still);
+      }
+      if (left.size) kept.set(rule, left);
+    }
+    if (kept.size) next.set(file, kept);
+  }
+  return next;
+}
+
+/**
+ * New findings of rules that did not run when the baseline was recorded, counted by rule: a
+ * rule that starts to run (an upgrade that finds the tokens it needs, or a rule turned on)
+ * reports what was in the code all along. Empty when the baseline does not say which rules ran.
+ */
+export function unrecordedRules(
+  baseline: BaselineData,
+  diagnostics: Iterable<Diagnostic>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (!baseline.rules) return counts;
+  const rules = new Set<string>(RULE_IDS);
+  for (const { ruleId } of diagnostics) {
+    if (rules.has(ruleId) && !baseline.rules.has(ruleId)) {
+      counts.set(ruleId, (counts.get(ruleId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 export function countBaseline(entries: Entries): { findings: number; files: number } {
   let findings = 0;
   for (const rules of entries.values()) {
@@ -170,8 +260,15 @@ export function countBaseline(entries: Entries): { findings: number; files: numb
   return { findings, files: entries.size };
 }
 
-/** Writes the baseline sorted at every level, so it diffs cleanly in review. */
-export function writeBaseline(file: string, entries: Entries): void {
+/**
+ * Writes the baseline sorted at every level, so it diffs cleanly in review, with the onsystem
+ * version and the rules that ran when given, and creates its folder.
+ */
+export function writeBaseline(
+  file: string,
+  entries: Entries,
+  about: { onsystem?: string | undefined; rules?: Iterable<string> | undefined } = {},
+): void {
   const sorted = <T>(map: Map<string, T>) =>
     [...map].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const files: Baseline['files'] = {};
@@ -183,8 +280,14 @@ export function writeBaseline(file: string, entries: Entries): void {
     // defineProperty: a file named `__proto__` must stay an ordinary key.
     Object.defineProperty(files, name, { value: byRule, enumerable: true, writable: true });
   }
-  const baseline: Baseline = { version: 1, files };
+  const baseline: Baseline = {
+    version: 1,
+    ...(about.onsystem === undefined ? {} : { onsystem: about.onsystem }),
+    ...(about.rules === undefined ? {} : { rules: [...new Set(about.rules)].sort() }),
+    files,
+  };
   try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, `${JSON.stringify(baseline, null, 2)}\n`);
   } catch (error) {
     throw new ConfigError(`Could not write baseline ${file}: ${(error as Error).message}`);
