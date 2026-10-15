@@ -9,7 +9,7 @@
 
 ## What I saw
 
-- **The sample.** `sample-unlabelled.json`, the only file of the draw's working folder that I opened.
+- **The sample.** `roadmap/build/fp-sample/sample-unlabelled.json`, the only file under `roadmap/` that I opened.
   - I did run one `ls` of `fp-sample/` at the start, which showed the other file names. I opened none of them.
 - **The rules doc.** onsystem `docs/rules.md` at `main`, read-only through the GitHub API. I read only:
   - the intro and rules table;
@@ -45,9 +45,9 @@ I followed the independence rules strictly.
   - `sample-key.json`, `population-index.json` and `population-summary.json`;
   - `ALLOCATION.md` and `allocation.json`;
   - the `fp-sample/scripts/` folder.
-- **Not opened elsewhere in that working folder:** briefs, evaluation data and plans.
+- **Not opened elsewhere under `roadmap/`:** briefs, evaluation data and ROADMAP files.
 - **Not opened elsewhere:**
-  - nothing in the temporary folders other sessions wrote;
+  - nothing under `/private/tmp` written by another agent;
   - onsystem's `corpus/labels.json` and `corpus/snapshot.json`;
   - the README paragraph on false positives;
   - any earlier sample or rate.

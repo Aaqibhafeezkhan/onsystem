@@ -777,11 +777,9 @@ const drawLabeller = section(
   `corpus/${draw}/LABELLER.md`,
 );
 assert.ok(/AI reviewer/.test(drawLabeller), `corpus/${draw}/LABELLER.md: an AI reviewer`);
-// The notes name the model by its name or, as the labeller wrote them, by its id in backticks.
-const drawModel = v2Models.find(
-  (m) => drawLabeller.includes(m.name) || drawLabeller.includes(`\`${m.id}\``),
-);
-assert.ok(drawModel, `corpus/${draw}/LABELLER.md should name the labeller model`);
+// The labeller's notes name the model by its id, in backticks; config/models.json gives its name.
+const drawModel = v2Models.find((m) => drawLabeller.includes(`model id \`${m.id}\``));
+assert.ok(drawModel, `corpus/${draw}/LABELLER.md should name the labeller model by its id`);
 /** A 95% Wilson score interval, as corpus/<draw>/scripts/stats.py computes it. */
 function wilson(k, n) {
   const z = 1.959964;

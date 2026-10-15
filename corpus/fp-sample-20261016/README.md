@@ -31,16 +31,12 @@ The README quotes this sample's rate only while every one of its findings is sti
 
 LABELLER.md and ALLOCATION.md were written in the draw's working folder, outside this repository. These are every change made to them here; the other files are as the draw and the labeller left them, apart from Prettier's formatting of the scripts.
 
-LABELLER.md, in the labeller's words except for:
-
-- What I saw: the sample's path in the working folder is cut to `sample-unlabelled.json`, and "the only file under `roadmap/` that I opened" reads "the only file of the draw's working folder that I opened".
-- What I did not see: "Not opened elsewhere under `roadmap/`: briefs, evaluation data and ROADMAP files" reads "Not opened elsewhere in that working folder: briefs, evaluation data and plans", and "nothing under `/private/tmp` written by another agent" reads "nothing in the temporary folders other sessions wrote".
-- Four blank lines that Prettier adds.
+LABELLER.md is the labeller's, byte for byte, apart from four blank lines that Prettier adds. Its paths are on the machine the draw ran on: `roadmap/build/fp-sample/` was the draw's working folder, inside a private planning folder, `roadmap/`, that also holds the briefs and evaluation data.
 
 ALLOCATION.md:
 
 - The title was "OS-FP-SAMPLE: population and allocation". The intro no longer names the brief it was drawn for, and points to this README for the labels and rates.
-- References to files not kept here are gone: `population-summary.json`, `population-index.json` and `scripts/summary.py`, and the full population's path in the working folder. `sample-unlabelled.json` is described as `sample-labelled.json` without the label fields. `run`, `occurrence` and `fingerprint` were the keys a later step needed "to add labels to corpus/labels.json"; they are now the keys of that file.
+- References to files not kept here are gone: `population-summary.json`, `population-index.json` and `scripts/summary.py`, and the full population's path in the working folder, after which "To rebuild it, run the commands below at the same main SHA" reads "The commands below rebuild it". `sample-unlabelled.json` is described as `sample-labelled.json` without the label fields. `run`, `occurrence` and `fingerprint` were the keys a later step needed "to add labels to corpus/labels.json"; they are now the keys of that file.
 - "Commands run" is now "Commands that rebuild it", and adds that the draw ran on checkouts copied from a local cache at the pinned commits. In the block:
   - `$W` is any working folder, not the session folder's absolute path, and the clone goes straight to `$W/onsystem`;
   - `git checkout` of the draw's commit replaces `git -C onsystem rev-parse HEAD`, which printed it;
@@ -49,4 +45,4 @@ ALLOCATION.md:
   - the corpus check no longer writes a log, and its result moved from an end-of-line comment to the comment above it;
   - the `summary.py` step is gone.
 - After the block: a check at e17d211, where the same two scripts rebuilt the same population and sample.
-- Prettier aligned the allocation table. No value changed.
+- Prettier aligned the allocation table, with no value changed, and added a blank line in the list of files.
