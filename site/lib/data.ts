@@ -261,6 +261,8 @@ export interface RuleEntry extends Rule {
 export interface RuleCatalog {
   version: string;
   rules: RuleEntry[];
+  /** What the rules do not check yet, as Markdown from docs/rules.md. */
+  limits: string;
   /** How colour, spacing and radius fixes are chosen, from docs/rules.md. */
   details: string;
   /** Suppression comments and overrides, as Markdown from docs/rules.md. */

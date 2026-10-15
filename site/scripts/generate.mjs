@@ -1040,7 +1040,9 @@ assert.ok(
 write('rules.json', {
   version: VERSION,
   rules,
-  // How colors, spacing and radius fixes are chosen, and how to suppress a finding.
+  // What the rules do not check yet, how colors, spacing and radius fixes are chosen, and how to
+  // suppress a finding.
+  limits: section(docs.rules, '## Known limits', 'docs/rules.md'),
   details: section(docs.rules, '## How fixes are chosen', 'docs/rules.md'),
   suppression,
   suppressionScope,

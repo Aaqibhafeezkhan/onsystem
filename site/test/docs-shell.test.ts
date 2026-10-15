@@ -261,6 +261,7 @@ describe('/rules', () => {
     const ids = [...rail.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
     expect(ids).toEqual([
       ...ruleCatalog.rules.map((rule) => rule.id),
+      'known-limits',
       'configure',
       'suppressing-findings',
       'fixes',
