@@ -9,13 +9,15 @@ No config is needed in a shadcn/ui project (Tailwind v3 or v4), an app whose com
 
 ## See what it found
 
-From the app's folder or the monorepo root:
+From the app's folder or the monorepo root, with no install and no config:
 
 ```sh
-npx -y onsystem inspect
+npx -y onsystem check .
 ```
 
-It lists the components with their props, variants and parts, and the tokens by category. `inspect --explain` adds every place it looked and why each was taken or not, the config it resolved to, tokens that did not resolve and components whose props did not. If the list is empty, see [troubleshooting](troubleshooting.md#inspect-found-nothing).
+It checks your UI code against the components, variants and tokens it found and prints each finding with what to write instead. It exits with code 1 when there are errors. Findings in folders that `npx shadcn add` filled from other registries, such as `components/ai-elements`, are in code you did not write: [Code from shadcn registries](configuration.md#code-from-shadcn-registries) says how to set them apart.
+
+`npx -y onsystem inspect` shows what it read from your design system: the components with their props, variants and parts, and the tokens by category. `inspect --explain` adds every place it looked and why each was taken or not, the config it resolved to, tokens that did not resolve and components whose props did not. If it found nothing, see [troubleshooting](troubleshooting.md#inspect-found-nothing).
 
 To keep what it found in a file you can edit, run `npx -y onsystem init`: it writes `onsystem.config.json` from it (or asks where the components and tokens are when it found nothing), checks the project once and offers to record the findings as a baseline. `--yes` answers for you.
 
