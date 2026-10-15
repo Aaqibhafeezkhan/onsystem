@@ -5,6 +5,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import BenchmarkPage from '@/app/benchmark/page';
 import Home from '@/app/page';
 import { llmsFullTxt, llmsTxt } from '@/lib/llms';
 import { SITE_URL } from '@/lib/site';
@@ -17,9 +18,19 @@ const text = (html: string) =>
   html
     .replace(/<[^>]+>/g, '')
     .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim();
+
+/** Markdown as the text it renders to: no emphasis, code marks or link targets. */
+const plain = (markdown: string) =>
+  markdown
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*|`/g, '')
+    .replace(/\s+/g, ' ');
 
 /** The body of a `## title` section of llms-full.txt, up to the next `## `. */
 function section(title: string): string {
@@ -89,6 +100,24 @@ describe('llms-full.txt', () => {
     expect(benchmark).not.toMatch(/\]\((?!https:\/\/)/);
     expect(benchmark).not.toMatch(/\{#[\w-]+\}/);
     expect(benchmark).toContain(`](${SITE_URL}/benchmark)`);
+  });
+
+  it('says what /benchmark says next to the blind labels, and every threat the page lists', () => {
+    // The caveats the page prints, word for word, so an agent that finds the labels table finds
+    // what limits it. When the page's copy changes, this fails until benchmarkMarkdown follows.
+    const html = renderToStaticMarkup(createElement(BenchmarkPage));
+    const benchmark = plain(section('Benchmark'));
+    const scope = text(/<p data-labels="scope"[^>]*>([\s\S]*?)<\/p>/.exec(html)?.[1] ?? '');
+    expect(scope).toMatch(/^These labels are too few to confirm the headline/);
+    expect(benchmark).toContain(scope);
+    const threats = /<section id="threats"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+    const items = [...threats.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)].map((m) => text(m[1] ?? ''));
+    // The page's own four, then every one in bench/v2/README.md.
+    expect(items.length).toBeGreaterThan(8);
+    expect(
+      items.filter((item) => item.startsWith('A chart token passes for a status color.')),
+    ).toHaveLength(1);
+    for (const item of items) expect(benchmark).toContain(item);
   });
 
   it('has the playground, with the drafts and the demo design system it checks against', () => {

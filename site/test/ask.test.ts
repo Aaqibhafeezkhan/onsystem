@@ -119,6 +119,7 @@ interface RpcResult {
   serverInfo?: { name: string; title?: string };
   tools?: { name: string }[];
   isError?: boolean;
+  structuredContent?: unknown;
   _meta?: Record<string, unknown>;
 }
 
@@ -313,6 +314,29 @@ describe('/api/mcp', () => {
     const caveats = await search('who labelled the benchmark and what are its threats to validity');
     expect(caveats).toContain(`${SITE_URL}/benchmark#`);
     expect(caveats).toContain('AI reviewer');
+    // The skeptical question about the labels table's hook and all rows finds what the page says
+    // next to them: in the hit that shows those rows, and in the section an agent fetches.
+    const scope = 'These labels are too few to confirm the headline either way.';
+    const labelsHit = async (query: string) => {
+      const { body } = await rpc('tools/call', { name: 'search', arguments: { query } });
+      const { results } = body.result.structuredContent as {
+        results: { id: string; text: string }[];
+      };
+      const hit = results.find((r) => r.id === '/benchmark#labels');
+      expect(hit, query).toBeDefined();
+      return hit?.text ?? '';
+    };
+    const agree = await labelsHit('do the blind labels agree with onsystem’s count');
+    expect(agree).toContain('| `all` |');
+    expect(agree).toContain(scope);
+    await labelsHit('why do the hook and all arms have more violations in the blind labels');
+    const { body } = await rpc('tools/call', {
+      name: 'fetch',
+      arguments: { id: '/benchmark#labels' },
+    });
+    const section = (body.result.structuredContent as { text: string }).text;
+    expect(section.indexOf(scope)).toBeGreaterThan(section.indexOf('| `all` |'));
+    expect(section.indexOf('| `all` |')).toBeGreaterThan(0);
   });
 
   it('answers GET and DELETE as a stateless server does', async () => {

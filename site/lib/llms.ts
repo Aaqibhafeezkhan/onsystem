@@ -1,5 +1,5 @@
 import { benchmarkMarkdown, playgroundMarkdown } from '@/lib/agent-markdown';
-import { headlineText } from '@/lib/benchmark';
+import * as benchmarkFormat from '@/lib/benchmark';
 import { benchmark, corpus, designSystem, docs, readme, ruleCatalog, tools } from '@/lib/data';
 import { DOCS_PAGES } from '@/lib/docs';
 import { faqMarkdown } from '@/lib/faq';
@@ -50,7 +50,7 @@ export function llmsTxt(): string {
     '- Required check on pull requests: the GitHub Action `uses: dgesteves/onsystem@v0`, which annotates the lines a pull request changed',
     `- Any MCP client, over stdio: \`${NPX}\``,
     '',
-    `Benchmark (${benchmark.date}): ${headlineText(benchmark)}. Tables, method and blind labels: ${SITE_URL}/benchmark`,
+    `Benchmark (${benchmark.date}): ${benchmarkFormat.headlineText(benchmark)}. Tables, method and blind labels: ${SITE_URL}/benchmark`,
     '',
     '## Docs',
     '',
@@ -116,7 +116,7 @@ export function llmsFullTxt(): string {
     ['FAQ', '/docs/faq', faqMarkdown(corpus)],
     ['How it works', '/docs/how-it-works', docs.howItWorks],
     ['Migrating from @dgesteves/design-system-mcp', '/docs/migrating', docs.migrating],
-    ['Benchmark', '/benchmark', indexed(benchmarkMarkdown(benchmark, headlineText(benchmark)))],
+    ['Benchmark', '/benchmark', indexed(benchmarkMarkdown(benchmark, benchmarkFormat))],
     ['Playground', '/playground', indexed(playgroundMarkdown(playground.presets, designSystem))],
   ];
   // Each page's own `##` sections become `###` under its `##` title; code blocks stay as they are.
