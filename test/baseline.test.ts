@@ -93,7 +93,9 @@ describe('the hint for baseline findings that no longer occur', () => {
       root,
     );
     expect(recorded).toMatchObject({ code: 0, stderr: '' });
-    expect(recorded.stdout).toBe('Baseline: 3 findings in 3 files → ci/accepted.json');
+    expect(recorded.stdout).toBe(
+      `Baseline: 3 findings in 3 files → ${path.join('ci', 'accepted.json')}`,
+    );
     expect(Object.keys(read(custom).files)).toEqual([
       'app/form.tsx',
       'app/page.test.tsx',
@@ -254,6 +256,21 @@ describe('a baseline written before a rule ran', () => {
       code: 0,
       stdout: 'No new problems in 2 files (3 in the baseline).',
     });
+  });
+
+  it('escapes the line for GitHub with --format github', async () => {
+    const root = noColors();
+    const options = ['--baseline', 'ci/100%.json'];
+    await run(['check', 'app', '--update-baseline', ...options, '--no-cache'], root);
+    fs.writeFileSync(path.join(root, TOKENS), ':root { --destructive: #ef4444; }');
+    const github = await run(
+      ['check', 'app', ...options, '--no-cache', '--format', 'github'],
+      root,
+    );
+    // `%` would otherwise be read as the start of an escape.
+    expect(github.stdout.split('\n').at(-1)).toBe(
+      `::notice title=onsystem baseline::no-hardcoded-color did not run when the baseline was written (onsystem ${VERSION}), so its 1 finding is new to the baseline, not necessarily to the code. To accept it, run \`check app --baseline "ci/100%25.json" --update-baseline\`.`,
+    );
   });
 
   it('reads a baseline without the version or the rules as before, and says nothing about them', async () => {

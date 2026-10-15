@@ -34,6 +34,7 @@ import { explainProject, librariesLeftOut } from './explain.js';
 import { init } from './init.js';
 import { libraryAdapter, type LibrarySource } from './libraries/index.js';
 import { formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
+import { escapeData } from './lint/format.js';
 import { serveStdio } from './server/stdio.js';
 import { toDesignMd, toDtcg } from './tokens/export.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
@@ -441,6 +442,8 @@ async function check(
     );
     writeBaseline(baselineFile, next, {
       onsystem: VERSION,
+      // One list for the whole baseline: in a workspace, a rule that ran in one project counts
+      // as run in all of them.
       rules: [...(baseline?.rules ?? []), ...ran],
     });
     const counts = countBaseline(next);
@@ -505,7 +508,7 @@ async function check(
   if (output) io.stdout(output);
   for (const text of baselineNotes) {
     if (format === 'pretty') io.stdout(text);
-    else if (format === 'github') io.stdout(`::notice title=${NAME} baseline::${text}`);
+    else if (format === 'github') io.stdout(`::notice title=${NAME} baseline::${escapeData(text)}`);
     else io.stderr(text);
   }
   for (const text of [...selection.notices, unchecked]) {
@@ -1199,7 +1202,9 @@ function checkCommand(
 /**
  * Whether a rule has something to compare against in a design system, as `notice()` says when
  * it has not: no-hardcoded-color needs color tokens, the spacing and radius rules tokens of
- * their kind, and the component rules components.
+ * their kind, and the component rules components. Keep it in step with `DesignSystem.notice()`
+ * in src/design-system.ts, or the baseline records a rule as run when it was skipped, or the
+ * other way round.
  */
 function canRun(ds: DesignSystem, rule: RuleId): boolean {
   switch (rule) {
