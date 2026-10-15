@@ -15,7 +15,7 @@ export default async function Image() {
       {...size}
       eyebrow="Rules"
       title={`${String(rules.length)} rules. Every finding says what to write instead.`}
-      lead="Hardcoded values, invented components, props and variants, native elements and unnamed icon buttons."
+      lead="Hardcoded colors, spacing and radius, native elements, APIs your design system lacks and unnamed icon buttons."
       aside={
         <Panel>
           {rules.map((rule) => (

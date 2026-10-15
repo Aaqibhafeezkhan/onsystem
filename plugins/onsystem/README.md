@@ -1,6 +1,6 @@
 # onsystem for Claude Code
 
-This plugin keeps Claude on your React design system. It reads the project's real components, props, `cva` variants and design tokens, gives them to Claude before it writes UI, and checks every `.tsx` or `.jsx` file Claude writes against them. When Claude invents a component, a prop, a variant value or a color, the hook answers the edit with a blocking error that names the fix, and Claude corrects the file before it moves on.
+This plugin keeps Claude on your React design system. It reads the project's real components, props, `cva` variants and design tokens, gives them to Claude before it writes UI, and checks every `.tsx` or `.jsx` file Claude writes against them. When Claude writes a palette color, a native element the design system wraps, or a component, prop or variant value it lacks, the hook answers the edit with a blocking error that names the fix, and Claude corrects the file before it moves on.
 
 ## What it adds
 

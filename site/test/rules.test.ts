@@ -89,6 +89,20 @@ describe('/rules/<id>', () => {
     await expect(RulePage(params('no-such-rule'))).rejects.toThrow();
   });
 
+  it('says the icon-button fix writes a label only where the icon or the code says the action', async () => {
+    // Since #160 a plus, a chevron or an X whose handler does not name one action gets a label
+    // suggested without a fix, as the docs/rules.md row says.
+    const rule = ruleCatalog.rules.find((r) => r.id === 'icon-button-accessible-name');
+    expect(rule?.suggests).toContain(
+      'fixed only when the icon or the code says what the button does',
+    );
+    expect(rule?.why).not.toMatch(/guesses the label/);
+    expect(rule?.why).toContain('Otherwise the message suggests a label without a fix.');
+    expect(text(await renderRule('icon-button-accessible-name'))).toContain(
+      plain(rule?.why ?? 'missing'),
+    );
+  });
+
   it('is in the sitemap and llms.txt', () => {
     const urls = sitemap().map((entry) => entry.url);
     const llms = llmsTxt();
