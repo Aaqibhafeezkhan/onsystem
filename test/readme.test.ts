@@ -539,7 +539,7 @@ describe('the README', () => {
     expect(lookedUp).toBeGreaterThan(0);
   });
 
-  it("counts bench/v2's measures, and the independent ones, as its Scoring list has them", () => {
+  it("counts bench/v2's measures, and the independent ones, as its Scoring list has them, and names each where it lists them", () => {
     const v2 = read('bench/v2/README.md');
     const start = v2.indexOf('\n### Scoring\n');
     expect(start).toBeGreaterThan(-1);
@@ -560,6 +560,28 @@ describe('the README', () => {
     expect(scoring).toContain(
       `${count(measures.length)} measures, ${count(measures.filter((m) => m.independent).length).toLowerCase()} of them independent of onsystem.`,
     );
+
+    // Anywhere else it counts them, it says the same number; and the two places that list the
+    // scorers, the v2 column of the table of what changes from v1 and their blind spots under
+    // Threats to validity, name every measure (`onsystem check` as onsystem).
+    for (const m of v2.matchAll(/\b(one|two|three|four|five|six) (?:scorers|measures)\b/gi))
+      expect(m[1]?.toLowerCase(), m[0]).toBe(count(measures.length).toLowerCase());
+    const lines = v2.split('\n');
+    const blindSpots = "- **The scorers' blind spots.** ";
+    const lists = {
+      'What changes from v1': lines.find((l) => /^\| Scoring +\|/.test(l))?.split('|')[3],
+      'Threats to validity': lines.find((l) => l.startsWith(blindSpots))?.slice(blindSpots.length),
+    };
+    const named = (name: string) =>
+      name
+        .replace(/`/g, '')
+        .replace(/ check$/, '')
+        .toLowerCase();
+    for (const [where, text] of Object.entries(lists)) {
+      expect(text, where).toBeDefined();
+      for (const { name } of measures)
+        expect(text?.toLowerCase(), `${where}: ${name}`).toContain(named(name));
+    }
   });
 });
 

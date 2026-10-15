@@ -50,9 +50,11 @@ export interface Label {
   verdict: Verdict;
   reason: string;
   /**
-   * `audit`: picked by hand as suspicious. `random`: drawn at random, so it estimates the rate.
-   * `blind`: a seeded draw from every distinct finding, stratified by rule, labelled by a reviewer
-   * who saw no other label; `draw` names its folder in corpus/, with the method and statistics.
+   * `audit`: picked because it looked suspicious. `random`: drawn at random, run by run, by a
+   * reviewer who could see the finding, so not blind; its figures cover only the runs and rules
+   * it labels. `blind`: a seeded draw from every distinct finding, stratified by rule, labelled by
+   * a reviewer who saw no other label; `draw` names its folder in corpus/, with the method and
+   * statistics. The false-positive rate to quote is a blind draw's.
    */
   sample: 'audit' | 'random' | 'blind';
   draw?: string;
@@ -281,9 +283,10 @@ export interface FalsePositiveRate {
   /** Audit labels still reported (picked as suspicious, so not an estimate). */
   audit: Precision;
   /**
-   * The random sample's FP rate per run and rule, weighted by how many findings each has now:
-   * an estimate for all findings in the corpus. `coverage` is the share of findings in a run
-   * and rule with at least one random label still reported.
+   * The random sample's FP rate per run and rule, weighted by how many findings each has now. It
+   * describes only the runs and rules those labels cover, not all findings in the corpus, and the
+   * labels are not blind: the rate to quote is a blind draw's. `coverage` is the share of findings
+   * in a run and rule with at least one random label still reported.
    */
   estimate: number | undefined;
   coverage: number;
