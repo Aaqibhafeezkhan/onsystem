@@ -33,8 +33,9 @@ import {
 import { componentFiles, loadDesignSystem, type DesignSystem } from './design-system.js';
 import { explainProject, librariesLeftOut } from './explain.js';
 import { init } from './init.js';
-import { libraryAdapter, type LibrarySource } from './libraries/index.js';
+import { libraryTitle, notReadYet, type LibrarySource } from './libraries/index.js';
 import { escapeData, formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
+import { missingDependencies, notReadNotices } from './not-read.js';
 import { serveStdio } from './server/stdio.js';
 import { toDesignMd, toDtcg } from './tokens/export.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
@@ -643,6 +644,7 @@ async function selectInProject(
   const notice = ds.notice();
   if (notice && values['require-design-system'] && !ds.hasDesignSystem()) {
     io.stderr(`check --require-design-system: ${notice}`);
+    for (const text of notReadNotices([{ ds }])) io.stderr(text);
     return 2;
   }
 
@@ -660,7 +662,7 @@ async function selectInProject(
     designSystemOf: () => ds,
     root: ds.root,
     notes: scopeNotes(skipped, left),
-    notices: notice ? [notice] : [],
+    notices: [...(notice ? [notice] : []), ...notReadNotices([{ ds }])],
     skipped,
     testsLeftOut: left.tests,
   };
@@ -790,6 +792,11 @@ async function selectInWorkspace(
     gaps.set(notice, gap);
   }
   const notices = [...gaps.values()].map(({ ds, dirs }) => ds.notice(listOf(dirs)) ?? '');
+  const checkedProjects = unique(files.map(project)).flatMap((p) => {
+    const ds = loaded.get(p.root);
+    return ds ? [{ ds, dir: p.dir }] : [];
+  });
+  notices.push(...notReadNotices(checkedProjects));
   const used = unique(files.map((file) => project(file).root)).length;
   return {
     files,
@@ -855,6 +862,8 @@ async function inspect(
   }
   if (values.explain) lines.push('', ...explainProject(ds, io.cwd));
   io.stdout(lines.join('\n'));
+  const missing = values.explain ? undefined : missingDependencies([{ ds }]);
+  if (missing) io.stderr(missing);
   return 0;
 }
 
@@ -868,7 +877,7 @@ function describeLibraries(
   cwd: string,
 ): string[] {
   const name = (library: LibrarySource) =>
-    `${libraryAdapter(library.package)?.title ?? library.package} (${library.package}${library.version ? ` ${library.version}` : ''})`;
+    `${libraryTitle(library.package)} (${library.package}${library.version ? ` ${library.version}` : ''})`;
   return [
     ...(config.libraries ?? []).map((library) => {
       if (!library.dir) return `${name(library)}: a dependency, but not installed`;
@@ -878,6 +887,7 @@ function describeLibraries(
     ...(config.librariesOff ?? []).map(
       (library) => `${name(library)}: ${librariesLeftOut(config, cwd)}`,
     ),
+    ...(config.librariesUnread ?? []).map((library) => `${name(library)}: ${notReadYet()}`),
   ];
 }
 
@@ -1031,6 +1041,10 @@ async function inspectWorkspace(
   );
   if (values.explain) lines.push('', ...explainWorkspace(workspace, loaded, io.cwd));
   io.stdout(lines.join('\n'));
+  const missing = values.explain
+    ? undefined
+    : missingDependencies(loaded.map(({ project, ds }) => ({ ds, dir: project.dir })));
+  if (missing) io.stderr(missing);
   return 0;
 }
 

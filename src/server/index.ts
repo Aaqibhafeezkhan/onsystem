@@ -7,6 +7,7 @@ import * as z from 'zod';
 import type { Catalog, CatalogEntry, ProjectSet, ServedProject } from '../catalog.js';
 import type { DesignSystem } from '../design-system.js';
 import { uncheckedNotice } from '../lint/index.js';
+import { notReadNotices } from '../not-read.js';
 import { TOKEN_CATEGORIES, type ComponentInfo } from '../types.js';
 import { isInside, relativePath } from '../util/paths.js';
 import { NAME, VERSION } from '../version.js';
@@ -599,7 +600,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
           .string()
           .optional()
           .describe(
-            'Set when no components or no color tokens were found, so rules did not run, or when components came from modules the model does not include.',
+            'Set when no components or no color tokens were found, so rules did not run, when components came from modules the model does not include, when the project depends on a component library onsystem does not read yet, or when its dependencies are not installed.',
           ),
       }),
       annotations: READ_ONLY,
@@ -659,11 +660,13 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
       const checked = ds.check(source, file);
       const result = file === shown ? checked : { ...checked, file: shown };
       const capped = capDiagnostics(result, limit);
-      // A clean result without components or color tokens, or with components the model
-      // leaves out, says little.
+      // A clean result without components or color tokens, with components the model leaves
+      // out, or with what was not read (a library, the dependencies), says little.
       const notice = result.skipped
         ? undefined
-        : [ds.notice(), uncheckedNotice([result])].filter(Boolean).join('\n\n') || undefined;
+        : [ds.notice(), ...notReadNotices([{ ds }]), uncheckedNotice([result])]
+            .filter(Boolean)
+            .join('\n\n') || undefined;
       return {
         content: [
           { type: 'text', text: renderCheck(result, capped) + (notice ? `\n\n${notice}` : '') },

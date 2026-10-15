@@ -247,6 +247,8 @@ export interface ResolvedConfig {
   libraryIds?: false | LibraryId[] | undefined;
   /** Libraries the project depends on that `libraries` leaves out, so they are not read. */
   librariesOff?: LibrarySource[] | undefined;
+  /** Component libraries the project depends on that onsystem does not read yet (Chakra UI). */
+  librariesUnread?: LibrarySource[] | undefined;
   elements: Record<string, string>;
   /** `check` lints the component files themselves, which it skips by default. */
   includeDesignSystem: boolean;
@@ -598,6 +600,7 @@ export async function loadConfigWith(
     libraries: libraries.read,
     libraryIds: config.libraries,
     librariesOff: libraries.off,
+    librariesUnread: libraries.unread,
     elements: config.elements ?? {},
     includeDesignSystem:
       options.includeDesignSystem ?? (declared ? undefined : config.includeDesignSystem) ?? false,

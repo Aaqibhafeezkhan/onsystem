@@ -35,7 +35,7 @@ At a workspace root, `inspect` lists every project it found (`apps/remix (@docum
 
 `inspect` lists components that wrap a library, such as a Radix `Dialog` or `DropdownMenu`, with `0 props`, and `no-unknown-prop` never reports on them.
 
-Their props come from the types of the packages they wrap, so they resolve only when the project's dependencies are installed. Without `node_modules`, extraction marks those props as open rather than guess, and `no-unknown-prop` skips the component. `inspect --explain` lists them under `Props` and says whether the dependencies are installed. On a checkout of Vercel's chatbot without its dependencies, `Dialog`, `DropdownMenu` and `Popover` show 0 props; in the demo, with them, `Dialog` has 5.
+Their props come from the types of the packages they wrap, so they resolve only when the project's dependencies are installed. Without `node_modules`, extraction marks those props as open rather than guess, and `no-unknown-prop` skips the component. `inspect --explain` lists them under `Props` and says whether the dependencies are installed. Without `node_modules`, `check`, `check_ui` and plain `inspect` say how many components `no-unknown-prop` skips. On a checkout of Vercel's chatbot without its dependencies, `Dialog`, `DropdownMenu` and `Popover` show 0 props; in the demo, with them, `Dialog` has 5.
 
 Install the dependencies (`npm install`, `pnpm install`, …) before running `inspect`, `check` or the server, and in CI before `check` (`npm ci`). If the counts still show 0, run once with `--no-cache`.
 
