@@ -51,7 +51,7 @@
         "icon-button-accessible-name": {
           "errors": 11,
           "warnings": 0,
-          "fixes": 4
+          "fixes": 1
         },
         "no-hardcoded-color": {
           "errors": 22,
@@ -132,7 +132,7 @@
         "icon-button-accessible-name": {
           "errors": 97,
           "warnings": 0,
-          "fixes": 12
+          "fixes": 11
         },
         "no-hardcoded-color": {
           "errors": 874,
@@ -170,7 +170,7 @@
         "icon-button-accessible-name": {
           "errors": 35,
           "warnings": 0,
-          "fixes": 25
+          "fixes": 16
         },
         "no-hardcoded-color": {
           "errors": 190,
@@ -214,7 +214,7 @@
         "icon-button-accessible-name": {
           "errors": 42,
           "warnings": 0,
-          "fixes": 31
+          "fixes": 21
         },
         "no-hardcoded-color": {
           "errors": 190,
@@ -236,7 +236,7 @@
         "icon-button-accessible-name": {
           "errors": 7,
           "warnings": 0,
-          "fixes": 6
+          "fixes": 5
         }
       }
     },
@@ -257,7 +257,7 @@
         "icon-button-accessible-name": {
           "errors": 52,
           "warnings": 0,
-          "fixes": 43
+          "fixes": 30
         },
         "no-hardcoded-color": {
           "errors": 10024,
@@ -319,7 +319,7 @@
         "icon-button-accessible-name": {
           "errors": 56,
           "warnings": 0,
-          "fixes": 47
+          "fixes": 30
         },
         "no-hardcoded-color": {
           "errors": 9967,
@@ -351,7 +351,7 @@
         "icon-button-accessible-name": {
           "errors": 52,
           "warnings": 0,
-          "fixes": 43
+          "fixes": 30
         },
         "no-hardcoded-color": {
           "errors": 10024,
@@ -407,7 +407,7 @@
         "icon-button-accessible-name": {
           "errors": 54,
           "warnings": 0,
-          "fixes": 45
+          "fixes": 32
         },
         "no-hardcoded-color": {
           "errors": 10300,
@@ -442,7 +442,7 @@
         "icon-button-accessible-name": {
           "errors": 14,
           "warnings": 0,
-          "fixes": 8
+          "fixes": 7
         },
         "no-hardcoded-color": {
           "errors": 2,
@@ -519,7 +519,7 @@
         "icon-button-accessible-name": {
           "errors": 2,
           "warnings": 0,
-          "fixes": 2
+          "fixes": 1
         },
         "no-hardcoded-color": {
           "errors": 0,
@@ -612,7 +612,7 @@
         "icon-button-accessible-name": {
           "errors": 16,
           "warnings": 0,
-          "fixes": 10
+          "fixes": 8
         },
         "no-hardcoded-color": {
           "errors": 7,
@@ -656,7 +656,7 @@
         "icon-button-accessible-name": {
           "errors": 17,
           "warnings": 0,
-          "fixes": 13
+          "fixes": 5
         },
         "no-hardcoded-color": {
           "errors": 201,
@@ -690,7 +690,7 @@
         "icon-button-accessible-name": {
           "errors": 1,
           "warnings": 0,
-          "fixes": 1
+          "fixes": 0
         },
         "prefer-design-system-component": {
           "errors": 3,
@@ -855,7 +855,7 @@
         "icon-button-accessible-name": {
           "errors": 18,
           "warnings": 0,
-          "fixes": 14
+          "fixes": 5
         },
         "no-hardcoded-color": {
           "errors": 384,
