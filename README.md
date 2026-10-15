@@ -1,6 +1,6 @@
 # onsystem
 
-**Keeps coding agents on your design system:** it catches palette colors, native elements and APIs your system lacks, at every edit and pull request, with the fix. Set it up once in your design-system package; every app in your monorepo gets it. Runs locally and works alongside [@shadcn/lint](https://github.com/shadcn-ui/lint).
+**Keeps coding agents on your design system:** catches palette colors, native elements and APIs your system lacks, at every edit and pull request, with the fix. Set it up once in your design-system package; every app in your monorepo gets it. Runs locally and works alongside [@shadcn/lint](https://github.com/shadcn-ui/lint).
 
 Built for design-system and platform teams with a React design-system package; a shadcn/ui app is the zero-config demo. Formerly `@dgesteves/design-system-mcp` ([what changed](https://onsystem.vercel.app/docs/migrating)).
 
