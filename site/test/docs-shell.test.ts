@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,17 +13,17 @@ import RequiredCheckPage from '@/app/docs/required-check/page';
 import RulesPage from '@/app/rules/page';
 import { Code, wrapsLines } from '@/components/code';
 import { InlineMarkdown } from '@/components/markdown';
-import { MarkdownBlocks, parseBlocks, type Block } from '@/components/markdown-blocks';
+import { MarkdownBlocks, parseBlocks, slug, type Block } from '@/components/markdown-blocks';
 import { assistantLinks } from '@/components/page-actions';
-import { ruleCatalog } from '@/lib/data';
+import { corpus, ruleCatalog } from '@/lib/data';
 import { DOCS_GROUPS, DOCS_NAV, DOCS_PAGES, docsPage } from '@/lib/docs';
-import { FAQ } from '@/lib/faq';
+import { faqEntries } from '@/lib/faq';
 import { lastModified } from '@/lib/git';
 import { outputLines } from '@/lib/output';
 import { llmsFullTxt } from '@/lib/llms';
 import { forPackageManager } from '@/lib/package-managers';
 import { markdownPath, pageMarkdown } from '@/lib/page-markdown';
-import { SITE_URL } from '@/lib/site';
+import { DOCS_FILES, SITE_URL } from '@/lib/site';
 
 vi.mock('next/navigation', () => ({ usePathname: () => '/docs' }));
 
@@ -135,13 +138,49 @@ describe('a docs page', () => {
 
   it('gives each FAQ question an anchor, outside the heading that names its section', () => {
     const page = render(createElement(FaqPage));
-    for (const [question] of FAQ) expect(text(page)).toContain(`Link to the section ${question}`);
+    const questions = faqEntries(corpus).map(([question]) => question);
+    for (const question of questions) {
+      expect(text(page)).toContain(`Link to the section ${question}`);
+    }
     const sections = [...page.matchAll(/<section aria-labelledby="([^"]+)">/g)].map(([, id]) => id);
     const headings = [...page.matchAll(/<h2 id="([^"]+)"[^>]*>(.*?)<\/h2>/g)].map(
       ([, id, inner = '']) => [id, text(inner)],
     );
     expect(headings.map(([id]) => id)).toEqual(sections);
-    expect(headings.map(([, name]) => name)).toEqual(FAQ.map(([question]) => question));
+    expect(headings.map(([, name]) => name)).toEqual(questions);
+  });
+
+  it('says the plugin checks code from other shadcn registries until its folder is set apart', () => {
+    const page = render(createElement(FaqPage));
+    const answer =
+      /<section aria-labelledby="is-the-claude-code-plugin-safe-to-install-everywhere">[\s\S]*?<\/section>/.exec(
+        page,
+      )?.[0] ?? '';
+    expect(text(answer)).toContain('Code installed from other shadcn registries');
+    expect(text(answer)).toContain('until you list its folder in components');
+    expect(answer).toContain('href="/docs/configuration#code-from-shadcn-registries"');
+  });
+
+  it('links the FAQ only to sections the pages have', () => {
+    const page = render(createElement(FaqPage));
+    const rules = render(createElement(RulesPage));
+    const files = new Map(Object.entries(DOCS_FILES).map(([file, href]) => [href, file]));
+    const links = [...page.matchAll(/href="(\/[^"#]*)#([^"]+)"/g)];
+    expect(links.length).toBeGreaterThan(3);
+    for (const [, href = '', anchor = ''] of links) {
+      // The rules page adds sections of its own to docs/rules.md, such as #configure.
+      if (href === '/rules') {
+        expect(rules, `${href}#${anchor}`).toContain(` id="${anchor}"`);
+        continue;
+      }
+      const file = files.get(href);
+      expect(file, href).toBeDefined();
+      const markdown = fs
+        .readFileSync(path.join(import.meta.dirname, '../../docs', String(file)), 'utf8')
+        .replace(/^```[\s\S]*?^```/gm, '');
+      const ids = [...markdown.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)].map((m) => slug(m[1] ?? ''));
+      expect(ids, `${href}#${anchor}`).toContain(anchor);
+    }
   });
 
   it('opens ChatGPT and Claude with a prompt that points at the page’s Markdown', () => {
@@ -192,7 +231,7 @@ describe('/docs/<page>.md', () => {
 
   it('includes what the page adds to its file: the FAQ, and the skill on the plugin page', () => {
     const faq = pageMarkdown(docsPage('/docs/faq').page);
-    for (const [question] of FAQ) expect(faq).toContain(`## ${question}`);
+    for (const [question] of faqEntries(corpus)) expect(faq).toContain(`## ${question}`);
     const plugin = pageMarkdown(docsPage('/docs/plugin').page);
     expect(plugin).toContain('## What the skill tells Claude');
     expect(plugin).toContain('#### Before writing UI');

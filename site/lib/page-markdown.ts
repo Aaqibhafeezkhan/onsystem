@@ -1,4 +1,4 @@
-import { docs } from '@/lib/data';
+import { corpus, docs } from '@/lib/data';
 import { docsMarkdown, docsSlug, type DocsPage } from '@/lib/docs';
 import { faqMarkdown } from '@/lib/faq';
 import { absolute } from '@/lib/llms';
@@ -33,7 +33,7 @@ function demote(markdown: string, levels: number): string {
 export function pageMarkdown(page: DocsPage): string {
   let body: string;
   if (page.href === '/docs/faq') {
-    body = faqMarkdown();
+    body = faqMarkdown(corpus);
   } else if (page.href === '/docs/plugin') {
     const skill = docs.skill.replace(/^# .*\n+/, '');
     body = `${docs.plugin}\n\n## What the skill tells Claude\n\nClaude loads it by itself for UI work, or with \`/onsystem:onsystem\`. This is its text, from SKILL.md:\n\n${demote(skill, 2)}`;

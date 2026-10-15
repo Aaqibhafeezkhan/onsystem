@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest';
 
 import BenchmarkPage from '@/app/benchmark/page';
 import Home from '@/app/page';
+import { docsPage } from '@/lib/docs';
 import { llmsTxt } from '@/lib/llms';
+import { pageMarkdown } from '@/lib/page-markdown';
 
 // What the site says about how often onsystem is wrong, against corpus/: a false-positive rate
 // only when a labelled sample can give one, and who made the labels.
@@ -71,6 +73,9 @@ function randomSample() {
   }
   const fp = random.filter((l) => l.verdict === 'FP');
   return {
+    repos: repos.repos.length,
+    runs: Object.keys(snapshot.runs).length,
+    distinct,
     coverage: covered / distinct,
     falsePositives: fp.length,
     fixed: fp.filter((l) => !sample.includes(l)).length,
@@ -108,6 +113,40 @@ describe('the home page on how often onsystem is wrong', () => {
     // The corpus labeller saw onsystem's finding; only bench/v2's sample was labelled blind.
     expect(paragraph).not.toMatch(/blind/i);
     expect(paragraph).not.toMatch(/measured, not guessed/);
+  });
+});
+
+describe('the FAQ on how often onsystem is wrong', () => {
+  // /docs/faq.md, built from the same entries as the page.
+  const faq = pageMarkdown(docsPage('/docs/faq').page);
+  const answer = /^## How often is it wrong\?\n\n(.+)$/m.exec(faq)?.[1] ?? '';
+
+  it('counts the repositories, runs and distinct findings as corpus/ has them', () => {
+    // It said "10 public repositories" while corpus/repos.json had 12.
+    const { repos, runs, distinct } = randomSample();
+    expect(answer).toContain(
+      `on ${String(repos)} public repositories pinned by commit (${String(runs)} runs, ${distinct.toLocaleString('en-US')} distinct findings)`,
+    );
+  });
+
+  it('quotes no false-positive rate until a random sample can give one, and says why', () => {
+    const { coverage, falsePositives, fixed, lost } = randomSample();
+    expect(coverage >= 0.8 && lost === 0, 'a sample gives a rate now: quote it here too').toBe(
+      false,
+    );
+    expect(answer.match(/\d+(?:\.\d+)?\s?%/g) ?? []).toEqual([]);
+    // It pointed at the README for a rate the README no longer quotes.
+    expect(answer).not.toMatch(/README/);
+    expect(answer).toContain('do not give a false-positive rate for all findings yet');
+    expect(answer).toContain('the runs and rules they cover hold under half of the findings');
+    expect(coverage).toBeLessThan(0.5);
+    expect(answer).toContain('most of the false positives they found have been fixed');
+    expect(fixed * 2).toBeGreaterThan(falsePositives);
+  });
+
+  it('says an AI reviewer made the labels, and does not call them blind', () => {
+    expect(answer).toContain('compares the findings with labels made by an AI reviewer');
+    expect(answer).not.toMatch(/blind/i);
   });
 });
 

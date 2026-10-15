@@ -961,13 +961,35 @@ write('social.json', {
 
 // ondocs's search index over the docs and the rules, for /api/ask and /api/mcp. Keyword-only
 // (BM25, no embedding model), so building it needs no API key and an agent's searches over MCP
-// call no model at all. The pages are those of DOCS_FILES in lib/site.ts, and the FAQ;
-// test/ask.test.ts keeps the lists in step. The docs go in as the site serves their Markdown,
-// without the renderer's markers. lib/markers.ts and lib/faq.ts import nothing, so Node loads
-// them as they are, with the types stripped.
+// call no model at all. The pages are those of DOCS_FILES in lib/site.ts, the FAQ, /benchmark
+// and /playground; test/ask.test.ts keeps the lists in step. The docs go in as the site serves
+// their Markdown, without the renderer's markers, and the other pages as llms-full.txt has them,
+// from the generated data the site renders. lib/markers.ts, lib/faq.ts, lib/benchmark.ts and
+// lib/agent-markdown.ts import nothing but types, so Node loads them as they are, with the types
+// stripped; it cannot resolve the `@/` alias, so a runtime import added to one of them stops the
+// build here, and the error says why.
 const { buildIndex, fromMarkdown, serializeIndexFile } = await import('ondocs');
-const { withoutMarkers } = await import('../lib/markers.ts');
-const { faqMarkdown } = await import('../lib/faq.ts');
+async function typeStripped(file) {
+  try {
+    return await import(file);
+  } catch (error) {
+    if (!['ERR_MODULE_NOT_FOUND', 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX'].includes(error?.code)) {
+      throw error;
+    }
+    throw new Error(
+      `scripts/generate.mjs loads ${file.replace('../', 'site/')} with Node's type stripping: it may import only types, since Node cannot resolve @/, and no TypeScript that needs compiling, such as an enum. ${error.message}`,
+      { cause: error },
+    );
+  }
+}
+const { withoutMarkers } = await typeStripped('../lib/markers.ts');
+const { faqMarkdown } = await typeStripped('../lib/faq.ts');
+const benchmarkFormat = await typeStripped('../lib/benchmark.ts');
+const { benchmarkMarkdown, playgroundMarkdown } = await typeStripped('../lib/agent-markdown.ts');
+const generated = (name) => JSON.parse(fs.readFileSync(path.join(OUT, name), 'utf8'));
+// /benchmark and /playground are cited by the ids the pages give their sections: a heading without
+// one, such as "The arms" under Method, is cited by the section it sits in. A null stays null.
+const explicitAnchors = (doc) => doc && { ...doc, anchors: 'explicit' };
 const ASK_PAGES = {
   'quickstart.md': '/docs',
   'plugin.md': '/docs/plugin',
@@ -992,7 +1014,22 @@ const askDocuments = [
       url,
     }),
   ),
-  fromMarkdown(`# FAQ\n\n${faqMarkdown()}`, { id: 'faq', url: '/docs/faq' }),
+  fromMarkdown(`# FAQ\n\n${faqMarkdown(generated('corpus.json'))}`, {
+    id: 'faq',
+    url: '/docs/faq',
+  }),
+  explicitAnchors(
+    fromMarkdown(benchmarkMarkdown(generated('benchmark.json'), benchmarkFormat), {
+      id: 'benchmark',
+      url: '/benchmark',
+    }),
+  ),
+  explicitAnchors(
+    fromMarkdown(
+      playgroundMarkdown(generated('playground.json').presets, generated('design-system.json')),
+      { id: 'playground', url: '/playground' },
+    ),
+  ),
   // Each rule's page, from the same data the page renders.
   ...rules.map((rule) =>
     fromMarkdown(
