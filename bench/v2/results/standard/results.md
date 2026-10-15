@@ -97,7 +97,6 @@ Each arm against `none`, paired on model, task and repeat (percentage points; er
 | all models | hook | 240 | -1 [-4, +2] | +29 [+16, +44] | +27 [+14, +41] | -0.80 [-1.29, -0.38] |
 | all models | all | 240 | 0 [-4, +3] | +32 [+17, +48] | +29 [+15, +44] | -0.85 [-1.38, -0.40] |
 
-
 ## Blind labels
 
 Who labelled, and what they could see: [labels/LABELLER.md](labels/LABELLER.md).
@@ -112,7 +111,6 @@ Who labelled, and what they could see: [labels/LABELLER.md](labels/LABELLER.md).
 
 onsystem against the labeller, per file: both found a problem in 1, only onsystem in 3, only the labeller in 5, neither in 51.
 onsystem's findings judged correct: 3/3 100% [44%, 100%] (19 debatable, left out).
-
 
 ## Independent scorer: @shadcn/lint
 

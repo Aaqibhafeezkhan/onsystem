@@ -390,7 +390,7 @@ describe('the independent scorer, @shadcn/lint', () => {
     rules,
   };
 
-  it('counts its own rules only, by rule, and says when a file did not parse', () => {
+  it('counts its own rules only, by rule, and says when a file could not be linted', () => {
     const s = summarizeShadcnLint([
       {
         ruleId: 'shadcn/no-restyle',
@@ -420,6 +420,13 @@ describe('the independent scorer, @shadcn/lint', () => {
         { ruleId: null, severity: 2, message: 'Parsing error', line: 1, column: 1, fatal: true },
       ]),
     ).toMatchObject({ findings: 0, failed: 'Parsing error' });
+    // A file ESLint ignores gets a warning with no rule and no `fatal`: it could not be linted,
+    // so it is reported as failed rather than counting 0 findings without saying so.
+    const ignored =
+      'File ignored because of a matching ignore pattern. Use "--no-ignore" to disable file ignore settings or use "--no-warn-ignored" to suppress this warning.';
+    expect(
+      summarizeShadcnLint([{ ruleId: null, severity: 1, message: ignored, line: 0, column: 0 }]),
+    ).toMatchObject({ findings: 0, failed: ignored });
   });
 
   it('turns every rule on as an error, and lets no comment in the file turn one off', () => {
@@ -497,7 +504,7 @@ describe('the independent scorer, @shadcn/lint', () => {
     expect(a?.byRule['no-raw-colors']?.value).toBeCloseTo(-1);
   });
 
-  it('says what ran, and renders both tables and the files it could not parse', () => {
+  it('says what ran, and renders both tables and the files it could not lint', () => {
     const md = renderShadcnLint(
       scorer,
       aggregateShadcnLint(results, lint, rules, { iterations: 200 }),
@@ -513,7 +520,9 @@ describe('the independent scorer, @shadcn/lint', () => {
     expect(md).toContain('| a | all | 4 | 3 | 0.75 [');
     expect(md).toContain('| 0.75 | 0.00 |');
     expect(md).toContain('| a | all | 4 | -3.25 [');
-    expect(md).toContain('1 file could not be parsed and count 0: `b-none-t1`.');
+    expect(md).toContain(
+      '1 file could not be linted (a parse error, or a file ESLint ignored) and count 0: `b-none-t1`.',
+    );
     expect(md).not.toContain('-0.00');
   });
 
@@ -524,7 +533,7 @@ describe('the independent scorer, @shadcn/lint', () => {
       .map((id) => readJson(path.join(out, 'runs', id, 'result.json')) as RunResult);
     const scores = readJson(path.join(out, 'shadcn-lint.json')) as {
       scorer: ShadcnLintScorer;
-      runs: Record<string, ShadcnLintRun>;
+      runs: Record<string, ShadcnLintRun & { messages: { message: string }[] }>;
     };
     expect(Object.keys(scores.runs).sort()).toEqual(
       runs
@@ -536,6 +545,16 @@ describe('the independent scorer, @shadcn/lint', () => {
       path.join(bench, 'config/shadcn-lint.json'),
     ) as ShadcnLintScorer & { $comment: string };
     expect(scores.scorer).toEqual(spec);
+    // Paths in the messages are relative to the repository: none names this machine's folders
+    // (a work folder reached through a symlink once put them there).
+    const absolute = Object.values(scores.runs).flatMap((run) =>
+      run.messages
+        .map((m) => m.message)
+        .filter((m) =>
+          /\/repos\/[^/]+\/src\/|(?:^|[\s"'(])\/(?:private|var|tmp|Users|home)\//.test(m),
+        ),
+    );
+    expect(absolute).toEqual([]);
     const { shadcnLint } = readJson(path.join(out, 'results.json')) as {
       shadcnLint: { scorer: ShadcnLintScorer; rows: ShadcnLintRow[]; deltas: ShadcnLintDelta[] };
     };
@@ -552,9 +571,12 @@ describe('the independent scorer, @shadcn/lint', () => {
         d.findings.value,
       ]),
     );
-    expect(fs.readFileSync(path.join(out, 'results.md'), 'utf8')).toContain(
+    const md = fs.readFileSync(path.join(out, 'results.md'), 'utf8');
+    expect(md).toContain(
       `\n## Independent scorer: @shadcn/lint\n\n${renderShadcnLint(shadcnLint.scorer, shadcnLint.rows, shadcnLint.deltas, scores.runs)}`,
     );
+    // One blank line between sections, as everywhere else in the file.
+    expect(md).not.toContain('\n\n\n');
   });
 });
 

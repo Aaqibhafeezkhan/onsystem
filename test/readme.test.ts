@@ -405,6 +405,33 @@ describe('the README', () => {
     expect(fired('openstatus')).not.toContain('no-restyle');
     expect(text).toContain('so only `no-raw-colors` and `no-arbitrary-values` report there');
     expect(fired('dub')).toEqual(['no-arbitrary-values', 'no-raw-colors']);
+
+    // Classes looked up at runtime: shadcn-website's files that contain palette classes, and how
+    // many of them got one require-static-classes finding and no color finding from either tool.
+    const palette =
+      /(?<![\w-])(?:[a-z0-9-]+:)*-?(?:bg|text|border(?:-[trblxyse])?|ring|ring-offset|outline|divide|from|via|to|fill|stroke|shadow|accent|caret|decoration|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)(?:\/\d+)?(?![\w-])/;
+    let withPalette = 0;
+    let lookedUp = 0;
+    for (const [id, run] of Object.entries(runs)) {
+      if (id.split('--')[2] !== 'shadcn-website') continue;
+      const dir = `bench/v2/results/standard/runs/${id}`;
+      const result = JSON.parse(read(`${dir}/result.json`)) as {
+        file: string;
+        onsystemByRule: Record<string, number>;
+      };
+      if (!palette.test(read(`${dir}/files/${result.file}`))) continue;
+      withPalette += 1;
+      if (
+        run.byRule['require-static-classes'] === 1 &&
+        !run.byRule['no-raw-colors'] &&
+        !result.onsystemByRule['no-hardcoded-color']
+      )
+        lookedUp += 1;
+    }
+    expect(text).toContain(
+      `In shadcn-website, ${lookedUp} of the ${withPalette} output files with palette classes went this way: each got one \`require-static-classes\` finding, no \`no-raw-colors\` and no onsystem color error.`,
+    );
+    expect(lookedUp).toBeGreaterThan(0);
   });
 });
 

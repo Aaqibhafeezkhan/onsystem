@@ -510,7 +510,10 @@ async function score(out) {
   for (const name of [...new Set(results.map((r) => r.repo))]) {
     if (!fs.existsSync(repoDirs(work, name).meta)) await prepare([name]);
     const own = results.filter((r) => r.repo === name);
-    const root = repoDirs(work, name).src;
+    // Through its real path: @shadcn/lint prints a component's path relative to ESLint's cwd only
+    // when the component's real path sits under it, so a work folder reached through a symlink
+    // (macOS's os.tmpdir() is one) would put this machine's absolute paths in the messages.
+    const root = fs.realpathSync(repoDirs(work, name).src);
     const started = Date.now();
     const child = await exec(process.execPath, [path.join(HERE, 'lib', 'shadcn-lint.mjs')], {
       // When a theme's own folders have no Tailwind, @shadcn/lint falls back to the working
@@ -641,7 +644,8 @@ function report(out) {
   // tables, so rebuilding them keeps it.
   const notes = path.join(out, 'notes.md');
   if (fs.existsSync(notes)) lines.push(fs.readFileSync(notes, 'utf8').trim(), '');
-  lines.push(renderMarkdown(rows, diffs));
+  // Each section's renderer ends in a newline; trimmed, so one blank line separates the sections.
+  lines.push(renderMarkdown(rows, diffs).trimEnd());
   const labelFile = path.join(out, 'labels', 'labels.csv');
   const keyFile = path.join(out, 'labels', 'key.json');
   if (fs.existsSync(labelFile) && fs.existsSync(keyFile)) {
@@ -656,7 +660,7 @@ function report(out) {
     const labeller = fs.existsSync(path.join(out, 'labels', 'LABELLER.md'))
       ? 'Who labelled, and what they could see: [labels/LABELLER.md](labels/LABELLER.md).'
       : 'Who labelled is not recorded: add labels/LABELLER.md.';
-    lines.push('', '## Blind labels', '', labeller, '', renderLabelSummary(summary));
+    lines.push('', '## Blind labels', '', labeller, '', renderLabelSummary(summary).trimEnd());
   }
   // The independent scorer, once `score --with shadcn-lint` has run.
   let shadcnLint;

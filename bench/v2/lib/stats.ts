@@ -746,7 +746,7 @@ export function renderShadcnLint(
   if (failed.length) {
     lines.push(
       '',
-      `${failed.length} file${failed.length === 1 ? '' : 's'} could not be parsed and count 0: ${failed.map(([id]) => `\`${id}\``).join(', ')}.`,
+      `${failed.length} file${failed.length === 1 ? '' : 's'} could not be linted (a parse error, or a file ESLint ignored) and count 0: ${failed.map(([id]) => `\`${id}\``).join(', ')}.`,
     );
   }
   return `${lines.join('\n')}\n`;

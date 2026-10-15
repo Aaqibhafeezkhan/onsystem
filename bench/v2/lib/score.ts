@@ -188,7 +188,7 @@ export interface LintMessage {
 export interface ShadcnLintSummary {
   findings: number;
   byRule: Record<string, number>;
-  /** Why the file could not be linted (a parse error), or null. */
+  /** Why the file could not be linted (a parse error, or ESLint ignored it), or null. */
   failed: string | null;
   messages: { rule: string; line: number; column: number; message: string }[];
 }
@@ -217,7 +217,11 @@ export function shadcnLintConfig({
   ];
 }
 
-/** Counts @shadcn/lint's messages on one file, by rule; anything else ESLint says is left out. */
+/**
+ * Counts @shadcn/lint's messages on one file, by rule; anything else ESLint says is left out,
+ * except why it could not lint the file: a parse error, or a file it ignored (a warning with no
+ * rule, so it would otherwise count 0 findings without saying so).
+ */
 export function summarizeShadcnLint(messages: readonly LintMessage[]): ShadcnLintSummary {
   const own = messages
     .filter((m) => m.ruleId?.startsWith('shadcn/'))
@@ -232,7 +236,9 @@ export function summarizeShadcnLint(messages: readonly LintMessage[]): ShadcnLin
   return {
     findings: own.length,
     byRule,
-    failed: messages.find((m) => m.fatal)?.message ?? null,
+    failed:
+      messages.find((m) => m.fatal || (m.ruleId == null && m.message.startsWith('File ignored')))
+        ?.message ?? null,
     messages: own,
   };
 }
