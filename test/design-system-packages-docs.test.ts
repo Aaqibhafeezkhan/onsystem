@@ -71,6 +71,15 @@ export default function Page() {
 `;
 const NATIVE_BUTTON_LINE = 14;
 
+/** An icon-only native <button> around an icon the package re-exports. */
+const ICON_PAGE = `import { ChevronLeft } from "@acme/ui";
+
+export function Back() {
+  return <button><ChevronLeft /></button>;
+}
+`;
+const ICON_BUTTON_LINE = 4;
+
 /**
  * `@acme/ui` as shadcn's monorepo template exports it: each component by its own subpath
  * (`@acme/ui/components/button`), with no barrel.
@@ -262,20 +271,22 @@ describe('what apps get from a design-system package (docs/design-system-package
     const app = installedApp(distOnly);
     const { rules, findings, stderr } = await check(app);
     const cell = rows()[2]?.[1] ?? '';
-    expect(cell).toContain('with `importPath` set, also `no-unknown-component`');
     expect(rules).toEqual(rulesIn(cell));
     // The icon rule runs on the native <button> only: the package's <Button> is not known.
     expect(
       findings.filter((d) => d.ruleId === 'icon-button-accessible-name').map((d) => d.line),
     ).toEqual([NATIVE_BUTTON_LINE]);
     expect(whatAppsGet).toContain('`icon-button-accessible-name` on native elements');
-    // The notice, although no-unknown-component reports.
+    // The notice, and no component rule reports.
     const notice = 'No design-system components found: the component rules did not run.';
     expect(stderr).toContain(notice);
-    expect(rules).toContain('no-unknown-component');
+    for (const rule of ['no-unknown-component', 'no-unknown-prop', 'no-unknown-variant']) {
+      expect(rules).not.toContain(rule);
+    }
     expect(whatAppsGet).toContain(
-      `\`${notice}\`, also when \`no-unknown-component\` reports, as in the next point.`,
+      '`no-unknown-component`, `no-unknown-prop` and `no-unknown-variant` check none of the components the app imports from the package',
     );
+    expect(whatAppsGet).toContain(`\`check\` says \`${notice}\`\n`);
     // Agents find no component.
     expect(await tool(app, 'list_components', {})).toMatch(/^No components found/);
     expect(await tool(app, 'search_components', { query: 'button' })).toMatch(
@@ -293,33 +304,42 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(whatAppsGet).toContain('**`--require-design-system` fails** (exit code 2)');
   });
 
-  it('with importPath, reports every component imported from a package published without src/, and without it, none', async () => {
+  it('checks no component imported from a package published without src/, with importPath or without it, but knows its icons only with it', async () => {
     const pkg = await initialised();
     const distOnly = without(published(pkg), (file) => file.startsWith('src/'));
-    const { findings } = await check(installedApp(distOnly));
-    const unknown = findings.filter((d) => d.ruleId === 'no-unknown-component');
-    // <Badge>, which the package does not have, and each of the three <Button>s, which it does.
-    // The page says so; a change to the rule that stops this changes the page too.
-    expect(unknown.map((d) => d.message.split(' (')[0])).toEqual([
-      '"Badge" is not a design-system component',
-      '"Button" is not a design-system component',
-      '"Button" is not a design-system component',
-      '"Button" is not a design-system component',
-    ]);
+    const noImportPath = (files: Record<string, string>) =>
+      withConfig(files, ({ importPath: _, ...config }) => config);
     expect(whatAppsGet).toContain(
-      '**With `importPath` set, `no-unknown-component` reports every component the app imports from the package**',
+      '**`importPath` does not turn the component rules on.** `init` sets it when apps import the package by one name, such as `@acme/ui`.',
     );
-    expect(whatAppsGet).toContain(
-      '`init` sets `importPath` when apps import the package by one name, such as `@acme/ui`.',
-    );
-    // Without importPath: the rest of the row, and no no-unknown-component.
-    const { rules } = await check(
-      installedApp(withConfig(distOnly, ({ importPath: _, ...config }) => config)),
-    );
+    // <Badge>, which the package does not have, is not reported either.
     const expected = rulesIn(rows()[2]?.[1] ?? '');
-    expected.delete('no-unknown-component');
-    expect(rules).toEqual(expected);
-    expect(whatAppsGet).toContain('Without it, `no-unknown-component` reports nothing either.');
+    const withImportPath = await check(installedApp(distOnly));
+    expect(withImportPath.rules).toEqual(expected);
+    expect(withImportPath.findings.filter((d) => d.message.includes('Badge'))).toEqual([]);
+    expect(whatAppsGet).toContain(
+      'With no component to compare against, imports from the package are not checked: `<Badge>` from `@acme/ui` is not reported, although the package has no `Badge`.',
+    );
+    const withoutImportPath = await check(installedApp(noImportPath(distOnly)));
+    expect(withoutImportPath.rules).toEqual(expected);
+    // An icon the package re-exports, in a native <button>: an icon only with importPath.
+    const withIcon = {
+      ...distOnly,
+      'dist/index.mjs': `${distOnly['dist/index.mjs'] ?? ''}export function ChevronLeft() {}\n`,
+      'dist/index.d.ts': `${distOnly['dist/index.d.ts'] ?? ''}export declare function ChevronLeft(props: object): unknown;\n`,
+    };
+    const iconPage = { 'app/page.tsx': ICON_PAGE };
+    const icon = await check(installedApp(withIcon, iconPage));
+    expect(icon.findings.map((d) => [d.ruleId, d.line])).toEqual([
+      ['icon-button-accessible-name', ICON_BUTTON_LINE],
+    ]);
+    expect(icon.code).toBe(1);
+    const iconWithoutImportPath = await check(installedApp(noImportPath(withIcon), iconPage));
+    expect(iconWithoutImportPath.findings).toEqual([]);
+    expect(iconWithoutImportPath.code).toBe(0);
+    expect(whatAppsGet).toContain(
+      'It still tells `icon-button-accessible-name` that an icon the package re-exports is an icon, so `<button><ChevronLeft /></button>`, with `ChevronLeft` from `@acme/ui`, is reported for having no accessible name. Without `importPath`, that button is not reported.',
+    );
   });
 
   it('gets nothing from a package published without its config, with a warning', async () => {

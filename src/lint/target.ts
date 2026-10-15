@@ -245,6 +245,17 @@ export class LintTarget {
   }
 
   /**
+   * Whether the component rules judge the components imported from `specifier`: it points at
+   * the design system, and the model has components to judge them by. A model with none (an
+   * app whose design-system package publishes only compiled `dist/`) still matches the
+   * configured `importPath`, but the component rules do not run there, as `check` says, so
+   * what comes from it is not called invented.
+   */
+  checksImport(specifier: string, fromFile = 'snippet.tsx'): boolean {
+    return this.model.components.length > 0 && this.isDesignSystemImport(specifier, fromFile);
+  }
+
+  /**
    * Whether `name`, imported from the design system, may be a real export the
    * model left out rather than an invented one: its module exists outside the
    * folders extraction read and exports `name`, or re-exports from such a
