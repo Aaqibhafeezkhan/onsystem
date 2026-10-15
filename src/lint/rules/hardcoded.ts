@@ -853,6 +853,12 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
           if (negative && !NEGATIVE_PREFIXES.has(utility.prefix)) continue;
           const replacement = lengthReplacement(context, spec.category, px, utility.prefix);
           if (!replacement || unnamed(replacement)) continue;
+          // Hairlines (issue #61): a value of 1px or less is left alone unless the scale has
+          // that exact step (`py-[1px]` → `py-px`), since the nearest step (4px, say) would
+          // change the layout. A negative one (`mt-[-1px]`, `-mt-[1px]`) is a deliberate border
+          // overlap, so it is left alone even then; the sign is the margin's, not the value's.
+          if (spec.category === 'spacing' && Math.abs(px) <= 1 && (!replacement.exact || negative))
+            continue;
           const fixed = withBase({ ...utility, negative }, replacement.cls);
           const message = replacement.exact
             ? `\`${token.value}\` is ${formatPx(px)}, which is on the ${spec.category} scale: use \`${fixed}\`.`
@@ -892,6 +898,15 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
                 ? lengthReplacement(context, spec.category, px, prefix)
                 : undefined;
             if (replacement && unnamed(replacement)) continue;
+            // Hairlines (issue #61): as for classes above. `replacement` is only set for a
+            // single value, so `margin: "-1px 0"` is still reported, without a fix.
+            if (
+              replacement &&
+              spec.category === 'spacing' &&
+              Math.abs(px) <= 1 &&
+              (!replacement.exact || negative)
+            )
+              continue;
             const cls = replacement && `${negative ? '-' : ''}${replacement.cls}`;
             const cssVar =
               replacement?.cssVar &&
