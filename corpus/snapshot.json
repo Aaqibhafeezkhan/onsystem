@@ -716,17 +716,12 @@
         "warnings": 0
       },
       "files": 55,
-      "flagged": 7,
+      "flagged": 5,
       "rules": {
         "no-hardcoded-color": {
           "errors": 11,
           "warnings": 0,
           "fixes": 7
-        },
-        "no-hardcoded-spacing": {
-          "errors": 0,
-          "warnings": 2,
-          "fixes": 2
         },
         "no-unknown-component": {
           "errors": 0,
@@ -850,7 +845,7 @@
         "others": 102
       },
       "files": 928,
-      "flagged": 151,
+      "flagged": 149,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 18,
@@ -869,8 +864,8 @@
         },
         "no-hardcoded-spacing": {
           "errors": 0,
-          "warnings": 7,
-          "fixes": 7
+          "warnings": 5,
+          "fixes": 5
         },
         "no-unknown-component": {
           "errors": 0,
@@ -1061,10 +1056,10 @@
     "e0dc49cdd748": false,
     "0e8ed079c6c5": false,
     "0a9155609801@bg-[var(--cal-bg-primary)]": false,
-    "058d10e38701@-ml-[var(--spacing)]": true,
+    "058d10e38701@-ml-[var(--spacing)]": false,
     "7ecfa4a8053d": false,
     "6b429f7a4e16": true,
-    "e75ccc28ba97@-ml-[var(--spacing)]": true,
+    "e75ccc28ba97@-ml-[var(--spacing)]": false,
     "4184374b6cad": true,
     "6126756b536b": false,
     "7e90d4ce06b5": false,
