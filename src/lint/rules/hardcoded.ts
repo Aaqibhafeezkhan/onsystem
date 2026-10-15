@@ -853,15 +853,11 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
           if (negative && !NEGATIVE_PREFIXES.has(utility.prefix)) continue;
           const replacement = lengthReplacement(context, spec.category, px, utility.prefix);
           if (!replacement || unnamed(replacement)) continue;
-          // Hairline overlaps (issue #61): a value of 1px or less would change
-          // the layout if swapped (e.g. `-mt-[-1px]` fixes to `mt-px`, dropping
-          // the overlap), so it is left alone — unless it is an exact,
-          // sign-preserving match (e.g. `py-[1px]` -> `py-px`).
-          if (
-            spec.category === 'spacing' &&
-            Math.abs(px) <= 1 &&
-            (!replacement.exact || px < 0)
-          )
+          // Hairlines (issue #61): a value of 1px or less is left alone unless the scale has
+          // that exact step (`py-[1px]` → `py-px`), since the nearest step (4px, say) would
+          // change the layout. A negative one (`mt-[-1px]`, `-mt-[1px]`) is a deliberate border
+          // overlap, so it is left alone even then; the sign is the margin's, not the value's.
+          if (spec.category === 'spacing' && Math.abs(px) <= 1 && (!replacement.exact || negative))
             continue;
           const fixed = withBase({ ...utility, negative }, replacement.cls);
           const message = replacement.exact
@@ -902,13 +898,13 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
                 ? lengthReplacement(context, spec.category, px, prefix)
                 : undefined;
             if (replacement && unnamed(replacement)) continue;
-            // Hairline overlaps (issue #61): see class-string loop above.
+            // Hairlines (issue #61): as for classes above. `replacement` is only set for a
+            // single value, so `margin: "-1px 0"` is still reported, without a fix.
             if (
               replacement &&
-              values.length === 1 &&
               spec.category === 'spacing' &&
               Math.abs(px) <= 1 &&
-              (!replacement.exact || px < 0)
+              (!replacement.exact || negative)
             )
               continue;
             const cls = replacement && `${negative ? '-' : ''}${replacement.cls}`;

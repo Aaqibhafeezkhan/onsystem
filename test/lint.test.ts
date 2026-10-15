@@ -727,16 +727,31 @@ describe('no-hardcoded-spacing and no-hardcoded-radius', () => {
     );
   });
 
-  it('leaves hairline overlaps of 1px or less alone', () => {
-    expect(check(`<div className="-mt-[-1px]" />`, 'no-hardcoded-spacing')).toEqual([]);
-    expect(
-      check(`<div style={{ marginTop: -1 }} />`, 'no-hardcoded-spacing'),
-    ).toEqual([]);
+  it('leaves hairline overlaps of 1px or less alone', async () => {
+    // `mt-[-1px]` and `-mt-[1px]` are the same -1px margin.
+    expect(check(`<div className="mt-[-1px] -mt-[1px]" />`, 'no-hardcoded-spacing')).toEqual([]);
+    expect(check(`<div style={{ marginTop: -1 }} />`, 'no-hardcoded-spacing')).toEqual([]);
     const [s] = check(`<div style={{ marginLeft: 1 }} />`, 'no-hardcoded-spacing');
     expect(s?.suggestion).toBe('ml-px');
     // Exact on-scale values are still reported (no layout change).
     const [d] = check(`<div className="mb-[1px]" />`, 'no-hardcoded-spacing');
     expect(d?.suggestion).toBe('mb-px');
+    // `-mt-[-1px]` is +1px, the same margin as `mt-px`.
+    const [p] = check(`<div className="-mt-[-1px]" />`, 'no-hardcoded-spacing');
+    expect(p?.suggestion).toBe('mt-px');
+
+    // Without a 1px step, the nearest one (4px) would change the layout.
+    const steps = await load(
+      fixture({
+        'onsystem.config.json': '{ "tokens": ["a.css"] }',
+        'a.css': `@import "tailwindcss";
+@theme { --spacing-*: initial; --spacing-xs: 0.25rem; --spacing-sm: 0.5rem; }`,
+      }),
+    );
+    const code = `<div className="mt-[-1px] mt-[0.5px] ml-[1px] p-[3px]" style={{ marginTop: 1, marginLeft: -1 }} />`;
+    expect(check(code, 'no-hardcoded-spacing', steps).map((d) => [d.source, d.suggestion])).toEqual(
+      [['p-[3px]', 'p-xs']],
+    );
   });
 
   it("offers every whole and half step of Tailwind's --spacing, and px", () => {
