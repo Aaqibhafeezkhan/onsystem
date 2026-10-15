@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { GET as markdownRoute, generateStaticParams } from '@/app/docs/[md]/route';
+import ClientsPage from '@/app/docs/clients/page';
 import FaqPage from '@/app/docs/faq/page';
 import QuickstartPage from '@/app/docs/page';
 import PluginPage from '@/app/docs/plugin/page';
@@ -15,15 +16,16 @@ import { Code, wrapsLines } from '@/components/code';
 import { InlineMarkdown } from '@/components/markdown';
 import { MarkdownBlocks, parseBlocks, slug, type Block } from '@/components/markdown-blocks';
 import { assistantLinks } from '@/components/page-actions';
-import { corpus, ruleCatalog } from '@/lib/data';
+import { corpus, docs, ruleCatalog } from '@/lib/data';
 import { DOCS_GROUPS, DOCS_NAV, DOCS_PAGES, docsPage } from '@/lib/docs';
+import { DOCS_MCP } from '@/lib/docs-mcp';
 import { faqEntries } from '@/lib/faq';
 import { lastModified } from '@/lib/git';
 import { outputLines } from '@/lib/output';
 import { llmsFullTxt } from '@/lib/llms';
 import { forPackageManager } from '@/lib/package-managers';
 import { markdownPath, pageMarkdown } from '@/lib/page-markdown';
-import { DOCS_FILES, SITE_URL } from '@/lib/site';
+import { CURSOR_INSTALL, DOCS_FILES, SITE_URL, VSCODE_INSTALL } from '@/lib/site';
 
 vi.mock('next/navigation', () => ({ usePathname: () => '/docs' }));
 
@@ -37,6 +39,11 @@ const text = (html: string) =>
     .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim();
+/** The links in `html` whose text matches `label`, as [text, URL]. */
+const installLinks = (html: string, label: RegExp) =>
+  [...html.matchAll(new RegExp(`<a href="([^"]+)"[^>]*>(${label.source})`, 'g'))].map(
+    ([, href = '', name]) => [name, href.replace(/&amp;/g, '&')],
+  );
 
 // ─── The sidebar ────────────────────────────────────────────────────────────
 
@@ -120,6 +127,59 @@ describe('a docs page', () => {
       'gate-your-pull-requests',
     ]);
     expect(text(html).match(/marketplace add dgesteves\/onsystem/g)).toHaveLength(1);
+  });
+
+  it('installs onsystem from step 2, and has no buttons for the docs search server', () => {
+    const step = html.slice(
+      html.indexOf('id="hold-your-agent-to-it"'),
+      html.indexOf('id="try-it"'),
+    );
+    expect(installLinks(step, /Install in [^<]+/)).toEqual([
+      ['Install in Cursor', CURSOR_INSTALL],
+      ['Install in VS Code', VSCODE_INSTALL],
+    ]);
+    // Each adds onsystem's own server (npx -y onsystem), as docs/clients.md has you commit it.
+    const committed = (file: string, key: string): unknown => {
+      const json = new RegExp(`\`${file}\`:\\s+\`\`\`json\\n([\\s\\S]*?)\\n\`\`\``).exec(
+        docs.clients,
+      )?.[1];
+      return (JSON.parse(json ?? '{}') as Record<string, Record<string, unknown>>)[key]?.onsystem;
+    };
+    const cursor = new URL(CURSOR_INSTALL).searchParams;
+    const vscode = new URL(VSCODE_INSTALL).searchParams;
+    expect([cursor.get('name'), vscode.get('name')]).toEqual(['onsystem', 'onsystem']);
+    const cursorServer: unknown = JSON.parse(
+      Buffer.from(cursor.get('config') ?? '', 'base64').toString('utf8'),
+    );
+    expect(cursorServer).toMatchObject({
+      command: 'npx',
+      args: ['-y', 'onsystem', '--root', expect.any(String)],
+    });
+    expect(cursorServer).toEqual(committed('.cursor/mcp.json', 'mcpServers'));
+    const vscodeServer = JSON.parse(vscode.get('config') ?? '{}') as object;
+    expect({ type: 'stdio', ...vscodeServer }).toEqual(committed('.vscode/mcp.json', 'servers'));
+    // The docs search server is offered at the end of /docs/clients instead.
+    expect(html).not.toContain(DOCS_MCP.name);
+    expect(html).not.toContain(DOCS_MCP.url);
+    expect(html).not.toMatch(/data-toc="[^"]*these docs from your agent"/);
+  });
+
+  it('ends /docs/clients with the docs search server, marked optional', () => {
+    const page = render(createElement(ClientsPage));
+    const id = 'search-these-docs-from-your-agent';
+    const headings = [...page.matchAll(/<h2 id="([^"]+)" data-toc="([^"]+)"/g)];
+    expect(headings.at(-1)?.slice(1)).toEqual([id, 'Optional: search these docs from your agent']);
+    const card = page.slice(page.indexOf(`id="${id}"`));
+    expect(installLinks(card, /Add docs search to [^<]+/)).toEqual([
+      ['Add docs search to Cursor', DOCS_MCP.cursor],
+      ['Add docs search to VS Code', DOCS_MCP.vscode],
+      ['Add docs search to Claude', DOCS_MCP.claude],
+    ]);
+    // onsystem's own installs (the buttons, and the links in the Markdown) stay first on the page.
+    expect(new Set(installLinks(page, /Install in [^<]+/).map(([, href]) => href))).toEqual(
+      new Set([CURSOR_INSTALL, VSCODE_INSTALL]),
+    );
+    expect(page.indexOf('Install in Cursor')).toBeLessThan(page.indexOf(`id="${id}"`));
   });
 
   it('puts the long title of the required-check page under its short one', () => {

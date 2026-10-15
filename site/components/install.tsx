@@ -39,6 +39,25 @@ export function InstallPanel({ className = '' }: { className?: string }) {
   );
 }
 
+const button =
+  'group inline-flex items-center gap-2 rounded-lg border border-line-strong bg-raised-2 px-3.5 py-2 text-sm font-medium text-fg transition-colors hover:border-cyan/60';
+
+/** The one-click installs of onsystem's server in Cursor and VS Code, as the docs show them. */
+export function EditorInstallButtons({ className = '' }: { className?: string }) {
+  return (
+    <div className={`flex flex-wrap gap-3 ${className}`}>
+      <a href={CURSOR_INSTALL} className={button}>
+        Install in Cursor
+        <ArrowUpRightIcon className="size-4 text-subtle group-hover:text-cyan" />
+      </a>
+      <a href={VSCODE_INSTALL} className={button}>
+        Install in VS Code
+        <ArrowUpRightIcon className="size-4 text-subtle group-hover:text-cyan" />
+      </a>
+    </div>
+  );
+}
+
 export function StarButton({ className = '' }: { className?: string }) {
   return (
     <a

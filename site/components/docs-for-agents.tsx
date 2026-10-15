@@ -4,14 +4,17 @@ import { ArrowUpRightIcon } from '@/components/icons';
 import { InlineCode } from '@/components/section';
 import { DOCS_MCP } from '@/lib/docs-mcp';
 
-const ID = 'use-these-docs-from-your-agent';
-const TITLE = 'Use these docs from your agent';
+const ID = 'search-these-docs-from-your-agent';
+const TITLE = 'Optional: search these docs from your agent';
 
 const button =
   'group inline-flex items-center gap-2 rounded-lg border border-line-strong bg-raised-2 px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:border-cyan/60';
 const link = 'text-fg underline decoration-line-strong underline-offset-4 hover:decoration-cyan';
 
-/** "Use these docs from your agent": the docs' MCP server, the ways to add it, and llms.txt. */
+/**
+ * The docs' own MCP server, the ways to add it, and llms.txt, at the end of /docs/clients. Its
+ * buttons say "docs search" so that none of them reads as an install of onsystem itself.
+ */
 export function DocsForAgents() {
   return (
     <section
@@ -29,9 +32,9 @@ export function DocsForAgents() {
       <div className="mt-4 flex flex-wrap gap-2.5">
         {(
           [
-            ['Add to Cursor', DOCS_MCP.cursor],
-            ['Add to VS Code', DOCS_MCP.vscode],
-            ['Add to Claude', DOCS_MCP.claude],
+            ['Add docs search to Cursor', DOCS_MCP.cursor],
+            ['Add docs search to VS Code', DOCS_MCP.vscode],
+            ['Add docs search to Claude', DOCS_MCP.claude],
           ] as const
         ).map(([label, href]) => (
           <a key={label} href={href} className={button}>

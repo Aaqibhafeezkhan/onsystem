@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
 
 import { DocPage, docsMetadata } from '@/components/doc-page';
-import { DocsForAgents } from '@/components/docs-for-agents';
+import { EditorInstallButtons } from '@/components/install';
 import { MarkdownBlocks } from '@/components/markdown-blocks';
 import { docs } from '@/lib/data';
 
 export const metadata: Metadata = docsMetadata('/docs');
 
-// The steps carry the plugin commands and the install links, so there is no install panel above
-// them repeating the commands.
+// The steps carry the plugin commands, and step 2 the Cursor and VS Code install buttons, so
+// there is no install panel above them repeating the commands. The docs search server is offered
+// at the end of /docs/clients.
 export default function QuickstartPage() {
   return (
     <DocPage
@@ -20,8 +21,10 @@ export default function QuickstartPage() {
         </p>
       }
     >
-      <MarkdownBlocks markdown={docs.quickstart} />
-      <DocsForAgents />
+      <MarkdownBlocks
+        markdown={docs.quickstart}
+        inSteps={{ 'hold-your-agent-to-it': <EditorInstallButtons className="mt-4" /> }}
+      />
     </DocPage>
   );
 }

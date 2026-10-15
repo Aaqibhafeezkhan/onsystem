@@ -295,10 +295,12 @@ function Blocks({
   blocks,
   shift,
   quiet = false,
+  inSteps,
 }: {
   blocks: Block[];
   shift: number;
   quiet?: boolean;
+  inSteps?: Record<string, ReactNode> | undefined;
 }): ReactNode {
   return blocks.map((block, i) => {
     switch (block.type) {
@@ -382,6 +384,7 @@ function Blocks({
                 />
                 <div className="mt-3">
                   <Blocks blocks={step.blocks} shift={shift} quiet={quiet} />
+                  {inSteps?.[slug(step.text)]}
                 </div>
               </li>
             ))}
@@ -474,20 +477,23 @@ function Blocks({
 
 /**
  * Docs Markdown as page content. `shift` lowers heading levels: `###` → `h2` with 1. `quiet`
- * sets headings small and out of "On this page", for Markdown quoted inside a page.
+ * sets headings small and out of "On this page", for Markdown quoted inside a page. `inSteps`
+ * adds what Markdown cannot hold, such as buttons, to the end of a step, by its heading's id.
  */
 export function MarkdownBlocks({
   markdown,
   shift = 0,
   quiet = false,
+  inSteps,
 }: {
   markdown: string;
   shift?: number;
   quiet?: boolean;
+  inSteps?: Record<string, ReactNode>;
 }) {
   return (
     <div className="text-[15.5px]">
-      <Blocks blocks={parseBlocks(markdown)} shift={shift} quiet={quiet} />
+      <Blocks blocks={parseBlocks(markdown)} shift={shift} quiet={quiet} inSteps={inSteps} />
     </div>
   );
 }
