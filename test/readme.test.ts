@@ -492,9 +492,17 @@ describe('the pitch', () => {
     }
   });
 
-  it('says the same on npm and in every plugin as in the README', () => {
-    expect(description('package.json')).toBe(pitch);
-    for (const [file, text] of Object.entries(manifests)) expect(text, file).toBe(pitch);
+  it('says the same in every plugin as on npm, and the README starts with it', () => {
+    const npm = description('package.json');
+    for (const [file, text] of Object.entries(manifests)) expect(text, file).toBe(npm);
+    // The README may add a sentence after it; npm has no room for one.
+    expect(pitch.startsWith(npm), pitch).toBe(true);
+  });
+
+  it('fits npm', () => {
+    // npm keeps the first 255 characters of a description and drops the rest: ondocs 0.10.0 ships
+    // 260 in its tarball, and the registry shows it ending '...Next.js, or one script'.
+    expect(description('package.json').length).toBeLessThanOrEqual(255);
   });
 
   it('fits the MCP Registry', () => {
