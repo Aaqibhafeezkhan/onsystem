@@ -538,6 +538,29 @@ describe('the README', () => {
     );
     expect(lookedUp).toBeGreaterThan(0);
   });
+
+  it("counts bench/v2's measures, and the independent ones, as its Scoring list has them", () => {
+    const v2 = read('bench/v2/README.md');
+    const start = v2.indexOf('\n### Scoring\n');
+    expect(start).toBeGreaterThan(-1);
+    const scoring = v2.slice(start, v2.indexOf('\n### ', start + 1));
+    // Each measure: `1. **name (kind).**`, the kind `independent…` or `the tool's own`.
+    const measures = [...scoring.matchAll(/^\d+\. \*\*(.+?) \(([^)]+)\)\.\*\*/gm)].map((m) => ({
+      name: m[1] ?? '',
+      independent: (m[2] ?? '').startsWith('independent'),
+    }));
+    // results.json has @shadcn/lint's score (#159): it is a measure, and an independent one.
+    const { shadcnLint } = JSON.parse(read('bench/v2/results/standard/results.json')) as {
+      shadcnLint?: unknown;
+    };
+    expect(shadcnLint).toBeDefined();
+    expect(measures.find((m) => m.name === '@shadcn/lint')?.independent).toBe(true);
+    const words = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six'];
+    const count = (n: number) => words[n] ?? String(n);
+    expect(scoring).toContain(
+      `${count(measures.length)} measures, ${count(measures.filter((m) => m.independent).length).toLowerCase()} of them independent of onsystem.`,
+    );
+  });
 });
 
 // The one-line pitch on GitHub, npm, the agent plugins, the MCP Registry and the Marketplace leads

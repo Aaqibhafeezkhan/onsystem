@@ -96,11 +96,12 @@ Runs go in a seeded random order, so arms, models and repositories interleave ov
 
 ### Scoring
 
-Three measures, two of them independent of onsystem:
+Four measures, three of them independent of onsystem. The first three were fixed before any run; @shadcn/lint was added after the standard run:
 
 1. **`tsc` (independent).** Each changed TypeScript file is type-checked in its project's own setup: a temporary tsconfig extends the project's, lists only the changed files (plus the project's ambient `.d.ts` files), and runs with the repository's own TypeScript. Only diagnostics in the changed files count. Invented components, props and variant values are type errors when the design system is typed, which all five are; hardcoded colors and spacing are not. A run passes when its file exists and has no type error. dub's `@dub/ui` and `@dub/utils` export a build output that an install without scripts lacks, so their imports are mapped to their sources for `tsc`.
 2. **`onsystem check` (the tool's own).** The changed UI files, against a baseline of the untouched repository, so only findings the run added count. A run is clean when its file exists and has no error.
 3. **Blind labels (independent of onsystem).** A stratified random sample of files (2 per model and arm by default), blinded: the labeller, a person or an AI reviewer, recorded in `labels/LABELLER.md`, sees the task, the design system and the file, not the model, the arm or onsystem's verdict. They count invented APIs, hardcoded values, native elements and unnamed controls, and say whether they would merge it. Then, separately, they judge each onsystem finding on those files as correct, wrong or debatable. [LABELLING.md](LABELLING.md) is the guide.
+4. **@shadcn/lint (independent, added after the standard run).** `score --with shadcn-lint` runs [@shadcn/lint](https://github.com/shadcn-ui/lint) on the file each run created, at its path in the prepared repository, so its six rules read that project's components, variants and Tailwind theme. It counts findings per run; no arm showed the agent its messages. Its own section, Independent scorer: @shadcn/lint, has the versions, the results and where it reads less.
 
 `prepare` checks that the scorers can be trusted in each repository before anything runs: a correct use of the design system's `Button` must pass both `tsc` and onsystem, the same component with an invented variant (`variant="warning"`) must fail both, and two or three existing files must type-check. All five pass (`tsc`: 0 errors on the correct use, 1 on the invented one; onsystem: 0 and 1, `no-unknown-variant`).
 
