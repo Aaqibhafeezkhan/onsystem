@@ -362,8 +362,20 @@ function check(selected) {
   const rate = falsePositiveRate(result.present, current);
   const tally = (p) => `${p.tp} TP, ${p.fp} FP, ${p.d} debatable`;
   const relevant = labels.filter((l) => l.run in current);
+  // A blind draw may label a finding that an older label has, so this counts labels, not findings.
+  const draws = [...new Set(relevant.filter((l) => l.sample === 'blind').map((l) => l.draw))];
+  const verdicts = (list) => ({
+    tp: list.filter((l) => l.verdict === 'TP').length,
+    fp: list.filter((l) => l.verdict === 'FP').length,
+    d: list.filter((l) => l.verdict === 'D').length,
+  });
   lines.push(
-    `Labelled sample: ${relevant.length} findings labelled, ${result.present.size} still reported.`,
+    `Labels: ${relevant.length}, ${result.present.size} of them still reported.`,
+    ...draws.map((draw) => {
+      const drawn = relevant.filter((l) => l.sample === 'blind' && l.draw === draw);
+      const kept = drawn.filter((l) => result.present.has(l));
+      return `  Blind sample ${draw}: ${kept.length} of its ${drawn.length} labels still reported (${tally(verdicts(kept))}).`;
+    }),
     `  Random sample still reported: ${tally(rate.sample)}. False-positive rate ${percent(rate.sample.rate)} (errors only: ${percent(rate.sampleErrors.rate)}).`,
     `  Weighted by run and rule over all findings: ${percent(rate.estimate)} of findings are false positives (errors only: ${percent(rate.estimateErrors)}), from labels covering ${percent(rate.coverage)} of them.`,
     `  Audit picks still reported: ${tally(rate.audit)}.`,

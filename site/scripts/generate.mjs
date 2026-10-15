@@ -711,8 +711,9 @@ write('benchmark.json', {
 
 // ─── The corpus: how often the rules are wrong ──────────────────────────────
 
-// The numbers `pnpm corpus` prints, from the files it writes: the labels in the random
-// sample that the snapshot says are still reported, and the findings per run and rule.
+// The corpus size, from the files `pnpm corpus` writes, and the false-positive rate of the blind
+// sample (corpus/<draw>/): a seeded draw from every distinct finding, stratified by rule, with
+// blind labels by an AI reviewer. test/readme.test.ts and test/claims.test.ts check the same.
 const corpusDir = path.join(repo, 'corpus');
 const readCorpus = (file) => JSON.parse(fs.readFileSync(path.join(corpusDir, file), 'utf8'));
 const corpusSnapshot = readCorpus('snapshot.json');
@@ -721,30 +722,95 @@ const labelKey = (label) =>
   label.suggestion === undefined
     ? label.fingerprint
     : `${label.fingerprint}@${label.suggestion ?? 'none'}`;
-const sample = readCorpus('labels.json').filter(
-  (label) => label.sample === 'random' && corpusSnapshot.labels[labelKey(label)] === true,
+const blind = readCorpus('labels.json').filter((label) => label.sample === 'blind');
+const draws = [...new Set(blind.map((label) => label.draw))];
+assert.equal(draws.length, 1, 'corpus/labels.json should have one blind draw');
+const [draw] = draws;
+// Every label it was drawn with, still reported: once a fix takes one out, it under-counts.
+assert.ok(
+  blind.every((label) => corpusSnapshot.labels[labelKey(label)] === true),
+  `a finding of the blind sample ${draw} is no longer reported: draw a fresh sample`,
 );
 const corpusRepos = readCorpus('repos.json').repos;
+// The copy says the corpus runs without dependencies installed, "the two MUI apps get MUI": the
+// repositories with an `install` are those two, and each gets MUI.
+const corpusInstalls = corpusRepos.filter((repo) => repo.install);
+assert.ok(
+  corpusInstalls.length === 2 &&
+    corpusInstalls.every((repo) =>
+      Object.values(repo.install.folders).some((deps) => '@mui/material' in deps),
+    ),
+  'the copy says the two MUI apps get MUI, and no other repository gets its dependencies',
+);
 // A run with a config of its own checks the same files as another run: not counted twice.
 const rechecks = new Set(
   corpusRepos.flatMap((repo) => repo.runs.filter((run) => run.config).map((run) => run.name)),
 );
-let corpusFindings = 0;
-let corpusCovered = 0;
-let corpusWeighted = 0;
+// Distinct findings per rule: the strata the blind sample is drawn from.
+const findingsByRule = new Map();
 // A run from a monorepo root counts only the findings it adds to the runs from its projects.
 for (const [run, { rules, added }] of Object.entries(corpusSnapshot.runs)) {
+  if (rechecks.has(run)) continue;
   for (const [rule, counts] of Object.entries(added ?? rules)) {
-    const n = counts.errors + counts.warnings;
-    if (!rechecks.has(run)) corpusFindings += n;
-    const stratum = sample.filter((label) => label.run === run && label.rule === rule);
-    if (!stratum.length) continue;
-    corpusCovered += n;
-    corpusWeighted +=
-      (n * stratum.filter((label) => label.verdict === 'FP').length) / stratum.length;
+    findingsByRule.set(rule, (findingsByRule.get(rule) ?? 0) + counts.errors + counts.warnings);
   }
 }
-assert.ok(sample.length > 0 && corpusCovered > 0, 'the corpus should have a labelled sample');
+const corpusFindings = [...findingsByRule.values()].reduce((a, b) => a + b, 0);
+const falsePositives = (labels) => labels.filter((label) => label.verdict === 'FP').length;
+const strata = [...findingsByRule].map(([rule, size]) => {
+  const stratum = blind.filter((label) => label.rule === rule);
+  return { rule, size, sampled: stratum.length, falsePositives: falsePositives(stratum) };
+});
+const covered = strata.filter((s) => s.sampled).reduce((n, s) => n + s.size, 0);
+assert.ok(covered / corpusFindings >= 0.8, 'the blind sample should cover the findings');
+// The strict reading: the draw's own file says which values the project's design system uses.
+const drawn = JSON.parse(
+  fs.readFileSync(path.join(corpusDir, draw, 'sample-labelled.json'), 'utf8'),
+).findings;
+assert.equal(drawn.length, blind.length, `corpus/${draw} should hold the blind labels`);
+const strictFalsePositives = drawn.filter(
+  (f) => f.label === 'FP' && f.own_ds_value !== true,
+).length;
+const drawLabeller = section(
+  fs.readFileSync(path.join(corpusDir, draw, 'LABELLER.md'), 'utf8'),
+  '## Who',
+  `corpus/${draw}/LABELLER.md`,
+);
+assert.ok(/AI reviewer/.test(drawLabeller), `corpus/${draw}/LABELLER.md: an AI reviewer`);
+// The notes name the model by its name or, as the labeller wrote them, by its id in backticks.
+const drawModel = v2Models.find(
+  (m) => drawLabeller.includes(m.name) || drawLabeller.includes(`\`${m.id}\``),
+);
+assert.ok(drawModel, `corpus/${draw}/LABELLER.md should name the labeller model`);
+/** A 95% Wilson score interval, as corpus/<draw>/scripts/stats.py computes it. */
+function wilson(k, n) {
+  const z = 1.959964;
+  const p = k / n;
+  const d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d;
+  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+}
+/** A share as a percentage to one decimal, a tie to the even digit as stats.py prints it. */
+function percent(x) {
+  const t = x * 1000;
+  const floor = Math.floor(t);
+  return (t - floor === 0.5 ? floor + (floor % 2) : Math.round(t)) / 10;
+}
+const rate = (k, n) => {
+  const [low, high] = wilson(k, n);
+  return { value: percent(k / n), low: percent(low), high: percent(high) };
+};
+const [top] = [...strata].sort((a, b) => b.falsePositives - a.falsePositives);
+assert.ok(top.falsePositives * 2 > falsePositives(blind), 'the copy says most come from one rule');
+// Each rule's false-positive share, weighted by its share of the findings.
+const weightedRate = strata
+  .filter((s) => s.sampled)
+  .reduce((sum, s) => sum + (s.size / covered) * (s.falsePositives / s.sampled), 0);
+assert.ok(
+  Math.abs(weightedRate - falsePositives(blind) / blind.length) < 0.01,
+  'the copy says the weighted rate is about the same',
+);
 // The baseline example: midday's dashboard, as the corpus checks it (`check src`).
 const midday = corpusSnapshot.runs['midday-dashboard'];
 assert.ok(midday?.flagged !== undefined, 'the corpus snapshot should have midday-dashboard');
@@ -753,12 +819,23 @@ write('corpus.json', {
   runs: Object.keys(corpusSnapshot.runs).length,
   /** Distinct findings: a root run counts what it adds, a run with a config not at all. */
   findings: corpusFindings,
-  sample: sample.length,
-  truePositives: sample.filter((label) => label.verdict === 'TP').length,
-  falsePositives: sample.filter((label) => label.verdict === 'FP').length,
-  debatable: sample.filter((label) => label.verdict === 'D').length,
-  /** False positives as a share of all findings, weighted by each run's and rule's share. */
-  weightedRate: corpusWeighted / corpusCovered,
+  /** The blind sample. Percentages to one decimal; intervals are 95% Wilson. */
+  sample: {
+    draw,
+    labeller: drawModel.name,
+    n: blind.length,
+    truePositives: blind.filter((label) => label.verdict === 'TP').length,
+    debatable: blind.filter((label) => label.verdict === 'D').length,
+    falsePositives: falsePositives(blind),
+    rate: rate(falsePositives(blind), blind.length),
+    weightedRate: percent(weightedRate),
+    top: { rule: top.rule, falsePositives: top.falsePositives, sampled: top.sampled },
+    /** Values the project's own design system already uses count as debatable. */
+    strict: {
+      falsePositives: strictFalsePositives,
+      rate: rate(strictFalsePositives, blind.length),
+    },
+  },
   baseline: {
     findings: Object.values(midday.rules).reduce((n, c) => n + c.errors + c.warnings, 0),
     flagged: midday.flagged,

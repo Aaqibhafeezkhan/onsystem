@@ -11,8 +11,8 @@ import { docsPage } from '@/lib/docs';
 import { llmsTxt } from '@/lib/llms';
 import { pageMarkdown } from '@/lib/page-markdown';
 
-// What the site says about how often onsystem is wrong, against corpus/: a false-positive rate
-// only when a labelled sample can give one, and who made the labels.
+// What the site says about how often onsystem is wrong, against corpus/: the false-positive rate
+// of the blind sample while it can give one, with its interval and who labelled it.
 const root = path.join(import.meta.dirname, '../..');
 const site = path.join(root, 'site');
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -29,7 +29,8 @@ interface Label {
   run: string;
   rule: string;
   verdict: 'TP' | 'FP' | 'D';
-  sample: 'random' | 'audit';
+  sample: 'random' | 'audit' | 'blind';
+  draw?: string;
   fingerprint: string;
   suggestion?: string | null;
 }
@@ -42,44 +43,96 @@ interface Snapshot {
   labels: Record<string, boolean>;
 }
 interface Repos {
-  repos: { runs: { name: string; config?: string }[] }[];
+  repos: {
+    runs: { name: string; config?: string }[];
+    install?: { folders: Record<string, Record<string, string>> };
+  }[];
 }
 
-/** The random sample in corpus/labels.json: what its labels cover, and what fixes took out of it. */
-function randomSample() {
+/** A 95% Wilson score interval, as corpus/<draw>/scripts/stats.py computes it. */
+function wilson(k: number, n: number) {
+  const z = 1.959964;
+  const p = k / n;
+  const d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d;
+  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return [Math.max(0, c - h), Math.min(1, c + h)] as const;
+}
+/** One decimal, a tie to the even digit, as stats.py prints it: 9/80 is 11.2%. */
+function tenths(x: number) {
+  const t = x * 1000;
+  const floor = Math.floor(t);
+  return ((t - floor === 0.5 ? floor + (floor % 2) : Math.round(t)) / 10).toFixed(1);
+}
+const pct = (x: number) => `${tenths(x)}%`;
+
+/** The blind sample in corpus/labels.json, as test/readme.test.ts reads it, and the corpus size. */
+function blindSample() {
   const labels = JSON.parse(read('corpus/labels.json')) as Label[];
   const snapshot = JSON.parse(read('corpus/snapshot.json')) as Snapshot;
   const repos = JSON.parse(read('corpus/repos.json')) as Repos;
   // As labelKey in scripts/corpus-lib.ts: a label tied to a suggestion is keyed with it.
   const key = (l: Label) =>
     l.suggestion === undefined ? l.fingerprint : `${l.fingerprint}@${l.suggestion ?? 'none'}`;
-  const random = labels.filter((l) => l.sample === 'random');
-  // The labels whose findings the snapshot says are still reported.
-  const sample = random.filter((l) => snapshot.labels[key(l)]);
+  const blind = labels.filter((l) => l.sample === 'blind');
+  const draws = [...new Set(blind.map((l) => l.draw))];
+  expect(draws, 'one blind draw at a time').toHaveLength(1);
+  const draw = draws[0] ?? '';
   // A run with a config of its own checks the same files as another run: not counted twice.
   const rechecks = new Set(
     repos.repos.flatMap((r) => r.runs.filter((run) => run.config).map((run) => run.name)),
   );
-  let distinct = 0;
-  let covered = 0;
+  const byRule = new Map<string, number>();
   // A run from a monorepo root counts only the findings it adds to the runs from its projects.
   for (const [run, { rules, added }] of Object.entries(snapshot.runs)) {
     if (rechecks.has(run)) continue;
     for (const [rule, counts] of Object.entries(added ?? rules)) {
-      const n = counts.errors + counts.warnings;
-      distinct += n;
-      if (sample.some((l) => l.run === run && l.rule === rule)) covered += n;
+      byRule.set(rule, (byRule.get(rule) ?? 0) + counts.errors + counts.warnings);
     }
   }
-  const fp = random.filter((l) => l.verdict === 'FP');
+  const distinct = [...byRule.values()].reduce((a, b) => a + b, 0);
+  const fps = (list: Label[]) => list.filter((l) => l.verdict === 'FP').length;
+  const strata = [...byRule].map(([rule, size]) => {
+    const stratum = blind.filter((l) => l.rule === rule);
+    return { rule, size, n: stratum.length, fp: fps(stratum) };
+  });
+  const covered = strata.filter((s) => s.n > 0).reduce((n, s) => n + s.size, 0);
+  const weighted = strata
+    .filter((s) => s.n > 0)
+    .reduce((rate, s) => rate + (s.size / covered) * (s.fp / s.n), 0);
+  // The strict reading: the draw's own file says which values the project's design system uses.
+  const { findings } = JSON.parse(read(`corpus/${draw}/sample-labelled.json`)) as {
+    findings: { label: string; own_ds_value: boolean | null }[];
+  };
+  const strict = findings.filter((f) => f.label === 'FP' && f.own_ds_value !== true).length;
+  const n = blind.length;
+  const fp = fps(blind);
+  const [low, high] = wilson(fp, n);
+  const [strictLow, strictHigh] = wilson(strict, n);
+  // The rule most false positives come from: most of them, as the copy says.
+  const [top] = [...strata].sort((a, b) => b.fp - a.fp);
+  expect((top?.fp ?? 0) * 2).toBeGreaterThan(fp);
+  // Dependencies: only the repositories with an `install` get any, and each of those gets MUI.
+  const installs = repos.repos.filter((r) => r.install);
+  const mui = installs.filter((r) =>
+    Object.values(r.install?.folders ?? {}).some((deps) => '@mui/material' in deps),
+  );
+  expect(mui).toEqual(installs);
+  const words = ['no', 'one', 'two', 'three', 'four'];
   return {
-    repos: repos.repos.length,
-    runs: Object.keys(snapshot.runs).length,
-    distinct,
-    coverage: covered / distinct,
-    falsePositives: fp.length,
-    fixed: fp.filter((l) => !sample.includes(l)).length,
-    lost: random.length - sample.length,
+    // The corpus size, and what runs without dependencies.
+    size: `on ${String(repos.repos.length)} public repositories pinned by commit (${String(Object.keys(snapshot.runs).length)} runs, ${distinct.toLocaleString('en-US')} distinct findings), without their dependencies installed (the ${words[mui.length] ?? String(mui.length)} MUI apps get MUI).`,
+    draw,
+    top: { rule: top?.rule ?? '', sentence: `(${String(top?.fp)} of ${String(top?.n)} sampled).` },
+    // As CONTRIBUTING.md and test/readme.test.ts have it: labels in rules holding at least 80%
+    // of the distinct findings, and every label the sample was drawn with still reported.
+    quotable: covered / distinct >= 0.8 && blind.every((l) => snapshot.labels[key(l)]),
+    sentences: [
+      `A seeded random sample of ${String(n)} of those findings, stratified by rule, was labelled from the code alone: blind labels by an AI reviewer (Claude Opus 5.5), not by a person.`,
+      `${String(blind.filter((l) => l.verdict === 'TP').length)} are right, ${String(blind.filter((l) => l.verdict === 'D').length)} debatable and ${String(fp)} false positives: ${pct(fp / n)} (95% Wilson interval ${tenths(low)}-${pct(high)}), about the same when weighted by each rule's share of all findings (${pct(weighted)}).`,
+      `Counting values a project's own design system already uses as debatable, ${String(strict)} of ${String(n)} are false positives (${pct(strict / n)}, ${tenths(strictLow)}-${pct(strictHigh)}).`,
+    ],
+    rates: [fp / n, high, weighted, strict / n, strictHigh].map(pct),
   };
 }
 
@@ -87,31 +140,20 @@ describe('the home page on how often onsystem is wrong', () => {
   const home = renderToStaticMarkup(createElement(Home));
   const paragraph = text(/<p[^>]*>\s*How often it is wrong[\s\S]*?<\/p>/.exec(home)?.[0] ?? '');
 
-  it('quotes no false-positive rate until a random sample covers the findings and is intact', () => {
-    expect(paragraph).not.toBe('');
-    const { coverage, falsePositives, fixed, lost } = randomSample();
-    // As CONTRIBUTING.md and test/readme.test.ts have it: labels where at least 80% of the
-    // distinct findings are, and every label the sample was drawn with still reported.
-    const quotable = coverage >= 0.8 && lost === 0;
-    const state = `the random sample's labels cover ${(coverage * 100).toFixed(1)}% of the distinct findings, and ${String(lost)} of them are no longer reported`;
-    console.info(`home page, corpus: ${state}`);
-    expect(paragraph.match(/\d+(?:\.\d+)?\s?%/g) ?? [], `no rate to quote: ${state}`).toEqual([]);
-    expect(
-      quotable,
-      `a random sample gives a rate now (${state}): quote it here with its interval and who labelled it`,
-    ).toBe(false);
-    // Why there is no rate, while it holds.
-    expect(paragraph).toContain('do not give a false-positive rate for all findings yet');
-    expect(paragraph).toContain('the runs and rules they cover hold under half of the findings');
-    expect(coverage).toBeLessThan(0.5);
-    expect(paragraph).toContain('most of the false positives they found have been fixed');
-    expect(fixed * 2).toBeGreaterThan(falsePositives);
+  it('counts the repositories, runs and distinct findings as corpus/ has them', () => {
+    expect(paragraph).toContain(blindSample().size);
   });
 
-  it('says an AI reviewer made the labels, and does not call them blind', () => {
-    expect(paragraph).toContain('compares the findings with labels made by an AI reviewer');
-    // The corpus labeller saw onsystem's finding; only bench/v2's sample was labelled blind.
-    expect(paragraph).not.toMatch(/blind/i);
+  it("quotes the blind sample's rate with its interval and who labelled it, and no other", () => {
+    const { quotable, sentences, top, rates, draw } = blindSample();
+    expect(quotable, 'the blind sample no longer gives a rate: take it out or draw again').toBe(
+      true,
+    );
+    for (const sentence of sentences) expect(paragraph).toContain(sentence);
+    expect(paragraph).toContain(`Most come from ${top.rule} ${top.sentence}`);
+    // 95% is the interval's level, not a rate.
+    expect(paragraph.match(/\d+(?:\.\d+)?%(?! Wilson)/g)).toEqual(rates);
+    expect(home).toContain(`href="https://github.com/dgesteves/onsystem/tree/main/corpus/${draw}"`);
     expect(paragraph).not.toMatch(/measured, not guessed/);
   });
 });
@@ -123,30 +165,20 @@ describe('the FAQ on how often onsystem is wrong', () => {
 
   it('counts the repositories, runs and distinct findings as corpus/ has them', () => {
     // It said "10 public repositories" while corpus/repos.json had 12.
-    const { repos, runs, distinct } = randomSample();
-    expect(answer).toContain(
-      `on ${String(repos)} public repositories pinned by commit (${String(runs)} runs, ${distinct.toLocaleString('en-US')} distinct findings)`,
-    );
+    expect(answer).toContain(blindSample().size);
   });
 
-  it('quotes no false-positive rate until a random sample can give one, and says why', () => {
-    const { coverage, falsePositives, fixed, lost } = randomSample();
-    expect(coverage >= 0.8 && lost === 0, 'a sample gives a rate now: quote it here too').toBe(
-      false,
+  it("quotes the blind sample's rate with its interval and who labelled it, and no other", () => {
+    const { quotable, sentences, top, rates, draw } = blindSample();
+    expect(quotable, 'the blind sample no longer gives a rate: take it out or draw again').toBe(
+      true,
     );
-    expect(answer.match(/\d+(?:\.\d+)?\s?%/g) ?? []).toEqual([]);
-    // It pointed at the README for a rate the README no longer quotes.
+    for (const sentence of sentences) expect(answer.replace(/\s+/g, ' ')).toContain(sentence);
+    expect(answer).toContain(`Most come from \`${top.rule}\` ${top.sentence}`);
+    expect(answer.match(/\d+(?:\.\d+)?%(?! Wilson)/g)).toEqual(rates);
+    expect(answer).toContain(`(https://github.com/dgesteves/onsystem/tree/main/corpus/${draw})`);
+    // It pointed at the README for a rate the README no longer quoted.
     expect(answer).not.toMatch(/README/);
-    expect(answer).toContain('do not give a false-positive rate for all findings yet');
-    expect(answer).toContain('the runs and rules they cover hold under half of the findings');
-    expect(coverage).toBeLessThan(0.5);
-    expect(answer).toContain('most of the false positives they found have been fixed');
-    expect(fixed * 2).toBeGreaterThan(falsePositives);
-  });
-
-  it('says an AI reviewer made the labels, and does not call them blind', () => {
-    expect(answer).toContain('compares the findings with labels made by an AI reviewer');
-    expect(answer).not.toMatch(/blind/i);
   });
 });
 

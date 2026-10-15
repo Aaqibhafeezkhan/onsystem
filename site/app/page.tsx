@@ -573,6 +573,8 @@ function Proof() {
 
 function RealCodebases() {
   const { intro, rows } = readme.realCodebases;
+  const { sample } = corpus;
+  const pct = (x: number) => `${x.toFixed(1)}%`;
   return (
     <SubSection
       id="real-codebases"
@@ -582,16 +584,25 @@ function RealCodebases() {
           <p>
             <InlineMarkdown text={intro} />
           </p>
-          {/* No false-positive rate until a sample can give one: test/claims.test.ts checks. */}
+          {/* The blind sample's rate while it can give one: test/claims.test.ts checks. */}
           <p className="mt-3">
             How often it is wrong: the <TextLink href={repoLink('corpus', 'tree')}>corpus</TextLink>{' '}
             runs <InlineCode>check</InlineCode> on {corpus.repos} public repositories pinned by
-            commit ({corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct findings)
-            and compares the findings with labels made by an AI reviewer. Those labels do not give a
-            false-positive rate for all findings yet: the runs and rules they cover hold under half
-            of the findings, and most of the false positives they found have been fixed, so what is
-            left under-counts them. The rate will come from a fresh seeded sample, published with
-            its confidence interval and who labelled it.
+            commit ({corpus.runs} runs, {corpus.findings.toLocaleString('en-US')} distinct
+            findings), without their dependencies installed (the two MUI apps get MUI). A seeded
+            random sample of {sample.n} of those findings, stratified by rule, was labelled from the
+            code alone: blind labels by an AI reviewer ({sample.labeller}), not by a person.{' '}
+            {sample.truePositives} are right, {sample.debatable} debatable and{' '}
+            {sample.falsePositives} false positives: {pct(sample.rate.value)} (95% Wilson interval{' '}
+            {sample.rate.low.toFixed(1)}-{pct(sample.rate.high)}), about the same when weighted by
+            each rule&apos;s share of all findings ({pct(sample.weightedRate)}). Most come from{' '}
+            <InlineCode>{sample.top.rule}</InlineCode> ({sample.top.falsePositives} of{' '}
+            {sample.top.sampled} sampled). Counting values a project&apos;s own design system
+            already uses as debatable, {sample.strict.falsePositives} of {sample.n} are false
+            positives ({pct(sample.strict.rate.value)}, {sample.strict.rate.low.toFixed(1)}-
+            {pct(sample.strict.rate.high)}). The{' '}
+            <TextLink href={repoLink(`corpus/${sample.draw}`, 'tree')}>sample</TextLink> has each
+            label with its reason.
           </p>
         </>
       }

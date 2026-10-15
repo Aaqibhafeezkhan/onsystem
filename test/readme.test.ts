@@ -12,7 +12,12 @@ import { loadConfig, RULE_IDS } from '../src/config.js';
 const root = path.resolve(import.meta.dirname, '..');
 
 interface Repos {
-  repos: { name: string; sha: string; runs: { name: string; config?: string }[] }[];
+  repos: {
+    name: string;
+    sha: string;
+    runs: { name: string; config?: string }[];
+    install?: { folders: Record<string, Record<string, string>> };
+  }[];
 }
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const readme = read('README.md');
@@ -112,22 +117,19 @@ describe('the README', () => {
     }
   });
 
-  // The corpus paragraph: what was checked, what the labels cover, and a false-positive rate only
-  // when a sample can give one for all findings.
+  // The corpus paragraph: what was checked, and the false-positive rate of the blind sample, while
+  // that sample can give one for all findings.
   const corpus = () => {
     const labels = JSON.parse(read('corpus/labels.json')) as Label[];
     const snapshot = JSON.parse(read('corpus/snapshot.json')) as Snapshot;
     const repos = JSON.parse(read('corpus/repos.json')) as Repos;
-    const random = labels.filter((l) => l.sample === 'random');
-    // The random sample, among the findings the snapshot says are still reported.
-    const sample = random.filter((l) => snapshot.labels[labelKey(l)]);
     // A run with a config of its own checks the same files as another run: not counted twice.
     const rechecks = new Set(
       repos.repos.flatMap((r) => r.runs.filter((run) => run.config).map((run) => run.name)),
     );
     let distinct = 0;
-    // Distinct findings in a run and rule with at least one label in the sample.
-    let covered = 0;
+    // Distinct findings per rule: the strata the blind sample is drawn from.
+    const byRule = new Map<string, number>();
     let unknown = 0;
     let unknownInFlowise = 0;
     // A run from a monorepo root counts only the findings it adds to the runs from its projects.
@@ -136,7 +138,7 @@ describe('the README', () => {
         const n = counts.errors + counts.warnings;
         if (!rechecks.has(run)) {
           distinct += n;
-          if (sample.some((l) => l.run === run && l.rule === rule)) covered += n;
+          byRule.set(rule, (byRule.get(rule) ?? 0) + n);
         }
         if (/^no-unknown-(component|prop|variant)$/.test(rule)) {
           unknown += n;
@@ -144,54 +146,149 @@ describe('the README', () => {
         }
       }
     }
-    return { snapshot, repos, random, sample, distinct, covered, unknown, unknownInFlowise };
+    return { labels, snapshot, repos, distinct, byRule, unknown, unknownInFlowise };
   };
-  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
-  // The paragraph's percentages: the coverage it states, and any rate.
+
+  /**
+   * The blind sample: a seeded random draw from every distinct finding, stratified by rule, with
+   * labels from a reviewer who saw no other label. Its folder in corpus/ is named by `draw`.
+   */
+  const blindSample = () => {
+    const { labels, snapshot, distinct, byRule } = corpus();
+    const blind = labels.filter((l) => l.sample === 'blind');
+    const draws = [...new Set(blind.map((l) => l.draw))];
+    expect(draws, 'one blind draw at a time').toHaveLength(1);
+    const draw = draws[0] ?? '';
+    // Labels whose findings the snapshot says are no longer reported: a fix took them out.
+    const lost = blind.filter((l) => !snapshot.labels[labelKey(l)]);
+    const count = (list: Label[], verdict: Label['verdict']) =>
+      list.filter((l) => l.verdict === verdict).length;
+    const strata = [...byRule].map(([rule, size]) => {
+      const stratum = blind.filter((l) => l.rule === rule);
+      return { rule, size, n: stratum.length, fp: count(stratum, 'FP') };
+    });
+    // The share of distinct findings in a rule the sample has labels for.
+    const covered = strata.filter((s) => s.n > 0).reduce((n, s) => n + s.size, 0);
+    // Each rule's false-positive share, weighted by its share of the findings.
+    const weighted = strata
+      .filter((s) => s.n > 0)
+      .reduce((rate, s) => rate + (s.size / covered) * (s.fp / s.n), 0);
+    const [top] = [...strata].sort((a, b) => b.fp - a.fp);
+    // The strict reading needs `own_ds_value`, which the draw's own file keeps per finding.
+    const { findings } = JSON.parse(read(`corpus/${draw}/sample-labelled.json`)) as {
+      findings: { fingerprint: string; label: string; own_ds_value: boolean | null }[];
+    };
+    const strict = findings.filter((f) => f.label === 'FP' && f.own_ds_value !== true).length;
+    return {
+      draw,
+      blind,
+      findings,
+      lost,
+      coverage: covered / distinct,
+      n: blind.length,
+      tp: count(blind, 'TP'),
+      d: count(blind, 'D'),
+      fp: count(blind, 'FP'),
+      weighted,
+      top,
+      strict,
+    };
+  };
+  /** A 95% Wilson score interval, as corpus/<draw>/scripts/stats.py computes it. */
+  const wilson = (k: number, n: number) => {
+    const z = 1.959964;
+    const p = k / n;
+    const d = 1 + (z * z) / n;
+    const c = (p + (z * z) / (2 * n)) / d;
+    const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+    return [Math.max(0, c - h), Math.min(1, c + h)] as const;
+  };
+  // One decimal, a tie to the even digit, as stats.py prints it (Python's format): 9/80 is 11.2%.
+  const tenths = (x: number) => {
+    const t = x * 1000;
+    const floor = Math.floor(t);
+    return ((t - floor === 0.5 ? floor + (floor % 2) : Math.round(t)) / 10).toFixed(1);
+  };
+  const pct = (x: number) => `${tenths(x)}%`;
   const paragraph = /\*\*How often it is wrong\.\*\*.*/.exec(readme)?.[0] ?? '';
 
-  it('quotes the corpus size and how much of it the labelled sample covers', () => {
-    const { snapshot, repos, random, sample, distinct, covered, unknown, unknownInFlowise } =
-      corpus();
-    const text = readme.replace(/\s+/g, ' ');
+  it('quotes the corpus size, and what the sample says about the rules for invented API', () => {
+    const { snapshot, repos, distinct, unknown, unknownInFlowise } = corpus();
+    const { blind } = blindSample();
+    const text = paragraph.replace(/\s+/g, ' ');
     expect(text).toContain(`on ${String(repos.repos.length)} public repositories pinned by commit`);
     expect(text).toContain(
-      `${String(Object.keys(snapshot.runs).length)} runs, ${distinct.toLocaleString('en-US')} distinct findings`,
+      `${String(Object.keys(snapshot.runs).length)} runs, ${distinct.toLocaleString('en-US')} distinct findings), without their dependencies installed (the two MUI apps get MUI).`,
     );
+    // Only the repositories with an `install` get dependencies: the two MUI apps, and MUI.
+    const installs = repos.repos.filter((r) => r.install);
+    expect(installs.map((r) => r.name).sort()).toEqual(['flowise', 'material-kit-react']);
+    for (const r of installs) {
+      expect(Object.values(r.install?.folders ?? {}).some((deps) => '@mui/material' in deps)).toBe(
+        true,
+      );
+    }
+    // Invented components, props and variants: MUI's Flowise has most of them, and the sample a
+    // few, too few for a rate of their own.
+    const unknownSample = blind.filter((l) => /^no-unknown-/.test(l.rule));
     expect(text).toContain(
-      `the runs and rules it has labels for hold ${pct(covered / distinct)} of them`,
+      `those three rules have ${String(unknown)} findings in the corpus, ${String(unknownInFlowise)} of them in Flowise, an MUI app, and ${String(unknownSample.length)} in the sample, all right but too few for a rate of their own`,
     );
-    // A fix that removes a finding takes its label out of the sample: most were false positives.
-    const fp = random.filter((l) => l.verdict === 'FP');
-    const fixed = fp.filter((l) => !sample.includes(l));
-    expect(text).toContain(
-      `${String(fixed.length)} of its ${String(fp.length)} false positives were fixed`,
-    );
-    // Invented components, props and variants: MUI's Flowise has most of them.
-    const unknownSample = sample.filter((l) => /^no-unknown-/.test(l.rule));
-    expect(text).toContain(
-      `those three rules have ${String(unknown)} findings in the corpus, ${String(unknownInFlowise)} of them in Flowise, an MUI app`,
-    );
-    expect(text).toContain(`the ${String(unknownSample.length)} still in the sample are all right`);
+    expect(unknownSample.length).toBeLessThan(10);
     expect(unknownSample.every((l) => l.verdict === 'TP')).toBe(true);
   });
 
-  it('quotes no false-positive rate until a random sample covers the findings and is intact', () => {
-    const { random, sample, distinct, covered } = corpus();
-    // A rate from the sample speaks only for the runs and rules it has labels for, so it needs
-    // labels where the findings are (at least 80% of them, as CONTRIBUTING.md says). And once
-    // the false positives a sample found are fixed, the labels left behind under-count them.
-    const coverage = covered / distinct;
-    const fixed = random.length - sample.length;
-    const state = `the random sample covers ${pct(coverage)} of ${distinct.toLocaleString('en-US')} distinct findings, and ${String(fixed)} of its ${String(random.length)} labels are no longer reported`;
+  it("keeps the blind sample's labels as its draw has them", () => {
+    const { draw, blind, findings } = blindSample();
+    expect(draw).toMatch(/^fp-sample-\d{8}$/);
+    const verdict: Record<string, Label['verdict']> = { TP: 'TP', FP: 'FP', debatable: 'D' };
+    expect(blind.map((l) => [l.fingerprint, l.verdict]).sort()).toEqual(
+      findings.map((f) => [f.fingerprint, verdict[f.label]]).sort(),
+    );
+    // The labeller's notes name it by model id, in its own words; the README by that model's name.
+    const labeller = read(`corpus/${draw}/LABELLER.md`);
+    expect(labeller).toContain('an AI reviewer, model id `claude-opus-5-5`');
+    const { models } = JSON.parse(read('bench/v2/config/models.json')) as {
+      models: { id: string; name: string }[];
+    };
+    expect(models.find((m) => m.id === 'claude-opus-5-5')?.name).toBe('Claude Opus 5.5');
+    expect(read(`corpus/${draw}/stats.txt`)).toContain(
+      `n = ${String(blind.length)}: TP ${String(blind.filter((l) => l.verdict === 'TP').length)}, debatable ${String(blind.filter((l) => l.verdict === 'D').length)}, FP ${String(blind.filter((l) => l.verdict === 'FP').length)}`,
+    );
+  });
+
+  it("quotes the blind sample's false-positive rate with its interval, while the sample is intact", () => {
+    const { draw, lost, coverage, n, tp, d, fp, weighted, top, strict } = blindSample();
+    // As CONTRIBUTING.md says: a rate needs labels where at least 80% of the distinct findings
+    // are, and every label the sample was drawn with still reported. Once a fix takes some out,
+    // what is left under-counts them: draw a fresh sample, or take the rate out of the README.
+    const state = `the blind sample ${draw} has labels in rules holding ${pct(coverage)} of the distinct findings, and ${String(lost.length)} of its ${String(n)} labels are no longer reported`;
     console.info(`corpus labels: ${state}`);
-    const quotable = coverage >= 0.8 && fixed === 0;
-    // Any percentage besides the coverage is a rate. When one is quotable, test it here.
-    const rates = [...paragraph.matchAll(/\d+(?:\.\d+)?%/g)]
-      .map((m) => m[0])
-      .filter((p) => p !== pct(coverage));
-    expect(paragraph).not.toBe('');
-    expect(quotable ? [] : rates, `no rate to quote: ${state}`).toEqual([]);
+    expect(coverage >= 0.8 && lost.length === 0, `no rate to quote: ${state}`).toBe(true);
+
+    const text = paragraph.replace(/\s+/g, ' ');
+    const [low, high] = wilson(fp, n);
+    const [strictLow, strictHigh] = wilson(strict, n);
+    expect(text).toContain(
+      `A seeded random sample of ${String(n)} of those findings, stratified by rule, was labelled from the code alone: blind labels by an AI reviewer (Claude Opus 5.5), not by a person.`,
+    );
+    expect(text).toContain(
+      `${String(tp)} are right, ${String(d)} debatable and ${String(fp)} false positives: ${pct(fp / n)} (95% Wilson interval ${tenths(low)}-${pct(high)}), about the same when weighted by each rule's share of all findings (${pct(weighted)}).`,
+    );
+    expect(Math.abs(weighted - fp / n)).toBeLessThan(0.01);
+    expect(text).toContain(
+      `Most come from \`${top?.rule ?? ''}\` (${String(top?.fp)} of ${String(top?.n)} sampled).`,
+    );
+    expect((top?.fp ?? 0) * 2).toBeGreaterThan(fp);
+    expect(text).toContain(
+      `Counting values a project's own design system already uses as debatable, ${String(strict)} of ${String(n)} are false positives (${pct(strict / n)}, ${tenths(strictLow)}-${pct(strictHigh)}).`,
+    );
+    expect(text).toContain(`[sample](corpus/${draw})`);
+    // No other rate (95% is the interval's level): none from the older labels, which are not
+    // a sample of all findings.
+    expect(paragraph.match(/\d+(?:\.\d+)?%(?! Wilson)/g)).toEqual(
+      [fp / n, high, weighted, strict / n, strictHigh].map(pct),
+    );
   });
 
   it('says who made the corpus labels, and never that they were made by hand', () => {
@@ -215,7 +312,15 @@ describe('the README', () => {
         ),
     );
     expect(hits).toEqual([]);
-    expect(paragraph).toContain('labels made by an AI reviewer');
+    // The blind sample's labeller saw no other label; the older labels' reviewer saw the finding.
+    const { labels } = corpus();
+    const older = labels.filter((l) => l.sample !== 'blind');
+    expect(older.every((l) => ['random', 'audit'].includes(l.sample) && !l.draw)).toBe(true);
+    const text = paragraph.replace(/\s+/g, ' ');
+    expect(text).toContain('blind labels by an AI reviewer (Claude Opus 5.5), not by a person');
+    expect(text).toContain(
+      "The corpus's older labels, made by an AI reviewer who could see the finding and so not blind,",
+    );
   });
 
   it('says the labels leave out code installed from shadcn registries', () => {

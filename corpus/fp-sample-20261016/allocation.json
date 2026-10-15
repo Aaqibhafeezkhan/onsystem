@@ -1,0 +1,88 @@
+{
+  "seed": 20261016,
+  "n": 80,
+  "populationTotal": 14539,
+  "generator": "mulberry32 (scripts/corpus-lib.ts random)",
+  "allocation": [
+    {
+      "rule": "no-hardcoded-color",
+      "population": 12422,
+      "share": 0.854391636288603,
+      "proportionalQuota": 68.35133090308824,
+      "floored": false,
+      "sampled": 65,
+      "samplingFraction": 0.00523265174690066,
+      "weight": 191.1076923076923
+    },
+    {
+      "rule": "prefer-design-system-component",
+      "population": 1462,
+      "share": 0.10055712222298645,
+      "proportionalQuota": 8.044569777838916,
+      "floored": false,
+      "sampled": 7,
+      "samplingFraction": 0.0047879616963064295,
+      "weight": 208.85714285714286
+    },
+    {
+      "rule": "icon-button-accessible-name",
+      "population": 530,
+      "share": 0.0364536763188665,
+      "proportionalQuota": 2.9162941055093197,
+      "floored": false,
+      "sampled": 3,
+      "samplingFraction": 0.005660377358490566,
+      "weight": 176.66666666666666
+    },
+    {
+      "rule": "no-hardcoded-radius",
+      "population": 57,
+      "share": 0.003920489717312057,
+      "proportionalQuota": 0.31363917738496455,
+      "floored": true,
+      "sampled": 1,
+      "samplingFraction": 0.017543859649122806,
+      "weight": 57
+    },
+    {
+      "rule": "no-unknown-prop",
+      "population": 41,
+      "share": 0.0028200013756104272,
+      "proportionalQuota": 0.22560011004883418,
+      "floored": true,
+      "sampled": 1,
+      "samplingFraction": 0.024390243902439025,
+      "weight": 41
+    },
+    {
+      "rule": "no-unknown-variant",
+      "population": 14,
+      "share": 0.0009629272989889263,
+      "proportionalQuota": 0.07703418391911411,
+      "floored": true,
+      "sampled": 1,
+      "samplingFraction": 0.07142857142857142,
+      "weight": 14
+    },
+    {
+      "rule": "no-hardcoded-spacing",
+      "population": 12,
+      "share": 0.0008253662562762226,
+      "proportionalQuota": 0.0660293005020978,
+      "floored": true,
+      "sampled": 1,
+      "samplingFraction": 0.08333333333333333,
+      "weight": 12
+    },
+    {
+      "rule": "no-unknown-component",
+      "population": 1,
+      "share": 0.00006878052135635188,
+      "proportionalQuota": 0.005502441708508151,
+      "floored": true,
+      "sampled": 1,
+      "samplingFraction": 1,
+      "weight": 1
+    }
+  ]
+}

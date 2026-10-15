@@ -292,17 +292,36 @@ export interface Docs {
   skill: string;
 }
 
-/** The real-world corpus: pinned repositories, their findings and the labelled sample. */
+/** A share as a percentage to one decimal, with its 95% Wilson interval. */
+export interface CorpusRate {
+  value: number;
+  low: number;
+  high: number;
+}
+
+/** The real-world corpus: pinned repositories, their findings and the blind sample. */
 export interface Corpus {
   repos: number;
   runs: number;
   /** Distinct findings across the runs. */
   findings: number;
-  sample: number;
-  truePositives: number;
-  falsePositives: number;
-  debatable: number;
-  weightedRate: number;
+  /** A seeded random sample of the findings, stratified by rule, with blind labels (corpus/<draw>). */
+  sample: {
+    draw: string;
+    /** The AI reviewer's model. */
+    labeller: string;
+    n: number;
+    truePositives: number;
+    debatable: number;
+    falsePositives: number;
+    rate: CorpusRate;
+    /** Weighted by each rule's share of the findings, in percent. */
+    weightedRate: number;
+    /** The rule most false positives come from. */
+    top: { rule: string; falsePositives: number; sampled: number };
+    /** Counting values the project's own design system already uses as debatable. */
+    strict: { falsePositives: number; rate: CorpusRate };
+  };
   /** midday's dashboard, the baseline example: its findings, the files they are in, and the files checked. */
   baseline: { findings: number; flagged: number; files: number };
 }
