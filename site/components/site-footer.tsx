@@ -90,7 +90,7 @@ export function SiteFooter() {
             </a>
           </li>
           <li>
-            <Link className={link} href="/docs#use-these-docs-from-your-agent">
+            <Link className={link} href="/docs/clients#search-these-docs-from-your-agent">
               Docs over MCP
             </Link>
           </li>

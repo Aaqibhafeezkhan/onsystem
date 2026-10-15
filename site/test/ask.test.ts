@@ -528,13 +528,13 @@ describe('the docs for agents', () => {
     expect(html).toContain('href="/llms-full.txt"');
   });
 
-  it('is a section of the docs home, in "On this page", where the footer links', () => {
+  it('is a section of /docs/clients, in "On this page", where the footer links', () => {
     const html = renderToStaticMarkup(createElement(DocsForAgents));
     expect(html).toMatch(
-      /<h2 id="use-these-docs-from-your-agent" data-toc="Use these docs from your agent" data-level="2" class="[^"]*scroll-mt-28[^"]*lg:scroll-mt-20/,
+      /<h2 id="search-these-docs-from-your-agent" data-toc="Optional: search these docs from your agent" data-level="2" class="[^"]*scroll-mt-28[^"]*lg:scroll-mt-20/,
     );
     const footer = renderToStaticMarkup(createElement(SiteFooter));
-    expect(footer).toContain('href="/docs#use-these-docs-from-your-agent"');
+    expect(footer).toContain('href="/docs/clients#search-these-docs-from-your-agent"');
   });
 
   it('lists the MCP endpoint in llms.txt', () => {

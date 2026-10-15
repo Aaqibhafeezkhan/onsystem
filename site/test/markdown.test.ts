@@ -74,4 +74,27 @@ describe('MarkdownBlocks', () => {
     const blocks = parseBlocks('- one\n- two\n\nText.\n\n1. first\n\n- other kind');
     expect(blocks.map((b) => b.type)).toEqual(['list', 'paragraph', 'list', 'list']);
   });
+
+  it('adds inSteps content to the end of its step, and throws for an id no step has', () => {
+    const markdown = [
+      '<!-- steps -->',
+      '## Run it',
+      'Run it once.',
+      '## Hold your agent to it',
+      'Add the server.',
+      '## Try it',
+      'Ask for a page.',
+      '<!-- /steps -->',
+    ].join('\n');
+    const render = (inSteps: Record<string, string>) =>
+      renderToStaticMarkup(createElement(MarkdownBlocks, { markdown, inSteps }));
+    const html = render({ 'hold-your-agent-to-it': 'BUTTONS' });
+    const at = html.indexOf('BUTTONS');
+    expect(at).toBeGreaterThan(html.indexOf('Add the server.'));
+    expect(at).toBeLessThan(html.indexOf('id="try-it"'));
+    // A renamed step fails the build rather than dropping the buttons without a word.
+    expect(() => render({ 'hold-your-agent': 'BUTTONS' })).toThrow(
+      'inSteps names hold-your-agent, but the steps are run-it, hold-your-agent-to-it, try-it.',
+    );
+  });
 });
