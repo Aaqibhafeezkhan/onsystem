@@ -961,13 +961,19 @@ write('social.json', {
 
 // ondocs's search index over the docs and the rules, for /api/ask and /api/mcp. Keyword-only
 // (BM25, no embedding model), so building it needs no API key and an agent's searches over MCP
-// call no model at all. The pages are those of DOCS_FILES in lib/site.ts, and the FAQ;
-// test/ask.test.ts keeps the lists in step. The docs go in as the site serves their Markdown,
-// without the renderer's markers. lib/markers.ts and lib/faq.ts import nothing, so Node loads
-// them as they are, with the types stripped.
+// call no model at all. The pages are those of DOCS_FILES in lib/site.ts, the FAQ, /benchmark
+// and /playground; test/ask.test.ts keeps the lists in step. The docs go in as the site serves
+// their Markdown, without the renderer's markers, and the other pages as llms-full.txt has them,
+// from the generated data the site renders. lib/markers.ts, lib/faq.ts, lib/benchmark.ts and
+// lib/agent-markdown.ts import nothing but types, so Node loads them as they are, with the types
+// stripped.
 const { buildIndex, fromMarkdown, serializeIndexFile } = await import('ondocs');
 const { withoutMarkers } = await import('../lib/markers.ts');
 const { faqMarkdown } = await import('../lib/faq.ts');
+const { headlineText } = await import('../lib/benchmark.ts');
+const { benchmarkMarkdown, playgroundMarkdown } = await import('../lib/agent-markdown.ts');
+const generated = (name) => JSON.parse(fs.readFileSync(path.join(OUT, name), 'utf8'));
+const benchmarkData = generated('benchmark.json');
 const ASK_PAGES = {
   'quickstart.md': '/docs',
   'plugin.md': '/docs/plugin',
@@ -992,7 +998,26 @@ const askDocuments = [
       url,
     }),
   ),
-  fromMarkdown(`# FAQ\n\n${faqMarkdown()}`, { id: 'faq', url: '/docs/faq' }),
+  fromMarkdown(`# FAQ\n\n${faqMarkdown(generated('corpus.json'))}`, {
+    id: 'faq',
+    url: '/docs/faq',
+  }),
+  // Their headings carry the ids the pages give their sections; a heading without one, such as
+  // "The arms" under Method, is cited by the section it sits in.
+  {
+    ...fromMarkdown(benchmarkMarkdown(benchmarkData, headlineText(benchmarkData)), {
+      id: 'benchmark',
+      url: '/benchmark',
+    }),
+    anchors: 'explicit',
+  },
+  {
+    ...fromMarkdown(
+      playgroundMarkdown(generated('playground.json').presets, generated('design-system.json')),
+      { id: 'playground', url: '/playground' },
+    ),
+    anchors: 'explicit',
+  },
   // Each rule's page, from the same data the page renders.
   ...rules.map((rule) =>
     fromMarkdown(

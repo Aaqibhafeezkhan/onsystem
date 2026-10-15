@@ -1,7 +1,10 @@
+import { benchmarkMarkdown, playgroundMarkdown } from '@/lib/agent-markdown';
 import { headlineText } from '@/lib/benchmark';
-import { benchmark, docs, readme, ruleCatalog, tools } from '@/lib/data';
+import { benchmark, corpus, designSystem, docs, readme, ruleCatalog, tools } from '@/lib/data';
 import { DOCS_PAGES } from '@/lib/docs';
+import { faqMarkdown } from '@/lib/faq';
 import { withoutMarkers } from '@/lib/markers';
+import { playground } from '@/lib/playground';
 import {
   NPM,
   NPX,
@@ -23,15 +26,20 @@ export function absolute(markdown: string, page: string): string {
   });
 }
 
-const summary =
-  'Keeps coding agents on your design system: it knows your real components, props, variants and tokens, catches the moment an agent invents one and has it fix it, and the same check gates your PRs. Local, zero config, works alongside @shadcn/lint. It reads React components, props, cva variants and tokens from source with the TypeScript compiler. In Claude Code, a hook checks each file right after it is written and hands the errors back with their fixes; other agents run check_ui over MCP; the CI check gates pull requests. Static analysis: no model calls, no API key.';
+// The home page's first screen, word for word (test/llms.test.ts checks), then how it works.
+const pitch =
+  'Keeps coding agents on your design system. Catches palette colors, native elements and APIs your design system lacks in agent-written React, at every edit and pull request, with the fix. Set it up once in your design-system package; every app in your monorepo gets it.';
+const details =
+  'It reads React components, props, cva variants and tokens from source with the TypeScript compiler. In Claude Code, a hook checks each file right after it is written and hands the errors back with their fixes; other agents run check_ui over MCP; the CI check gates pull requests. Static analysis, run locally: no model calls, no API key, zero config. It works alongside @shadcn/lint.';
 
 /** llms.txt (https://llmstxt.org): what this is, how to install it, and where everything is. */
 export function llmsTxt(): string {
   const lines = [
     '# onsystem',
     '',
-    `> ${summary}`,
+    `> ${pitch}`,
+    '',
+    details,
     '',
     `Version ${tools.version}, MIT. React (.tsx/.jsx), shadcn/ui or any design system, Tailwind v3 or v4, Node.js ${readme.engines.node.replace('>=', '')}+.`,
     '',
@@ -75,8 +83,12 @@ export function llmsTxt(): string {
   return `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`;
 }
 
-/** Every docs page and the rules, as one Markdown file. */
+/** Every docs page, the rules, the FAQ, the benchmark and the playground, as one Markdown file. */
 export function llmsFullTxt(): string {
+  // /benchmark and /playground as the docs index has them, without their `# title` (the section
+  // has one) and the ids their headings carry for the index's citations.
+  const indexed = (markdown: string) =>
+    markdown.replace(/^# .*\n+/, '').replace(/ \{#[\w-]+\}$/gm, '');
   const sections: [title: string, page: string, body: string][] = [
     ['Quickstart', '/docs', docs.quickstart],
     ['Claude Code plugin', '/docs/plugin', docs.plugin],
@@ -101,8 +113,11 @@ export function llmsFullTxt(): string {
     ],
     ['Tools', '/docs/tools', docs.tools],
     ['Troubleshooting', '/docs/troubleshooting', docs.troubleshooting],
+    ['FAQ', '/docs/faq', faqMarkdown(corpus)],
     ['How it works', '/docs/how-it-works', docs.howItWorks],
     ['Migrating from @dgesteves/design-system-mcp', '/docs/migrating', docs.migrating],
+    ['Benchmark', '/benchmark', indexed(benchmarkMarkdown(benchmark, headlineText(benchmark)))],
+    ['Playground', '/playground', indexed(playgroundMarkdown(playground.presets, designSystem))],
   ];
   // Each page's own `##` sections become `###` under its `##` title; code blocks stay as they are.
   const nest = (body: string) => {
@@ -115,7 +130,7 @@ export function llmsFullTxt(): string {
       })
       .join('\n');
   };
-  return `# onsystem\n\n> ${summary}\n\n${sections
+  return `# onsystem\n\n> ${pitch}\n\n${details}\n\n${sections
     .map(([title, page, body]) => `## ${title}\n\n${absolute(nest(withoutMarkers(body)), page)}`)
     .join('\n\n')}\n`;
 }

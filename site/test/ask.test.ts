@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } fr
 
 import { GET as askStatusRoute, POST as askRoute } from '@/app/api/ask/route';
 import { DELETE as mcpDelete, GET as mcpGet, POST as mcpRoute } from '@/app/api/mcp/route';
+import BenchmarkPage from '@/app/benchmark/page';
+import PlaygroundPage from '@/app/playground/page';
 import { AskButton, askStatus, resetAskStatus } from '@/components/ask';
 import { SiteAskDialog } from '@/components/ask-dialog';
 import { DocsForAgents } from '@/components/docs-for-agents';
@@ -16,9 +18,9 @@ import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
 import index from '@/generated/ask-index.json';
 import { ASK_BUDGET, askCount, askEnabled, MCP_TOOLS } from '@/lib/ask';
-import { ruleCatalog } from '@/lib/data';
+import { corpus, ruleCatalog } from '@/lib/data';
 import { DOCS_MCP } from '@/lib/docs-mcp';
-import { FAQ } from '@/lib/faq';
+import { faqEntries } from '@/lib/faq';
 import { llmsTxt } from '@/lib/llms';
 import { DOCS_FILES, SITE_URL } from '@/lib/site';
 
@@ -45,15 +47,38 @@ function counted(): unknown[] {
 // ─── The index ──────────────────────────────────────────────────────────────
 
 describe('the docs index', () => {
-  it('holds every docs page, the FAQ and every rule, as the site serves them', () => {
+  it('holds every docs page, the FAQ, every rule, the benchmark and the playground', () => {
     const urls = index.documents.map((doc) => doc.url).sort();
     expect(urls).toEqual(
       [
         ...Object.values(DOCS_FILES),
         '/docs/faq',
         ...ruleCatalog.rules.map((rule) => `/rules/${rule.id}`),
+        '/benchmark',
+        '/playground',
       ].sort(),
     );
+  });
+
+  it('cites the benchmark and the playground by the ids their pages give their sections', () => {
+    const anchors = (url: string) => {
+      const doc = index.documents.findIndex((d) => d.url === url);
+      return [...new Set(index.chunks.filter((c) => c.doc === doc).map((c) => c.anchor))];
+    };
+    const benchmark = anchors('/benchmark');
+    expect(benchmark).toEqual(
+      expect.arrayContaining(['results', 'labels', 'method', 'threats', 'reproduce']),
+    );
+    const benchmarkPage = renderToStaticMarkup(createElement(BenchmarkPage));
+    for (const anchor of benchmark.filter(Boolean)) {
+      expect(benchmarkPage, anchor).toContain(`<section id="${String(anchor)}"`);
+    }
+    const playground = anchors('/playground');
+    expect(playground).toContain('demo-ds-title');
+    const playgroundPage = renderToStaticMarkup(createElement(PlaygroundPage));
+    for (const anchor of playground.filter(Boolean)) {
+      expect(playgroundPage, anchor).toContain(` id="${String(anchor)}"`);
+    }
   });
 
   it('leaves out the docs renderer’s markers, as the pages’ Markdown does', () => {
@@ -69,7 +94,7 @@ describe('the docs index', () => {
     const faq = index.documents.findIndex((doc) => doc.url === '/docs/faq');
     expect(index.documents[faq]?.title).toBe('FAQ');
     const anchors = index.chunks.filter((c) => c.doc === faq).map((c) => c.anchor);
-    expect(anchors).toEqual(FAQ.map(([question]) => slug(question)));
+    expect(anchors).toEqual(faqEntries(corpus).map(([question]) => slug(question)));
   });
 
   it('is keyword-only, so building and searching it calls no model', () => {
@@ -265,6 +290,29 @@ describe('/api/mcp', () => {
     expect(body.result.isError).toBeFalsy();
     const text = JSON.stringify(body.result);
     expect(text).toContain(`${SITE_URL}/docs/ci#adopting-it-in-an-existing-codebase`);
+  });
+
+  it('lists the benchmark and the playground among its pages', async () => {
+    const { body } = await rpc('tools/call', { name: 'list_pages', arguments: {} });
+    expect(body.result.isError).toBeFalsy();
+    const text = JSON.stringify(body.result);
+    expect(text).toContain(`${SITE_URL}/benchmark`);
+    expect(text).toContain(`${SITE_URL}/playground`);
+  });
+
+  it('finds the benchmark’s headline and caveats when asked whether onsystem helps', async () => {
+    const search = async (query: string) => {
+      const { body } = await rpc('tools/call', { name: 'search', arguments: { query } });
+      expect(body.result.isError).toBeFalsy();
+      return JSON.stringify(body.result);
+    };
+    // Before, the best answer was a rule page's one line about the benchmark, with no numbers.
+    const helps = await search('does onsystem reduce design system violations by coding agents');
+    expect(helps).toContain(`${SITE_URL}/benchmark`);
+    expect(helps).toContain('went from 0.85 to 0.00');
+    const caveats = await search('who labelled the benchmark and what are its threats to validity');
+    expect(caveats).toContain(`${SITE_URL}/benchmark#`);
+    expect(caveats).toContain('AI reviewer');
   });
 
   it('answers GET and DELETE as a stateless server does', async () => {
