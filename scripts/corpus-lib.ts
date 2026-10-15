@@ -49,8 +49,13 @@ export interface Label {
   suggestion?: string | null;
   verdict: Verdict;
   reason: string;
-  /** `audit`: picked by hand as suspicious. `random`: drawn at random, so it estimates the rate. */
-  sample: 'audit' | 'random';
+  /**
+   * `audit`: picked by hand as suspicious. `random`: drawn at random, so it estimates the rate.
+   * `blind`: a seeded draw from every distinct finding, stratified by rule, labelled by a reviewer
+   * who saw no other label; `draw` names its folder in corpus/, with the method and statistics.
+   */
+  sample: 'audit' | 'random' | 'blind';
+  draw?: string;
 }
 
 export interface RuleCounts {
@@ -143,7 +148,10 @@ export function matches(label: Label, finding: Finding): boolean {
   );
 }
 
-/** Problems with the label file itself: a fingerprint that does not match its fields, duplicates. */
+/**
+ * Problems with the label file itself: a fingerprint that does not match its fields, duplicates.
+ * A finding has one label, plus at most one from each blind draw.
+ */
 export function invalidLabels(labels: readonly Label[]): string[] {
   const problems: string[] = [];
   const keys = new Set<string>();
@@ -157,9 +165,14 @@ export function invalidLabels(labels: readonly Label[]): string[] {
     if (!['TP', 'FP', 'D'].includes(label.verdict)) {
       problems.push(`${label.fingerprint}: verdict must be TP, FP or D`);
     }
+    if (label.sample === 'blind' && !label.draw) {
+      problems.push(`${label.fingerprint}: a blind label names its draw`);
+    }
+    // A blind draw is a sample of its own: it may pick a finding the other labels have.
     const key = labelKey(label);
-    if (keys.has(key)) problems.push(`${key}: labelled twice`);
-    keys.add(key);
+    const scoped = label.sample === 'blind' ? `${label.draw ?? ''}\0${key}` : key;
+    if (keys.has(scoped)) problems.push(`${key}: labelled twice`);
+    keys.add(scoped);
   }
   return problems;
 }

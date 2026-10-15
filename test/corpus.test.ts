@@ -180,6 +180,23 @@ describe('corpus comparison', () => {
     expect(invalidLabels([stray, stray])).toEqual([expect.stringContaining('labelled twice')]);
   });
 
+  it('lets a blind draw label a finding the older labels have, once per draw', () => {
+    // The fresh sample drew 5 findings that the older random and audit labels already had.
+    const older = label('demo', 'bg-blue-500', 'D');
+    const blind = { ...older, verdict: 'FP' as const, sample: 'blind' as const, draw: 'a' };
+    expect(invalidLabels([older, blind])).toEqual([]);
+    expect(invalidLabels([older, blind, { ...blind, draw: 'b' }])).toEqual([]);
+    expect(invalidLabels([older, blind, blind])).toEqual([
+      expect.stringContaining('labelled twice'),
+    ]);
+    expect(invalidLabels([{ ...older, sample: 'audit' }, older])).toEqual([
+      expect.stringContaining('labelled twice'),
+    ]);
+    expect(invalidLabels([{ ...blind, draw: undefined }])).toEqual([
+      expect.stringContaining('a blind label names its draw'),
+    ]);
+  });
+
   it('estimates the false-positive rate per run and rule, weighted by findings', () => {
     // Four color findings, two labelled (one FP); one icon finding, labelled TP.
     const found = results(

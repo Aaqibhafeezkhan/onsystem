@@ -1,0 +1,20 @@
+n = 80: TP 57, debatable 14, FP 9
+FP (unweighted) 9/80 = 11.2% [95% Wilson 6.0%-20.0%]
+TP (unweighted) 57/80 = 71.2% [60.5%-80.0%]
+FP weighted by rule population: 11.0% [95% Wilson on n_eff=76.1: 5.8%-20.0%]
+FP strict (own design-system values count as debatable) 6/80 = 7.5% [3.5%-15.4%]
+FP strict, weighted: 8.0% [3.7%-16.3%]
+
+Per rule (FP / sampled, 95% Wilson):
+  no-hardcoded-color: FP 7/65 [5.3%-20.6%]  (TP 47, debatable 11); population 12422
+  prefer-design-system-component: FP 1/7 [2.6%-51.3%]  (TP 4, debatable 2); population 1462
+  icon-button-accessible-name: FP 0/3 [0.0%-56.1%]  (TP 3, debatable 0); population 530
+  no-hardcoded-spacing: FP 0/1 [0.0%-79.3%]  (TP 0, debatable 1); population 12
+  no-hardcoded-radius: FP 1/1 [20.7%-100.0%]  (TP 0, debatable 0); population 57
+  no-unknown-prop: FP 0/1 [0.0%-79.3%]  (TP 1, debatable 0); population 41
+  no-unknown-component: FP 0/1 [0.0%-79.3%]  (TP 1, debatable 0); population 1
+  no-unknown-variant: FP 0/1 [0.0%-79.3%]  (TP 1, debatable 0); population 14
+
+Component/prop/variant rules: 3/3 right (FP upper bound 56.1%)
+Findings whose named replacement was wrong (any label): 3
+Findings flagging a value the project's own design system uses (own_ds_value): 57

@@ -362,15 +362,34 @@ function check(selected) {
   const rate = falsePositiveRate(result.present, current);
   const tally = (p) => `${p.tp} TP, ${p.fp} FP, ${p.d} debatable`;
   const relevant = labels.filter((l) => l.run in current);
+  // A blind draw may label a finding that an older label has, so this counts labels, not findings.
+  const draws = [...new Set(relevant.filter((l) => l.sample === 'blind').map((l) => l.draw))];
+  const verdicts = (list) => ({
+    tp: list.filter((l) => l.verdict === 'TP').length,
+    fp: list.filter((l) => l.verdict === 'FP').length,
+    d: list.filter((l) => l.verdict === 'D').length,
+  });
+  // The blind draws come first: the README quotes their rate. The older labels' figures cover
+  // only their own runs and rules, so they are printed as that, not as a rate for all findings.
   lines.push(
-    `Labelled sample: ${relevant.length} findings labelled, ${result.present.size} still reported.`,
-    `  Random sample still reported: ${tally(rate.sample)}. False-positive rate ${percent(rate.sample.rate)} (errors only: ${percent(rate.sampleErrors.rate)}).`,
-    `  Weighted by run and rule over all findings: ${percent(rate.estimate)} of findings are false positives (errors only: ${percent(rate.estimateErrors)}), from labels covering ${percent(rate.coverage)} of them.`,
-    `  Audit picks still reported: ${tally(rate.audit)}.`,
-    '  Random sample by rule:',
+    `Labels: ${relevant.length}, ${result.present.size} of them still reported.`,
+    ...draws.map((draw) => {
+      const drawn = relevant.filter((l) => l.sample === 'blind' && l.draw === draw);
+      const kept = drawn.filter((l) => result.present.has(l));
+      const intact =
+        kept.length === drawn.length
+          ? `Its false-positive rate, with its interval, is in corpus/${draw}/stats.txt.`
+          : 'Some of its findings are no longer reported, so its rate no longer holds: draw a fresh sample.';
+      return `  Blind sample ${draw}: ${kept.length} of its ${drawn.length} labels still reported (${tally(verdicts(kept))}). ${intact}`;
+    }),
+    '  Older labels, by a reviewer who could see the finding. Not a false-positive rate for all findings:',
+    `    Random sample still reported: ${tally(rate.sample)}. ${percent(rate.sample.rate)} of these labels are false positives (errors only: ${percent(rate.sampleErrors.rate)}).`,
+    `    Weighted by run and rule, coverage only: ${percent(rate.estimate)} of the findings in the runs and rules these labels cover (${percent(rate.coverage)} of all findings) are false positives (errors only: ${percent(rate.estimateErrors)}).`,
+    `    Audit picks still reported: ${tally(rate.audit)}.`,
+    '    Random sample by rule:',
     ...rate.byRule.map(
       ({ rule, precision }) =>
-        `    ${rule.padEnd(32)} ${tally(precision)}: ${percent(precision.rate)}`,
+        `      ${rule.padEnd(32)} ${tally(precision)}: ${percent(precision.rate)}`,
     ),
   );
   console.log(lines.join('\n'));

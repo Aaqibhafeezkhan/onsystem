@@ -1,0 +1,808 @@
+{
+  "seed": 20261016,
+  "n": 80,
+  "populationTotal": 14539,
+  "generator": "mulberry32 (scripts/corpus-lib.ts random)",
+  "findings": [
+    {
+      "sampleNo": "S01",
+      "id": "dub:apps/web/app/app.dub.co/(auth-marketing)/customer-carousel.tsx:65:88:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S02",
+      "id": "midday:apps/dashboard/src/components/forms/category-edit-form.tsx:144:49:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S03",
+      "id": "midday:apps/dashboard/src/components/error-boundary.tsx:54:33:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S04",
+      "id": "dub:apps/web/ui/modals/application-settings-modal.tsx:262:98:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S05",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/bounties/[bountyId]/bounty-info.tsx:69:93:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S06",
+      "id": "dub:apps/web/ui/oauth-apps/add-edit-integration-form.tsx:246:78:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S07",
+      "id": "dub:apps/web/ui/modals/update-partner-user-modal.tsx:87:86:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S08",
+      "id": "cal.com:packages/platform/examples/base/src/pages/[bookingUid].tsx:125:38:no-hardcoded-spacing",
+      "rule": "no-hardcoded-spacing",
+      "severity": "warning",
+      "hasFix": true,
+      "stratumPopulation": 12,
+      "stratumSampled": 1,
+      "weight": 12
+    },
+    {
+      "sampleNo": "S09",
+      "id": "dub:apps/web/ui/partners/partner-platform-shared-partners.tsx:26:51:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S10",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/resources/program-help-and-support.tsx:176:114:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S11",
+      "id": "dub:apps/web/app/(ee)/admin.dub.co/(dashboard)/components/slack-support-invite.tsx:92:25:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S12",
+      "id": "dub:apps/web/app/(ee)/admin.dub.co/(dashboard)/components/user-info.tsx:186:57:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S13",
+      "id": "dub:apps/web/ui/analytics/link-preview.tsx:71:75:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S14",
+      "id": "cal.com:apps/web/modules/troubleshooter/components/ConnectedAppsContainer.tsx:13:47:no-hardcoded-radius",
+      "rule": "no-hardcoded-radius",
+      "severity": "warning",
+      "hasFix": true,
+      "stratumPopulation": 57,
+      "stratumSampled": 1,
+      "weight": 57
+    },
+    {
+      "sampleNo": "S15",
+      "id": "dub:apps/web/ui/links/link-analytics-badge.tsx:181:40:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S16",
+      "id": "midday:apps/dashboard/src/components/tracker/calendar-day.tsx:102:14:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S17",
+      "id": "dub:apps/web/ui/modals/add-customer-modal.tsx:446:51:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S18",
+      "id": "dub:apps/web/ui/shared/inline-badge-popover.tsx:241:112:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S19",
+      "id": "flowise:packages/ui/src/views/roles/CreateEditRoleDialog.jsx:377:54:prefer-design-system-component",
+      "rule": "prefer-design-system-component",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 1462,
+      "stratumSampled": 7,
+      "weight": 208.85714285714286
+    },
+    {
+      "sampleNo": "S20",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/settings/billing/upgrade/page.tsx:335:65:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S21",
+      "id": "dub:apps/web/ui/customers/customer-stats.tsx:127:54:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S22",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/partners/invite-partner-sheet.tsx:286:62:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S23",
+      "id": "dub:apps/web/app/app.dub.co/(share)/share/[dashboardId]/page.tsx:78:80:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S24",
+      "id": "flowise:packages/ui/src/views/chatflows/ShareChatbot.jsx:247:26:icon-button-accessible-name",
+      "rule": "icon-button-accessible-name",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 530,
+      "stratumSampled": 3,
+      "weight": 176.66666666666666
+    },
+    {
+      "sampleNo": "S25",
+      "id": "dub:apps/web/lib/partner-referrals/components/attribute-referring-partner-modal.tsx:91:43:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S26",
+      "id": "dub:apps/web/app/password/[linkId]/form.tsx:42:74:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S27",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/partners/invite-email-preview.tsx:252:168:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S28",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/page-client.tsx:127:64:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "warning",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S29",
+      "id": "documenso:apps/remix/app/components/general/stack-avatars-with-tooltip.tsx:161:48:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S30",
+      "id": "dub:apps/web/ui/modals/import-rebrandly-modal.tsx:169:95:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S31",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/network/network-partner-card.tsx:356:60:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S32",
+      "id": "cal.com:apps/web/modules/embed/components/Embed.tsx:536:50:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S33",
+      "id": "flowise:packages/ui/src/views/agentflows/index.jsx:252:33:no-unknown-prop",
+      "rule": "no-unknown-prop",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 41,
+      "stratumSampled": 1,
+      "weight": 41
+    },
+    {
+      "sampleNo": "S34",
+      "id": "dub:apps/web/ui/partners/rewards/rewards-logic.tsx:131:26:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "warning",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S35",
+      "id": "dub:apps/web/ui/modals/link-builder/partners-modal.tsx:77:48:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S36",
+      "id": "dub:apps/web/ui/layout/sidebar/workspace-dropdown.tsx:241:172:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S37",
+      "id": "dub:apps/web/ui/modals/delete-folder-modal.tsx:99:64:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S38",
+      "id": "dub:apps/web/ui/partners/program-application-review-sheet.tsx:90:80:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S39",
+      "id": "documenso:apps/remix/app/routes/_authenticated+/admin+/organisation-stats._index.tsx:178:12:prefer-design-system-component",
+      "rule": "prefer-design-system-component",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 1462,
+      "stratumSampled": 7,
+      "weight": 208.85714285714286
+    },
+    {
+      "sampleNo": "S40",
+      "id": "dub:apps/web/ui/modals/edit-customer-modal.tsx:89:78:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S41",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/program-empty-state.tsx:26:48:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S42",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/groups/[groupSlug]/discounts/group-discounts.tsx:204:61:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S43",
+      "id": "cal.com:packages/platform/atoms/event-types/payments/StripePaymentForm.tsx:23:6:no-unknown-component",
+      "rule": "no-unknown-component",
+      "severity": "warning",
+      "hasFix": false,
+      "stratumPopulation": 1,
+      "stratumSampled": 1,
+      "weight": 1
+    },
+    {
+      "sampleNo": "S44",
+      "id": "flowise:packages/ui/src/views/evaluations/CreateEvaluationDialog.jsx:475:47:no-unknown-variant",
+      "rule": "no-unknown-variant",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 14,
+      "stratumSampled": 1,
+      "weight": 14
+    },
+    {
+      "sampleNo": "S45",
+      "id": "dub:apps/web/ui/modals/confirm-reward-change-modal.tsx:227:16:prefer-design-system-component",
+      "rule": "prefer-design-system-component",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 1462,
+      "stratumSampled": 7,
+      "weight": 208.85714285714286
+    },
+    {
+      "sampleNo": "S46",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/groups/[groupSlug]/discounts/group-discounts.tsx:203:56:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S47",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/campaigns/[campaignId]/campaign-events.tsx:110:49:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S48",
+      "id": "dub:apps/web/ui/shared/message-input.tsx:500:115:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S49",
+      "id": "chatbot:components/chat/artifact-close-button.tsx:19:6:icon-button-accessible-name",
+      "rule": "icon-button-accessible-name",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 530,
+      "stratumSampled": 3,
+      "weight": 176.66666666666666
+    },
+    {
+      "sampleNo": "S50",
+      "id": "dub:packages/ui/src/rich-text-area/table-hover-controls.tsx:394:10:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S51",
+      "id": "cal.com:apps/web/components/booking/BookingListItem.tsx:671:35:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S52",
+      "id": "saas-starter:app/(dashboard)/dashboard/activity/page.tsx:102:45:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S53",
+      "id": "dub:apps/web/ui/modals/bulk-archive-partners-modal.tsx:127:59:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S54",
+      "id": "dub:apps/web/ui/modals/delete-partner-modal.tsx:127:16:prefer-design-system-component",
+      "rule": "prefer-design-system-component",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 1462,
+      "stratumSampled": 7,
+      "weight": 208.85714285714286
+    },
+    {
+      "sampleNo": "S55",
+      "id": "dub:apps/web/ui/modals/share-dashboard-modal.tsx:387:98:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S56",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/settings/tracking/setup-instructions.tsx:61:73:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S57",
+      "id": "chatbot:components/chat/slash-commands.tsx:98:6:prefer-design-system-component",
+      "rule": "prefer-design-system-component",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 1462,
+      "stratumSampled": 7,
+      "weight": 208.85714285714286
+    },
+    {
+      "sampleNo": "S58",
+      "id": "dub:apps/web/ui/partners/rewards/custom-reward-builder.tsx:214:68:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S59",
+      "id": "dub:apps/web/ui/partners/groups/group-selector.tsx:124:61:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S60",
+      "id": "dub:apps/web/ui/partners/program-application-details.tsx:246:59:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S61",
+      "id": "dub:apps/web/app/app.dub.co/(onboarding)/onboarding/(steps)/plan/enterprise-link.tsx:16:82:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S62",
+      "id": "dub:apps/web/app/(ee)/partners.dub.co/(dashboard)/payouts/payout-stats.tsx:216:51:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S63",
+      "id": "dub:apps/web/ui/workspaces/slack-support-settings-card.tsx:73:131:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "warning",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S64",
+      "id": "dub:apps/web/ui/partners/rewards/custom-reward-builder.tsx:174:45:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S65",
+      "id": "documenso:apps/remix/app/components/tables/settings-public-profile-templates-table.tsx:117:22:prefer-design-system-component",
+      "rule": "prefer-design-system-component",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 1462,
+      "stratumSampled": 7,
+      "weight": 208.85714285714286
+    },
+    {
+      "sampleNo": "S66",
+      "id": "dub:apps/web/app/(ee)/partners.dub.co/(auth-login-register)/(generic)/register/page-client.tsx:96:47:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S67",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/customers/[customerId]/layout.tsx:89:84:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S68",
+      "id": "documenso:apps/remix/app/components/embed/authoring/configure-fields-view.tsx:576:16:prefer-design-system-component",
+      "rule": "prefer-design-system-component",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 1462,
+      "stratumSampled": 7,
+      "weight": 208.85714285714286
+    },
+    {
+      "sampleNo": "S69",
+      "id": "midday:apps/dashboard/src/components/invoice-status.tsx:68:12:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "warning",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S70",
+      "id": "dub:apps/web/ui/layout/page-content/page-content-with-side-panel.tsx:106:20:icon-button-accessible-name",
+      "rule": "icon-button-accessible-name",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 530,
+      "stratumSampled": 3,
+      "weight": 176.66666666666666
+    },
+    {
+      "sampleNo": "S71",
+      "id": "dub:apps/web/app/(ee)/partners.dub.co/(dashboard)/programs/[programSlug]/(enrolled)/page-client.tsx:977:71:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S72",
+      "id": "midday:apps/dashboard/src/components/invoice-status.tsx:42:36:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "warning",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S73",
+      "id": "dub:apps/web/ui/analytics/bar-list.tsx:481:34:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S74",
+      "id": "dub:apps/web/ui/partners/rewards/reward-quality.tsx:335:27:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S75",
+      "id": "dub:apps/web/app/app.dub.co/(dashboard)/[slug]/(ee)/program/resources/program-brand-assets/add-link-modal.tsx:107:42:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S76",
+      "id": "dub:apps/web/ui/links/link-builder/link-partner-details.tsx:76:52:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S77",
+      "id": "cal.com:apps/web/modules/auth/forgot-password/forgot-password-view.tsx:91:45:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S78",
+      "id": "dub:apps/web/app/app.dub.co/(auth)/oauth/authorize/scopes-requested.tsx:97:44:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": false,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S79",
+      "id": "dub:apps/web/ui/modals/import-partnerstack-modal.tsx:155:58:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    },
+    {
+      "sampleNo": "S80",
+      "id": "dub:apps/web/ui/links/link-builder/draft-controls.tsx:151:70:no-hardcoded-color",
+      "rule": "no-hardcoded-color",
+      "severity": "error",
+      "hasFix": true,
+      "stratumPopulation": 12422,
+      "stratumSampled": 65,
+      "weight": 191.1076923076923
+    }
+  ]
+}

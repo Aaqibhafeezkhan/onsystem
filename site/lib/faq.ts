@@ -4,12 +4,32 @@
  * it imports nothing; the corpus numbers come in from generated/corpus.json.
  */
 
+interface FaqRate {
+  value: number;
+  low: number;
+  high: number;
+}
+
 /** What the FAQ quotes from generated/corpus.json (`corpus` in lib/data.ts). */
 export interface FaqCorpus {
   repos: number;
   runs: number;
   findings: number;
+  sample: {
+    draw: string;
+    labeller: string;
+    n: number;
+    truePositives: number;
+    debatable: number;
+    falsePositives: number;
+    rate: FaqRate;
+    weightedRate: number;
+    top: { rule: string; falsePositives: number; sampled: number };
+    strict: { falsePositives: number; rate: FaqRate };
+  };
 }
+
+const pct = (x: number) => `${x.toFixed(1)}%`;
 
 export const faqEntries = (corpus: FaqCorpus): [question: string, answer: string][] => [
   [
@@ -26,8 +46,8 @@ export const faqEntries = (corpus: FaqCorpus): [question: string, answer: string
   ],
   [
     'How often is it wrong?',
-    // No rate until a random sample can give one: test/claims.test.ts checks, as for the home page.
-    `It is measured: every pull request that touches the rules runs them on ${String(corpus.repos)} public repositories pinned by commit (${String(corpus.runs)} runs, ${corpus.findings.toLocaleString('en-US')} distinct findings) and compares the findings with labels made by an AI reviewer, which the [corpus](https://github.com/dgesteves/onsystem/tree/main/corpus) keeps. Those labels do not give a false-positive rate for all findings yet: the runs and rules they cover hold under half of the findings, and most of the false positives they found have been fixed, so what is left under-counts them. The rate will come from a fresh seeded sample, published with its confidence interval and who labelled it. When it flags something that is fine, [suppress it](/rules#suppressing-findings) with a comment, turn the rule down in the [config](/rules#configure), and please open an issue with the snippet and the output of \`inspect\`: those are the reports I most want.`,
+    // The blind sample's rate while it can give one: test/claims.test.ts checks, as for the home page.
+    `It is measured: every pull request that touches the rules runs them on ${String(corpus.repos)} public repositories pinned by commit (${String(corpus.runs)} runs, ${corpus.findings.toLocaleString('en-US')} distinct findings), without their dependencies installed (the two MUI apps get MUI). A seeded random sample of ${String(corpus.sample.n)} of those findings, stratified by rule, was labelled from the code alone: blind labels by an AI reviewer (${corpus.sample.labeller}), not by a person. ${String(corpus.sample.truePositives)} are right, ${String(corpus.sample.debatable)} debatable and ${String(corpus.sample.falsePositives)} false positives: ${pct(corpus.sample.rate.value)} (95% Wilson interval ${corpus.sample.rate.low.toFixed(1)}-${pct(corpus.sample.rate.high)}), about the same when weighted by each rule's share of all findings (${pct(corpus.sample.weightedRate)}). Most come from \`${corpus.sample.top.rule}\` (${String(corpus.sample.top.falsePositives)} of ${String(corpus.sample.top.sampled)} sampled). Counting values a project's own design system already uses as debatable, ${String(corpus.sample.strict.falsePositives)} of ${String(corpus.sample.n)} are false positives (${pct(corpus.sample.strict.rate.value)}, ${corpus.sample.strict.rate.low.toFixed(1)}-${pct(corpus.sample.strict.rate.high)}). The [sample](https://github.com/dgesteves/onsystem/tree/main/corpus/${corpus.sample.draw}) has each label with its reason. When it flags something that is fine, [suppress it](/rules#suppressing-findings) with a comment, turn the rule down in the [config](/rules#configure), and please open an issue with the snippet and the output of \`inspect\`: those are the reports I most want.`,
   ],
   [
     'How is it different from @shadcn/lint?',
