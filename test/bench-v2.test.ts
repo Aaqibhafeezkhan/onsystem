@@ -45,21 +45,31 @@ import {
   diffManifests,
   parseTscOutput,
   scopeTsconfig,
+  shadcnLintConfig,
   summarizeCheck,
+  summarizeShadcnLint,
 } from '../bench/v2/lib/score.js';
 import {
   aggregate,
+  aggregateShadcnLint,
   bootstrapMean,
   deltas,
+  isScored,
   labelSample,
   labelSummary,
   pairedDifference,
   parseCsv,
   renderMarkdown,
+  renderShadcnLint,
+  shadcnLintDeltas,
   shuffle,
   toCsv,
   wilson,
   type RunResult,
+  type ShadcnLintDelta,
+  type ShadcnLintRow,
+  type ShadcnLintRun,
+  type ShadcnLintScorer,
 } from '../bench/v2/lib/stats.js';
 import { createFileTools, FILE_TOOLS, globToRegex, resolveInside } from '../bench/v2/lib/tools.js';
 
@@ -369,6 +379,204 @@ describe('onsystem and change scoring', () => {
       ui: ['a.tsx', 'd.jsx'],
       typescript: ['a.tsx', 'b.ts'],
     });
+  });
+});
+
+describe('the independent scorer, @shadcn/lint', () => {
+  const rules = ['no-restyle', 'no-raw-colors'];
+  const scorer: ShadcnLintScorer = {
+    packages: { '@shadcn/lint': '0.2.1', eslint: '9.39.5', '@typescript-eslint/parser': '8.71.2' },
+    before: '2026-10-14',
+    rules,
+  };
+
+  it('counts its own rules only, by rule, and says when a file could not be linted', () => {
+    const s = summarizeShadcnLint([
+      {
+        ruleId: 'shadcn/no-restyle',
+        severity: 2,
+        message: '"p-4" is not allowed on <Button>',
+        line: 3,
+        column: 9,
+      },
+      { ruleId: 'shadcn/no-restyle', severity: 2, message: 'm', line: 4, column: 9 },
+      { ruleId: 'shadcn/no-raw-colors', severity: 2, message: 'm', line: 5, column: 9 },
+      // A rule the file names that the config does not load: ESLint's message, not the scorer's.
+      { ruleId: 'react-hooks/exhaustive-deps', severity: 2, message: 'm', line: 1, column: 1 },
+    ]);
+    expect(s).toMatchObject({
+      findings: 3,
+      byRule: { 'no-restyle': 2, 'no-raw-colors': 1 },
+      failed: null,
+    });
+    expect(s.messages[0]).toEqual({
+      rule: 'no-restyle',
+      line: 3,
+      column: 9,
+      message: '"p-4" is not allowed on <Button>',
+    });
+    expect(
+      summarizeShadcnLint([
+        { ruleId: null, severity: 2, message: 'Parsing error', line: 1, column: 1, fatal: true },
+      ]),
+    ).toMatchObject({ findings: 0, failed: 'Parsing error' });
+    // A file ESLint ignores gets a warning with no rule and no `fatal`: it could not be linted,
+    // so it is reported as failed rather than counting 0 findings without saying so.
+    const ignored =
+      'File ignored because of a matching ignore pattern. Use "--no-ignore" to disable file ignore settings or use "--no-warn-ignored" to suppress this warning.';
+    expect(
+      summarizeShadcnLint([{ ruleId: null, severity: 1, message: ignored, line: 0, column: 0 }]),
+    ).toMatchObject({ findings: 0, failed: ignored });
+  });
+
+  it('turns every rule on as an error, and lets no comment in the file turn one off', () => {
+    const [config] = shadcnLintConfig({ plugin: {}, parser: {}, rules });
+    expect(config?.rules).toEqual({
+      'shadcn/no-restyle': 'error',
+      'shadcn/no-raw-colors': 'error',
+    });
+    expect(config?.linterOptions.noInlineConfig).toBe(true);
+    expect(config?.files).toEqual(['**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}']);
+  });
+
+  // Two small models, four tasks each. Without onsystem every file has 4 findings; with all three
+  // parts 1, except model a's last task, which created no file. One aborted run is not scored.
+  const results: RunResult[] = [];
+  const lint: Record<string, ShadcnLintRun> = {};
+  for (const m of ['a', 'b']) {
+    for (const task of ['t1', 't2', 't3', 't4']) {
+      const none = result({ id: `${m}-none-${task}`, model: m, tier: 'small', task });
+      lint[none.id] = { findings: 4, byRule: { 'no-restyle': 3, 'no-raw-colors': 1 } };
+      const created = !(m === 'a' && task === 't4');
+      const all = result({
+        id: `${m}-all-${task}`,
+        model: m,
+        tier: 'small',
+        task,
+        arm: 'all',
+        created,
+      });
+      if (created) lint[all.id] = { findings: 1, byRule: { 'no-restyle': 1 } };
+      results.push(none, all);
+    }
+  }
+  results.push(
+    result({
+      id: 'a-all-t9',
+      model: 'a',
+      tier: 'small',
+      task: 't9',
+      arm: 'all',
+      status: 'aborted',
+    }),
+  );
+  lint['a-all-t9'] = { findings: 9, byRule: { 'no-restyle': 9 } };
+
+  it('averages over every scored run, a run without its file counting 0', () => {
+    const rows = aggregateShadcnLint(results, lint, rules, { iterations: 200 });
+    expect(rows.map((r) => `${r.model}/${r.arm}`)).toEqual([
+      'a/none',
+      'a/all',
+      'b/none',
+      'b/all',
+      'small models/none',
+      'small models/all',
+      'all models/none',
+      'all models/all',
+    ]);
+    const a = rows.find((r) => r.model === 'a' && r.arm === 'all');
+    expect(a).toMatchObject({
+      runs: 4,
+      linted: 3,
+      byRule: { 'no-restyle': 0.75, 'no-raw-colors': 0 },
+    });
+    expect(a?.findings.value).toBeCloseTo(0.75);
+    expect(
+      rows.find((r) => r.model === 'all models' && r.arm === 'all')?.findings.value,
+    ).toBeCloseTo(7 / 8);
+  });
+
+  it('pairs each arm with none, by rule too', () => {
+    const [a] = shadcnLintDeltas(results, lint, rules, 'none', { iterations: 200 });
+    expect(a).toMatchObject({ model: 'a', arm: 'all', pairs: 4 });
+    expect(a?.findings.value).toBeCloseTo(-13 / 4);
+    expect(a?.byRule['no-restyle']?.value).toBeCloseTo(-9 / 4);
+    expect(a?.byRule['no-raw-colors']?.value).toBeCloseTo(-1);
+  });
+
+  it('says what ran, and renders both tables and the files it could not lint', () => {
+    const md = renderShadcnLint(
+      scorer,
+      aggregateShadcnLint(results, lint, rules, { iterations: 200 }),
+      shadcnLintDeltas(results, lint, rules, 'none', { iterations: 200 }),
+      { ...lint, 'b-none-t1': { findings: 0, byRule: {}, failed: 'Parsing error' } },
+    );
+    expect(md).toContain(
+      '@shadcn/lint 0.2.1, with eslint 9.39.5 and @typescript-eslint/parser 8.71.2 (their dependencies as npm had them before 2026-10-14), ran its 2 rules',
+    );
+    expect(md).toContain(
+      '| Model | Arm | Runs | Files linted | Findings / run | `no-restyle` | `no-raw-colors` |',
+    );
+    expect(md).toContain('| a | all | 4 | 3 | 0.75 [');
+    expect(md).toContain('| 0.75 | 0.00 |');
+    expect(md).toContain('| a | all | 4 | -3.25 [');
+    expect(md).toContain(
+      '1 file could not be linted (a parse error, or a file ESLint ignored) and count 0: `b-none-t1`.',
+    );
+    expect(md).not.toContain('-0.00');
+  });
+
+  it('scored every file the standard run created, and its tables come from those scores', () => {
+    const out = path.join(bench, 'results/standard');
+    const runs = fs
+      .readdirSync(path.join(out, 'runs'))
+      .map((id) => readJson(path.join(out, 'runs', id, 'result.json')) as RunResult);
+    const scores = readJson(path.join(out, 'shadcn-lint.json')) as {
+      scorer: ShadcnLintScorer;
+      runs: Record<string, ShadcnLintRun & { messages: { message: string }[] }>;
+    };
+    expect(Object.keys(scores.runs).sort()).toEqual(
+      runs
+        .filter((r) => isScored(r) && r.created)
+        .map((r) => r.id)
+        .sort(),
+    );
+    const { $comment: _comment, ...spec } = readJson(
+      path.join(bench, 'config/shadcn-lint.json'),
+    ) as ShadcnLintScorer & { $comment: string };
+    expect(scores.scorer).toEqual(spec);
+    // Paths in the messages are relative to the repository: none names this machine's folders
+    // (a work folder reached through a symlink once put them there).
+    const absolute = Object.values(scores.runs).flatMap((run) =>
+      run.messages
+        .map((m) => m.message)
+        .filter((m) =>
+          /\/repos\/[^/]+\/src\/|(?:^|[\s"'(])\/(?:private|var|tmp|Users|home)\//.test(m),
+        ),
+    );
+    expect(absolute).toEqual([]);
+    const { shadcnLint } = readJson(path.join(out, 'results.json')) as {
+      shadcnLint: { scorer: ShadcnLintScorer; rows: ShadcnLintRow[]; deltas: ShadcnLintDelta[] };
+    };
+    const values = (rows: readonly ShadcnLintRow[]) =>
+      rows.map((r) => [r.model, r.arm, r.runs, r.linted, r.findings.value, r.byRule]);
+    const rules = scores.scorer.rules;
+    expect(values(shadcnLint.rows)).toEqual(
+      values(aggregateShadcnLint(runs, scores.runs, rules, { iterations: 1 })),
+    );
+    expect(shadcnLint.deltas.map((d) => [d.model, d.arm, d.findings.value])).toEqual(
+      shadcnLintDeltas(runs, scores.runs, rules, 'none', { iterations: 1 }).map((d) => [
+        d.model,
+        d.arm,
+        d.findings.value,
+      ]),
+    );
+    const md = fs.readFileSync(path.join(out, 'results.md'), 'utf8');
+    expect(md).toContain(
+      `\n## Independent scorer: @shadcn/lint\n\n${renderShadcnLint(shadcnLint.scorer, shadcnLint.rows, shadcnLint.deltas, scores.runs)}`,
+    );
+    // One blank line between sections, as everywhere else in the file.
+    expect(md).not.toContain('\n\n\n');
   });
 });
 
@@ -1081,6 +1289,15 @@ describe('configuration', () => {
     for (const t of tasks.filter((x) => x.repo === 'chatbot')) {
       expect(v1.find((v) => v.id === t.id)?.prompt).toBe(t.prompt);
     }
+  });
+
+  it('pins the independent scorer’s packages, the date their dependencies resolve to, and its rules', () => {
+    const spec = readJson(path.join(bench, 'config/shadcn-lint.json')) as ShadcnLintScorer;
+    // The results name the first package as the scorer.
+    expect(Object.keys(spec.packages)[0]).toBe('@shadcn/lint');
+    for (const version of Object.values(spec.packages)) expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(spec.before).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(new Set(spec.rules).size).toBe(6);
   });
 
   it('cites a source for every paid model’s price', () => {

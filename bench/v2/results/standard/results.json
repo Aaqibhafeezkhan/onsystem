@@ -3370,5 +3370,2394 @@
         "high": -0.4
       }
     }
-  ]
+  ],
+  "shadcnLint": {
+    "scorer": {
+      "packages": {
+        "@shadcn/lint": "0.2.1",
+        "eslint": "9.39.5",
+        "@typescript-eslint/parser": "8.71.2"
+      },
+      "before": "2026-10-14",
+      "rules": [
+        "no-restyle",
+        "no-raw-colors",
+        "no-arbitrary-values",
+        "no-inline-styles",
+        "no-unknown-classes",
+        "require-static-classes"
+      ]
+    },
+    "rows": [
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "none",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 4.133333333333334,
+          "low": 2.2,
+          "high": 6.400416666666661
+        },
+        "byRule": {
+          "no-restyle": 2.95,
+          "no-raw-colors": 0.9833333333333333,
+          "no-arbitrary-values": 0.13333333333333333,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.016666666666666666,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "skill",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 2.5,
+          "low": 1.2833333333333334,
+          "high": 3.9337499999999936
+        },
+        "byRule": {
+          "no-restyle": 1.9666666666666666,
+          "no-raw-colors": 0.4666666666666667,
+          "no-arbitrary-values": 0.016666666666666666,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "mcp",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 1.8333333333333333,
+          "low": 0.8333333333333334,
+          "high": 3.0166666666666666
+        },
+        "byRule": {
+          "no-restyle": 1.3833333333333333,
+          "no-raw-colors": 0.38333333333333336,
+          "no-arbitrary-values": 0.016666666666666666,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "hook",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 3.5,
+          "low": 2.033333333333333,
+          "high": 5.25
+        },
+        "byRule": {
+          "no-restyle": 2.7333333333333334,
+          "no-raw-colors": 0.6666666666666666,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "all",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 1.3166666666666667,
+          "low": 0.6166666666666667,
+          "high": 2.1666666666666665
+        },
+        "byRule": {
+          "no-restyle": 1.0666666666666667,
+          "no-raw-colors": 0.21666666666666667,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.03333333333333333
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "none",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 3.35,
+          "low": 1.75,
+          "high": 5.2
+        },
+        "byRule": {
+          "no-restyle": 1.8,
+          "no-raw-colors": 1.5,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "skill",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 1.6,
+          "low": 0.7,
+          "high": 2.65
+        },
+        "byRule": {
+          "no-restyle": 1,
+          "no-raw-colors": 0.5,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "mcp",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 0.8,
+          "low": 0.2,
+          "high": 1.65
+        },
+        "byRule": {
+          "no-restyle": 0.4,
+          "no-raw-colors": 0.35,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "hook",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 2.6,
+          "low": 1.25,
+          "high": 4.2
+        },
+        "byRule": {
+          "no-restyle": 1.8,
+          "no-raw-colors": 0.75,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "all",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 0.75,
+          "low": 0.25,
+          "high": 1.35
+        },
+        "byRule": {
+          "no-restyle": 0.5,
+          "no-raw-colors": 0.2,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "none",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 7.733333333333333,
+          "low": 5.283333333333333,
+          "high": 10.316666666666666
+        },
+        "byRule": {
+          "no-restyle": 4.1,
+          "no-raw-colors": 3.466666666666667,
+          "no-arbitrary-values": 0.1,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.05,
+          "require-static-classes": 0.016666666666666666
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "skill",
+        "runs": 60,
+        "linted": 59,
+        "findings": {
+          "value": 6.75,
+          "low": 4.383333333333334,
+          "high": 9.233333333333333
+        },
+        "byRule": {
+          "no-restyle": 3.7333333333333334,
+          "no-raw-colors": 2.9,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.05,
+          "require-static-classes": 0.016666666666666666
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "mcp",
+        "runs": 60,
+        "linted": 58,
+        "findings": {
+          "value": 5.733333333333333,
+          "low": 3.5833333333333335,
+          "high": 8.183333333333334
+        },
+        "byRule": {
+          "no-restyle": 4.183333333333334,
+          "no-raw-colors": 1.4666666666666666,
+          "no-arbitrary-values": 0.08333333333333333,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "hook",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 5.666666666666667,
+          "low": 3.3333333333333335,
+          "high": 8.300416666666662
+        },
+        "byRule": {
+          "no-restyle": 3.9166666666666665,
+          "no-raw-colors": 1.6333333333333333,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.03333333333333333,
+          "require-static-classes": 0.03333333333333333
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "all",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 5.983333333333333,
+          "low": 3.8666666666666667,
+          "high": 8.166666666666666
+        },
+        "byRule": {
+          "no-restyle": 4.05,
+          "no-raw-colors": 1.7833333333333334,
+          "no-arbitrary-values": 0.08333333333333333,
+          "no-inline-styles": 0.03333333333333333,
+          "no-unknown-classes": 0.016666666666666666,
+          "require-static-classes": 0.016666666666666666
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "none",
+        "runs": 20,
+        "linted": 7,
+        "findings": {
+          "value": 3.45,
+          "low": 1,
+          "high": 6.55
+        },
+        "byRule": {
+          "no-restyle": 2.45,
+          "no-raw-colors": 0.85,
+          "no-arbitrary-values": 0.1,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "skill",
+        "runs": 20,
+        "linted": 4,
+        "findings": {
+          "value": 1.1,
+          "low": 0.05,
+          "high": 2.9
+        },
+        "byRule": {
+          "no-restyle": 0.7,
+          "no-raw-colors": 0.4,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "mcp",
+        "runs": 20,
+        "linted": 7,
+        "findings": {
+          "value": 2.1,
+          "low": 0.4,
+          "high": 4.2
+        },
+        "byRule": {
+          "no-restyle": 1.25,
+          "no-raw-colors": 0.8,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "hook",
+        "runs": 20,
+        "linted": 8,
+        "findings": {
+          "value": 3.65,
+          "low": 1.3,
+          "high": 6.4
+        },
+        "byRule": {
+          "no-restyle": 2.85,
+          "no-raw-colors": 0.8,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "all",
+        "runs": 20,
+        "linted": 9,
+        "findings": {
+          "value": 1.8,
+          "low": 0.7,
+          "high": 3.05
+        },
+        "byRule": {
+          "no-restyle": 1.75,
+          "no-raw-colors": 0,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "none",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 4.7,
+          "low": 2.8333333333333335,
+          "high": 6.7
+        },
+        "byRule": {
+          "no-restyle": 2.65,
+          "no-raw-colors": 1.9333333333333333,
+          "no-arbitrary-values": 0.06666666666666667,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "skill",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 3.15,
+          "low": 1.75,
+          "high": 4.683333333333334
+        },
+        "byRule": {
+          "no-restyle": 1.7666666666666666,
+          "no-raw-colors": 1.2666666666666666,
+          "no-arbitrary-values": 0.06666666666666667,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "mcp",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 2.466666666666667,
+          "low": 1.25,
+          "high": 3.9
+        },
+        "byRule": {
+          "no-restyle": 1.9166666666666667,
+          "no-raw-colors": 0.4666666666666667,
+          "no-arbitrary-values": 0.03333333333333333,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "hook",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 3.9,
+          "low": 2.2333333333333334,
+          "high": 5.716666666666667
+        },
+        "byRule": {
+          "no-restyle": 2.8,
+          "no-raw-colors": 1,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "all",
+        "runs": 60,
+        "linted": 60,
+        "findings": {
+          "value": 2.0166666666666666,
+          "low": 1,
+          "high": 3.2
+        },
+        "byRule": {
+          "no-restyle": 1.65,
+          "no-raw-colors": 0.31666666666666665,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "none",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 3.1,
+          "low": 1.15,
+          "high": 5.85
+        },
+        "byRule": {
+          "no-restyle": 2.45,
+          "no-raw-colors": 0.55,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "skill",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 1.75,
+          "low": 0.4,
+          "high": 3.6
+        },
+        "byRule": {
+          "no-restyle": 1.75,
+          "no-raw-colors": 0,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "mcp",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 1.35,
+          "low": 0.6,
+          "high": 2.2
+        },
+        "byRule": {
+          "no-restyle": 1.3,
+          "no-raw-colors": 0,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "hook",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 3.3,
+          "low": 1.15,
+          "high": 6.15
+        },
+        "byRule": {
+          "no-restyle": 3.15,
+          "no-raw-colors": 0.05,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "all",
+        "runs": 20,
+        "linted": 20,
+        "findings": {
+          "value": 1.15,
+          "low": 0.45,
+          "high": 2.1
+        },
+        "byRule": {
+          "no-restyle": 1.05,
+          "no-raw-colors": 0,
+          "no-arbitrary-values": 0,
+          "no-inline-styles": 0.05,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "none",
+        "runs": 60,
+        "linted": 47,
+        "findings": {
+          "value": 3.3,
+          "low": 1.7666666666666666,
+          "high": 4.983749999999994
+        },
+        "byRule": {
+          "no-restyle": 2.2333333333333334,
+          "no-raw-colors": 0.9666666666666667,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.05
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "skill",
+        "runs": 60,
+        "linted": 44,
+        "findings": {
+          "value": 1.4833333333333334,
+          "low": 0.7,
+          "high": 2.4166666666666665
+        },
+        "byRule": {
+          "no-restyle": 1.15,
+          "no-raw-colors": 0.3,
+          "no-arbitrary-values": 0.016666666666666666,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.016666666666666666
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "mcp",
+        "runs": 60,
+        "linted": 47,
+        "findings": {
+          "value": 1.4166666666666667,
+          "low": 0.6333333333333333,
+          "high": 2.3333333333333335
+        },
+        "byRule": {
+          "no-restyle": 0.9833333333333333,
+          "no-raw-colors": 0.38333333333333336,
+          "no-arbitrary-values": 0.03333333333333333,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.016666666666666666
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "hook",
+        "runs": 60,
+        "linted": 48,
+        "findings": {
+          "value": 3.183333333333333,
+          "low": 1.5833333333333333,
+          "high": 5.016666666666667
+        },
+        "byRule": {
+          "no-restyle": 2.6,
+          "no-raw-colors": 0.5333333333333333,
+          "no-arbitrary-values": 0.016666666666666666,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.03333333333333333
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "all",
+        "runs": 60,
+        "linted": 49,
+        "findings": {
+          "value": 1.2333333333333334,
+          "low": 0.5833333333333334,
+          "high": 2.0166666666666666
+        },
+        "byRule": {
+          "no-restyle": 1.1,
+          "no-raw-colors": 0.06666666666666667,
+          "no-arbitrary-values": 0.016666666666666666,
+          "no-inline-styles": 0.016666666666666666,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.03333333333333333
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "none",
+        "runs": 180,
+        "linted": 180,
+        "findings": {
+          "value": 5.522222222222222,
+          "low": 3.7276388888888903,
+          "high": 7.361111111111111
+        },
+        "byRule": {
+          "no-restyle": 3.2333333333333334,
+          "no-raw-colors": 2.1277777777777778,
+          "no-arbitrary-values": 0.1,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.022222222222222223,
+          "require-static-classes": 0.03888888888888889
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "skill",
+        "runs": 180,
+        "linted": 179,
+        "findings": {
+          "value": 4.133333333333334,
+          "low": 2.761111111111111,
+          "high": 5.511249999999998
+        },
+        "byRule": {
+          "no-restyle": 2.488888888888889,
+          "no-raw-colors": 1.5444444444444445,
+          "no-arbitrary-values": 0.044444444444444446,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.016666666666666666,
+          "require-static-classes": 0.03888888888888889
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "mcp",
+        "runs": 180,
+        "linted": 178,
+        "findings": {
+          "value": 3.3444444444444446,
+          "low": 2.0944444444444446,
+          "high": 4.777916666666664
+        },
+        "byRule": {
+          "no-restyle": 2.4944444444444445,
+          "no-raw-colors": 0.7722222222222223,
+          "no-arbitrary-values": 0.044444444444444446,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.03333333333333333
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "hook",
+        "runs": 180,
+        "linted": 180,
+        "findings": {
+          "value": 4.355555555555555,
+          "low": 2.7666666666666666,
+          "high": 6.094583333333331
+        },
+        "byRule": {
+          "no-restyle": 3.15,
+          "no-raw-colors": 1.1,
+          "no-arbitrary-values": 0.05,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.011111111111111112,
+          "require-static-classes": 0.044444444444444446
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "all",
+        "runs": 180,
+        "linted": 180,
+        "findings": {
+          "value": 3.1055555555555556,
+          "low": 2.0722222222222224,
+          "high": 4.183333333333334
+        },
+        "byRule": {
+          "no-restyle": 2.2555555555555555,
+          "no-raw-colors": 0.7722222222222223,
+          "no-arbitrary-values": 0.027777777777777776,
+          "no-inline-styles": 0.011111111111111112,
+          "no-unknown-classes": 0.005555555555555556,
+          "require-static-classes": 0.03333333333333333
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "none",
+        "runs": 240,
+        "linted": 227,
+        "findings": {
+          "value": 4.966666666666667,
+          "low": 3.3,
+          "high": 6.6875
+        },
+        "byRule": {
+          "no-restyle": 2.9833333333333334,
+          "no-raw-colors": 1.8375,
+          "no-arbitrary-values": 0.0875,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.016666666666666666,
+          "require-static-classes": 0.041666666666666664
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "skill",
+        "runs": 240,
+        "linted": 223,
+        "findings": {
+          "value": 3.470833333333333,
+          "low": 2.2875,
+          "high": 4.662604166666664
+        },
+        "byRule": {
+          "no-restyle": 2.154166666666667,
+          "no-raw-colors": 1.2333333333333334,
+          "no-arbitrary-values": 0.0375,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.0125,
+          "require-static-classes": 0.03333333333333333
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "mcp",
+        "runs": 240,
+        "linted": 225,
+        "findings": {
+          "value": 2.8625,
+          "low": 1.8,
+          "high": 4.083333333333333
+        },
+        "byRule": {
+          "no-restyle": 2.1166666666666667,
+          "no-raw-colors": 0.675,
+          "no-arbitrary-values": 0.041666666666666664,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0,
+          "require-static-classes": 0.029166666666666667
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "hook",
+        "runs": 240,
+        "linted": 228,
+        "findings": {
+          "value": 4.0625,
+          "low": 2.55,
+          "high": 5.754166666666666
+        },
+        "byRule": {
+          "no-restyle": 3.0125,
+          "no-raw-colors": 0.9583333333333334,
+          "no-arbitrary-values": 0.041666666666666664,
+          "no-inline-styles": 0,
+          "no-unknown-classes": 0.008333333333333333,
+          "require-static-classes": 0.041666666666666664
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "all",
+        "runs": 240,
+        "linted": 229,
+        "findings": {
+          "value": 2.6375,
+          "low": 1.7583333333333333,
+          "high": 3.5833333333333335
+        },
+        "byRule": {
+          "no-restyle": 1.9666666666666666,
+          "no-raw-colors": 0.5958333333333333,
+          "no-arbitrary-values": 0.025,
+          "no-inline-styles": 0.0125,
+          "no-unknown-classes": 0.004166666666666667,
+          "require-static-classes": 0.03333333333333333
+        }
+      }
+    ],
+    "deltas": [
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "skill",
+        "pairs": 60,
+        "findings": {
+          "value": -1.6333333333333333,
+          "low": -3.1166666666666667,
+          "high": -0.26666666666666666
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.9833333333333333,
+            "low": -2.1666666666666665,
+            "high": 0.05
+          },
+          "no-raw-colors": {
+            "value": -0.5166666666666667,
+            "low": -1.2666666666666666,
+            "high": 0.2
+          },
+          "no-arbitrary-values": {
+            "value": -0.11666666666666667,
+            "low": -0.25,
+            "high": -0.016666666666666666
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "mcp",
+        "pairs": 60,
+        "findings": {
+          "value": -2.3,
+          "low": -4.083333333333333,
+          "high": -0.7
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.5666666666666667,
+            "low": -3.183333333333333,
+            "high": -0.26666666666666666
+          },
+          "no-raw-colors": {
+            "value": -0.6,
+            "low": -1.3833333333333333,
+            "high": 0.18333333333333332
+          },
+          "no-arbitrary-values": {
+            "value": -0.11666666666666667,
+            "low": -0.23333333333333334,
+            "high": -0.03291666666667273
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "hook",
+        "pairs": 60,
+        "findings": {
+          "value": -0.6333333333333333,
+          "low": -1.6666666666666667,
+          "high": 0.25
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.21666666666666667,
+            "low": -1.15,
+            "high": 0.5
+          },
+          "no-raw-colors": {
+            "value": -0.31666666666666665,
+            "low": -0.7833333333333333,
+            "high": 0.1
+          },
+          "no-arbitrary-values": {
+            "value": -0.08333333333333333,
+            "low": -0.16666666666666666,
+            "high": -0.016666666666666666
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "claude-haiku-5-5",
+        "arm": "all",
+        "pairs": 60,
+        "findings": {
+          "value": -2.816666666666667,
+          "low": -4.566666666666666,
+          "high": -1.2166666666666666
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.8833333333333333,
+            "low": -3.5166666666666666,
+            "high": -0.55
+          },
+          "no-raw-colors": {
+            "value": -0.7666666666666667,
+            "low": -1.55,
+            "high": -0.03333333333333333
+          },
+          "no-arbitrary-values": {
+            "value": -0.13333333333333333,
+            "low": -0.26666666666666666,
+            "high": -0.03291666666667273
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "skill",
+        "pairs": 20,
+        "findings": {
+          "value": -1.75,
+          "low": -3.5,
+          "high": -0.3
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.8,
+            "low": -1.95,
+            "high": 0.1
+          },
+          "no-raw-colors": {
+            "value": -1,
+            "low": -2.35,
+            "high": -0.15
+          },
+          "no-arbitrary-values": {
+            "value": 0.05,
+            "low": 0,
+            "high": 0.15
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "mcp",
+        "pairs": 20,
+        "findings": {
+          "value": -2.55,
+          "low": -4.35,
+          "high": -1
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.4,
+            "low": -2.8,
+            "high": -0.25
+          },
+          "no-raw-colors": {
+            "value": -1.15,
+            "low": -2.6,
+            "high": -0.15
+          },
+          "no-arbitrary-values": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "hook",
+        "pairs": 20,
+        "findings": {
+          "value": -0.75,
+          "low": -1.85,
+          "high": 0.15
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": 0,
+            "low": -0.4,
+            "high": 0.35
+          },
+          "no-raw-colors": {
+            "value": -0.75,
+            "low": -1.6,
+            "high": -0.1
+          },
+          "no-arbitrary-values": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "arm": "all",
+        "pairs": 20,
+        "findings": {
+          "value": -2.6,
+          "low": -4.3,
+          "high": -1.2
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.3,
+            "low": -2.65,
+            "high": -0.25
+          },
+          "no-raw-colors": {
+            "value": -1.3,
+            "low": -2.7,
+            "high": -0.3
+          },
+          "no-arbitrary-values": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "skill",
+        "pairs": 60,
+        "findings": {
+          "value": -0.9833333333333333,
+          "low": -2.1166666666666667,
+          "high": 0.11666666666666667
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.36666666666666664,
+            "low": -1.1166666666666667,
+            "high": 0.4166666666666667
+          },
+          "no-raw-colors": {
+            "value": -0.5666666666666667,
+            "low": -1.2333333333333334,
+            "high": -0.06666666666666667
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.13333333333333333,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "mcp",
+        "pairs": 60,
+        "findings": {
+          "value": -2,
+          "low": -4.033333333333333,
+          "high": 0.11666666666666667
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": 0.08333333333333333,
+            "low": -0.95,
+            "high": 1.4666666666666666
+          },
+          "no-raw-colors": {
+            "value": -2,
+            "low": -3.35,
+            "high": -0.8333333333333334
+          },
+          "no-arbitrary-values": {
+            "value": -0.016666666666666666,
+            "low": -0.1,
+            "high": 0.05
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "hook",
+        "pairs": 60,
+        "findings": {
+          "value": -2.066666666666667,
+          "low": -4.033333333333333,
+          "high": -0.016666666666666666
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.18333333333333332,
+            "low": -1.3833333333333333,
+            "high": 1.3166666666666667
+          },
+          "no-raw-colors": {
+            "value": -1.8333333333333333,
+            "low": -2.8833333333333333,
+            "high": -0.9166666666666666
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.13333333333333333,
+            "high": 0.03333333333333333
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0.016666666666666666,
+            "low": 0,
+            "high": 0.05
+          }
+        }
+      },
+      {
+        "model": "gemini-3.5-flash-lite",
+        "arm": "all",
+        "pairs": 60,
+        "findings": {
+          "value": -1.75,
+          "low": -3.2333333333333334,
+          "high": -0.38333333333333336
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.05,
+            "low": -0.8666666666666667,
+            "high": 0.8
+          },
+          "no-raw-colors": {
+            "value": -1.6833333333333333,
+            "low": -2.6333333333333333,
+            "high": -0.8333333333333334
+          },
+          "no-arbitrary-values": {
+            "value": -0.016666666666666666,
+            "low": -0.1,
+            "high": 0.05
+          },
+          "no-inline-styles": {
+            "value": 0.03333333333333333,
+            "low": 0,
+            "high": 0.1
+          },
+          "no-unknown-classes": {
+            "value": -0.03333333333333333,
+            "low": -0.15,
+            "high": 0.05
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "skill",
+        "pairs": 20,
+        "findings": {
+          "value": -2.35,
+          "low": -5.5,
+          "high": 0.05
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.75,
+            "low": -3.9,
+            "high": 0
+          },
+          "no-raw-colors": {
+            "value": -0.45,
+            "low": -1.4,
+            "high": 0.2
+          },
+          "no-arbitrary-values": {
+            "value": -0.1,
+            "low": -0.3,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "mcp",
+        "pairs": 20,
+        "findings": {
+          "value": -1.35,
+          "low": -4.05,
+          "high": 1.4
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.2,
+            "low": -2.6,
+            "high": 0
+          },
+          "no-raw-colors": {
+            "value": -0.05,
+            "low": -1.65,
+            "high": 2.1
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "hook",
+        "pairs": 20,
+        "findings": {
+          "value": 0.2,
+          "low": -3.5,
+          "high": 3.65
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": 0.4,
+            "low": -2.2,
+            "high": 2.95
+          },
+          "no-raw-colors": {
+            "value": -0.05,
+            "low": -1.65,
+            "high": 2.1
+          },
+          "no-arbitrary-values": {
+            "value": -0.1,
+            "low": -0.3,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "arm": "all",
+        "pairs": 20,
+        "findings": {
+          "value": -1.65,
+          "low": -3.85,
+          "high": 0.05
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.7,
+            "low": -2.05,
+            "high": 0.4
+          },
+          "no-raw-colors": {
+            "value": -0.85,
+            "low": -1.85,
+            "high": 0
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "skill",
+        "pairs": 60,
+        "findings": {
+          "value": -1.55,
+          "low": -2.71708333333333,
+          "high": -0.35
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.8833333333333333,
+            "low": -1.5833333333333333,
+            "high": -0.26666666666666666
+          },
+          "no-raw-colors": {
+            "value": -0.6666666666666666,
+            "low": -1.6170833333333297,
+            "high": 0.2670833333333273
+          },
+          "no-arbitrary-values": {
+            "value": 0,
+            "low": -0.06666666666666667,
+            "high": 0.08333333333333333
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "mcp",
+        "pairs": 60,
+        "findings": {
+          "value": -2.2333333333333334,
+          "low": -3.56708333333333,
+          "high": -1.0333333333333334
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.7333333333333333,
+            "low": -1.5833333333333333,
+            "high": 0.08333333333333333
+          },
+          "no-raw-colors": {
+            "value": -1.4666666666666666,
+            "low": -2.783333333333333,
+            "high": -0.4
+          },
+          "no-arbitrary-values": {
+            "value": -0.03333333333333333,
+            "low": -0.08333333333333333,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "hook",
+        "pairs": 60,
+        "findings": {
+          "value": -0.8,
+          "low": -2.3,
+          "high": 0.7833333333333333
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": 0.15,
+            "low": -0.5666666666666667,
+            "high": 1.2333333333333334
+          },
+          "no-raw-colors": {
+            "value": -0.9333333333333333,
+            "low": -2.1666666666666665,
+            "high": 0.11666666666666667
+          },
+          "no-arbitrary-values": {
+            "value": -0.016666666666666666,
+            "low": -0.08333333333333333,
+            "high": 0.03333333333333333
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6-luna",
+        "arm": "all",
+        "pairs": 60,
+        "findings": {
+          "value": -2.683333333333333,
+          "low": -4.283333333333333,
+          "high": -1.2666666666666666
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1,
+            "low": -1.95,
+            "high": -0.21666666666666667
+          },
+          "no-raw-colors": {
+            "value": -1.6166666666666667,
+            "low": -3.183333333333333,
+            "high": -0.3
+          },
+          "no-arbitrary-values": {
+            "value": -0.06666666666666667,
+            "low": -0.13333333333333333,
+            "high": -0.016666666666666666
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "skill",
+        "pairs": 20,
+        "findings": {
+          "value": -1.35,
+          "low": -2.601249999999989,
+          "high": -0.25
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.7,
+            "low": -1.8,
+            "high": 0.2
+          },
+          "no-raw-colors": {
+            "value": -0.55,
+            "low": -1.15,
+            "high": -0.1
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "mcp",
+        "pairs": 20,
+        "findings": {
+          "value": -1.75,
+          "low": -4.601249999999989,
+          "high": 0.25
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.15,
+            "low": -4,
+            "high": 0.75
+          },
+          "no-raw-colors": {
+            "value": -0.55,
+            "low": -1.15,
+            "high": -0.1
+          },
+          "no-arbitrary-values": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "hook",
+        "pairs": 20,
+        "findings": {
+          "value": 0.2,
+          "low": -0.25,
+          "high": 0.7
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": 0.7,
+            "low": 0.15,
+            "high": 1.6
+          },
+          "no-raw-colors": {
+            "value": -0.5,
+            "low": -1.1,
+            "high": -0.05
+          },
+          "no-arbitrary-values": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "gpt-6.1-sol",
+        "arm": "all",
+        "pairs": 20,
+        "findings": {
+          "value": -1.95,
+          "low": -4.7,
+          "high": -0.15
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.4,
+            "low": -4.05,
+            "high": 0.2
+          },
+          "no-raw-colors": {
+            "value": -0.55,
+            "low": -1.15,
+            "high": -0.1
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.15,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0.05,
+            "low": 0,
+            "high": 0.15
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "skill",
+        "pairs": 60,
+        "findings": {
+          "value": -1.8166666666666667,
+          "low": -2.9166666666666665,
+          "high": -0.8833333333333333
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.0833333333333333,
+            "low": -1.95,
+            "high": -0.3333333333333333
+          },
+          "no-raw-colors": {
+            "value": -0.6666666666666666,
+            "low": -1.2333333333333334,
+            "high": -0.2
+          },
+          "no-arbitrary-values": {
+            "value": -0.03333333333333333,
+            "low": -0.1,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.03333333333333333,
+            "low": -0.1,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "mcp",
+        "pairs": 60,
+        "findings": {
+          "value": -1.8833333333333333,
+          "low": -3.4,
+          "high": -0.6
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.25,
+            "low": -2.5833333333333335,
+            "high": -0.26666666666666666
+          },
+          "no-raw-colors": {
+            "value": -0.5833333333333334,
+            "low": -1.25,
+            "high": -0.05
+          },
+          "no-arbitrary-values": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.03333333333333333,
+            "low": -0.1,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "hook",
+        "pairs": 60,
+        "findings": {
+          "value": -0.11666666666666667,
+          "low": -1.45,
+          "high": 1
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": 0.36666666666666664,
+            "low": -0.5333333333333333,
+            "high": 1.2666666666666666
+          },
+          "no-raw-colors": {
+            "value": -0.43333333333333335,
+            "low": -1.15,
+            "high": 0.18333333333333332
+          },
+          "no-arbitrary-values": {
+            "value": -0.03333333333333333,
+            "low": -0.1,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "mid models",
+        "arm": "all",
+        "pairs": 60,
+        "findings": {
+          "value": -2.066666666666667,
+          "low": -3.5,
+          "high": -0.8833333333333333
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.1333333333333333,
+            "low": -2.433333333333333,
+            "high": -0.23333333333333334
+          },
+          "no-raw-colors": {
+            "value": -0.9,
+            "low": -1.6166666666666667,
+            "high": -0.2833333333333333
+          },
+          "no-arbitrary-values": {
+            "value": -0.03333333333333333,
+            "low": -0.1,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0.016666666666666666,
+            "low": 0,
+            "high": 0.05
+          },
+          "no-unknown-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "skill",
+        "pairs": 180,
+        "findings": {
+          "value": -1.3888888888888888,
+          "low": -2.188888888888889,
+          "high": -0.6
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.7444444444444445,
+            "low": -1.3445833333333321,
+            "high": -0.2388888888888889
+          },
+          "no-raw-colors": {
+            "value": -0.5833333333333334,
+            "low": -1.1777777777777778,
+            "high": -0.022222222222222223
+          },
+          "no-arbitrary-values": {
+            "value": -0.05555555555555555,
+            "low": -0.12222222222222222,
+            "high": -0.005555555555555556
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.005555555555555556,
+            "low": -0.016666666666666666,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "mcp",
+        "pairs": 180,
+        "findings": {
+          "value": -2.1777777777777776,
+          "low": -3.283333333333333,
+          "high": -1.1277777777777778
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.7388888888888889,
+            "low": -1.45,
+            "high": -0.13333333333333333
+          },
+          "no-raw-colors": {
+            "value": -1.3555555555555556,
+            "low": -2.2944444444444443,
+            "high": -0.5055555555555555
+          },
+          "no-arbitrary-values": {
+            "value": -0.05555555555555555,
+            "low": -0.12222222222222222,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.022222222222222223,
+            "low": -0.06111111111111111,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.005555555555555556,
+            "low": -0.016666666666666666,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "hook",
+        "pairs": 180,
+        "findings": {
+          "value": -1.1666666666666667,
+          "low": -2.138888888888889,
+          "high": -0.25
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.08333333333333333,
+            "low": -0.6722222222222223,
+            "high": 0.4834722222222202
+          },
+          "no-raw-colors": {
+            "value": -1.0277777777777777,
+            "low": -1.8111111111111111,
+            "high": -0.3554166666666687
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.1,
+            "high": -0.011111111111111112
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.011111111111111112,
+            "low": -0.027777777777777776,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0.005555555555555556,
+            "low": 0,
+            "high": 0.016666666666666666
+          }
+        }
+      },
+      {
+        "model": "small models",
+        "arm": "all",
+        "pairs": 180,
+        "findings": {
+          "value": -2.4166666666666665,
+          "low": -3.4166666666666665,
+          "high": -1.4220833333333354
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.9777777777777777,
+            "low": -1.8055555555555556,
+            "high": -0.32222222222222224
+          },
+          "no-raw-colors": {
+            "value": -1.3555555555555556,
+            "low": -2.2444444444444445,
+            "high": -0.5444444444444444
+          },
+          "no-arbitrary-values": {
+            "value": -0.07222222222222222,
+            "low": -0.14444444444444443,
+            "high": -0.011111111111111112
+          },
+          "no-inline-styles": {
+            "value": 0.011111111111111112,
+            "low": 0,
+            "high": 0.03333333333333333
+          },
+          "no-unknown-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.05555555555555555,
+            "high": 0.011111111111111112
+          },
+          "require-static-classes": {
+            "value": -0.005555555555555556,
+            "low": -0.016666666666666666,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "skill",
+        "pairs": 240,
+        "findings": {
+          "value": -1.4958333333333333,
+          "low": -2.283333333333333,
+          "high": -0.7708333333333334
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.8291666666666667,
+            "low": -1.4292708333333324,
+            "high": -0.3125
+          },
+          "no-raw-colors": {
+            "value": -0.6041666666666666,
+            "low": -1.1166666666666667,
+            "high": -0.125
+          },
+          "no-arbitrary-values": {
+            "value": -0.05,
+            "low": -0.1,
+            "high": -0.0125
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.004166666666666667,
+            "low": -0.0125,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.008333333333333333,
+            "low": -0.025,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "mcp",
+        "pairs": 240,
+        "findings": {
+          "value": -2.1041666666666665,
+          "low": -3.0875,
+          "high": -1.1708333333333334
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -0.8666666666666667,
+            "low": -1.65,
+            "high": -0.2875
+          },
+          "no-raw-colors": {
+            "value": -1.1625,
+            "low": -1.9208333333333334,
+            "high": -0.4583333333333333
+          },
+          "no-arbitrary-values": {
+            "value": -0.04583333333333333,
+            "low": -0.1,
+            "high": 0
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.016666666666666666,
+            "low": -0.04583333333333333,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": -0.0125,
+            "low": -0.0375,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "hook",
+        "pairs": 240,
+        "findings": {
+          "value": -0.9041666666666667,
+          "low": -1.8041666666666667,
+          "high": -0.058333333333333334
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": 0.029166666666666667,
+            "low": -0.49583333333333335,
+            "high": 0.5958333333333333
+          },
+          "no-raw-colors": {
+            "value": -0.8791666666666667,
+            "low": -1.5166666666666666,
+            "high": -0.32083333333333336
+          },
+          "no-arbitrary-values": {
+            "value": -0.04583333333333333,
+            "low": -0.0875,
+            "high": -0.0125
+          },
+          "no-inline-styles": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          },
+          "no-unknown-classes": {
+            "value": -0.008333333333333333,
+            "low": -0.020833333333333332,
+            "high": 0
+          },
+          "require-static-classes": {
+            "value": 0,
+            "low": 0,
+            "high": 0
+          }
+        }
+      },
+      {
+        "model": "all models",
+        "arm": "all",
+        "pairs": 240,
+        "findings": {
+          "value": -2.3291666666666666,
+          "low": -3.279166666666667,
+          "high": -1.375
+        },
+        "byRule": {
+          "no-restyle": {
+            "value": -1.0166666666666666,
+            "low": -1.85,
+            "high": -0.3458333333333333
+          },
+          "no-raw-colors": {
+            "value": -1.2416666666666667,
+            "low": -2.033333333333333,
+            "high": -0.5125
+          },
+          "no-arbitrary-values": {
+            "value": -0.0625,
+            "low": -0.125,
+            "high": -0.0125
+          },
+          "no-inline-styles": {
+            "value": 0.0125,
+            "low": 0,
+            "high": 0.03333333333333333
+          },
+          "no-unknown-classes": {
+            "value": -0.0125,
+            "low": -0.041666666666666664,
+            "high": 0.008333333333333333
+          },
+          "require-static-classes": {
+            "value": -0.008333333333333333,
+            "low": -0.025,
+            "high": 0
+          }
+        }
+      }
+    ]
+  }
 }

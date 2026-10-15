@@ -294,6 +294,145 @@ describe('the README', () => {
     );
     expect(help).not.toContain('bench/agents');
   });
+
+  // GitHub's id for a heading: lower case, punctuation dropped, spaces as hyphens.
+  const githubSlug = (heading: string) =>
+    heading
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s/g, '-');
+
+  it('says what the MCP server and the hook do next to @shadcn/lint, and links its table', () => {
+    const text = section('## Works with @shadcn/lint').replace(/\s+/g, ' ');
+    // Benchmark v2 saw no invented component, prop or variant for the hook to catch (the pitch
+    // test below counts them), so this says what each part does instead.
+    expect(text).toContain(
+      'Its MCP server shows the agent your components and tokens before it writes, and in Claude Code its hook checks every edit.',
+    );
+    expect(text).not.toMatch(/invent/i);
+    const heading = 'Independent scorer: @shadcn/lint';
+    expect(text).toContain(`](bench/v2/results/standard/results.md#${githubSlug(heading)})`);
+    expect(read('bench/v2/results/standard/results.md').split('\n')).toContain(`## ${heading}`);
+  });
+
+  it("quotes bench/v2's independent scorer as results.json has it", () => {
+    interface Interval {
+      value: number;
+      low: number;
+      high: number;
+    }
+    interface Row {
+      model: string;
+      arm: string;
+      findings: Interval;
+      byRule: Record<string, number>;
+    }
+    interface Delta {
+      model: string;
+      arm: string;
+      findings: Interval;
+      byRule: Record<string, Interval>;
+    }
+    const { info, shadcnLint } = JSON.parse(read('bench/v2/results/standard/results.json')) as {
+      info: { onsystem: string };
+      shadcnLint: {
+        scorer: { packages: Record<string, string>; rules: string[] };
+        rows: Row[];
+        deltas: Delta[];
+      };
+    };
+    const pooled = <T extends { model: string; arm: string }>(rows: T[], arm: string): T => {
+      const row = rows.find((r) => r.model === 'all models' && r.arm === arm);
+      expect(row, arm).toBeDefined();
+      return row as T;
+    };
+    const [none, skill, mcp, hook, all] = ['none', 'skill', 'mcp', 'hook', 'all'].map((arm) =>
+      pooled(shadcnLint.rows, arm),
+    ) as [Row, Row, Row, Row, Row];
+    const [dMcp, dHook, dAll] = ['mcp', 'hook', 'all'].map((arm) =>
+      pooled(shadcnLint.deltas, arm),
+    ) as [Delta, Delta, Delta];
+    const rule = (d: Delta, id: string) => {
+      const i = d.byRule[id];
+      expect(i, id).toBeDefined();
+      return i as Interval;
+    };
+    // As the README prints them: two decimals and a real minus sign; differences signed.
+    const num = (x: number) => x.toFixed(2).replace('-', '−');
+    const signed = (x: number) => `${x > 0 ? '+' : ''}${num(x)}`;
+    const interval = (i: Interval, f = num) => `${f(i.value)} [${f(i.low)}, ${f(i.high)}]`;
+
+    const v2 = read('bench/v2/README.md');
+    const start = v2.indexOf('\n## Independent scorer: @shadcn/lint\n');
+    expect(start).toBeGreaterThan(-1);
+    const text = v2.slice(start, v2.indexOf('\n## ', start + 1)).replace(/\s+/g, ' ');
+    const { packages, rules } = shadcnLint.scorer;
+    expect(text).toContain(
+      `[@shadcn/lint](https://github.com/shadcn-ui/lint) ${packages['@shadcn/lint'] ?? ''}, with ESLint ${packages.eslint ?? ''} and @typescript-eslint/parser ${packages['@typescript-eslint/parser'] ?? ''},`,
+    );
+    expect(rules).toHaveLength(6);
+    expect(text).toContain('All six rules are on, each an error at its defaults.');
+    expect(text).toContain(
+      `**On the standard run (onsystem ${info.onsystem}):** @shadcn/lint findings per run, all models, went from ${interval(none.findings)} without onsystem to ${interval(all.findings)} with all three parts, a paired difference of ${interval(dAll.findings, signed)}. With the skill alone ${num(skill.findings.value)}, the MCP server ${num(mcp.findings.value)}, the hook ${num(hook.findings.value)}.`,
+    );
+    const perRun = (id: string) =>
+      `(${num(none.byRule[id] ?? NaN)} → ${num(all.byRule[id] ?? NaN)} per run)`;
+    expect(text).toContain(`\`no-raw-colors\` ${perRun('no-raw-colors')}`);
+    expect(text).toContain(`\`no-restyle\`** ${perRun('no-restyle')}`);
+    expect(text).toContain(
+      `**The hook alone lowers colors, not restyles:** ${interval(dHook.findings, signed)} in all, ${interval(rule(dHook, 'no-raw-colors'), signed)} in \`no-raw-colors\`, ${interval(rule(dHook, 'no-restyle'), signed)} in \`no-restyle\`. The MCP server alone: ${interval(dMcp.findings, signed)}, with ${interval(rule(dMcp, 'no-restyle'), signed)} in \`no-restyle\`.`,
+    );
+    // "Colors, not restyles": the hook's no-raw-colors interval is below 0, its no-restyle one holds 0.
+    expect(rule(dHook, 'no-raw-colors').high).toBeLessThan(0);
+    expect(rule(dHook, 'no-restyle').low).toBeLessThanOrEqual(0);
+    expect(rule(dHook, 'no-restyle').high).toBeGreaterThanOrEqual(0);
+
+    // Where it reads less: what each repository's files got, from the per-run findings.
+    const { runs } = JSON.parse(read('bench/v2/results/standard/shadcn-lint.json')) as {
+      runs: Record<string, { byRule: Record<string, number> }>;
+    };
+    const fired = (repo: string) => {
+      const counts = new Map<string, number>();
+      for (const [id, run] of Object.entries(runs)) {
+        if (id.split('--')[2] !== repo) continue;
+        for (const [r, n] of Object.entries(run.byRule)) counts.set(r, (counts.get(r) ?? 0) + n);
+      }
+      return [...counts.keys()].sort();
+    };
+    expect(text).toContain(
+      "openstatus's points at the app's own folder, not `@openstatus/ui`, so `no-restyle` reports nothing there.",
+    );
+    expect(fired('openstatus')).not.toContain('no-restyle');
+    expect(text).toContain('so only `no-raw-colors` and `no-arbitrary-values` report there');
+    expect(fired('dub')).toEqual(['no-arbitrary-values', 'no-raw-colors']);
+
+    // Classes looked up at runtime: shadcn-website's files that contain palette classes, and how
+    // many of them got one require-static-classes finding and no color finding from either tool.
+    const palette =
+      /(?<![\w-])(?:[a-z0-9-]+:)*-?(?:bg|text|border(?:-[trblxyse])?|ring|ring-offset|outline|divide|from|via|to|fill|stroke|shadow|accent|caret|decoration|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)(?:\/\d+)?(?![\w-])/;
+    let withPalette = 0;
+    let lookedUp = 0;
+    for (const [id, run] of Object.entries(runs)) {
+      if (id.split('--')[2] !== 'shadcn-website') continue;
+      const dir = `bench/v2/results/standard/runs/${id}`;
+      const result = JSON.parse(read(`${dir}/result.json`)) as {
+        file: string;
+        onsystemByRule: Record<string, number>;
+      };
+      if (!palette.test(read(`${dir}/files/${result.file}`))) continue;
+      withPalette += 1;
+      if (
+        run.byRule['require-static-classes'] === 1 &&
+        !run.byRule['no-raw-colors'] &&
+        !result.onsystemByRule['no-hardcoded-color']
+      )
+        lookedUp += 1;
+    }
+    expect(text).toContain(
+      `In shadcn-website, ${lookedUp} of the ${withPalette} output files with palette classes went this way: each got one \`require-static-classes\` finding, no \`no-raw-colors\` and no onsystem color error.`,
+    );
+    expect(lookedUp).toBeGreaterThan(0);
+  });
 });
 
 // The one-line pitch on GitHub, npm, the agent plugins, the MCP Registry and the Marketplace leads

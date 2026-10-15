@@ -306,23 +306,8 @@ export function deltas(
   baseline = 'none',
   options: BootstrapOptions = {},
 ): Delta[] {
-  const unit = (r: RunResult) => `${r.model}\0${r.repo}\0${r.task}\0${r.repeat}`;
-  const base = new Map(
-    results.filter((r) => r.arm === baseline && isScored(r)).map((r) => [unit(r), r]),
-  );
-  const groups = new Map<string, [RunResult, RunResult][]>();
-  const pools = poolKeys(results);
-  for (const r of results) {
-    if (r.arm === baseline || !isScored(r)) continue;
-    const b = base.get(unit(r));
-    if (!b) continue;
-    for (const model of pools(r)) {
-      const key = `${model}\0${r.arm}`;
-      groups.set(key, [...(groups.get(key) ?? []), [b, r]]);
-    }
-  }
   const out: Delta[] = [];
-  for (const [key, pairs] of groups) {
+  for (const [key, pairs] of pairGroups(results, baseline)) {
     const [model = '', arm = ''] = key.split('\0');
     const diff = (pick: (r: RunResult) => number) =>
       pairedDifference(
@@ -340,6 +325,32 @@ export function deltas(
     });
   }
   return out.sort(compareRows);
+}
+
+/**
+ * Each scored run outside the baseline arm with the baseline run of the same model, task and
+ * repeat, grouped by model (and pool) and arm.
+ */
+function pairGroups(
+  results: readonly RunResult[],
+  baseline: string,
+): Map<string, [RunResult, RunResult][]> {
+  const unit = (r: RunResult) => `${r.model}\0${r.repo}\0${r.task}\0${r.repeat}`;
+  const base = new Map(
+    results.filter((r) => r.arm === baseline && isScored(r)).map((r) => [unit(r), r]),
+  );
+  const groups = new Map<string, [RunResult, RunResult][]>();
+  const pools = poolKeys(results);
+  for (const r of results) {
+    if (r.arm === baseline || !isScored(r)) continue;
+    const b = base.get(unit(r));
+    if (!b) continue;
+    for (const model of pools(r)) {
+      const key = `${model}\0${r.arm}`;
+      groups.set(key, [...(groups.get(key) ?? []), [b, r]]);
+    }
+  }
+  return groups;
 }
 
 export const ARM_ORDER = ['none', 'skill', 'mcp', 'hook', 'all'];
@@ -367,8 +378,12 @@ const signedPct = (x: number) => {
   return points > 0 ? `+${points}` : String(points === 0 ? 0 : points);
 };
 const num = (x: number, digits = 1) => (Number.isNaN(x) ? 'n/a' : x.toFixed(digits));
-const signedNum = (x: number, digits: number) =>
-  Number.isNaN(x) ? 'n/a' : `${x > 0 ? '+' : ''}${x.toFixed(digits)}`;
+const signedNum = (x: number, digits: number) => {
+  if (Number.isNaN(x)) return 'n/a';
+  const fixed = x.toFixed(digits);
+  // A difference that rounds to zero is 0, not -0.00.
+  return Number(fixed) === 0 ? (0).toFixed(digits) : `${x > 0 ? '+' : ''}${fixed}`;
+};
 
 export function formatRate(r: Rate): string {
   if (!r.n) return 'n/a';
@@ -579,5 +594,160 @@ export function renderLabelSummary(s: LabelSummary): string {
     `onsystem against the labeller, per file: both found a problem in ${s.agreement.both}, only onsystem in ${s.agreement.onsystemOnly}, only the labeller in ${s.agreement.humanOnly}, neither in ${s.agreement.neither}.`,
     `onsystem's findings judged correct: ${formatRate(s.precision)}${s.precision.unsure ? ` (${s.precision.unsure} debatable, left out)` : ''}.`,
   ];
+  return `${lines.join('\n')}\n`;
+}
+
+// ─── Independent scorer: @shadcn/lint ─────────────────────────────────────────
+
+/** What `run.mjs score --with shadcn-lint` installed and ran, from config/shadcn-lint.json. */
+export interface ShadcnLintScorer {
+  packages: Record<string, string>;
+  before: string;
+  rules: string[];
+}
+
+/** @shadcn/lint on one run's file, as `score` writes it to shadcn-lint.json. Only what aggregation reads. */
+export interface ShadcnLintRun {
+  findings: number;
+  byRule: Record<string, number>;
+  failed?: string | null;
+}
+
+export interface ShadcnLintRow {
+  model: string;
+  arm: string;
+  /** Scored runs. A run that did not create its file counts 0 findings. */
+  runs: number;
+  /** The files linted: runs that created theirs. */
+  linted: number;
+  findings: Interval;
+  /** Mean findings per run, by rule. */
+  byRule: Record<string, number>;
+}
+
+export interface ShadcnLintDelta {
+  model: string;
+  arm: string;
+  pairs: number;
+  findings: Interval;
+  byRule: Record<string, Interval>;
+}
+
+const lintOf = (lint: Record<string, ShadcnLintRun>, r: RunResult) =>
+  r.created ? lint[r.id] : undefined;
+
+/** Findings per run per model and arm, pooled as `aggregate` pools them. */
+export function aggregateShadcnLint(
+  results: readonly RunResult[],
+  lint: Record<string, ShadcnLintRun>,
+  rules: readonly string[],
+  options: BootstrapOptions = {},
+): ShadcnLintRow[] {
+  const groups = new Map<string, RunResult[]>();
+  const pools = poolKeys(results);
+  for (const r of results.filter(isScored)) {
+    for (const model of pools(r)) {
+      const key = `${model}\0${r.arm}`;
+      groups.set(key, [...(groups.get(key) ?? []), r]);
+    }
+  }
+  const rows: ShadcnLintRow[] = [];
+  for (const [key, runs] of groups) {
+    const [model = '', arm = ''] = key.split('\0');
+    const mean = (pick: (r: RunResult) => number) =>
+      runs.reduce((a, r) => a + pick(r), 0) / runs.length;
+    rows.push({
+      model,
+      arm,
+      runs: runs.length,
+      linted: runs.filter((r) => lintOf(lint, r)).length,
+      findings: bootstrapMean(
+        runs.map((r) => ({ cluster: cluster(r), value: lintOf(lint, r)?.findings ?? 0 })),
+        options,
+      ),
+      byRule: Object.fromEntries(
+        rules.map((rule) => [rule, mean((r) => lintOf(lint, r)?.byRule[rule] ?? 0)]),
+      ),
+    });
+  }
+  return rows.sort(compareRows);
+}
+
+/** Each arm against the baseline arm, paired on model, task and repeat, as `deltas` pairs them. */
+export function shadcnLintDeltas(
+  results: readonly RunResult[],
+  lint: Record<string, ShadcnLintRun>,
+  rules: readonly string[],
+  baseline = 'none',
+  options: BootstrapOptions = {},
+): ShadcnLintDelta[] {
+  const out: ShadcnLintDelta[] = [];
+  for (const [key, pairs] of pairGroups(results, baseline)) {
+    const [model = '', arm = ''] = key.split('\0');
+    const diff = (pick: (run: ShadcnLintRun | undefined) => number) =>
+      pairedDifference(
+        pairs.map(([b, t]) => ({
+          cluster: cluster(t),
+          base: pick(lintOf(lint, b)),
+          treated: pick(lintOf(lint, t)),
+        })),
+        options,
+      );
+    out.push({
+      model,
+      arm,
+      pairs: pairs.length,
+      findings: diff((run) => run?.findings ?? 0),
+      byRule: Object.fromEntries(
+        rules.map((rule) => [rule, diff((run) => run?.byRule[rule] ?? 0)]),
+      ),
+    });
+  }
+  return out.sort(compareRows);
+}
+
+/** The independent scorer's section of results.md: what ran, findings per run, and each arm against `none`. */
+export function renderShadcnLint(
+  scorer: ShadcnLintScorer,
+  rows: readonly ShadcnLintRow[],
+  diffs: readonly ShadcnLintDelta[],
+  lint: Record<string, ShadcnLintRun>,
+): string {
+  const [name = '@shadcn/lint', version = '?'] = Object.entries(scorer.packages)[0] ?? [];
+  const others = Object.entries(scorer.packages)
+    .slice(1)
+    .map(([pkg, v]) => `${pkg} ${v}`)
+    .join(' and ');
+  const failed = Object.entries(lint).filter(([, run]) => run.failed);
+  const lines = [
+    `${name} ${version}${others ? `, with ${others}` : ''} (their dependencies as npm had them before ${scorer.before}), ran its ${scorer.rules.length} rules, each an error at its defaults, on the file each run created, at its path in the prepared repository. It is not onsystem, and no arm showed the agent its messages. Findings per run count every scored run, and a run that did not create its file counts 0; intervals as above. \`node bench/v2/run.mjs score --with shadcn-lint --out <dir>\` reruns it. What it does and does not measure: [README](../../README.md#independent-scorer-shadcnlint).`,
+    '',
+    `| Model | Arm | Runs | Files linted | Findings / run | ${scorer.rules.map((r) => `\`${r}\``).join(' | ')} |`,
+    `| --- | --- | --: | --: | --: | ${scorer.rules.map(() => '--:').join(' | ')} |`,
+    ...rows.map(
+      (r) =>
+        `| ${r.model} | ${r.arm} | ${r.runs} | ${r.linted} | ${formatInterval(r.findings, 2)} | ${scorer.rules.map((rule) => num(r.byRule[rule] ?? Number.NaN, 2)).join(' | ')} |`,
+    ),
+    '',
+    'Each arm against `none`, paired on model, task and repeat (findings per run):',
+    '',
+    `| Model | Arm | Pairs | Δ findings / run | ${scorer.rules.map((r) => `Δ \`${r}\``).join(' | ')} |`,
+    `| --- | --- | --: | --: | ${scorer.rules.map(() => '--:').join(' | ')} |`,
+    ...diffs.map(
+      (d) =>
+        `| ${d.model} | ${d.arm} | ${d.pairs} | ${formatSignedInterval(d.findings, 2)} | ${scorer.rules
+          .map((rule) => {
+            const i = d.byRule[rule];
+            return i ? formatSignedInterval(i, 2) : 'n/a';
+          })
+          .join(' | ')} |`,
+    ),
+  ];
+  if (failed.length) {
+    lines.push(
+      '',
+      `${failed.length} file${failed.length === 1 ? '' : 's'} could not be linted (a parse error, or a file ESLint ignored) and count 0: ${failed.map(([id]) => `\`${id}\``).join(', ')}.`,
+    );
+  }
   return `${lines.join('\n')}\n`;
 }
