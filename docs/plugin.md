@@ -11,7 +11,7 @@ The plugin is the fastest way to keep Claude on your design system. It bundles t
 /plugin install onsystem@dgesteves
 ```
 
-## What Claude sees when it invents something
+## What Claude sees when an edit breaks the design system
 
 ```text
 ⏺ Write(app/promo/page.tsx)

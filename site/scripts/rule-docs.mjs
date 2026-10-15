@@ -74,7 +74,7 @@ export const ruleDocs = {
 `,
   },
   'icon-button-accessible-name': {
-    why: 'A button with only an icon is announced as just "button" to screen-reader users. It is the most common accessibility slip in real apps: `check` found 11 in vercel/ai-chatbot and 105 in midday\'s dashboard. The fix guesses the label from the icon (`Trash2` → "Delete").',
+    why: 'A button with only an icon is announced as just "button" to screen-reader users. It is the most common accessibility slip in real apps: `check` found 11 in vercel/ai-chatbot and 105 in midday\'s dashboard. The label is written as a fix only when the icon means one action (`Trash2` → "Delete") or the code says it: an ellipsis on a menu\'s trigger ("More options"), an X in a close part (`DialogClose` → "Close") or one whose `onClick` names the action (`clearSearch()` → "Clear"). Otherwise the message suggests a label without a fix.',
     related: ['prefer-design-system-component', 'no-unknown-prop'],
     bad: `<Button variant="ghost" size="icon">
   <Trash2 />
