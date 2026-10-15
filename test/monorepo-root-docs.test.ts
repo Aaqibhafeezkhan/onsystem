@@ -42,7 +42,7 @@ async function check(cwd: string, ...args: string[]) {
 describe('a root config and baseline (docs/configuration.md#monorepo-roots)', () => {
   it('say which runs read them', () => {
     expect(roots).toContain(
-      'A root config and a root baseline apply to runs from the root: `check` there, and the Claude Code hook, which runs the check from the root when the root holds either file and has no design system of its own',
+      'A root config and a root baseline apply to runs from the root: `check` there, and the Claude Code hook, which, for a project without a baseline of its own, runs the check from the root when the root holds either file and has no design system of its own',
     );
     expect(roots).toContain(
       "A run from a project's folder reads neither: the CLI there, a GitHub Action job with `working-directory: apps/web`, and ESLint run per project",
