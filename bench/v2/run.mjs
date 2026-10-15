@@ -8,17 +8,20 @@
 //                                 [--work <dir>] [--seed 1] [--limit <n>] [--allow-partial] [--keep-workspaces]
 //   node bench/v2/run.mjs report  --out <dir>
 //   node bench/v2/run.mjs labels  --out <dir> [--per-cell 2] [--seed 1] [--force]
+//   node bench/v2/run.mjs score   --with shadcn-lint --out <dir> [--work <dir>]
 //
 // `plan` and the mock matrix need no network and no key. Every other matrix calls paid APIs:
 // it needs the key variables its providers name in config/models.json, and a --max-cost cap.
+// `score` calls no model: it lints the files finished runs wrote with a scorer that is not
+// onsystem (@shadcn/lint, at the versions config/shadcn-lint.json pins), then runs `report`.
 // Run `pnpm build` first: the MCP server, the hook and the scoring use this checkout's dist/cli.js.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { runAgent } from './lib/agent.mjs';
-import { startOnsystemMcp } from './lib/mcp.mjs';
+import { exec, runAgent } from './lib/agent.mjs';
+import { minimalEnv, startOnsystemMcp } from './lib/mcp.mjs';
 import { createMockProvider } from './lib/mock.ts';
 import {
   armParts,
@@ -38,15 +41,20 @@ import {
 } from './lib/prompt.ts';
 import { createProvider } from './lib/providers.ts';
 import { createWorkspace, loadRepos, prepareRepo, repoDirs, scoreWorkspace } from './lib/repo.mjs';
+import { summarizeShadcnLint } from './lib/score.ts';
 import {
   aggregate,
+  aggregateShadcnLint,
   deltas,
+  isScored,
   labelSample,
   labelSummary,
   parseCsv,
   renderLabelSummary,
   renderMarkdown,
+  renderShadcnLint,
   seedOf,
+  shadcnLintDeltas,
   shuffle,
   toCsv,
 } from './lib/stats.ts';
@@ -57,6 +65,8 @@ const ROOT = path.resolve(HERE, '../..');
 const CLI = path.join(ROOT, 'dist', 'cli.js');
 const HOOK = path.join(ROOT, 'plugins', 'onsystem', 'hooks', 'check-ui.mjs');
 const SKILL_FILE = path.join(ROOT, 'plugins', 'onsystem', 'skills', 'onsystem', 'SKILL.md');
+/** Where `score --with shadcn-lint` writes each run's @shadcn/lint findings, in <out>. */
+const SHADCN_LINT = 'shadcn-lint.json';
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
 const { values, positionals } = parseArgs({
@@ -64,6 +74,7 @@ const { values, positionals } = parseArgs({
   options: {
     matrix: { type: 'string' },
     out: { type: 'string' },
+    with: { type: 'string' },
     work: { type: 'string' },
     repos: { type: 'string' },
     'max-cost': { type: 'string' },
@@ -99,7 +110,8 @@ try {
   else if (command === 'run') process.exitCode = await run();
   else if (command === 'report') report(requireOut());
   else if (command === 'labels') labels(requireOut());
-  else fail(`Unknown command "${command}": plan, prepare, run, report or labels.`);
+  else if (command === 'score') await score(requireOut());
+  else fail(`Unknown command "${command}": plan, prepare, run, report, labels or score.`);
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 }
@@ -476,6 +488,121 @@ function checkPrices(runs) {
   }
 }
 
+// ─── score ────────────────────────────────────────────────────────────────────
+
+/**
+ * Lints the file each scored run created with @shadcn/lint, a scorer that is not onsystem and
+ * whose messages no arm showed the agent, then rebuilds the tables. Each file is linted at its
+ * path in the prepared repository, so the rules read that project's components, variants and
+ * Tailwind theme.
+ */
+async function score(out) {
+  if (values.with !== 'shadcn-lint') fail('Pass --with shadcn-lint, the scorer `score` adds.');
+  assertIsolated(work);
+  const spec = readJson(path.join(HERE, 'config/shadcn-lint.json'));
+  const scorer = await installScorer('shadcn-lint', spec);
+  const results = readResults(out)
+    .filter((r) => isScored(r) && r.created)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!results.length) fail(`No scored runs with a created file in ${out}/runs.`);
+  /** @type {Record<string, import('./lib/score.ts').ShadcnLintSummary>} */
+  const lint = {};
+  for (const name of [...new Set(results.map((r) => r.repo))]) {
+    if (!fs.existsSync(repoDirs(work, name).meta)) await prepare([name]);
+    const own = results.filter((r) => r.repo === name);
+    const root = repoDirs(work, name).src;
+    const started = Date.now();
+    const child = await exec(process.execPath, [path.join(HERE, 'lib', 'shadcn-lint.mjs')], {
+      // When a theme's own folders have no Tailwind, @shadcn/lint falls back to the working
+      // folder's: the scorer's folder has none, so it never picks up another project's.
+      cwd: scorer,
+      env: minimalEnv(),
+      input: JSON.stringify({
+        scorer,
+        root,
+        rules: spec.rules,
+        files: own.map((r) => ({
+          id: r.id,
+          file: r.file,
+          code: fs.readFileSync(path.join(out, 'runs', r.id, 'files', r.file), 'utf8'),
+        })),
+      }),
+      timeoutMs: 30 * 60_000,
+    });
+    const lines = child.stdout.split('\n').filter(Boolean);
+    if (child.status !== 0 || lines.length !== own.length) {
+      fail(
+        `${name}: @shadcn/lint stopped after ${lines.length} of ${own.length} files (exit ${child.status}):\n${child.stderr.trim().split('\n').slice(-20).join('\n')}`,
+      );
+    }
+    // What @shadcn/lint could not read in this repository (a theme it could not build, say).
+    const warnings = child.stderr.split('\n').filter((l) => l.startsWith('[@shadcn/lint]'));
+    for (const warning of new Set(warnings))
+      console.error(`${name}: ${warning.split(root).join('.')}`);
+    let findings = 0;
+    for (const line of lines) {
+      const { id, messages } = JSON.parse(line);
+      lint[id] = summarizeShadcnLint(messages);
+      findings += lint[id].findings;
+    }
+    console.error(
+      `${name}: ${own.length} files linted in ${Math.round((Date.now() - started) / 1000)}s, ${findings} findings`,
+    );
+  }
+  // One line per run: the messages make the file large, and a rerun's diff stays readable.
+  const runs = Object.keys(lint)
+    .sort((a, b) => a.localeCompare(b))
+    .map((id) => `    ${JSON.stringify(id)}: ${JSON.stringify(lint[id])}`);
+  const scorerInfo = { packages: spec.packages, before: spec.before, rules: spec.rules };
+  fs.writeFileSync(
+    path.join(out, SHADCN_LINT),
+    `{\n  "scorer": ${JSON.stringify(scorerInfo)},\n  "runs": {\n${runs.join(',\n')}\n  }\n}\n`,
+  );
+  report(out);
+}
+
+/**
+ * Installs a scorer's packages into the work folder at the exact versions its config pins, with
+ * lifecycle scripts off, resolving what they depend on from what npm had published by `before`.
+ * Reinstalls when the config changes.
+ */
+async function installScorer(name, spec) {
+  const dir = path.join(work, 'scorers', name);
+  const want = JSON.stringify({ packages: spec.packages, before: spec.before });
+  const stamp = path.join(dir, 'stamp.json');
+  const packages = Object.entries(spec.packages).map(([pkg, version]) => `${pkg}@${version}`);
+  if (!fs.existsSync(stamp) || fs.readFileSync(stamp, 'utf8') !== want) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'package.json'), '{ "private": true }\n');
+    console.error(`${name}: installing ${packages.join(', ')} with scripts off`);
+    const install = await exec(
+      'npm',
+      [
+        'install',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--save-exact',
+        `--before=${spec.before}`,
+        ...packages,
+      ],
+      { cwd: dir, env: minimalEnv(), timeoutMs: 10 * 60_000 },
+    );
+    if (install.status !== 0) {
+      fail(
+        `${name}: npm install failed (exit ${install.status}):\n${(install.stderr || install.stdout).trim().split('\n').slice(-20).join('\n')}`,
+      );
+    }
+    fs.writeFileSync(stamp, want);
+  }
+  for (const [pkg, version] of Object.entries(spec.packages)) {
+    const installed = readJson(path.join(dir, 'node_modules', pkg, 'package.json')).version;
+    if (installed !== version) fail(`${name}: ${pkg} ${installed} is installed, not ${version}.`);
+  }
+  return dir;
+}
+
 // ─── report and labels ────────────────────────────────────────────────────────
 
 function readResults(out) {
@@ -531,10 +658,32 @@ function report(out) {
       : 'Who labelled is not recorded: add labels/LABELLER.md.';
     lines.push('', '## Blind labels', '', labeller, '', renderLabelSummary(summary));
   }
+  // The independent scorer, once `score --with shadcn-lint` has run.
+  let shadcnLint;
+  if (fs.existsSync(path.join(out, SHADCN_LINT))) {
+    const { scorer, runs } = readJson(path.join(out, SHADCN_LINT));
+    const unscored = results.filter((r) => isScored(r) && r.created && !runs[r.id]).length;
+    if (unscored) {
+      console.error(
+        `${SHADCN_LINT} has no findings for ${unscored} run(s) that created their file, so they count 0: run \`score --with shadcn-lint\` again.`,
+      );
+    }
+    shadcnLint = {
+      scorer,
+      rows: aggregateShadcnLint(results, runs, scorer.rules),
+      deltas: shadcnLintDeltas(results, runs, scorer.rules),
+    };
+    lines.push(
+      '',
+      '## Independent scorer: @shadcn/lint',
+      '',
+      renderShadcnLint(scorer, shadcnLint.rows, shadcnLint.deltas, runs),
+    );
+  }
   fs.writeFileSync(path.join(out, 'results.md'), `${lines.join('\n').trimEnd()}\n`);
   fs.writeFileSync(
     path.join(out, 'results.json'),
-    JSON.stringify({ info, rows, deltas: diffs }, null, 2),
+    JSON.stringify({ info, rows, deltas: diffs, ...(shadcnLint && { shadcnLint }) }, null, 2),
   );
   fs.writeFileSync(
     path.join(out, 'runs.csv'),

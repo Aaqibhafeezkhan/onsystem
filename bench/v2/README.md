@@ -133,6 +133,26 @@ Rates get 95% [Wilson score intervals](https://en.wikipedia.org/wiki/Binomial_pr
 - **Prices and models change.** The cost table is for 2026-10-12. Gemini 3.8 Flash's price doubles on 2027-01-01, and Gemini 3.1 Pro is a preview.
 - **Run-to-run variance** is measured only where a matrix has repeats.
 
+## Independent scorer: @shadcn/lint
+
+`tsc` sees invented APIs but not hardcoded values, and onsystem counts the same errors its MCP server and hook show the agent. To score the same files with a linter that is not onsystem, `score` runs [@shadcn/lint](https://github.com/shadcn-ui/lint) 0.2.1, with ESLint 9.39.5 and @typescript-eslint/parser 8.71.2, on the file each run created, at its path in the prepared repository, so its rules read that project's components, variants and Tailwind theme. All six rules are on, each an error at its defaults. No arm showed the agent its messages. It was added after the standard run, so it is not one of the outcomes fixed before any run.
+
+```sh
+node bench/v2/run.mjs prepare                    # once, if the repositories are not prepared yet
+node bench/v2/run.mjs score --with shadcn-lint --out bench/v2/results/standard
+```
+
+`score` installs the three packages into the work folder with scripts off, at the versions [config/shadcn-lint.json](config/shadcn-lint.json) pins, writes each run's findings and messages to `shadcn-lint.json`, and runs `report`, which adds the tables to [results.md](results/standard/results.md#independent-scorer-shadcnlint). It calls no model; a rerun on the same prepared repositories writes the same file.
+
+**On the standard run (onsystem 0.5.0):** @shadcn/lint findings per run, all models, went from 4.97 [3.30, 6.69] without onsystem to 2.64 [1.76, 3.58] with all three parts, a paired difference of −2.33 [−3.28, −1.38]. With the skill alone 3.47, the MCP server 2.86, the hook 4.06. Read it with these:
+
+- **On colors it agrees with onsystem rather than confirming it.** `no-raw-colors` (1.84 → 0.60 per run) flags palette classes, the same kind of error the MCP server and the hook show the agent.
+- **Most of what is left is `no-restyle`** (2.98 → 1.97 per run): a class that changes a design-system component's color, typography or spacing, which onsystem does not report. It is strict, and whether an override is wrong depends on the design system.
+- **The hook alone lowers colors, not restyles:** −0.90 [−1.80, −0.06] in all, −0.88 [−1.52, −0.32] in `no-raw-colors`, +0.03 [−0.50, +0.60] in `no-restyle`. The MCP server alone: −2.10 [−3.09, −1.17], with −0.87 [−1.65, −0.29] in `no-restyle`.
+- **Chart tokens.** Neither tool counts a `chart-*` token used for a status color as wrong. `no-restyle` reports one only on a design-system component, as a restyle.
+- **Where it reads less.** @shadcn/lint finds components through `components.json`. openstatus's points at the app's own folder, not `@openstatus/ui`, so `no-restyle` reports nothing there. dub has no `components.json` and uses Tailwind v3, so only `no-raw-colors` and `no-arbitrary-values` report there. shadcn-website's theme imports `shadcn/tailwind.css`, which the install without scripts lacks, so `no-unknown-classes` uses @shadcn/lint's bundled grammar there. `score` prints these warnings.
+- **It loads code from the installs.** To know which classes exist, @shadcn/lint loads the Tailwind each repository installed, and the plugins its CSS names, in a child process without the API keys. `tsc` already runs from the same installs.
+
 ## Sizes and cost
 
 `node bench/v2/run.mjs plan` prints this table from the configuration. Nothing is called.
@@ -203,6 +223,7 @@ Keys are read from those environment variables only, by name, and never printed 
   transcripts/<run>.jsonl              every request's usage and every tool call and result
   ledger.jsonl                         cost of every attempt
   labels/                              the blinded sample, once `labels` has run
+  shadcn-lint.json                     @shadcn/lint's findings per run, once `score --with shadcn-lint` has run
 ```
 
 Commit everything but `transcripts/` (whole tool outputs, too large for the repository), and attach that folder to a release instead.

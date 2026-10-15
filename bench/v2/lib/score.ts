@@ -172,3 +172,67 @@ export function classify(files: readonly string[]): { ui: string[]; typescript: 
     typescript: files.filter((f) => /\.(tsx?|mts|cts)$/i.test(f) && !/\.d\.ts$/i.test(f)),
   };
 }
+
+// ─── The independent scorer: @shadcn/lint ─────────────────────────────────────
+
+/** One message from ESLint's `lintText`, as lib/shadcn-lint.mjs prints it. */
+export interface LintMessage {
+  ruleId: string | null;
+  severity: number;
+  message: string;
+  line: number;
+  column: number;
+  fatal?: boolean;
+}
+
+export interface ShadcnLintSummary {
+  findings: number;
+  byRule: Record<string, number>;
+  /** Why the file could not be linted (a parse error), or null. */
+  failed: string | null;
+  messages: { rule: string; line: number; column: number; message: string }[];
+}
+
+/**
+ * The ESLint config the scorer runs: every rule named, as an error, at its defaults, and no
+ * inline config, so a comment in the file cannot switch a rule off.
+ */
+export function shadcnLintConfig({
+  plugin,
+  parser,
+  rules,
+}: {
+  plugin: unknown;
+  parser: unknown;
+  rules: readonly string[];
+}) {
+  return [
+    {
+      files: ['**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}'],
+      languageOptions: { parser, parserOptions: { ecmaFeatures: { jsx: true } } },
+      linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: 'off' as const },
+      plugins: { shadcn: plugin },
+      rules: Object.fromEntries(rules.map((rule) => [`shadcn/${rule}`, 'error' as const])),
+    },
+  ];
+}
+
+/** Counts @shadcn/lint's messages on one file, by rule; anything else ESLint says is left out. */
+export function summarizeShadcnLint(messages: readonly LintMessage[]): ShadcnLintSummary {
+  const own = messages
+    .filter((m) => m.ruleId?.startsWith('shadcn/'))
+    .map((m) => ({
+      rule: (m.ruleId ?? '').slice('shadcn/'.length),
+      line: m.line,
+      column: m.column,
+      message: m.message,
+    }));
+  const byRule: Record<string, number> = {};
+  for (const m of own) byRule[m.rule] = (byRule[m.rule] ?? 0) + 1;
+  return {
+    findings: own.length,
+    byRule,
+    failed: messages.find((m) => m.fatal)?.message ?? null,
+    messages: own,
+  };
+}

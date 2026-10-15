@@ -110,7 +110,7 @@ Findings show up as annotations on the pull request, and `--require-design-syste
 
 ## Works with @shadcn/lint
 
-[@shadcn/lint](https://github.com/shadcn-ui/lint) checks the Tailwind classes written against a component and the theme (restyling, raw colors, arbitrary and unknown classes) as ESLint or Oxlint rules on Tailwind v4. onsystem checks that the components, props and variant values exist, flags native elements and unnamed icon buttons on Tailwind v3 or v4, and in Claude Code catches an invented one right after the edit, so run both.
+[@shadcn/lint](https://github.com/shadcn-ui/lint) checks the Tailwind classes written against a component and the theme (restyling, raw colors, arbitrary and unknown classes) as ESLint or Oxlint rules on Tailwind v4. onsystem checks that the components, props and variant values exist and flags native elements and unnamed icon buttons, on Tailwind v3 or v4. Its MCP server shows the agent your components and tokens before it writes, and in Claude Code its hook checks every edit. Run both: benchmark v2 also scores every output with @shadcn/lint, in [the independent scorer's table](bench/v2/results/standard/results.md#independent-scorer-shadcnlint).
 
 ## Does it help?
 

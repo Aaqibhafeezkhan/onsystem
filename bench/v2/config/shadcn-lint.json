@@ -1,0 +1,17 @@
+{
+  "$comment": "The independent scorer `node bench/v2/run.mjs score --with shadcn-lint` runs. `packages` are installed at these exact versions into the work folder, with lifecycle scripts off, from what npm had published by `before`. `rules` are @shadcn/lint's six, each an error at its defaults.",
+  "packages": {
+    "@shadcn/lint": "0.2.1",
+    "eslint": "9.39.5",
+    "@typescript-eslint/parser": "8.71.2"
+  },
+  "before": "2026-10-14",
+  "rules": [
+    "no-restyle",
+    "no-raw-colors",
+    "no-arbitrary-values",
+    "no-inline-styles",
+    "no-unknown-classes",
+    "require-static-classes"
+  ]
+}
