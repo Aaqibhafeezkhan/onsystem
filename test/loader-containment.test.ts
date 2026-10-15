@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
 import { loadConfig } from '../src/config.js';
@@ -155,7 +155,7 @@ describe('design-system files that lead outside the project', () => {
     expect(ds.tokens.map((t) => t.name)).toContain('primary');
     expect(ds.tokens.map((t) => t.name)).not.toContain('leak');
     expect(ds.model.warnings).toContain(
-      "Not read: app/theme.css, components/ui/secret.tsx and styles/globals.css lead outside the project. Links resolved, the design system's files must be in the project, the workspace or git repository it is in, or a package installed in node_modules.",
+      "Not read: app/theme.css, components/ui/secret.tsx and styles/globals.css lead outside the project. Links resolved, the design system's files must be in the project, the workspace or git repository it is in, a package installed in their node_modules, or a package that declares its config (run onsystem init in it).",
     );
   });
 
@@ -202,6 +202,27 @@ describe('design-system files that lead outside the project', () => {
     ]);
     expect(model.tokens.map((t) => t.name)).toContain('brand');
     expect(model.warnings.join('\n')).not.toContain('outside the project');
+  });
+
+  it("does not read another project's installed package through a link in the project", async () => {
+    const other = fixture({
+      'node_modules/private-pkg/package.json': JSON.stringify({ name: 'private-pkg' }),
+      'node_modules/private-pkg/credentials.md': `# Credentials\n\n${SECRET}\n`,
+    });
+    const root = fixture({
+      'package.json': JSON.stringify({ name: 'starter' }),
+      'components/ui/credentials.tsx': COMPONENT('Credentials'),
+    });
+    link(
+      path.join(other, 'node_modules/private-pkg/credentials.md'),
+      path.join(root, 'components/ui/credentials.md'),
+    );
+    const ds = await load(root);
+    expect(ds.model.stats.files.docs).toBe(0);
+    expect(JSON.stringify(ds.model)).not.toContain(SECRET);
+    expect(ds.model.warnings.join('\n')).toContain(
+      'Not read: components/ui/credentials.md leads outside the project.',
+    );
   });
 
   it('reads files elsewhere in the git repository the project is in', async () => {
@@ -272,5 +293,109 @@ describe('design-system files that lead outside the project', () => {
     const { stdout } = await run(['check', '.', '--format', 'json', '--no-cache'], root);
     const files = (JSON.parse(stdout) as { file: string }[]).map((r) => r.file);
     expect(files).toEqual(['app/settings/members.tsx']);
+  });
+});
+
+describe('the files left out, as the cached model names them', () => {
+  it('rebuilds when a link that leads outside the project is removed or added', async () => {
+    const outside = elsewhere();
+    const root = fixture({
+      'package.json': JSON.stringify({ name: 'starter' }),
+      'components/ui/credentials.tsx': COMPONENT('Credentials'),
+    });
+    // The cache is kept in node_modules/.cache/onsystem.
+    fs.mkdirSync(path.join(root, 'node_modules'));
+    const credentials = path.join(root, 'components/ui/credentials.md');
+    link(path.join(outside, '.aws/credentials'), credentials);
+    const config = await loadConfig({ root });
+    const notRead = (warnings: string[]) => warnings.filter((w) => w.startsWith('Not read:'));
+
+    const first = await buildModel(config);
+    expect(first.model.stats.fromCache).toBe(false);
+    expect(notRead(first.model.warnings).join('\n')).toContain('components/ui/credentials.md');
+    expect((await buildModel(config)).model.stats.fromCache).toBe(true);
+
+    fs.unlinkSync(credentials);
+    const removed = await buildModel(config);
+    expect(removed.model.stats.fromCache).toBe(false);
+    expect(notRead(removed.model.warnings)).toEqual([]);
+
+    link(path.join(outside, '.npmrc'), path.join(root, 'components/ui/notes.md'));
+    const added = await buildModel(config);
+    expect(added.model.stats.fromCache).toBe(false);
+    expect(notRead(added.model.warnings)).toEqual([
+      expect.stringContaining('Not read: components/ui/notes.md leads outside the project.'),
+    ]);
+  });
+});
+
+describe('a home folder that looks like a workspace or a repository', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("is not a boundary a package's config may reach, with a stray workspace manifest", async () => {
+    const home = fixture({
+      'package.json': JSON.stringify({ name: 'dotfiles', private: true, workspaces: ['code/*'] }),
+      '.git/HEAD': 'ref: refs/heads/main\n',
+      '.aws/credentials': `[default]\naws_secret_access_key = ${SECRET}\n`,
+      // A cloned repository with no config of its own and a package of its own that declares one.
+      'code/repo/package.json': JSON.stringify({
+        name: 'starter',
+        dependencies: { 'evil-ds': '1.0.0' },
+      }),
+      'code/repo/packages/evil-ds/package.json': JSON.stringify({
+        name: 'evil-ds',
+        version: '1.0.0',
+        onsystem: './onsystem.config.json',
+      }),
+      'code/repo/packages/evil-ds/onsystem.config.json': JSON.stringify({
+        components: ['src/*.tsx'],
+        docs: ['../../../../.aws/credentials'],
+      }),
+      'code/repo/packages/evil-ds/src/credentials.tsx': COMPONENT('Credentials'),
+    });
+    vi.spyOn(os, 'homedir').mockReturnValue(home);
+    const root = path.join(home, 'code/repo');
+    link(path.join(root, 'packages/evil-ds'), path.join(root, 'node_modules/evil-ds'));
+
+    const ds = await load(root);
+    expect(ds.config.designSystemPackage?.name).toBe('evil-ds');
+    expect(ds.components.map((c) => c.name)).toEqual(['Credentials']);
+    expect(ds.model.stats.files.docs).toBe(0);
+    expect((ds.config.warnings ?? []).join('\n')).toContain(
+      "evil-ds's onsystem config names paths outside the workspace, which were ignored: docs ../../../../.aws/credentials.",
+    );
+    const client = await connect(ds);
+    try {
+      const result = await client.callTool({
+        name: 'get_component',
+        arguments: { name: 'Credentials' },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('is not the workspace or repository a link may lead into', async () => {
+    const home = fixture({
+      'package.json': JSON.stringify({ name: 'dotfiles', private: true, workspaces: ['code/*'] }),
+      '.git/HEAD': 'ref: refs/heads/main\n',
+      '.aws/credentials': `[default]\naws_secret_access_key = ${SECRET}\n`,
+      'code/repo/package.json': JSON.stringify({ name: 'starter' }),
+      'code/repo/components/ui/credentials.tsx': COMPONENT('Credentials'),
+    });
+    vi.spyOn(os, 'homedir').mockReturnValue(home);
+    const root = path.join(home, 'code/repo');
+    link(path.join(home, '.aws/credentials'), path.join(root, 'components/ui/credentials.md'));
+
+    const ds = await load(root);
+    expect(ds.model.stats.files.docs).toBe(0);
+    expect(JSON.stringify(ds.model)).not.toContain(SECRET);
+    expect(ds.model.warnings.join('\n')).toContain(
+      'Not read: components/ui/credentials.md leads outside the project.',
+    );
   });
 });

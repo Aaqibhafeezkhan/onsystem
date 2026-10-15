@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 export function toPosix(p: string): string {
@@ -25,6 +27,28 @@ export function relativePath(root: string, file: string): string {
 export function isInside(root: string, file: string): boolean {
   const rel = path.relative(root, file);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * Whether `dir` is the home folder, a folder that holds it, or a filesystem root, links
+ * resolved. None of them is a project's workspace or repository, though a stray
+ * `~/package.json` with `workspaces`, or a repository of dotfiles, makes one look like it, and
+ * from there a `../` path reaches `~/.aws/credentials`.
+ */
+export function isHomeOrAbove(dir: string): boolean {
+  const home = os.homedir();
+  const holdsHome = (d: string, h: string) => d === path.parse(d).root || isInside(d, h);
+  return (
+    holdsHome(path.resolve(dir), path.resolve(home)) || holdsHome(realOrSelf(dir), realOrSelf(home))
+  );
+}
+
+function realOrSelf(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
 }
 
 /** The static directory part of a glob (`components/ui/**\/*.tsx` → `components/ui`). */

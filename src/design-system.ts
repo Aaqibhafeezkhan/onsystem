@@ -43,7 +43,7 @@ import type {
   TokenCategory,
 } from './types.js';
 import { silentLogger, type Logger } from './util/log.js';
-import { globBase, isInside, relativePath } from './util/paths.js';
+import { globBase, isHomeOrAbove, isInside, relativePath } from './util/paths.js';
 import { closest, plural, unique } from './util/strings.js';
 import { COLOR_UTILITY, parseUtility } from './lint/tailwind.js';
 import { VERSION } from './version.js';
@@ -224,29 +224,32 @@ interface ResolvedFiles {
 /**
  * Where the design system's files may really be, links resolved: the project, the workspace
  * and the git repository it is in, the folder a design-system package's config stays in, and
- * packages installed in `node_modules`, which pnpm links from its store. A glob follows links,
- * and a config can name `../` and absolute paths, so without this a cloned repository could
- * have the tools return any file on the machine (`docs/credentials.md` linked to
- * `~/.aws/credentials`).
+ * packages reached through a `node_modules` folder in those, which pnpm can link from a store
+ * elsewhere. A glob follows links, and a config can name `../` and absolute paths, so without
+ * this a cloned repository could have the tools return any file on the machine
+ * (`docs/credentials.md` linked to `~/.aws/credentials`).
  */
 class Containment {
+  /** The folders, as given. */
+  private readonly dirs: string[];
+  /** The same folders, links resolved. */
   private readonly roots: Promise<string[]>;
   private readonly reals = new Map<string, Promise<string | undefined>>();
   /** Files left out, as they were found. */
   readonly outside = new Set<string>();
 
   constructor(config: ResolvedConfig) {
-    const dirs = [
-      config.root,
-      // Never the home folder or the filesystem root, which a stray package.json or a
-      // repository of dotfiles can make one.
-      ...[workspaceRootOf(config.root), repositoryOf(config.root)].filter(
-        (dir) => dir !== undefined && !isHomeOrFilesystemRoot(dir),
-      ),
+    const around = [
+      workspaceRootOf(config.root),
+      repositoryOf(config.root),
       config.base,
       config.designSystemPackage?.boundary,
-    ].filter((dir): dir is string => dir !== undefined);
-    this.roots = Promise.all(unique(dirs).map((dir) => this.real(dir))).then((reals) =>
+    ]
+      // Never the home folder or above, which a stray package.json or a repository of
+      // dotfiles can make the workspace or repository.
+      .filter((dir): dir is string => dir !== undefined && !isHomeOrAbove(dir));
+    this.dirs = unique([config.root, ...around].map((dir) => path.resolve(dir)));
+    this.roots = Promise.all(this.dirs.map((dir) => this.real(dir))).then((reals) =>
       reals.filter((real): real is string => real !== undefined),
     );
   }
@@ -272,7 +275,10 @@ class Containment {
     files.forEach((file, i) => {
       const real = reals[i];
       if (real === undefined) return;
-      if (!roots.some((root) => isInside(root, real)) && !isInstalled(real)) {
+      const inside =
+        roots.some((root) => isInside(root, real)) ||
+        (isInstalled(real) && this.inNodeModules(file));
+      if (!inside) {
         this.outside.add(file);
         return;
       }
@@ -281,11 +287,21 @@ class Containment {
     });
     return [...kept.values()];
   }
+
+  /**
+   * Whether `file`, as found, is in a package in a `node_modules` folder of the project, the
+   * workspace or the repository, as one pnpm links from its store is. A link elsewhere in the
+   * project to another project's `node_modules` is not.
+   */
+  private inNodeModules(file: string): boolean {
+    const found = path.resolve(file);
+    return this.dirs.some((dir) => isInside(dir, found) && isInstalled(path.relative(dir, found)));
+  }
 }
 
-/** Whether a real path is a file of a package in `node_modules`, not of `.cache` or `.bin` there. */
-function isInstalled(real: string): boolean {
-  const parts = real.split(/[\\/]/);
+/** Whether a path is a file of a package in `node_modules`, not of `.cache` or `.bin` there. */
+function isInstalled(file: string): boolean {
+  const parts = file.split(/[\\/]/);
   const at = parts.lastIndexOf('node_modules');
   return at !== -1 && at < parts.length - 2 && !(parts[at + 1] ?? '.').startsWith('.');
 }
@@ -298,11 +314,6 @@ function repositoryOf(dir: string): string | undefined {
   }
 }
 
-function isHomeOrFilesystemRoot(dir: string): boolean {
-  const resolved = path.resolve(dir);
-  return resolved === path.parse(resolved).root || path.relative(os.homedir(), resolved) === '';
-}
-
 /** What `inspect` and the server's log say about files that lead outside the project. */
 function outsideWarning(root: string, files: readonly string[]): string {
   const shown = files.map((file) => relativePath(root, file)).sort();
@@ -312,7 +323,7 @@ function outsideWarning(root: string, files: readonly string[]): string {
       : shown.length <= 5
         ? `${shown.slice(0, -1).join(', ')} and ${shown.at(-1) ?? ''}`
         : `${shown.slice(0, 5).join(', ')} and ${shown.length - 5} more`;
-  return `Not read: ${named} ${shown.length === 1 ? 'leads' : 'lead'} outside the project. Links resolved, the design system's files must be in the project, the workspace or git repository it is in, or a package installed in node_modules.`;
+  return `Not read: ${named} ${shown.length === 1 ? 'leads' : 'lead'} outside the project. Links resolved, the design system's files must be in the project, the workspace or git repository it is in, a package installed in their node_modules, or a package that declares its config (run onsystem init in it).`;
 }
 
 /**
@@ -455,7 +466,7 @@ class FileStats {
 /**
  * Everything that, when changed, invalidates the cached model: the tracked
  * files, `dependencies` (project files the components import and the tsconfig
- * chain, known after extraction), the lockfile and the config.
+ * chain, known after extraction), the lockfile, the config and the files left out.
  */
 async function cacheKey(
   config: ResolvedConfig,
@@ -481,8 +492,17 @@ async function cacheKey(
     ...dependencies,
   ]);
   const { rules: _rules, overrides: _overrides, ...relevant } = config;
+  // The files left out too: the model's warning names them, so adding or removing one rebuilds.
+  const outside = files.outside.map((file) => relativePath(config.root, file)).sort();
   return createHash('sha256')
-    .update(JSON.stringify({ version: VERSION, config: relevant, stats: await stats.of(all) }))
+    .update(
+      JSON.stringify({
+        version: VERSION,
+        config: relevant,
+        outside,
+        stats: await stats.of(all),
+      }),
+    )
     .digest('hex');
 }
 
