@@ -1302,7 +1302,7 @@ function pnpmWorkspacePackages(dir: string): string[] {
 }
 
 /** The nearest workspace root at or above `start`. */
-function workspaceRootOf(start: string): string | undefined {
+export function workspaceRootOf(start: string): string | undefined {
   for (let dir = start; ; dir = path.dirname(dir)) {
     if (isWorkspaceRoot(dir)) return dir;
     if (dir === path.dirname(dir)) return undefined;
