@@ -68,6 +68,16 @@ describe('the README', () => {
     );
   });
 
+  it('says what apps that install a design-system package miss when it publishes only compiled code', () => {
+    const quickstart = section('## Quickstart').replace(/\s+/g, ' ');
+    // In the words init uses to tell the package's team (src/init.ts).
+    const missed = 'no component, prop, variant or native-element checks';
+    expect(read('src/init.ts')).toContain(missed);
+    expect(quickstart).toContain(
+      `From a package that publishes only compiled code, installed apps get the token rules but ${missed}.`,
+    );
+  });
+
   it('links each client badge to a section of docs/clients.md', () => {
     const top = readme.slice(0, readme.indexOf('<!-- npm-readme:video -->'));
     // The site's ids: a heading's or a <details> summary's text, as site/components/markdown-blocks.tsx slugs it.
@@ -283,6 +293,74 @@ describe('the README', () => {
       `The blind labels by an AI reviewer, ${String([...labelled][0])} files per arm, are too few to confirm the count either way`,
     );
     expect(help).not.toContain('bench/agents');
+  });
+});
+
+// The one-line pitch on GitHub, npm, the agent plugins, the MCP Registry and the Marketplace leads
+// with what benchmark v2 measured, in the words of the site's first screen (site/app/page.tsx).
+describe('the pitch', () => {
+  const description = (file: string) =>
+    (JSON.parse(read(file)) as { description: string }).description;
+  const listed = (file: string) =>
+    (JSON.parse(read(file)) as { plugins: { name: string; description: string }[] }).plugins.find(
+      (plugin) => plugin.name === 'onsystem',
+    )?.description;
+  // The README's first paragraph, as text.
+  const pitch = (readme.split('\n\n')[1] ?? '')
+    .replace(/\*\*/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const manifests = {
+    'plugins/onsystem/.claude-plugin/plugin.json': description(
+      'plugins/onsystem/.claude-plugin/plugin.json',
+    ),
+    'plugins/onsystem-agent/plugin.json': description('plugins/onsystem-agent/plugin.json'),
+    'plugins/onsystem-cursor/.cursor-plugin/plugin.json': description(
+      'plugins/onsystem-cursor/.cursor-plugin/plugin.json',
+    ),
+    '.claude-plugin/marketplace.json': listed('.claude-plugin/marketplace.json'),
+    '.cursor-plugin/marketplace.json': listed('.cursor-plugin/marketplace.json'),
+  };
+  const server = description('server.json');
+  const surfaces = {
+    'README.md': pitch,
+    'package.json': description('package.json'),
+    ...manifests,
+    'server.json': server,
+    'action.yml': /^description: (.+)$/m.exec(read('action.yml'))?.[1],
+  };
+
+  it('names what benchmark v2 found, in its order, and no invention, which it never saw', () => {
+    const runs = 'bench/v2/results/standard/runs';
+    const fired = new Map<string, number>();
+    for (const run of fs.readdirSync(path.join(root, runs))) {
+      const { onsystemByRule } = JSON.parse(read(`${runs}/${run}/result.json`)) as {
+        onsystemByRule?: Record<string, number>;
+      };
+      for (const [rule, n] of Object.entries(onsystemByRule ?? {})) {
+        fired.set(rule, (fired.get(rule) ?? 0) + n);
+      }
+    }
+    const ranked = [...fired].sort((a, b) => b[1] - a[1]).map(([rule]) => rule);
+    expect(ranked.slice(0, 2)).toEqual(['no-hardcoded-color', 'prefer-design-system-component']);
+    // When a benchmark sees agents invent components, props or variants, the pitch can say so.
+    expect(ranked.filter((rule) => rule.startsWith('no-unknown-'))).toEqual([]);
+
+    for (const [file, text] of Object.entries(surfaces)) {
+      expect(text, file).toMatch(
+        /palette colors, native elements and APIs your (design )?system lacks/,
+      );
+      expect(text, file).not.toMatch(/invent/i);
+    }
+  });
+
+  it('says the same on npm and in every plugin as in the README', () => {
+    expect(description('package.json')).toBe(pitch);
+    for (const [file, text] of Object.entries(manifests)) expect(text, file).toBe(pitch);
+  });
+
+  it('fits the MCP Registry', () => {
+    // The registry's server.schema.json gives description a maxLength of 100.
+    expect(server.length).toBeLessThanOrEqual(100);
   });
 });
 

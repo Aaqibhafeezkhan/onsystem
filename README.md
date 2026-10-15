@@ -1,6 +1,6 @@
 # onsystem
 
-**Keeps coding agents on your design system:** it knows your real components, props, variants and tokens, catches the moment an agent invents one and has it fix it, and the same check gates your PRs. Local, zero config, works alongside [@shadcn/lint](https://github.com/shadcn-ui/lint).
+**Keeps coding agents on your design system:** it catches palette colors, native elements and APIs your system lacks, at every edit and pull request, with the fix. Set it up once in your design-system package; every app in your monorepo gets it. Runs locally and works alongside [@shadcn/lint](https://github.com/shadcn-ui/lint).
 
 Built for design-system and platform teams with a React design-system package; a shadcn/ui app is the zero-config demo. Formerly `@dgesteves/design-system-mcp` ([what changed](https://onsystem.vercel.app/docs/migrating)).
 
@@ -74,7 +74,7 @@ npx -y onsystem check .   # the same check the agent and CI run
 npx -y onsystem init      # write the config, and offer a baseline
 ```
 
-At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system. In a [design-system package](https://onsystem.vercel.app/docs/design-system-packages), `init` sets it up for every app that depends on it, workspace or npm, with no config in the apps.
+At a [monorepo root](https://onsystem.vercel.app/docs/configuration#monorepo-roots), `inspect` lists every app and design-system package, and `check` checks each file by its own project's design system. In a [design-system package](https://onsystem.vercel.app/docs/design-system-packages), `init` sets it up for every app that depends on it, with no config in the apps: as a workspace package, or installed from npm when it publishes its component sources (`init` checks its `files` list). From a package that publishes only compiled code, installed apps get the token rules but no component, prop, variant or native-element checks.
 
 In a new create-next-app, the template page's hardcoded colors already make the first `check .` fail; `init` offers to record them as a baseline, so only new findings fail. Folders installed from a shadcn registry, such as `components/ai-elements`, are someone else's code: [Code from shadcn registries](https://onsystem.vercel.app/docs/configuration#code-from-shadcn-registries) says how to check them or leave them out.
 

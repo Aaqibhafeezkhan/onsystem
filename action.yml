@@ -1,5 +1,5 @@
 name: onsystem design system check
-description: Gate pull requests on your design system. Flags invented components, props, variants and hardcoded values on changed lines.
+description: Checks the lines a pull request changes for palette colors, native elements and APIs your design system lacks.
 author: Diogo Esteves
 branding:
   icon: check-square
