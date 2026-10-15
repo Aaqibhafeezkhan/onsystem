@@ -1,6 +1,6 @@
 # Design-system packages
 
-A design-system team owns one package that many apps use. Set onsystem up once, in that package, and every app that depends on it finds the design system with no config of its own: in the CLI, the MCP server, the ESLint plugin, the agent plugin's hook and the GitHub Action.
+A design-system team owns one package that many apps use. Set onsystem up once, in that package, and every app that depends on it finds the design system with no config of its own: in the CLI, the MCP server, the ESLint plugin, the agent plugin's hook and the GitHub Action. What an app checks depends on what it can read of the package: every rule from a workspace package, or from a published one that ships its component sources, and the token rules, but none of its components, from one that publishes compiled code alone ([what apps get](#what-apps-get)).
 
 ## Set up the package
 
@@ -57,13 +57,31 @@ The config a project reads is the first of these that it has:
 
 `check` from a monorepo root and from the app's folder read the same config. The root itself reads no dependency's config: each project in it finds its own.
 
+An app's own config replaces the package's, rules and all. Zero config fills in only the fields it leaves out, as in any project: it finds a workspace package named like a design system, but never one installed in `node_modules`. So a config that only changes a rule's severity can leave the app without the package's components and tokens, and `check` then says which rules did not run. Copy `components`, `importPath` and `tokens` from the package's config into the app's, with paths into the package: `node_modules/@acme/ui/src/**/*.tsx`, or `../../packages/ui/src/**/*.tsx` from a workspace app. `init` writes no `importPath` for a package that apps import by subpath (`@acme/ui/components/button`), so when the package's config has none, set it to the package's name (`@acme/ui`). Without it, `no-unknown-component`, `no-unknown-prop`, `no-unknown-variant`, and `icon-button-accessible-name` on the package's `<Button>`, check none of the app's imports from the package, and nothing says so. With it, the same rules run as with the package's config, but the imports that findings and `get_component` suggest name `@acme/ui`, not the subpath. `init --force` in such an app says what it loses, but it writes no `importPath` there either.
+
 The declared config is read as JSON and never run, so a dependency cannot make an app run its code. A field that names a `.js` or `.ts` config, a file outside the package, or a file that does not exist is an error that names the package when it is a workspace package, which its team can fix. In a package installed in `node_modules`, the declaration is skipped with a warning, and the app is read as if the package declared none. An app with a config of its own reads that instead.
 
 `check` and `inspect` print each warning once, on stderr (`::warning` with `--format github`). The MCP server logs it once, and the ESLint plugin writes it once to stderr.
 
-## Installed from a registry
+## What apps get
 
-An app that installs the package reads what was published. Publish the files the config names: the config, the token stylesheets or DTCG files, and the component sources (`src/`) for the components to be known. From a package that publishes only compiled `dist/`, apps get the tokens and the rules, but not the components: onsystem reads components from source, except for the [published libraries](configuration.md#published-libraries-mui) it knows.
+An app that installs the package reads what was published, and onsystem reads components from their source, never from compiled code (except for the [published libraries](configuration.md#published-libraries-mui) it knows). So the rules that run in an app depend on how it gets the package and what the package publishes:
+
+| The app gets the package                                                                         | Rules that run in the app                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| As a workspace package                                                                           | All eight [rules](rules.md)                                                                                                                                                                                                            |
+| From a registry, with the config, the token files and the component sources (`src/`) published   | All eight                                                                                                                                                                                                                              |
+| From a registry, with the config, the token files and compiled `dist/` published, but not `src/` | `no-hardcoded-color`, `no-hardcoded-spacing` and `no-hardcoded-radius`, and `icon-button-accessible-name` on native elements; with `importPath` set, also `no-unknown-component`, on every component imported from the package (below) |
+| From a registry, without the config                                                              | What zero config finds in the app itself, and nothing from the package: the declaration is skipped with a warning                                                                                                                      |
+
+In an app whose package publishes only `dist/`:
+
+- **No component is known.** `prefer-design-system-component`, `no-unknown-prop` and `no-unknown-variant` report nothing, `icon-button-accessible-name` does not know that the package's `<Button>` renders a button, and agents find no component with `list_components`, `search_components` or `get_component`. `check` says `No design-system components found: the component rules did not run.`, also when `no-unknown-component` reports, as in the next point.
+- **With `importPath` set, `no-unknown-component` reports every component the app imports from the package** as one the design system does not have, since it knows none of them. `init` sets `importPath` when apps import the package by one name, such as `@acme/ui`. Without it, `no-unknown-component` reports nothing either.
+- **The token rules check against the published tokens:** `no-hardcoded-color` when they hold colors, `no-hardcoded-spacing` and `no-hardcoded-radius` when they set a spacing scale and radii.
+- **`--require-design-system` fails** (exit code 2), and it is on by default in the [GitHub Action](required-check.md).
+
+The CLI, the MCP server, the ESLint plugin, the hook and the Action read the package the same way, so this holds in each. To give these apps every rule, add `src/` to `files` in `package.json`; `init` says when `files` leaves out the component or token files.
 
 ## On real code
 
