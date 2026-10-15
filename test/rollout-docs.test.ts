@@ -5,7 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
-import { onChangedLines, parseDiff } from '../action/check.mjs';
+import { cli, onChangedLines, parseDiff } from '../action/check.mjs';
 import { main, type Io } from '../src/cli.js';
 import { DEMO_ROOT, fixture, load } from './helpers.js';
 import { section } from './markdown.js';
@@ -74,6 +74,7 @@ interface Workflow {
 }
 interface Step {
   uses?: string;
+  run?: string;
   with?: Record<string, unknown>;
 }
 
@@ -164,6 +165,35 @@ describe('the team rollout page (docs/rollout.md)', () => {
     expect(gate).toContain('(required-check.md#make-the-check-required)');
   });
 
+  it('gives the steps for a pnpm repository, as a pnpm monorepo is', () => {
+    const npm =
+      (parse(titled(rollout, '.github/workflows/onsystem.yml')) as Workflow).jobs.onsystem?.steps ??
+      [];
+    const setupNode = npm.find((step) => step.uses?.startsWith('actions/setup-node@'));
+    expect(npm.map((step) => step.run).filter(Boolean)).toEqual(['npm ci']);
+    // `cache: npm` and `npm ci` both need a package-lock.json. pnpm is set up before Node, so that
+    // setup-node can cache its store, and installs from pnpm-lock.yaml.
+    const { steps } = parse(after(section(rollout, 'Gate pull requests'), 'With pnpm')) as {
+      steps: Step[];
+    };
+    expect(steps).toEqual([
+      npm[0],
+      { uses: 'pnpm/action-setup@v6' },
+      { ...setupNode, with: { ...setupNode?.with, cache: 'pnpm' } },
+      { run: 'pnpm install --frozen-lockfile' },
+      npm.at(-1),
+    ]);
+  });
+
+  it('brings the baseline up to date in the pull request that makes the check fail', () => {
+    // While `fail-on: none` is on, pull requests merge new findings that the baseline does not
+    // have, and with every line checked, the first failing run would fail on all of them.
+    const gate = section(rollout, 'Gate pull requests');
+    expect(gate).toContain(
+      "So in the pull request that removes `fail-on: none`, first run `npx onsystem check .` where CI runs it, and fix what is new or record it with `npx onsystem check . --update-baseline`, which the baseline's code owners review. The first required run then passes.",
+    );
+  });
+
   it('says why: a variant removed from the design system breaks a line the pull request did not change', async () => {
     // The demo with a page on Button's `link` variant, and a pull request that drops the variant.
     const root = fixture({});
@@ -214,8 +244,32 @@ describe('the team rollout page (docs/rollout.md)', () => {
     expect(baseline).toContain('npx onsystem check . --update-baseline');
     expect(baseline).toContain('(configuration.md#monorepo-roots)');
     expect(titled(baseline, '.github/CODEOWNERS')).toMatch(/^\/onsystem\.baseline\.json @/m);
-    // init in the package offers a baseline of its own, which CI at the root would not read.
-    expect(section(rollout, 'Set up the design system')).toContain('Answer no');
+    // init in the package offers a baseline of its own, which CI at the root would not read; in a
+    // single app, it records it where CI runs.
+    const setup = section(rollout, 'Set up the design system');
+    expect(setup).toContain('In a single app, run `npx onsystem init` in the app, and answer yes');
+    expect(setup).toContain('In a package, answer no when it offers a baseline');
+  });
+
+  it('skips the CI section of the ONSYSTEM.md init writes in a package, which records a baseline per app', async () => {
+    const root = fixture({
+      'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - packages/*\n',
+      'package.json': JSON.stringify({ name: 'acme', private: true }),
+      'packages/ui/package.json': JSON.stringify({ name: '@acme/ui', private: true }),
+      'packages/ui/src/button.tsx':
+        'export function Button(props: { variant?: "default" | "outline"; children?: unknown }) { return <button /> }\n',
+      'packages/ui/src/globals.css': ':root {\n  --primary: oklch(0.55 0.2 260);\n}\n',
+    });
+    const ui = path.join(root, 'packages/ui');
+    const io: Io = { cwd: ui, color: false, stdout: () => {}, stderr: () => {} };
+    const where = ['--components', 'src/button.tsx', '--tokens', 'src/globals.css'];
+    expect(await main(['init', '--yes', '--no-cache', ...where], io)).toBe(0);
+    const ci = section(fs.readFileSync(path.join(ui, 'ONSYSTEM.md'), 'utf8'), 'CI');
+    expect(ci).toContain('In the app, record the findings it already has once');
+    expect(ci).toContain('npx onsystem check . --update-baseline');
+    expect(section(rollout, 'Set up the design system')).toContain(
+      "Skip `ONSYSTEM.md`'s CI section too, which has each app record a baseline in its own folder: it is for apps outside this repository",
+    );
   });
 
   it('names the check of each job in a matrix per app', () => {
@@ -225,6 +279,11 @@ describe('the team rollout page (docs/rollout.md)', () => {
     const apps = job?.strategy?.matrix?.app ?? [];
     expect(apps.length).toBeGreaterThan(1);
     expect(job?.steps.at(-1)?.with?.['working-directory']).toBe('apps/${{ matrix.app }}');
+    // Per app too, the check reports before it is required.
+    expect(job?.steps.at(-1)?.with?.['fail-on']).toBe('none');
+    expect(perApp).toContain(
+      "with `npx onsystem check .` run in each app's folder before you remove `fail-on: none`",
+    );
     for (const app of apps) expect(perApp).toContain(`\`onsystem (${app})\``);
   });
 
@@ -235,6 +294,7 @@ describe('the team rollout page (docs/rollout.md)', () => {
     );
     expect(upgrade).toContain('uses: dgesteves/onsystem@<commit> # onsystem <version>');
     // The action runs the CLI of its own release; the hook runs the project's install.
-    expect(read('action/check.mjs')).toContain("args: ['--yes', `onsystem@${version}`]");
+    const { version } = JSON.parse(read('package.json')) as { version: string };
+    expect(cli({}, root).args).toEqual(['--yes', `onsystem@${version}`]);
   });
 });

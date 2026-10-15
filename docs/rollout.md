@@ -23,7 +23,9 @@ cd packages/ui
 npx onsystem init
 ```
 
-In a single app, run `npx onsystem init` in the app. `init` writes `onsystem.config.json` from what it found, and in a package also `ONSYSTEM.md`, which tells the apps' teams how to use it. Commit what it writes. Answer no when it offers a baseline: the next step records one where CI runs the check.
+In a single app, run `npx onsystem init` in the app, and answer yes when it offers a baseline: the app is where CI runs the check, so that does the next step. `init` writes `onsystem.config.json` from what it found, and in a package also `ONSYSTEM.md`, which tells the apps' teams how to use it. Commit what it writes.
+
+In a package, answer no when it offers a baseline: CI at the root does not read a baseline in the package, and the next step records one where CI runs the check. Skip `ONSYSTEM.md`'s CI section too, which has each app record a baseline in its own folder: it is for apps outside this repository, and the next step sets the baseline for the apps inside it.
 
 ## Record the baseline
 
@@ -139,8 +141,25 @@ jobs:
           fail-on: none
 ```
 
+With pnpm, set up pnpm before Node and install from its lockfile. `pnpm/action-setup` takes pnpm's version from `packageManager` in `package.json`, or from its `version` input:
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+  - uses: pnpm/action-setup@v6
+  - uses: actions/setup-node@v7
+    with:
+      node-version: 24
+      cache: pnpm
+  - run: pnpm install --frozen-lockfile
+  - uses: dgesteves/onsystem@v0
+    with:
+      only-changed-lines: false
+      fail-on: none
+```
+
 - **Report first.** With `fail-on: none`, the findings show as annotations on the pull request and in the job summary, and the job fails only when the check cannot run (no design system found, a broken config). Keep it that way until the team trusts what it reports, and fix or [suppress](rules.md#suppressing-findings) what it gets wrong.
-- **Then require it.** Remove `fail-on: none`, so that errors fail the job, and add `onsystem` as a required check ([make the check required](required-check.md#make-the-check-required)).
+- **Then require it.** Remove `fail-on: none`, so that errors fail the job, and add `onsystem` as a required check ([make the check required](required-check.md#make-the-check-required)). While the check only reported, pull requests could merge new findings, and they are not in the baseline: once errors fail the job, every pull request fails on them, even one that does not touch them. So in the pull request that removes `fail-on: none`, first run `npx onsystem check .` where CI runs it, and fix what is new or record it with `npx onsystem check . --update-baseline`, which the baseline's code owners review. The first required run then passes.
 
 `only-changed-lines: false` checks every line, and only findings that are not in the baseline fail. By default the action reports only the lines a pull request changed, so a pull request that removes a variant from `packages/ui` passes while an app still uses it: the app's line did not change. Since every pull request is checked in full, the workflow needs no `paths` filter, which would leave a required check waiting on the pull requests it skips.
 
@@ -163,9 +182,10 @@ jobs:
         with:
           working-directory: apps/${{ matrix.app }}
           only-changed-lines: false
+          fail-on: none
 ```
 
-GitHub names each job after its matrix value, `onsystem (web)` and `onsystem (admin)`: require each of them, and the new one whenever you add an app. Give each app's baseline a line in `CODEOWNERS`. The plugin's hook reads each app's baseline too. A job per app is also the stricter `require-design-system` gate: from the root, it fails only when no workspace package has components and color tokens.
+It reports first and is required later, as above, with `npx onsystem check .` run in each app's folder before you remove `fail-on: none`. GitHub names each job after its matrix value, `onsystem (web)` and `onsystem (admin)`: require each of them, and the new one whenever you add an app. Give each app's baseline a line in `CODEOWNERS`. The plugin's hook reads each app's baseline too. A job per app is also the stricter `require-design-system` gate: from the root, it fails only when no workspace package has components and color tokens.
 
 ## Upgrade
 
