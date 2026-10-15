@@ -725,27 +725,179 @@ export const noUnknownVariant: Rule = {
 
 // ─── icon-button-accessible-name ────────────────────────────────────────────
 
-const ICON_LABELS: [RegExp, string][] = [
-  [/^(Trash|Delete|Bin)/, 'Delete'],
+/**
+ * Labels guessed from an icon's name, for the message. The third pattern names the icons that mean
+ * one thing on a button (a trash can deletes, a magnifier searches), matched against the name
+ * without its digits or `Icon` suffix (`Trash2Icon` is `Trash`): only their label is fixed. A plus
+ * may add or expand, a chevron page or expand, an X close, remove or clear, so those are fixed only
+ * where the code says which (`iconLabel`), and the rest are named without a fix.
+ */
+const ICON_LABELS: [RegExp, string, RegExp?][] = [
+  [/^(Trash|Delete|Bin)/, 'Delete', /^(?:Trash|Delete|Bin)$/],
   [/^(X|Close|Cross)(Icon)?$|^X(Circle|Square)/, 'Close'],
   [/^(Plus|Add)/, 'Add'],
-  [/^(Pencil|Edit|PenLine|SquarePen)/, 'Edit'],
-  [/^Search/, 'Search'],
+  [/^(Pencil|Edit|PenLine|SquarePen)/, 'Edit', /^(?:Pencil|Edit|SquarePen)$/],
+  [/^Search/, 'Search', /^Search$/],
   [/^(Menu|Hamburger)/, 'Open menu'],
-  [/^(Settings|Cog|Gear)/, 'Settings'],
-  [/^(Copy|Clipboard)/, 'Copy'],
-  [/^Download/, 'Download'],
-  [/^Upload/, 'Upload'],
+  [/^(Settings|Cog|Gear)/, 'Settings', /^(?:Settings|Cog|Gear)$/],
+  [/^(Copy|Clipboard)/, 'Copy', /^(?:Copy|ClipboardCopy)$/],
+  [/^Download/, 'Download', /^Download$/],
+  [/^Upload/, 'Upload', /^Upload$/],
   [/^(MoreHorizontal|MoreVertical|Ellipsis|DotsHorizontal|DotsVertical)/, 'More options'],
   [/^ChevronLeft|^ArrowLeft/, 'Previous'],
   [/^ChevronRight|^ArrowRight/, 'Next'],
   [/^(UserMinus|UserX)/, 'Remove member'],
   [/^(UserPlus)/, 'Invite member'],
   [/^(RefreshCw|RefreshCcw|RotateCw)/, 'Refresh'],
-  [/^(Share)/, 'Share'],
-  [/^(Filter)/, 'Filter'],
+  [/^(Share)/, 'Share', /^Share$/],
+  [/^(Filter)/, 'Filter', /^Filter$/],
   [/^(Info)/, 'More information'],
 ];
+
+/** A part that expands and collapses: `CollapsibleTrigger`, `Accordion.Trigger`, `DisclosureButton`. */
+const TOGGLE_PART = /(?:Collapsible|Accordion|Disclosure)\w*\.?\w*(?:Trigger|Button)$/;
+/** A part that closes its dialog, sheet or popover: `DialogClose`, `Dialog.Close`. */
+const CLOSE_PART = /Close$/;
+/** A part that opens a menu: `DropdownMenuTrigger`, `Menu.Trigger`, Headless UI's `MenuButton`. */
+const MENU_TRIGGER = /Menu\w*\.?\w*Trigger$|^(?:\w+\.)?Menu\.?Button$/;
+/** Classes styled by an expanded state: `data-[state=open]:rotate-90`, `aria-expanded:bg-muted`. */
+const EXPANDED_CLASS = /data-\[state=(?:open|closed)\]|aria-expanded:/;
+
+/** The tags of the button and of every element around it, its `render` host included. */
+function enclosingTags(context: RuleContext, element: JsxNode): string[] {
+  const tags = [element.tag];
+  ts.findAncestor(element.node.parent, (node) => {
+    if (ts.isJsxElement(node)) tags.push(node.openingElement.tagName.getText(context.sourceFile));
+    return false;
+  });
+  return tags;
+}
+
+/** The names a callee is reached by: `deleteMutation.mutate` is `deleteMutation` and `mutate`. */
+function calleeNames(expression: ts.Expression): string[] {
+  const names: string[] = [];
+  let current: ts.Expression = expression;
+  for (;;) {
+    if (ts.isNonNullExpression(current) || ts.isParenthesizedExpression(current)) {
+      current = current.expression;
+    } else if (ts.isPropertyAccessExpression(current)) {
+      names.unshift(current.name.text);
+      current = current.expression;
+    } else {
+      if (ts.isIdentifier(current)) names.unshift(current.text);
+      return names;
+    }
+  }
+}
+
+type HandlerAction = 'Remove' | 'Clear' | 'Close';
+
+/** The words that name each action in a function's name. */
+const ACTION_WORDS: [HandlerAction, readonly string[]][] = [
+  ['Remove', ['remove', 'delete']],
+  ['Clear', ['clear', 'reset']],
+  ['Close', ['close', 'dismiss', 'hide']],
+];
+
+/** Calls that tidy up around the action rather than name it: `clearTimeout(timer)`. */
+const HOUSEKEEPING =
+  /^(?:clearTimeout|clearInterval|clearImmediate|removeEventListener|removeListener)$/;
+
+/**
+ * What one call or handler reference does, by its name: `removeAssertion`, `onClose`,
+ * `setOpen(false)`. A name with words of two actions (`closeDeleteDialog`, `hideRemoveConfirm`) or
+ * with `cancel` (`onCancelDelete`) says none.
+ */
+function actionOf(names: string[], argument?: ts.Expression): HandlerAction | undefined {
+  const last = names.at(-1) ?? '';
+  if (HOUSEKEEPING.test(last)) return undefined;
+  const words = names.flatMap((name) => name.split(/(?=[A-Z])|_/)).map((w) => w.toLowerCase());
+  if (
+    argument?.kind === ts.SyntaxKind.FalseKeyword &&
+    words.some((w) => w === 'open' || w === 'show' || w === 'visible')
+  ) {
+    return 'Close';
+  }
+  // A state setter names state, not an action: `setDeleteTarget(null)`.
+  if (/^set[A-Z]/.test(last) || words.includes('cancel')) return undefined;
+  const actions = ACTION_WORDS.filter(([, named]) => words.some((w) => named.includes(w)));
+  return actions.length === 1 ? actions[0]?.[0] : undefined;
+}
+
+/**
+ * What a button's `onClick` (or React Aria's `onPress`) does, by the names of the functions it
+ * calls or passes, and whether that is sure: only when every name says the same action. A close
+ * button that also tidies up (`form.reset(); setOpen(false)`) or a button that removes a row and
+ * closes a popover is named "Close", or "Remove" when it removes and clears, without a fix.
+ * Callbacks inside the handler run later, on their own events (`mutate(id, { onSuccess: () =>
+ * toast.dismiss() })`), so they do not count.
+ */
+function handlerAction(
+  attributes: readonly ts.JsxAttribute[],
+): { action: HandlerAction; sure: boolean } | undefined {
+  const found = new Set<HandlerAction>();
+  for (const attribute of attributes) {
+    if (!/^on(?:Click|Press)$/.test(attributeName(attribute))) continue;
+    const init = attribute.initializer;
+    const value = init && ts.isJsxExpression(init) ? init.expression : undefined;
+    if (!value) continue;
+    const reference = actionOf(calleeNames(value));
+    if (reference) found.add(reference);
+    const stack: ts.Node[] = [value];
+    for (let node = stack.pop(); node; node = stack.pop()) {
+      if (ts.isCallExpression(node)) {
+        const action = actionOf(calleeNames(node.expression), node.arguments[0]);
+        if (action) found.add(action);
+      }
+      ts.forEachChild(node, (child) => {
+        if (!ts.isFunctionLike(child)) stack.push(child);
+      });
+    }
+  }
+  const [only] = found;
+  if (!only) return undefined;
+  if (found.size === 1) return { action: only, sure: true };
+  return { action: found.has('Close') ? 'Close' : 'Remove', sure: false };
+}
+
+/**
+ * The label for an icon-only button, and whether the fix may write it: only when the icon means
+ * one thing on a button, or the code says what it does. A chevron that expands or collapses gets
+ * no direction; an X is named by its handler (`Remove`, `Clear`, `Close`), and `Close` is fixed
+ * in a close part; "More options" is fixed on a menu's trigger.
+ */
+function iconLabel(
+  context: RuleContext,
+  element: JsxNode,
+  host: JsxNode | undefined,
+  icon: string | undefined,
+): { label?: string; fixed: boolean } {
+  const entry = icon ? ICON_LABELS.find(([pattern]) => pattern.test(icon)) : undefined;
+  if (!icon || !entry) return { fixed: false };
+  const [, label, plain] = entry;
+  const tags = enclosingTags(context, element);
+  const owners = host ? [element, host] : [element];
+  const attributes = owners.flatMap((owner) => owner.attributes);
+  if (label === 'Next' || label === 'Previous') {
+    const toggles =
+      tags.some((tag) => TOGGLE_PART.test(tag)) ||
+      attributes.some((a) => /^(?:aria-expanded|data-state)$/.test(attributeName(a))) ||
+      context.analysis.classStrings.some(
+        (c) => c.element && owners.includes(c.element) && EXPANDED_CLASS.test(c.text),
+      );
+    return { label: toggles ? 'Toggle' : label, fixed: false };
+  }
+  if (label === 'Close') {
+    // A close part closes, whatever else its onClick does (`form.reset()`).
+    if (tags.some((tag) => CLOSE_PART.test(tag))) return { label, fixed: true };
+    const handler = handlerAction(attributes);
+    return handler ? { label: handler.action, fixed: handler.sure } : { label, fixed: false };
+  }
+  if (label === 'More options') {
+    return { label, fixed: tags.some((tag) => MENU_TRIGGER.test(tag)) };
+  }
+  return { label, fixed: plain?.test(icon.replace(/Icon$/, '').replace(/\d+$/, '')) ?? false };
+}
 
 /**
  * What a button holds: text (or a labelled element), icons only, nothing, or
@@ -1068,8 +1220,7 @@ export const iconButtonAccessibleName: Rule = {
       )
         continue;
 
-      const icon = icons[0];
-      const label = icon ? ICON_LABELS.find(([pattern]) => pattern.test(icon))?.[1] : undefined;
+      const { label, fixed } = iconLabel(context, element, host, icons[0]);
       const attribute = `aria-label="${label ?? '…'}"`;
       context.report({
         ...tagRange(context, element),
@@ -1078,7 +1229,7 @@ export const iconButtonAccessibleName: Rule = {
             ? `Icon-only <${element.tag}> has no accessible name. Add ${attribute} describing the action, or visually hidden text.`
             : `<${element.tag}> has no content and no accessible name. Add ${attribute}.`,
         suggestion: attribute,
-        fix: label
+        fix: fixed
           ? [{ range: [element.tagName.end, element.tagName.end], text: ` ${attribute}` }]
           : undefined,
       });
