@@ -33,13 +33,14 @@ const RULES_CONFIG = `{
 /** "On this page": each rule's card, then the sections under the list. */
 const TOC: TocItem[] = [
   ...ruleCatalog.rules.map((rule) => ({ id: rule.id, label: rule.id, level: 2 })),
+  { id: 'known-limits', label: 'Known limits', level: 2 },
   { id: 'configure', label: 'Configuring the rules', level: 2 },
   { id: 'suppressing-findings', label: 'Suppressing findings', level: 2 },
   { id: 'fixes', label: 'How fixes are chosen', level: 2 },
 ];
 
 export default function RulesPage() {
-  const { rules, version, details, suppression } = ruleCatalog;
+  const { rules, version, limits, details, suppression } = ruleCatalog;
   return (
     <main id="main" className="relative">
       <div className="glow pointer-events-none absolute inset-x-0 top-0 h-140" aria-hidden="true" />
@@ -78,6 +79,22 @@ export default function RulesPage() {
             </ul>
 
             <div className="mt-14 max-w-3xl">
+              <section
+                id="known-limits"
+                aria-labelledby="known-limits-title"
+                className="scroll-mt-20 border-t border-line pt-10 pb-12"
+              >
+                <h2
+                  id="known-limits-title"
+                  className="text-xl font-semibold tracking-tight text-fg"
+                >
+                  Known limits
+                </h2>
+                <div className="mt-3">
+                  <MarkdownBlocks markdown={limits} />
+                </div>
+              </section>
+
               <section
                 id="configure"
                 aria-labelledby="configure-title"

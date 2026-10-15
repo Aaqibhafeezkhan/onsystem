@@ -128,6 +128,22 @@ describe('/rules', () => {
       expect(index).toContain(`id="${id}"`);
     }
   });
+
+  it('shows the known limits from docs/rules.md, after the rules', () => {
+    // docs/rules.md says there which class strings are not followed yet, and what to write
+    // instead. The page showed the doc's other sections but not this one.
+    const { limits } = ruleCatalog;
+    expect(limits).toContain('className={statusStyles[status]}');
+    const section = /<section id="known-limits"[^>]*>([\s\S]*?)<\/section>/.exec(index)?.[1] ?? '';
+    expect(text(section)).toContain('Known limits');
+    // The whole section, as the page shows it: links by their text, code without backticks.
+    expect(text(section)).toContain(plain(limits.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')));
+    // Its link to the other limits goes to the site's page, not to the Markdown file.
+    expect(section).toContain('href="/docs/how-it-works#limits"');
+    const at = (id: string) => index.indexOf(`id="${id}"`);
+    expect(at('known-limits')).toBeGreaterThan(at(ruleCatalog.rules.at(-1)?.id ?? '-'));
+    expect(at('known-limits')).toBeLessThan(at('suppressing-findings'));
+  });
 });
 
 describe('old /rules#<id> links', () => {
