@@ -20,6 +20,7 @@ import {
   pointsInterval,
   rateInterval,
   row,
+  SHADCN_LINT,
   SHADCN_LINT_ANCHOR,
   shadcnLintDelta,
   shadcnLintRow,
@@ -42,8 +43,6 @@ import { docsHref, REPO, repoLink } from '@/lib/site';
 const RESULTS = 'bench/v2/results/standard';
 /** The change that reads dub's color tokens, which the benchmarked release could not. */
 const PR_107 = `${REPO}/pull/107`;
-/** The independent scorer's repository, as bench/v2/README.md links it. */
-const SHADCN_LINT = 'https://github.com/shadcn-ui/lint';
 const top = headline(benchmark);
 
 export const metadata: Metadata = pageMetadata({
@@ -661,7 +660,9 @@ export default function BenchmarkPage() {
                 onsystem: <TextLink href={SHADCN_LINT}>@shadcn/lint</TextLink> {lint.version}, with
                 all {words(lint.rules.length)} of its rules, on the file each run created, at its
                 path in the repository. No arm showed the agent its messages, and a run that created
-                no file counts 0. <InlineCode>{lint.rerun}</InlineCode> runs it again, as{' '}
+                no file counts 0. It was added after the standard run, so it is not one of the
+                outcomes fixed before any run. <InlineCode>{lint.rerun}</InlineCode> runs it again,
+                as{' '}
                 <TextLink href={`${repoLink('bench/v2/README.md')}#${SHADCN_LINT_ANCHOR}`}>
                   bench/v2/README.md
                 </TextLink>{' '}
@@ -676,7 +677,12 @@ export default function BenchmarkPage() {
               so <InlineCode>no-raw-colors</InlineCode> agrees with onsystem rather than confirming
               it. Most of what is left is <InlineCode>no-restyle</InlineCode>, a class that changes
               a design-system component&apos;s color, typography or spacing, which onsystem does not
-              report. By model and by rule:{' '}
+              report. It is strict, and whether an override is wrong depends on the design system.
+              What it does and does not measure, and where it reads less:{' '}
+              <TextLink href={`${repoLink('bench/v2/README.md')}#${SHADCN_LINT_ANCHOR}`}>
+                bench/v2/README.md
+              </TextLink>
+              . By model and by rule:{' '}
               <TextLink href={`${repoLink(`${RESULTS}/results.md`)}#${SHADCN_LINT_ANCHOR}`}>
                 results.md
               </TextLink>
@@ -939,9 +945,12 @@ export default function BenchmarkPage() {
                 <li className="pl-1">
                   <strong className="font-semibold text-fg">onsystem is one of the scorers.</strong>{' '}
                   The headline counts the errors of onsystem {benchmark.onsystem}, the release under
-                  test. <InlineCode>tsc</InlineCode> and the blind labels are the independent
-                  checks: <InlineCode>tsc</InlineCode> does not see hardcoded values, and the labels
-                  cover {labels.files} files.
+                  test. <InlineCode>tsc</InlineCode>, @shadcn/lint and the blind labels are the
+                  independent checks: <InlineCode>tsc</InlineCode> does not see hardcoded values,
+                  @shadcn/lint&apos;s <InlineCode>no-raw-colors</InlineCode> flags the same kind of
+                  error the MCP server and the hook show the agent (see{' '}
+                  <TextLink href="#independent-scorer">Independent scorer</TextLink>), and the
+                  labels cover {labels.files} files.
                 </li>
                 <li className="pl-1">
                   <strong className="font-semibold text-fg">

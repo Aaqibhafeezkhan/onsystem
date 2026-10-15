@@ -498,7 +498,7 @@ assert.ok(
 const lint = v2Results.shadcnLint;
 assert.ok(
   lint,
-  'results.json has no shadcnLint: run `node bench/v2/run.mjs score --with shadcn-lint`',
+  'results.json has no shadcnLint: run `node bench/v2/run.mjs score --with shadcn-lint --out bench/v2/results/standard`',
 );
 const lintVersion = lint.scorer?.packages?.['@shadcn/lint'];
 assert.ok(lintVersion, 'results.json: shadcnLint.scorer names no @shadcn/lint version');

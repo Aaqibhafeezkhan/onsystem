@@ -430,7 +430,7 @@ describe('/benchmark', () => {
     expect(section.match(/<table/g)).toHaveLength(1);
     const method = text(/<p data-lint="method"[^>]*>([\s\S]*?)<\/p>/.exec(section)?.[1] ?? '');
     expect(method).toBe(
-      'The same 1,200 runs, scored by a linter that is not part of onsystem: @shadcn/lint 0.2.1, with all six of its rules, on the file each run created, at its path in the repository. No arm showed the agent its messages, and a run that created no file counts 0. node bench/v2/run.mjs score --with shadcn-lint --out bench/v2/results/standard runs it again, as bench/v2/README.md describes.',
+      'The same 1,200 runs, scored by a linter that is not part of onsystem: @shadcn/lint 0.2.1, with all six of its rules, on the file each run created, at its path in the repository. No arm showed the agent its messages, and a run that created no file counts 0. It was added after the standard run, so it is not one of the outcomes fixed before any run. node bench/v2/run.mjs score --with shadcn-lint --out bench/v2/results/standard runs it again, as bench/v2/README.md describes.',
     );
     // The command is the one the README gives, and the sections linked are there.
     const readme = fs.readFileSync(path.join(results, '../../README.md'), 'utf8');
@@ -439,6 +439,18 @@ describe('/benchmark', () => {
     );
     expect(readme).toContain('\n## Independent scorer: @shadcn/lint\n');
     expect(report).toContain('\n## Independent scorer: @shadcn/lint\n');
+    // The README's disclosures the notes repeat: the scorer came after the run, and no-restyle
+    // is strict.
+    const readmeSection = /^## Independent scorer: @shadcn\/lint\n([\s\S]*?)^## /m.exec(
+      readme,
+    )?.[1];
+    for (const said of [
+      'It was added after the standard run, so it is not one of the outcomes fixed before any run.',
+      'It is strict, and whether an override is wrong depends on the design system.',
+    ]) {
+      expect(readmeSection).toContain(said);
+      expect(text(section)).toContain(said);
+    }
     expect(section).toContain(
       'href="https://github.com/dgesteves/onsystem/blob/main/bench/v2/README.md#independent-scorer-shadcnlint"',
     );
@@ -448,8 +460,25 @@ describe('/benchmark', () => {
     expect(section).toContain('href="https://github.com/shadcn-ui/lint"');
     // What its count agrees with, and what onsystem does not report.
     expect(text(/<p data-lint="scope"[^>]*>([\s\S]*?)<\/p>/.exec(section)?.[1] ?? '')).toBe(
-      "On colors it flags the same kind of error the MCP server and the hook show the agent, so no-raw-colors agrees with onsystem rather than confirming it. Most of what is left is no-restyle, a class that changes a design-system component's color, typography or spacing, which onsystem does not report. By model and by rule: results.md.",
+      "On colors it flags the same kind of error the MCP server and the hook show the agent, so no-raw-colors agrees with onsystem rather than confirming it. Most of what is left is no-restyle, a class that changes a design-system component's color, typography or spacing, which onsystem does not report. It is strict, and whether an override is wrong depends on the design system. What it does and does not measure, and where it reads less: bench/v2/README.md. By model and by rule: results.md.",
     );
+    expect(
+      [...section.matchAll(/href="([^"]+)"/g)].filter(
+        (m) =>
+          m[1] ===
+          'https://github.com/dgesteves/onsystem/blob/main/bench/v2/README.md#independent-scorer-shadcnlint',
+      ),
+    ).toHaveLength(2);
+    // Threats to validity names it with the other independent checks, and links the section.
+    const threats = /<section id="threats"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+    const scorers =
+      [...threats.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)]
+        .map((m) => m[1] ?? '')
+        .find((item) => text(item).startsWith('onsystem is one of the scorers.')) ?? '';
+    expect(text(scorers)).toBe(
+      `onsystem is one of the scorers. The headline counts the errors of onsystem ${version}, the release under test. tsc, @shadcn/lint and the blind labels are the independent checks: tsc does not see hardcoded values, @shadcn/lint's no-raw-colors flags the same kind of error the MCP server and the hook show the agent (see Independent scorer), and the labels cover ${String(labelled.length)} files.`,
+    );
+    expect(scorers).toContain('href="#independent-scorer"');
     // A section of its own, after the results, and nowhere in the headline or on the home page.
     expect(html.indexOf('id="independent-scorer"')).toBeGreaterThan(html.indexOf('id="results"'));
     expect(html.indexOf('id="independent-scorer"')).toBeLessThan(html.indexOf('id="labels"'));

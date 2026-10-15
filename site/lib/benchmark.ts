@@ -105,6 +105,9 @@ export function shadcnLintDelta(benchmark: Benchmark, arm: string): ShadcnLintDe
   return found;
 }
 
+/** The independent scorer's repository, as bench/v2/README.md links it. */
+export const SHADCN_LINT = 'https://github.com/shadcn-ui/lint';
+
 /** The section of bench/v2/README.md and of results.md on @shadcn/lint, as GitHub anchors it. */
 export const SHADCN_LINT_ANCHOR = 'independent-scorer-shadcnlint';
 
