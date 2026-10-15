@@ -1,5 +1,5 @@
 // What a coding agent wrote before it could see the design system.
-// `pnpm demo:check` (or the check_ui tool) reports every problem below.
+// `npm run check` (or the check_ui tool) reports every problem below.
 import { Trash2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
