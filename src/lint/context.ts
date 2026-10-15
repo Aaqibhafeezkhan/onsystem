@@ -67,7 +67,7 @@ export function resolveElement(
 
   // `UI.Button` with `import * as UI from "@/components/ui"`.
   if (binding?.imported === '*' && rest.length) {
-    if (!target.isDesignSystemImport(binding.source, file)) return { kind: 'external' };
+    if (!target.checksImport(binding.source, file)) return { kind: 'external' };
     const name = rest.join('.');
     const library = target.libraryOf(binding.source);
     if (library) return fromLibrary(target, library, name, binding.source, rest.length > 1);
@@ -98,7 +98,7 @@ export function resolveElement(
     if (resolved.kind !== 'component') return resolved;
     owner = resolved.component;
   } else if (binding) {
-    if (!target.isDesignSystemImport(binding.source, file)) return { kind: 'external' };
+    if (!target.checksImport(binding.source, file)) return { kind: 'external' };
     const imported =
       binding.imported === 'default'
         ? (target.defaultExport(binding.source, file)?.name ?? head)
