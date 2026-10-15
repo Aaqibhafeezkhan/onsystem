@@ -21,6 +21,9 @@ import type { Preset } from '@/lib/playground';
 const RESULTS = 'bench/v2/results/standard';
 /** The change that reads dub's color tokens, which the benchmarked release could not. */
 const PR_107 = 'https://github.com/dgesteves/onsystem/pull/107';
+/** Files with an anchor, linked whole: a relative link to one would resolve as a folder. */
+const BLOB = 'https://github.com/dgesteves/onsystem/blob/main';
+const SHADCN_LINT = 'https://github.com/shadcn-ui/lint';
 
 const labelRate = (r: LabelRate) =>
   `${String(r.successes)}/${String(r.n)} ${String(r.percent)}% [${String(r.low)}%, ${String(r.high)}%]`;
@@ -33,11 +36,12 @@ const list = (items: string[]) =>
 const capitalized = (text: string) => text.replace(/^./, (c) => c.toUpperCase());
 
 /**
- * /benchmark: the headline, the pooled results, the blind labels, the method and the threats to
- * validity, from generated/benchmark.json, formatted by `format` (lib/benchmark.ts) as the page is.
+ * /benchmark: the headline, the pooled results, the independent scorer's count, the blind labels,
+ * the method and the threats to validity, from generated/benchmark.json, formatted by `format`
+ * (lib/benchmark.ts) as the page is.
  */
 export function benchmarkMarkdown(benchmark: Benchmark, format: typeof BenchmarkFormat): string {
-  const { labels } = benchmark;
+  const { labels, shadcnLint: lint } = benchmark;
   const { count, perRun, perRunInterval, percent, rateInterval, words } = format;
   /** A rate as results.md prints it: `221/240 92% [88%, 95%]`. */
   const rate = (r: BenchRate) =>
@@ -52,6 +56,7 @@ export function benchmarkMarkdown(benchmark: Benchmark, format: typeof Benchmark
   const tiers = [...new Set(benchmark.models.map((m) => m.tier))];
   const stopped = Object.entries(benchmark.statuses).filter(([status]) => status !== 'done');
   const labeller = `[LABELLER.md](${RESULTS}/labels/LABELLER.md)`;
+  const lintSection = (file: string) => `${BLOB}/${file}#${format.SHADCN_LINT_ANCHOR}`;
   return [
     '# Benchmark',
     `Coding agents with and without onsystem. In the run of ${benchmark.date}, ${format.headlineText(benchmark)}. Every table is on [the benchmark page](/benchmark).`,
@@ -71,6 +76,35 @@ export function benchmarkMarkdown(benchmark: Benchmark, format: typeof Benchmark
         ];
       }),
     ),
+    '## Independent scorer: @shadcn/lint {#independent-scorer}',
+    `The same ${count(benchmark.runs)} runs, scored by a linter that is not part of onsystem: [@shadcn/lint](${SHADCN_LINT}) ${lint.version}, with all ${words(lint.rules.length)} of its rules, on the file each run created, at its path in the repository. No arm showed the agent its messages, and a run that created no file counts 0. \`${lint.rerun}\` runs it again, as [bench/v2/README.md](${lintSection('bench/v2/README.md')}) describes.`,
+    table(
+      [
+        'Arm',
+        'Runs',
+        'Files linted',
+        'Findings per run',
+        'Δ against `none`, paired',
+        '`no-raw-colors` per run',
+        '`no-restyle` per run',
+      ],
+      benchmark.arms.map((arm) => {
+        const row = format.shadcnLintRow(benchmark, arm);
+        const d = format.shadcnLintDelta(benchmark, arm);
+        return [
+          `\`${arm}\``,
+          count(row.runs),
+          count(row.linted),
+          mean(row.findings),
+          d
+            ? `${format.signedPerRun(d.findings.value)} ${format.signedPerRunInterval(d.findings)}`
+            : '—',
+          perRun(row.byRule['no-raw-colors'] ?? 0),
+          perRun(row.byRule['no-restyle'] ?? 0),
+        ];
+      }),
+    ),
+    `On colors it flags the same kind of error the MCP server and the hook show the agent, so \`no-raw-colors\` agrees with onsystem rather than confirming it. Most of what is left is \`no-restyle\`, a class that changes a design-system component's color, typography or spacing, which onsystem does not report. By model and by rule: [results.md](${lintSection(`${RESULTS}/results.md`)}).`,
     '## Blind labels {#labels}',
     `A stratified random sample of ${String(labels.files)} files (${String(perArm)} per arm) was labelled blind by an AI reviewer (${labels.labeller.model}), not by people. It saw the task, the design system and the file, not the model, the arm or onsystem's verdict, and counted invented APIs, hardcoded values, native elements and unnamed controls. ${familyOf} are from the same family as the labeller, so they may share its blind spots. With ${String(perArm)} files per arm, the intervals are wide. Who labelled, what it could see and the rules it applied are in ${labeller}.`,
     table(

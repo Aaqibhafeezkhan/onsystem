@@ -123,6 +123,26 @@ export interface BenchDelta {
   onsystemErrors: BenchInterval;
 }
 
+/** @shadcn/lint's findings per run for one pool of models and arm, from results.json. */
+export interface ShadcnLintRow {
+  model: string;
+  arm: string;
+  runs: number;
+  /** Runs whose file existed to lint: a run that created none counts 0 findings. */
+  linted: number;
+  findings: BenchInterval;
+  /** Findings per run, by @shadcn/lint rule. */
+  byRule: Record<string, number>;
+}
+
+/** An arm against `none` in @shadcn/lint's findings per run, paired on model, task and repeat. */
+export interface ShadcnLintDelta {
+  model: string;
+  arm: string;
+  pairs: number;
+  findings: BenchInterval;
+}
+
 /** A rate as results.md prints it: whole percents. */
 export interface LabelRate {
   successes: number;
@@ -153,6 +173,16 @@ export interface Benchmark {
   tasks: { id: string; repo: string; prompt: string }[];
   rows: BenchRow[];
   deltas: BenchDelta[];
+  /** The independent scorer, pooled over all models: results.json's `shadcnLint`. */
+  shadcnLint: {
+    /** @shadcn/lint's version, as config/shadcn-lint.json pins it. */
+    version: string;
+    rules: string[];
+    /** The command bench/v2/README.md gives to score the run again. */
+    rerun: string;
+    rows: ShadcnLintRow[];
+    deltas: ShadcnLintDelta[];
+  };
   cost: { total: number; cap: number; pricesVerified: string };
   time: { wallMinutes: number; medianSeconds: number; minSeconds: number; maxSeconds: number };
   labels: {

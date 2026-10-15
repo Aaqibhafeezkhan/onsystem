@@ -120,6 +120,37 @@ describe('llms-full.txt', () => {
     for (const item of items) expect(benchmark).toContain(item);
   });
 
+  it('has the independent scorer’s table and the notes /benchmark prints with it', () => {
+    // #155's review: Ask and llms-full.txt should have @shadcn/lint's count as the page has it.
+    const html = renderToStaticMarkup(createElement(BenchmarkPage));
+    const benchmark = section('Benchmark');
+    expect(benchmark).toContain('\n### Independent scorer: @shadcn/lint\n');
+    const results = JSON.parse(read('bench/v2/results/standard/results.json')) as {
+      shadcnLint: {
+        rows: { model: string; arm: string; runs: number; linted: number }[];
+        deltas: { model: string; arm: string; findings: { value: number } }[];
+      };
+    };
+    const rows = results.shadcnLint.rows.filter((r) => r.model === 'all models');
+    expect(rows.map((r) => r.arm)).toEqual(['none', 'skill', 'mcp', 'hook', 'all']);
+    expect(benchmark).toContain(
+      '| Arm | Runs | Files linted | Findings per run | Δ against `none`, paired | `no-raw-colors` per run | `no-restyle` per run |',
+    );
+    expect(benchmark).toContain('| `none` | 240 | 227 | 4.97 [3.30, 6.69] | — | 1.84 | 2.98 |');
+    expect(benchmark).toContain(
+      '| `all` | 240 | 229 | 2.64 [1.76, 3.58] | −2.33 [−3.28, −1.38] | 0.60 | 1.97 |',
+    );
+    for (const r of rows) expect(benchmark).toContain(`| \`${r.arm}\` | ${String(r.runs)} | `);
+    const plainBenchmark = plain(benchmark);
+    for (const note of ['method', 'scope']) {
+      const said = text(
+        new RegExp(`<p data-lint="${note}"[^>]*>([\\s\\S]*?)</p>`).exec(html)?.[1] ?? '',
+      );
+      expect(said, note).not.toBe('');
+      expect(plainBenchmark, note).toContain(said);
+    }
+  });
+
   it('has the playground, with the drafts and the demo design system it checks against', () => {
     const playground = section('Playground');
     expect(playground).not.toBe('');
