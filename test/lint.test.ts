@@ -728,10 +728,15 @@ describe('no-hardcoded-spacing and no-hardcoded-radius', () => {
   });
 
   it('leaves hairline overlaps of 1px or less alone', () => {
-    expect(check(`<div className="-mt-[-1px] mb-[1px]" />`, 'no-hardcoded-spacing')).toEqual([]);
+    expect(check(`<div className="-mt-[-1px]" />`, 'no-hardcoded-spacing')).toEqual([]);
     expect(
-      check(`<div style={{ marginTop: -1, marginLeft: 1 }} />`, 'no-hardcoded-spacing'),
+      check(`<div style={{ marginTop: -1 }} />`, 'no-hardcoded-spacing'),
     ).toEqual([]);
+    const [s] = check(`<div style={{ marginLeft: 1 }} />`, 'no-hardcoded-spacing');
+    expect(s?.suggestion).toBe('ml-px');
+    // Exact on-scale values are still reported (no layout change).
+    const [d] = check(`<div className="mb-[1px]" />`, 'no-hardcoded-spacing');
+    expect(d?.suggestion).toBe('mb-px');
   });
 
   it("offers every whole and half step of Tailwind's --spacing, and px", () => {

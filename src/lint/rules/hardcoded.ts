@@ -853,6 +853,16 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
           if (negative && !NEGATIVE_PREFIXES.has(utility.prefix)) continue;
           const replacement = lengthReplacement(context, spec.category, px, utility.prefix);
           if (!replacement || unnamed(replacement)) continue;
+          // Hairline overlaps (issue #61): a value of 1px or less would change
+          // the layout if swapped (e.g. `-mt-[-1px]` fixes to `mt-px`, dropping
+          // the overlap), so it is left alone — unless it is an exact,
+          // sign-preserving match (e.g. `py-[1px]` -> `py-px`).
+          if (
+            spec.category === 'spacing' &&
+            Math.abs(px) <= 1 &&
+            (!replacement.exact || px < 0)
+          )
+            continue;
           const fixed = withBase({ ...utility, negative }, replacement.cls);
           const message = replacement.exact
             ? `\`${token.value}\` is ${formatPx(px)}, which is on the ${spec.category} scale: use \`${fixed}\`.`
@@ -892,6 +902,15 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
                 ? lengthReplacement(context, spec.category, px, prefix)
                 : undefined;
             if (replacement && unnamed(replacement)) continue;
+            // Hairline overlaps (issue #61): see class-string loop above.
+            if (
+              replacement &&
+              values.length === 1 &&
+              spec.category === 'spacing' &&
+              Math.abs(px) <= 1 &&
+              (!replacement.exact || px < 0)
+            )
+              continue;
             const cls = replacement && `${negative ? '-' : ''}${replacement.cls}`;
             const cssVar =
               replacement?.cssVar &&
