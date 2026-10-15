@@ -50,7 +50,10 @@ const installLinks = (html: string, label: RegExp) =>
 describe('the docs sidebar', () => {
   it('groups the pages: get started, gating pull requests, integrations, reference, help', () => {
     expect(DOCS_NAV.map((g) => [g.group, g.items.map((item) => item.label)])).toEqual([
-      ['Get started', ['Quickstart', 'Set up your agent', 'Claude Code plugin']],
+      [
+        'Get started',
+        ['Quickstart', 'Set up your agent', 'Claude Code plugin', 'Roll out to a team'],
+      ],
       ['Gate PRs', ['CI and baselines', 'GitHub Action']],
       ['Integrations', ['ESLint plugin']],
       ['Reference', ['Configuration', 'Design-system packages', 'Design tokens', 'Rules', 'Tools']],
@@ -72,8 +75,8 @@ describe('the docs sidebar', () => {
       (href) => href !== '/rules',
     );
     expect(DOCS_PAGES.map((p) => p.href)).toEqual(order);
-    expect(docsPage('/docs/plugin').next?.href).toBe('/docs/ci');
-    expect(docsPage('/docs/ci').previous?.href).toBe('/docs/plugin');
+    expect(docsPage('/docs/plugin').next?.href).toBe('/docs/rollout');
+    expect(docsPage('/docs/ci').previous?.href).toBe('/docs/rollout');
   });
 });
 

@@ -727,6 +727,33 @@ describe('no-hardcoded-spacing and no-hardcoded-radius', () => {
     );
   });
 
+  it('leaves hairline overlaps of 1px or less alone', async () => {
+    // `mt-[-1px]` and `-mt-[1px]` are the same -1px margin.
+    expect(check(`<div className="mt-[-1px] -mt-[1px]" />`, 'no-hardcoded-spacing')).toEqual([]);
+    expect(check(`<div style={{ marginTop: -1 }} />`, 'no-hardcoded-spacing')).toEqual([]);
+    const [s] = check(`<div style={{ marginLeft: 1 }} />`, 'no-hardcoded-spacing');
+    expect(s?.suggestion).toBe('ml-px');
+    // Exact on-scale values are still reported (no layout change).
+    const [d] = check(`<div className="mb-[1px]" />`, 'no-hardcoded-spacing');
+    expect(d?.suggestion).toBe('mb-px');
+    // `-mt-[-1px]` is +1px, the same margin as `mt-px`.
+    const [p] = check(`<div className="-mt-[-1px]" />`, 'no-hardcoded-spacing');
+    expect(p?.suggestion).toBe('mt-px');
+
+    // Without a 1px step, the nearest one (4px) would change the layout.
+    const steps = await load(
+      fixture({
+        'onsystem.config.json': '{ "tokens": ["a.css"] }',
+        'a.css': `@import "tailwindcss";
+@theme { --spacing-*: initial; --spacing-xs: 0.25rem; --spacing-sm: 0.5rem; }`,
+      }),
+    );
+    const code = `<div className="mt-[-1px] mt-[0.5px] ml-[1px] p-[3px]" style={{ marginTop: 1, marginLeft: -1 }} />`;
+    expect(check(code, 'no-hardcoded-spacing', steps).map((d) => [d.source, d.suggestion])).toEqual(
+      [['p-[3px]', 'p-xs']],
+    );
+  });
+
   it("offers every whole and half step of Tailwind's --spacing, and px", () => {
     const code = `<div className="p-[52px] px-[18px] py-[1px] gap-[13px]" />`;
     const diagnostics = check(code, 'no-hardcoded-spacing');
@@ -2217,6 +2244,193 @@ describe('icon-button-accessible-name', () => {
   it('still flags an empty aria-label', () => {
     expect(check(`<button aria-label=""><svg /></button>`, rule)).toHaveLength(1);
     expect(check(`<button><svg><title> </title></svg></button>`, rule)).toHaveLength(1);
+  });
+
+  /** The label a finding suggests, and whether its fix writes it. */
+  const guess = (body: string, system = ds) =>
+    check(body.includes('import ') ? body : `${IMPORTS}${body}`, rule, system).map((d) => [
+      d.suggestion,
+      d.fix ? 'fixed' : 'not fixed',
+    ]);
+
+  it('fixes a label only for an icon that means one thing on a button', () => {
+    for (const [icon, label] of [
+      ['Trash2', 'Delete'],
+      ['TrashIcon', 'Delete'],
+      ['Pencil', 'Edit'],
+      ['Search', 'Search'],
+      ['Settings2', 'Settings'],
+      ['Copy', 'Copy'],
+      ['ClipboardCopyIcon', 'Copy'],
+      ['Download', 'Download'],
+      ['Upload', 'Upload'],
+      ['Share2', 'Share'],
+      ['Filter', 'Filter'],
+    ]) {
+      expect(guess(`<Button size="icon"><${icon} /></Button>`), icon).toEqual([
+        [`aria-label="${label}"`, 'fixed'],
+      ]);
+    }
+    // A plus may add or expand, a chevron page or expand, a refresh arrow rotate an image:
+    // the message names a label, without a fix. So do icons whose name only starts like one.
+    for (const [icon, label] of [
+      ['Plus', 'Add'],
+      ['ChevronLeft', 'Previous'],
+      ['ArrowRight', 'Next'],
+      ['Menu', 'Open menu'],
+      ['RotateCw', 'Refresh'],
+      ['UserPlus', 'Invite member'],
+      ['Info', 'More information'],
+      ['Copyright', 'Copy'],
+      ['ClipboardPaste', 'Copy'],
+      ['SearchX', 'Search'],
+      ['FilterX', 'Filter'],
+      ['Binary', 'Delete'],
+    ]) {
+      expect(guess(`<Button size="icon"><${icon} /></Button>`), icon).toEqual([
+        [`aria-label="${label}"`, 'not fixed'],
+      ]);
+    }
+    // "More options" is fixed on a menu's trigger.
+    expect(guess(`<Button size="icon"><MoreHorizontal /></Button>`)).toEqual([
+      ['aria-label="More options"', 'not fixed'],
+    ]);
+    const code = `${IMPORTS}<DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal /></Button></DropdownMenuTrigger>`;
+    expect(guess(code)).toEqual([['aria-label="More options"', 'fixed']]);
+    const [d] = check(code, rule);
+    expect(applyFixes(code, d ? [d] : [])).toContain(
+      '<Button aria-label="More options" variant="ghost"',
+    );
+    expect(
+      guess(`<Menu.Trigger render={<Button size="icon" />}><EllipsisVertical /></Menu.Trigger>`),
+    ).toEqual([['aria-label="More options"', 'fixed']]);
+  });
+
+  it('names no direction for a chevron that expands or collapses', async () => {
+    // shadcn's sidebar-10 and sidebar-15 blocks (nav-workspaces.tsx): the chevron expands a
+    // workspace, and the fix wrote aria-label="Next".
+    const shadcn = await load(
+      fixture({
+        'tsconfig.json': TSCONFIG,
+        'components/ui/sidebar.tsx': `import * as React from "react"
+export function SidebarMenuAction({ showOnHover, ...props }: React.ComponentProps<"button"> & { showOnHover?: boolean }) {
+  return <button data-sidebar="menu-action" {...props} />
+}`,
+        'components/ui/collapsible.tsx': `import * as React from "react"
+export function Collapsible(props: { children?: React.ReactNode }) {
+  return <div>{props.children}</div>
+}
+export function CollapsibleTrigger(props: { asChild?: boolean; children?: React.ReactNode }) {
+  return <button type="button">{props.children}</button>
+}`,
+      }),
+    );
+    const workspaces = `import { ChevronRight } from "lucide-react"
+import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { SidebarMenuAction } from "@/components/ui/sidebar"
+export function NavWorkspaces({ workspaces }: { workspaces: { name: string }[] }) {
+  return workspaces.map((workspace) => (
+    <Collapsible key={workspace.name}>
+      <CollapsibleTrigger asChild>
+        <SidebarMenuAction className="left-2 data-[state=open]:rotate-90" showOnHover>
+          <ChevronRight />
+        </SidebarMenuAction>
+      </CollapsibleTrigger>
+    </Collapsible>
+  ))
+}`;
+    expect(guess(workspaces, shadcn)).toEqual([['aria-label="Toggle"', 'not fixed']]);
+    // Inside an accordion's or a collapsible's trigger, or showing whether it is expanded.
+    for (const code of [
+      `<AccordionTrigger asChild><Button size="icon"><ChevronRight /></Button></AccordionTrigger>`,
+      `<Collapsible.Trigger render={<Button size="icon" />}><ChevronLeft /></Collapsible.Trigger>`,
+      `<Button size="icon" aria-expanded={open} onClick={() => setOpen(!open)}><ChevronRight /></Button>`,
+      `<Button size="icon" data-state={open ? "open" : "closed"}><ArrowRight /></Button>`,
+      `<Button size="icon" className={cn("transition-transform", "data-[state=open]:rotate-90")}><ChevronRight /></Button>`,
+    ]) {
+      expect(guess(code), code).toEqual([['aria-label="Toggle"', 'not fixed']]);
+    }
+    // A pager's chevron keeps its direction, without a fix, whatever other classes the file has.
+    expect(
+      guess(
+        `const chevron = cn("data-[state=open]:rotate-90");\n<Button size="icon" onClick={next}><ChevronRight /></Button>`,
+      ),
+    ).toEqual([['aria-label="Next"', 'not fixed']]);
+  });
+
+  it('names an X by what its onClick does, and fixes "Close" only where it closes', () => {
+    // OpenStatus's monitor form and onboarding page, and Dub's link builder: the fix wrote
+    // aria-label="Close" on buttons that remove a row.
+    for (const handler of [
+      `() => removeAssertion(index)`,
+      `() => remove(index)`,
+      `onRemove`,
+      `() => handleRemoveDomain(domain)`,
+      `() => { form.trigger(); fields.remove(i) }`,
+      `() => onDelete?.(id)`,
+      `() => deleteMutation.mutate({ id })`,
+      // A callback inside the handler runs on its own event, after the button's action.
+      `() => deleteMutation.mutate({ id }, { onSuccess: () => onClose() })`,
+    ]) {
+      expect(guess(`<Button size="icon" onClick={${handler}}><X /></Button>`), handler).toEqual([
+        ['aria-label="Remove"', 'fixed'],
+      ]);
+    }
+    expect(
+      guess(`<button type="button" onClick={() => clearSearch()}><XCircle /></button>`),
+    ).toEqual([['aria-label="Clear"', 'fixed']]);
+    expect(guess(`<Button size="icon" onPress={() => form.reset()}><X /></Button>`)).toEqual([
+      ['aria-label="Clear"', 'fixed'],
+    ]);
+    // A handler or a part that closes.
+    for (const code of [
+      `<Button size="icon" onClick={onClose}><X /></Button>`,
+      `<Button size="icon" onClick={() => setShowModal(false)}><X /></Button>`,
+      `<Button size="icon" onClick={() => setShowDeleteModal(false)}><X /></Button>`,
+      `<Button size="icon" onClick={() => props.onOpenChange?.(false)}><XIcon /></Button>`,
+      `<Button size="icon" onClick={() => toast.dismiss(id)}><X /></Button>`,
+      // A toast's close button that stops its timer: clearing a timeout tidies up.
+      `<Button size="icon" onClick={() => { window.clearTimeout(timer); onClose() }}><X /></Button>`,
+      `<Button size="icon" onClick={() => { onClose(); removeEventListener("keydown", onKey) }}><X /></Button>`,
+      `<DialogClose asChild><Button variant="ghost" size="icon"><X /></Button></DialogClose>`,
+      // A close part closes, whatever else its onClick does.
+      `<Dialog.Close asChild><button onClick={() => form.reset()}><X /></button></Dialog.Close>`,
+      `<DialogClose asChild><Button size="icon" onClick={() => clearSelection()}><X /></Button></DialogClose>`,
+      `<SheetClose asChild><Button size="icon" onClick={() => { reset(); onRemove() }}><X /></Button></SheetClose>`,
+    ]) {
+      expect(guess(code), code).toEqual([['aria-label="Close"', 'fixed']]);
+    }
+    // Nothing says what it does: a state setter names state, not an action; a name with words of
+    // two actions, or with "cancel", names none; a callback inside the handler does not count.
+    for (const code of [
+      `<Button size="icon"><X /></Button>`,
+      `<Button size="icon" onClick={handleClick}><X /></Button>`,
+      `<Button size="icon" onClick={() => setDeleteTarget(null)}><X /></Button>`,
+      `<Button size="icon" onClick={closeDeleteDialog}><X /></Button>`,
+      `<Button size="icon" onClick={onCancelDelete}><X /></Button>`,
+      `<Button size="icon" onClick={() => hideRemoveConfirm()}><X /></Button>`,
+      `<Button size="icon" onClick={() => mutate(id, { onSuccess: () => toast.dismiss() })}><X /></Button>`,
+      `<Button size="icon" onClick={() => mutate(id, { onSettled() { closeSheet() } })}><X /></Button>`,
+    ]) {
+      expect(guess(code), code).toEqual([['aria-label="Close"', 'not fixed']]);
+    }
+    // A handler that does two of these is named, without a fix: a close button that clears its
+    // form, or a button that removes a row and closes its popover.
+    for (const [handler, label] of [
+      [`() => { form.reset(); setOpen(false) }`, 'Close'],
+      [`() => { reset(); onClose() }`, 'Close'],
+      [`() => { onOpenChange(false); resetState() }`, 'Close'],
+      [`() => { onClose(); removeTag(tag) }`, 'Close'],
+      [`() => { removeFile(file); clearPreview() }`, 'Remove'],
+    ]) {
+      expect(guess(`<Button size="icon" onClick={${handler}}><X /></Button>`), handler).toEqual([
+        [`aria-label="${label}"`, 'not fixed'],
+      ]);
+    }
+    // A trash can still deletes, whatever its handler is called.
+    expect(guess(`<Button size="icon" onClick={() => remove(index)}><Trash2 /></Button>`)).toEqual([
+      ['aria-label="Delete"', 'fixed'],
+    ]);
   });
 });
 

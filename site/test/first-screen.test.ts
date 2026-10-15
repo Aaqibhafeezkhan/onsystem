@@ -223,7 +223,9 @@ describe('the rest of the home page', () => {
   it('says how to adopt it in one sentence, and links what the agent sees', () => {
     const adopt = /<section id="baseline"[\s\S]*?<\/section>/.exec(home)?.[0] ?? '';
     expect(adopt).not.toContain('data-code-block');
-    expect(adopt).toContain('href="/docs/ci#adopting-it-in-an-existing-codebase"');
+    // The team rollout page records the baseline as one of its steps.
+    expect(adopt).toContain('href="/docs/rollout"');
+    expect(read('docs/rollout.md')).toContain('## Record the baseline');
     expect(home).not.toContain('id="agent-view"');
     expect(home).toContain('href="/docs/tools"');
     expect(read('docs/tools.md')).toContain('What the agent sees');
