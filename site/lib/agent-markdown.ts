@@ -21,6 +21,8 @@ import type { Preset } from '@/lib/playground';
 const RESULTS = 'bench/v2/results/standard';
 /** The change that reads dub's color tokens, which the benchmarked release could not. */
 const PR_107 = 'https://github.com/dgesteves/onsystem/pull/107';
+/** Files with an anchor, linked whole: a relative link to one would resolve as a folder. */
+const BLOB = 'https://github.com/dgesteves/onsystem/blob/main';
 
 const labelRate = (r: LabelRate) =>
   `${String(r.successes)}/${String(r.n)} ${String(r.percent)}% [${String(r.low)}%, ${String(r.high)}%]`;
@@ -33,11 +35,12 @@ const list = (items: string[]) =>
 const capitalized = (text: string) => text.replace(/^./, (c) => c.toUpperCase());
 
 /**
- * /benchmark: the headline, the pooled results, the blind labels, the method and the threats to
- * validity, from generated/benchmark.json, formatted by `format` (lib/benchmark.ts) as the page is.
+ * /benchmark: the headline, the pooled results, the independent scorer's count, the blind labels,
+ * the method and the threats to validity, from generated/benchmark.json, formatted by `format`
+ * (lib/benchmark.ts) as the page is.
  */
 export function benchmarkMarkdown(benchmark: Benchmark, format: typeof BenchmarkFormat): string {
-  const { labels } = benchmark;
+  const { labels, shadcnLint: lint } = benchmark;
   const { count, perRun, perRunInterval, percent, rateInterval, words } = format;
   /** A rate as results.md prints it: `221/240 92% [88%, 95%]`. */
   const rate = (r: BenchRate) =>
@@ -52,6 +55,7 @@ export function benchmarkMarkdown(benchmark: Benchmark, format: typeof Benchmark
   const tiers = [...new Set(benchmark.models.map((m) => m.tier))];
   const stopped = Object.entries(benchmark.statuses).filter(([status]) => status !== 'done');
   const labeller = `[LABELLER.md](${RESULTS}/labels/LABELLER.md)`;
+  const lintSection = (file: string) => `${BLOB}/${file}#${format.SHADCN_LINT_ANCHOR}`;
   return [
     '# Benchmark',
     `Coding agents with and without onsystem. In the run of ${benchmark.date}, ${format.headlineText(benchmark)}. Every table is on [the benchmark page](/benchmark).`,
@@ -71,6 +75,35 @@ export function benchmarkMarkdown(benchmark: Benchmark, format: typeof Benchmark
         ];
       }),
     ),
+    '## Independent scorer: @shadcn/lint {#independent-scorer}',
+    `The same ${count(benchmark.runs)} runs, scored by a linter that is not part of onsystem: [@shadcn/lint](${format.SHADCN_LINT}) ${lint.version}, with all ${words(lint.rules.length)} of its rules, on the file each run created, at its path in the repository. No arm showed the agent its messages, and a run that created no file counts 0. It was added after the standard run, so it is not one of the outcomes fixed before any run. \`${lint.rerun}\` runs it again, as [bench/v2/README.md](${lintSection('bench/v2/README.md')}) describes.`,
+    table(
+      [
+        'Arm',
+        'Runs',
+        'Files linted',
+        'Findings per run',
+        'Δ against `none`, paired',
+        '`no-raw-colors` per run',
+        '`no-restyle` per run',
+      ],
+      benchmark.arms.map((arm) => {
+        const row = format.shadcnLintRow(benchmark, arm);
+        const d = format.shadcnLintDelta(benchmark, arm);
+        return [
+          `\`${arm}\``,
+          count(row.runs),
+          count(row.linted),
+          mean(row.findings),
+          d
+            ? `${format.signedPerRun(d.findings.value)} ${format.signedPerRunInterval(d.findings)}`
+            : '—',
+          perRun(row.byRule['no-raw-colors'] ?? 0),
+          perRun(row.byRule['no-restyle'] ?? 0),
+        ];
+      }),
+    ),
+    `On colors it flags the same kind of error the MCP server and the hook show the agent, so \`no-raw-colors\` agrees with onsystem rather than confirming it. Most of what is left is \`no-restyle\`, a class that changes a design-system component's color, typography or spacing, which onsystem does not report. It is strict, and whether an override is wrong depends on the design system. What it does and does not measure, and where it reads less: [bench/v2/README.md](${lintSection('bench/v2/README.md')}). By model and by rule: [results.md](${lintSection(`${RESULTS}/results.md`)}).`,
     '## Blind labels {#labels}',
     `A stratified random sample of ${String(labels.files)} files (${String(perArm)} per arm) was labelled blind by an AI reviewer (${labels.labeller.model}), not by people. It saw the task, the design system and the file, not the model, the arm or onsystem's verdict, and counted invented APIs, hardcoded values, native elements and unnamed controls. ${familyOf} are from the same family as the labeller, so they may share its blind spots. With ${String(perArm)} files per arm, the intervals are wide. Who labelled, what it could see and the rules it applied are in ${labeller}.`,
     table(
@@ -95,7 +128,7 @@ export function benchmarkMarkdown(benchmark: Benchmark, format: typeof Benchmark
     [
       `- **The labels are an AI reviewer's.** The sample was labelled blind by an AI reviewer (${labels.labeller.model}), not by people. ${labeller} records what it could see and how it decided.`,
       `- **The labeller's family is under test.** ${familyOf} are from the same family as the labeller, so they may share blind spots.`,
-      `- **onsystem is one of the scorers.** The headline counts the errors of onsystem ${benchmark.onsystem}, the release under test. \`tsc\` and the blind labels are the independent checks: \`tsc\` does not see hardcoded values, and the labels cover ${String(labels.files)} files.`,
+      `- **onsystem is one of the scorers.** The headline counts the errors of onsystem ${benchmark.onsystem}, the release under test. \`tsc\`, @shadcn/lint and the blind labels are the independent checks: \`tsc\` does not see hardcoded values, @shadcn/lint's \`no-raw-colors\` flags the same kind of error the MCP server and the hook show the agent (see [Independent scorer](#independent-scorer)), and the labels cover ${String(labels.files)} files.`,
       '- **A chart token passes for a status color.** Two tasks ask for a small green status label in saas-starter and chatbot, whose themes have no success token. Every run of those tasks with all three parts used a `chart-*` token for the green, and no run without onsystem did; onsystem counts that as clean, although those tokens are meant for charts.',
       benchmark.method.threats,
     ].join('\n'),

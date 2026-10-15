@@ -55,10 +55,31 @@ interface Delta {
   onsystemErrors: Interval;
 }
 
+/** @shadcn/lint's count, which `score --with shadcn-lint` adds to results.json. */
+interface LintRow {
+  model: string;
+  arm: string;
+  runs: number;
+  linted: number;
+  findings: Interval;
+  byRule: Record<string, number>;
+}
+interface LintDelta {
+  model: string;
+  arm: string;
+  pairs: number;
+  findings: Interval;
+}
+
 const json = JSON.parse(fs.readFileSync(path.join(results, 'results.json'), 'utf8')) as {
   info: { startedAt: string; onsystem: string; repos: Record<string, unknown> };
   rows: Row[];
   deltas: Delta[];
+  shadcnLint: {
+    scorer: { packages: Record<string, string>; rules: string[] };
+    rows: LintRow[];
+    deltas: LintDelta[];
+  };
 };
 const report = fs.readFileSync(path.join(results, 'results.md'), 'utf8');
 const models = JSON.parse(
@@ -364,6 +385,110 @@ describe('/benchmark', () => {
       if (d.model === 'all models')
         expect(cells('deltas', `${d.model}/${d.arm}`)).toEqual(expected);
     }
+  });
+
+  it('shows @shadcn/lint’s findings per run for every arm, as the independent scorer', () => {
+    const lint = json.shadcnLint;
+    expect(lint.scorer.packages['@shadcn/lint']).toBe('0.2.1');
+    expect(lint.scorer.rules).toHaveLength(6);
+    const arms = ['none', 'skill', 'mcp', 'hook', 'all'];
+    // The same arms, in the same order, as the table of onsystem's own count.
+    const order = (table: string) =>
+      [
+        ...(
+          new RegExp(`<table data-table="${table}"[\\s\\S]*?</table>`).exec(html)?.[0] ?? ''
+        ).matchAll(/<tr data-row="all models\/(\w+)"/g),
+      ].map((m) => m[1]);
+    expect(order('arms')).toEqual(arms);
+    expect(order('shadcn-lint')).toEqual(arms);
+    for (const arm of arms) {
+      const r = lint.rows.find((l) => l.model === 'all models' && l.arm === arm);
+      const d = lint.deltas.find((l) => l.model === 'all models' && l.arm === arm);
+      if (!r) throw new Error(`no @shadcn/lint row ${arm}`);
+      // Every run the table of onsystem's count has, scored again.
+      expect(r.runs).toBe(pooled('all models', arm).runs);
+      expect(cells('shadcn-lint', `all models/${arm}`)).toEqual({
+        runs: `${String(r.runs)} ${String(r.linted)} files linted`,
+        findings: errors(r.findings),
+        delta: arm === 'none' ? '—' : d ? signedErrors(d.findings) : '',
+        noRawColors: two(r.byRule['no-raw-colors'] ?? NaN),
+        noRestyle: two(r.byRule['no-restyle'] ?? NaN),
+      });
+    }
+    // The numbers bench/v2/README.md and results.md quote.
+    expect(cells('shadcn-lint', 'all models/none').findings).toBe('4.97 [3.30, 6.69]');
+    expect(cells('shadcn-lint', 'all models/all').findings).toBe('2.64 [1.76, 3.58]');
+    expect(cells('shadcn-lint', 'all models/all').delta).toBe('−2.33 [−3.28, −1.38]');
+    expect(report).toContain('| all models | all | 240 | 229 | 2.64 [1.76, 3.58] |');
+  });
+
+  it('says what @shadcn/lint is, that it is not onsystem, and how to run it again', () => {
+    const section = /<section id="independent-scorer"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+    expect(text(/<h2[\s\S]*?<\/h2>/.exec(section)?.[0] ?? '')).toBe(
+      'Independent scorer: @shadcn/lint',
+    );
+    expect(section.match(/<table/g)).toHaveLength(1);
+    const method = text(/<p data-lint="method"[^>]*>([\s\S]*?)<\/p>/.exec(section)?.[1] ?? '');
+    expect(method).toBe(
+      'The same 1,200 runs, scored by a linter that is not part of onsystem: @shadcn/lint 0.2.1, with all six of its rules, on the file each run created, at its path in the repository. No arm showed the agent its messages, and a run that created no file counts 0. It was added after the standard run, so it is not one of the outcomes fixed before any run. node bench/v2/run.mjs score --with shadcn-lint --out bench/v2/results/standard runs it again, as bench/v2/README.md describes.',
+    );
+    // The command is the one the README gives, and the sections linked are there.
+    const readme = fs.readFileSync(path.join(results, '../../README.md'), 'utf8');
+    expect(readme).toContain(
+      '\nnode bench/v2/run.mjs score --with shadcn-lint --out bench/v2/results/standard',
+    );
+    expect(readme).toContain('\n## Independent scorer: @shadcn/lint\n');
+    expect(report).toContain('\n## Independent scorer: @shadcn/lint\n');
+    // The README's disclosures the notes repeat: the scorer came after the run, and no-restyle
+    // is strict.
+    const readmeSection = /^## Independent scorer: @shadcn\/lint\n([\s\S]*?)^## /m.exec(
+      readme,
+    )?.[1];
+    for (const said of [
+      'It was added after the standard run, so it is not one of the outcomes fixed before any run.',
+      'It is strict, and whether an override is wrong depends on the design system.',
+    ]) {
+      expect(readmeSection).toContain(said);
+      expect(text(section)).toContain(said);
+    }
+    expect(section).toContain(
+      'href="https://github.com/dgesteves/onsystem/blob/main/bench/v2/README.md#independent-scorer-shadcnlint"',
+    );
+    expect(section).toContain(
+      'href="https://github.com/dgesteves/onsystem/blob/main/bench/v2/results/standard/results.md#independent-scorer-shadcnlint"',
+    );
+    expect(section).toContain('href="https://github.com/shadcn-ui/lint"');
+    // What its count agrees with, and what onsystem does not report.
+    expect(text(/<p data-lint="scope"[^>]*>([\s\S]*?)<\/p>/.exec(section)?.[1] ?? '')).toBe(
+      "On colors it flags the same kind of error the MCP server and the hook show the agent, so no-raw-colors agrees with onsystem rather than confirming it. Most of what is left is no-restyle, a class that changes a design-system component's color, typography or spacing, which onsystem does not report. It is strict, and whether an override is wrong depends on the design system. What it does and does not measure, and where it reads less: bench/v2/README.md. By model and by rule: results.md.",
+    );
+    expect(
+      [...section.matchAll(/href="([^"]+)"/g)].filter(
+        (m) =>
+          m[1] ===
+          'https://github.com/dgesteves/onsystem/blob/main/bench/v2/README.md#independent-scorer-shadcnlint',
+      ),
+    ).toHaveLength(2);
+    // Threats to validity names it with the other independent checks, and links the section.
+    const threats = /<section id="threats"[\s\S]*?<\/section>/.exec(html)?.[0] ?? '';
+    const scorers =
+      [...threats.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)]
+        .map((m) => m[1] ?? '')
+        .find((item) => text(item).startsWith('onsystem is one of the scorers.')) ?? '';
+    expect(text(scorers)).toBe(
+      `onsystem is one of the scorers. The headline counts the errors of onsystem ${version}, the release under test. tsc, @shadcn/lint and the blind labels are the independent checks: tsc does not see hardcoded values, @shadcn/lint's no-raw-colors flags the same kind of error the MCP server and the hook show the agent (see Independent scorer), and the labels cover ${String(labelled.length)} files.`,
+    );
+    expect(scorers).toContain('href="#independent-scorer"');
+    // A section of its own, after the results, and nowhere in the headline or on the home page.
+    expect(html.indexOf('id="independent-scorer"')).toBeGreaterThan(html.indexOf('id="results"'));
+    expect(html.indexOf('id="independent-scorer"')).toBeLessThan(html.indexOf('id="labels"'));
+    expect(html).toContain('href="#independent-scorer"');
+    const top = html.slice(0, html.indexOf('id="results"'));
+    expect(text(top)).not.toMatch(/shadcn\/lint/);
+    expect(metadata.description).not.toMatch(/shadcn/);
+    const home = text(renderToStaticMarkup(createElement(Home)));
+    expect(home).not.toContain('4.97');
+    expect(home).not.toContain('2.64');
   });
 
   it('shows the blind labels as results.md reports them', () => {

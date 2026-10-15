@@ -1,4 +1,12 @@
-import type { Benchmark, BenchDelta, BenchInterval, BenchRate, BenchRow } from '@/lib/data';
+import type {
+  Benchmark,
+  BenchDelta,
+  BenchInterval,
+  BenchRate,
+  BenchRow,
+  ShadcnLintDelta,
+  ShadcnLintRow,
+} from '@/lib/data';
 
 /**
  * How /benchmark and the home page print bench/v2's numbers. Every value comes from
@@ -81,6 +89,27 @@ export function delta(benchmark: Benchmark, model: string, arm: string): BenchDe
   if (!found) throw new Error(`No paired difference for ${model}, ${arm}`);
   return found;
 }
+
+/** @shadcn/lint's count of one arm, pooled over all models. */
+export function shadcnLintRow(benchmark: Benchmark, arm: string): ShadcnLintRow {
+  const found = benchmark.shadcnLint.rows.find((r) => r.model === 'all models' && r.arm === arm);
+  if (!found) throw new Error(`No @shadcn/lint row for ${arm}`);
+  return found;
+}
+
+/** @shadcn/lint's paired difference of one arm against `none`, or null for `none` itself. */
+export function shadcnLintDelta(benchmark: Benchmark, arm: string): ShadcnLintDelta | null {
+  if (arm === 'none') return null;
+  const found = benchmark.shadcnLint.deltas.find((d) => d.model === 'all models' && d.arm === arm);
+  if (!found) throw new Error(`No @shadcn/lint paired difference for ${arm}`);
+  return found;
+}
+
+/** The independent scorer's repository, as bench/v2/README.md links it. */
+export const SHADCN_LINT = 'https://github.com/shadcn-ui/lint';
+
+/** The section of bench/v2/README.md and of results.md on @shadcn/lint, as GitHub anchors it. */
+export const SHADCN_LINT_ANCHOR = 'independent-scorer-shadcnlint';
 
 /** What the arms add on top of the file tools, in a few words. */
 export const ARM_LABELS: Record<string, string> = {

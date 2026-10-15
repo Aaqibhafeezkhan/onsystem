@@ -492,6 +492,51 @@ assert.ok(
   'the cost per run should not change with all three parts',
 );
 
+// The independent scorer: @shadcn/lint's count of the same runs, which `score --with shadcn-lint`
+// adds to results.json. /benchmark prints the pools of all models, says how to run it again with
+// the README's command and links the section of results.md with every table, so all are checked.
+const lint = v2Results.shadcnLint;
+assert.ok(
+  lint,
+  'results.json has no shadcnLint: run `node bench/v2/run.mjs score --with shadcn-lint --out bench/v2/results/standard`',
+);
+const lintVersion = lint.scorer?.packages?.['@shadcn/lint'];
+assert.ok(lintVersion, 'results.json: shadcnLint.scorer names no @shadcn/lint version');
+const lintRows = ARM_NAMES.map((arm) => {
+  const row = lint.rows.find((r) => r.model === 'all models' && r.arm === arm);
+  assert.ok(row, `results.json: shadcnLint has no row for all models, ${arm}`);
+  assert.equal(
+    row.runs,
+    pooled('all models', arm).runs,
+    `@shadcn/lint should score every ${arm} run`,
+  );
+  for (const rule of ['no-raw-colors', 'no-restyle']) {
+    assert.equal(
+      typeof row.byRule[rule],
+      'number',
+      `results.json: shadcnLint has no ${rule} count`,
+    );
+  }
+  return row;
+});
+const lintDeltas = ARM_NAMES.slice(1).map((arm) => {
+  const d = lint.deltas.find((r) => r.model === 'all models' && r.arm === arm);
+  assert.ok(d, `results.json: shadcnLint has no paired difference for all models, ${arm}`);
+  return { model: d.model, arm: d.arm, pairs: d.pairs, findings: d.findings };
+});
+const lintRerun =
+  /^(node bench\/v2\/run\.mjs score --with shadcn-lint\b[^#\n]*?)\s*(?:#.*)?$/m.exec(v2Readme);
+assert.ok(lintRerun, 'bench/v2/README.md should give the `score --with shadcn-lint` command');
+for (const [file, markdown] of [
+  ['bench/v2/README.md', v2Readme],
+  ['results.md', v2Report],
+]) {
+  assert.ok(
+    markdown.includes('\n## Independent scorer: @shadcn/lint\n'),
+    `${file}: /benchmark links its "Independent scorer: @shadcn/lint" section`,
+  );
+}
+
 // Wall-clock time from the first start to the last finished attempt; seconds per run.
 const ledger = readV2('results/standard/ledger.jsonl')
   .split('\n')
@@ -617,6 +662,13 @@ write('benchmark.json', {
     .map((t) => ({ id: t.id, repo: t.repo, prompt: t.prompt })),
   rows: v2Results.rows,
   deltas: v2Results.deltas,
+  shadcnLint: {
+    version: lintVersion,
+    rules: lint.scorer.rules,
+    rerun: lintRerun[1],
+    rows: lintRows,
+    deltas: lintDeltas,
+  },
   cost: {
     total: ledger.reduce((sum, entry) => sum + entry.cost, 0),
     cap: v2Info.cap,

@@ -20,6 +20,10 @@ import {
   pointsInterval,
   rateInterval,
   row,
+  SHADCN_LINT,
+  SHADCN_LINT_ANCHOR,
+  shadcnLintDelta,
+  shadcnLintRow,
   signedPerRun,
   signedPerRunInterval,
   usd,
@@ -166,6 +170,71 @@ function ArmsTable() {
                 <PlainCell col="cost">{usd(r.cost.value)}</PlainCell>
                 <PlainCell col="hookBlocks">{r.hookBlocks.toFixed(2)}</PlainCell>
                 <PlainCell col="mcpCalls">{r.mcpCalls.toFixed(1)}</PlainCell>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Scroll>
+  );
+}
+
+/** The same arms, in the same order, as @shadcn/lint counts them: the independent scorer. */
+function ShadcnLintTable() {
+  return (
+    <Scroll label="@shadcn/lint findings by arm">
+      <table data-table="shadcn-lint" className="w-full min-w-[720px] text-left text-[13px]">
+        <caption className="sr-only">
+          @shadcn/lint findings per run by arm, pooled over all {benchmark.models.length} models,
+          with 95% intervals; each arm against no onsystem is paired on model, task and repeat
+        </caption>
+        <thead className="bg-raised">
+          <tr>
+            <th scope="col" className={th}>
+              Arm
+            </th>
+            <th scope="col" className={th}>
+              Runs
+            </th>
+            <th scope="col" className={th}>
+              Findings / run
+            </th>
+            <th scope="col" className={th}>
+              Δ against <InlineCode>none</InlineCode>
+            </th>
+            <th scope="col" className={th}>
+              <InlineCode>no-raw-colors</InlineCode> / run
+            </th>
+            <th scope="col" className={th}>
+              <InlineCode>no-restyle</InlineCode> / run
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line/70">
+          {benchmark.arms.map((arm) => {
+            const r = shadcnLintRow(benchmark, arm);
+            const d = shadcnLintDelta(benchmark, arm);
+            return (
+              <tr key={arm} data-row={`${r.model}/${arm}`}>
+                <th scope="row" className="py-2.5 pr-3 pl-4 text-left align-top font-normal">
+                  <ArmName arm={arm} />
+                </th>
+                <PlainCell col="runs">
+                  {count(r.runs)} <span className={small}>{count(r.linted)} files linted</span>
+                </PlainCell>
+                <ErrorsCell col="findings" value={r.findings} />
+                <td data-col="delta" className={`${td} text-fg-soft`}>
+                  {d ? (
+                    <>
+                      {signedPerRun(d.findings.value)}{' '}
+                      <span className={small}>{signedPerRunInterval(d.findings)}</span>
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <PlainCell col="noRawColors">{perRun(r.byRule['no-raw-colors'] ?? 0)}</PlainCell>
+                <PlainCell col="noRestyle">{perRun(r.byRule['no-restyle'] ?? 0)}</PlainCell>
               </tr>
             );
           })}
@@ -454,6 +523,7 @@ function Prose({ children }: { children: ReactNode }) {
 
 const SECTIONS = [
   ['results', 'Results'],
+  ['independent-scorer', 'Independent scorer'],
   ['labels', 'Blind labels'],
   ['method', 'Method'],
   ['threats', 'Threats to validity'],
@@ -478,7 +548,7 @@ function Prompt({ text }: { text: string }) {
 }
 
 export default function BenchmarkPage() {
-  const { labels, time, cost } = benchmark;
+  const { labels, time, cost, shadcnLint: lint } = benchmark;
   const family = labellerFamily(benchmark);
   const small = row(benchmark, 'small models', 'none');
   const smallAll = row(benchmark, 'small models', 'all');
@@ -580,6 +650,43 @@ export default function BenchmarkPage() {
               From <TextLink href={repoLink(`${RESULTS}/results.json`)}>results.json</TextLink> and{' '}
               <TextLink href={repoLink(`${RESULTS}/results.md`)}>results.md</TextLink>; one row per
               run in <TextLink href={repoLink(`${RESULTS}/runs.csv`)}>runs.csv</TextLink>.
+            </p>
+          </Block>
+
+          <Block id="independent-scorer" title="Independent scorer: @shadcn/lint">
+            <Prose>
+              <p data-lint="method">
+                The same {count(benchmark.runs)} runs, scored by a linter that is not part of
+                onsystem: <TextLink href={SHADCN_LINT}>@shadcn/lint</TextLink> {lint.version}, with
+                all {words(lint.rules.length)} of its rules, on the file each run created, at its
+                path in the repository. No arm showed the agent its messages, and a run that created
+                no file counts 0. It was added after the standard run, so it is not one of the
+                outcomes fixed before any run. <InlineCode>{lint.rerun}</InlineCode> runs it again,
+                as{' '}
+                <TextLink href={`${repoLink('bench/v2/README.md')}#${SHADCN_LINT_ANCHOR}`}>
+                  bench/v2/README.md
+                </TextLink>{' '}
+                describes.
+              </p>
+            </Prose>
+            <div className="mt-6">
+              <ShadcnLintTable />
+            </div>
+            <p data-lint="scope" className="measure mt-4 text-[13px] leading-relaxed text-subtle">
+              On colors it flags the same kind of error the MCP server and the hook show the agent,
+              so <InlineCode>no-raw-colors</InlineCode> agrees with onsystem rather than confirming
+              it. Most of what is left is <InlineCode>no-restyle</InlineCode>, a class that changes
+              a design-system component&apos;s color, typography or spacing, which onsystem does not
+              report. It is strict, and whether an override is wrong depends on the design system.
+              What it does and does not measure, and where it reads less:{' '}
+              <TextLink href={`${repoLink('bench/v2/README.md')}#${SHADCN_LINT_ANCHOR}`}>
+                bench/v2/README.md
+              </TextLink>
+              . By model and by rule:{' '}
+              <TextLink href={`${repoLink(`${RESULTS}/results.md`)}#${SHADCN_LINT_ANCHOR}`}>
+                results.md
+              </TextLink>
+              .
             </p>
           </Block>
 
@@ -838,9 +945,12 @@ export default function BenchmarkPage() {
                 <li className="pl-1">
                   <strong className="font-semibold text-fg">onsystem is one of the scorers.</strong>{' '}
                   The headline counts the errors of onsystem {benchmark.onsystem}, the release under
-                  test. <InlineCode>tsc</InlineCode> and the blind labels are the independent
-                  checks: <InlineCode>tsc</InlineCode> does not see hardcoded values, and the labels
-                  cover {labels.files} files.
+                  test. <InlineCode>tsc</InlineCode>, @shadcn/lint and the blind labels are the
+                  independent checks: <InlineCode>tsc</InlineCode> does not see hardcoded values,
+                  @shadcn/lint&apos;s <InlineCode>no-raw-colors</InlineCode> flags the same kind of
+                  error the MCP server and the hook show the agent (see{' '}
+                  <TextLink href="#independent-scorer">Independent scorer</TextLink>), and the
+                  labels cover {labels.files} files.
                 </li>
                 <li className="pl-1">
                   <strong className="font-semibold text-fg">
