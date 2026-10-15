@@ -71,6 +71,15 @@ export default function Page() {
 `;
 const NATIVE_BUTTON_LINE = 14;
 
+/** An icon-only native <button> around an icon the package re-exports. */
+const ICON_PAGE = `import { ChevronLeft } from "@acme/ui";
+
+export function Back() {
+  return <button><ChevronLeft /></button>;
+}
+`;
+const ICON_BUTTON_LINE = 4;
+
 /**
  * `@acme/ui` as shadcn's monorepo template exports it: each component by its own subpath
  * (`@acme/ui/components/button`), with no barrel.
@@ -295,11 +304,13 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(whatAppsGet).toContain('**`--require-design-system` fails** (exit code 2)');
   });
 
-  it('checks no component imported from a package published without src/, with importPath or without it', async () => {
+  it('checks no component imported from a package published without src/, with importPath or without it, but knows its icons only with it', async () => {
     const pkg = await initialised();
     const distOnly = without(published(pkg), (file) => file.startsWith('src/'));
+    const noImportPath = (files: Record<string, string>) =>
+      withConfig(files, ({ importPath: _, ...config }) => config);
     expect(whatAppsGet).toContain(
-      '**`importPath` changes nothing here.** `init` sets it when apps import the package by one name, such as `@acme/ui`.',
+      '**`importPath` does not turn the component rules on.** `init` sets it when apps import the package by one name, such as `@acme/ui`.',
     );
     // <Badge>, which the package does not have, is not reported either.
     const expected = rulesIn(rows()[2]?.[1] ?? '');
@@ -307,12 +318,28 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(withImportPath.rules).toEqual(expected);
     expect(withImportPath.findings.filter((d) => d.message.includes('Badge'))).toEqual([]);
     expect(whatAppsGet).toContain(
-      '`<Badge>` from `@acme/ui` is not reported, although the package has no `Badge`.',
+      'With no component to compare against, imports from the package are not checked: `<Badge>` from `@acme/ui` is not reported, although the package has no `Badge`.',
     );
-    const withoutImportPath = await check(
-      installedApp(withConfig(distOnly, ({ importPath: _, ...config }) => config)),
-    );
+    const withoutImportPath = await check(installedApp(noImportPath(distOnly)));
     expect(withoutImportPath.rules).toEqual(expected);
+    // An icon the package re-exports, in a native <button>: an icon only with importPath.
+    const withIcon = {
+      ...distOnly,
+      'dist/index.mjs': `${distOnly['dist/index.mjs'] ?? ''}export function ChevronLeft() {}\n`,
+      'dist/index.d.ts': `${distOnly['dist/index.d.ts'] ?? ''}export declare function ChevronLeft(props: object): unknown;\n`,
+    };
+    const iconPage = { 'app/page.tsx': ICON_PAGE };
+    const icon = await check(installedApp(withIcon, iconPage));
+    expect(icon.findings.map((d) => [d.ruleId, d.line])).toEqual([
+      ['icon-button-accessible-name', ICON_BUTTON_LINE],
+    ]);
+    expect(icon.code).toBe(1);
+    const iconWithoutImportPath = await check(installedApp(noImportPath(withIcon), iconPage));
+    expect(iconWithoutImportPath.findings).toEqual([]);
+    expect(iconWithoutImportPath.code).toBe(0);
+    expect(whatAppsGet).toContain(
+      'It still tells `icon-button-accessible-name` that an icon the package re-exports is an icon, so `<button><ChevronLeft /></button>`, with `ChevronLeft` from `@acme/ui`, is reported for having no accessible name. Without `importPath`, that button is not reported.',
+    );
   });
 
   it('gets nothing from a package published without its config, with a warning', async () => {

@@ -77,7 +77,7 @@ An app that installs the package reads what was published, and onsystem reads co
 In an app whose package publishes only `dist/`:
 
 - **No component is known.** `no-unknown-component`, `no-unknown-prop` and `no-unknown-variant` check none of the components the app imports from the package, `prefer-design-system-component` reports nothing, `icon-button-accessible-name` does not know that the package's `<Button>` renders a button, and agents find no component with `list_components`, `search_components` or `get_component`. `check` says `No design-system components found: the component rules did not run.`
-- **`importPath` changes nothing here.** `init` sets it when apps import the package by one name, such as `@acme/ui`. With no component to compare against, an import from the package is not checked with it either: `<Badge>` from `@acme/ui` is not reported, although the package has no `Badge`.
+- **`importPath` does not turn the component rules on.** `init` sets it when apps import the package by one name, such as `@acme/ui`. With no component to compare against, imports from the package are not checked: `<Badge>` from `@acme/ui` is not reported, although the package has no `Badge`. It still tells `icon-button-accessible-name` that an icon the package re-exports is an icon, so `<button><ChevronLeft /></button>`, with `ChevronLeft` from `@acme/ui`, is reported for having no accessible name. Without `importPath`, that button is not reported.
 - **The token rules check against the published tokens:** `no-hardcoded-color` when they hold colors, `no-hardcoded-spacing` and `no-hardcoded-radius` when they set a spacing scale and radii.
 - **`--require-design-system` fails** (exit code 2), and it is on by default in the [GitHub Action](required-check.md).
 
