@@ -783,6 +783,7 @@ function codeBlock(markdown) {
 const docs = {
   quickstart: doc('quickstart.md'),
   plugin: doc('plugin.md'),
+  rollout: doc('rollout.md'),
   ci: doc('ci.md'),
   requiredCheck: doc('required-check.md'),
   clients: doc('clients.md'),
@@ -993,6 +994,7 @@ const explicitAnchors = (doc) => doc && { ...doc, anchors: 'explicit' };
 const ASK_PAGES = {
   'quickstart.md': '/docs',
   'plugin.md': '/docs/plugin',
+  'rollout.md': '/docs/rollout',
   'ci.md': '/docs/ci',
   'required-check.md': '/docs/required-check',
   'clients.md': '/docs/clients',

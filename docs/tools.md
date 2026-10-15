@@ -43,13 +43,16 @@ variant (default "default")
 ```text
 > check_ui { "code": "<Button variant=\"primary\" className=\"bg-blue-600 px-[18px]\">Save</Button>" }
 
-snippet.tsx: 2 errors, 1 warning
+snippet.tsx: 1 error, 2 warnings
 
 1:17 error [no-unknown-variant] "primary" is not a valid variant for <Button>.
      Allowed: default, destructive, outline, secondary, ghost, link. Did you mean "default"?
-1:38 error [no-hardcoded-color] `bg-blue-600` is Tailwind's default palette, not a design-system
-     color. No token has this hue; nearest is ring (ΔE 0.294), a gray. Pick the semantic token
-     that fits. <Button> already sets bg-* through `variant`; prefer a variant over overriding it.
+1:38 warning [no-hardcoded-color] `bg-blue-600` is Tailwind's default palette, not a
+     design-system color. No token has this hue. Add a token for it to the theme, such as
+     `--success` for a status color, or keep this color and give the reason on the line above:
+     `// onsystem-disable-next-line no-hardcoded-color -- <reason>` (between JSX children,
+     `{/* onsystem-disable-next-line no-hardcoded-color -- <reason> */}`). <Button> already sets
+     bg-* through `variant`; prefer a variant over overriding it.
 1:50 warning [no-hardcoded-spacing] `px-[18px]` is 18px, which is on the spacing scale: use
      `px-4.5`.
 ```

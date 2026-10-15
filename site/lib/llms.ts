@@ -92,6 +92,7 @@ export function llmsFullTxt(): string {
   const sections: [title: string, page: string, body: string][] = [
     ['Quickstart', '/docs', docs.quickstart],
     ['Claude Code plugin', '/docs/plugin', docs.plugin],
+    ['Roll out to a team', '/docs/rollout', docs.rollout],
     ['CI and baselines', '/docs/ci', docs.ci],
     ['Make it a required check on agent pull requests', '/docs/required-check', docs.requiredCheck],
     ['Set up your agent', '/docs/clients', docs.clients],
