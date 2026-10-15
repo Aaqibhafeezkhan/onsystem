@@ -8,16 +8,16 @@ Does onsystem make coding agents write UI that fits a project's design system, a
 
 [v1](../agents) was one repository, Claude only, 40 runs, and onsystem scored its own output. It showed a direction, not a result.
 
-|              | v1 (2026-10-08)                                           | v2                                                                                           |
-| ------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Agent        | Claude Code headless, with the user's own settings loaded | One neutral agent loop over each provider's API, nothing else loaded                         |
-| Models       | Claude Haiku 4.5, Claude Opus 5                           | Small and mid tiers from Anthropic, OpenAI and Google; frontier tier optional                |
-| Repositories | 1 (vercel/chatbot)                                        | 5 from `corpus/`, pinned, installed with scripts off                                         |
-| Tasks        | 10                                                        | 20 (4 per repository), fixed prompts                                                         |
-| Conditions   | base, plugin                                              | none, skill, mcp, hook, all                                                                  |
-| Repeats      | 1                                                         | 1 to 3 per cell                                                                              |
-| Scoring      | `onsystem check`                                          | `tsc` in each project's own setup, `onsystem check`, and blind labels on a stratified sample |
-| Statistics   | counts                                                    | Wilson intervals for rates, cluster bootstrap for means and paired differences               |
+|              | v1 (2026-10-08)                                           | v2                                                                                                                                        |
+| ------------ | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent        | Claude Code headless, with the user's own settings loaded | One neutral agent loop over each provider's API, nothing else loaded                                                                      |
+| Models       | Claude Haiku 4.5, Claude Opus 5                           | Small and mid tiers from Anthropic, OpenAI and Google; frontier tier optional                                                             |
+| Repositories | 1 (vercel/chatbot)                                        | 5 from `corpus/`, pinned, installed with scripts off                                                                                      |
+| Tasks        | 10                                                        | 20 (4 per repository), fixed prompts                                                                                                      |
+| Conditions   | base, plugin                                              | none, skill, mcp, hook, all                                                                                                               |
+| Repeats      | 1                                                         | 1 to 3 per cell                                                                                                                           |
+| Scoring      | `onsystem check`                                          | `tsc` in each project's own setup, `onsystem check`, blind labels on a stratified sample, and @shadcn/lint (added after the standard run) |
+| Statistics   | counts                                                    | Wilson intervals for rates, cluster bootstrap for means and paired differences                                                            |
 
 ## Method
 
@@ -124,7 +124,7 @@ Rates get 95% [Wilson score intervals](https://en.wikipedia.org/wiki/Binomial_pr
 - **Not a product test.** The loop is not Claude Code, Codex or Gemini CLI. Real clients add their own prompts and tools, which can change how much onsystem helps.
 - **One reasoning level.** `medium` means different things to different providers; other levels may change the picture.
 - **The prompt asks for the design system.** Every arm is told to use the project's components and tokens. A prompt that does not ask would likely show larger effects; this one is the conservative case, and the same as v1.
-- **The scorers' blind spots.** `tsc` sees invented APIs, not hardcoded values. onsystem sees both but is the tool under test; its precision on the corpus is in `corpus/labels.json`. Neither judges whether the UI does what was asked; only the blind labels do, and only on a sample.
+- **The scorers' blind spots.** `tsc` sees invented APIs, not hardcoded values. onsystem sees both but is the tool under test; its precision on the corpus is in `corpus/labels.json`. @shadcn/lint, added after the standard run, sees hardcoded values and restyled components, not invented APIs, and reads less in some repositories (its own section, Independent scorer: @shadcn/lint, says where). No tool judges whether the UI does what was asked; only the blind labels do, and only on a sample.
 - **onsystem counts what it feeds back.** The MCP server's `check_ui` and the hook give the agent the same errors that `onsystem check` counts afterwards, so the arms with either end close to zero partly by construction. No run added a suppression comment or changed a file other than its own.
 - **dub, as of onsystem 0.5.0.** 0.5.0 found no color tokens in dub, so the color rules stayed quiet there in every arm. dub keeps its tokens in a shared Tailwind config package, which onsystem reads since [#107](https://github.com/dgesteves/onsystem/pull/107), merged after 0.6.0, and re-scoring these outputs with it raises dub's count in every arm. A rerun on the released version is planned.
 - **Chart tokens for status colors.** `settings-card` (chatbot) and `plan-summary-card` (saas-starter) ask for a small green status label in a design system with no success token. With onsystem, agents often used a `chart-*` token for the green (24 of 24 runs with all three, 0 of 24 without onsystem), which onsystem counts as clean. Those two tasks hold 91 of the 203 errors without onsystem. `release-badges` (shadcn-website) asks for status labels in green, blue and amber, and its design system has no success token either; fewer runs used a `chart-*` token there (2 of 12 with all three, 5 of 12 with the MCP server alone, 0 of 12 without onsystem).

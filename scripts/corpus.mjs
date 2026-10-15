@@ -11,8 +11,11 @@
 // It fails when the counts differ from the snapshot (pass --update to accept them, as with Jest
 // snapshots), when a finding labelled TP is no longer reported, when one labelled FP comes
 // back after a fix, or when a run from a monorepo root (`sameAs`) reports other files or
-// findings for a project than the run from that project's folder. It ends with the
-// false-positive rate of the labelled sample.
+// findings for a project than the run from that project's folder. It ends with the labels
+// still reported: each blind draw's first, with where its false-positive rate is
+// (corpus/<draw>/stats.txt), or that the rate no longer holds once some of its labels are no
+// longer reported; then the older labels' figures, which are not a false-positive rate for all
+// findings.
 //
 // The repositories are untrusted. They are fetched shallow and sparse (source, styles,
 // manifests and docs only), never installed or built, and nothing in them runs: a run whose
