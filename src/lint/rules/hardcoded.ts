@@ -28,6 +28,7 @@ import type { Report, Rule, RuleContext } from '../context.js';
 import { TAILWIND_PALETTE } from '../tailwind-palette.js';
 import {
   COLOR_PREFIXES,
+  COLOR_UTILITY,
   NEGATIVE_PREFIXES,
   RADIUS_PREFIXES,
   SPACING_PREFIXES,
@@ -133,10 +134,13 @@ export const noHardcodedColor: Rule = {
       const list = lists.get(key) ?? [];
       lists.set(key, list);
       for (const token of splitClasses(classString.text, classString.start)) {
-        const listed: ListedClass = { value: token.value };
+        const utility = parseUtility(token.value);
+        const listed: ListedClass = {
+          value: token.value,
+          prefix: tokenColorPrefix(utility, tokens.colorKeys),
+        };
         list.push(listed);
         if (allow.has(token.value.toLowerCase())) continue;
-        const utility = parseUtility(token.value);
         const element = classString.element;
 
         if (
@@ -150,12 +154,13 @@ export const noHardcodedColor: Rule = {
           const literal = whole ? { text: value, color: whole } : findColorLiterals(value)[0];
           if (!literal || allow.has(literal.text.toLowerCase())) continue;
           listed.color = literal.color;
+          listed.prefix = whole ? utility.prefix : undefined;
           listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
             what: `Hardcoded color \`${token.value}\``,
             color: literal.color,
-            prefix: whole ? utility.prefix : undefined,
+            prefix: listed.prefix,
             place: 'class',
             utility,
             element,
@@ -172,12 +177,13 @@ export const noHardcodedColor: Rule = {
           const literal = whole ? { text: value, color: whole } : findColorLiterals(value)[0];
           if (!literal || allow.has(literal.text.toLowerCase())) continue;
           listed.color = literal.color;
+          listed.prefix = whole ? property.prefix : undefined;
           listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
             what: `Hardcoded color \`${token.value}\``,
             color: literal.color,
-            prefix: whole ? property.prefix : undefined,
+            prefix: listed.prefix,
             place: 'class',
             utility,
             element,
@@ -191,6 +197,7 @@ export const noHardcodedColor: Rule = {
           const color = parseColor(palette.value);
           if (!color) continue;
           listed.color = color;
+          listed.prefix = palette.prefix;
           listed.report = colorReport(context, {
             start: token.start,
             end: token.end,
@@ -462,9 +469,21 @@ function statusTooClose(
 /** A class in a class list, with its hardcoded color and its finding if it has them. */
 interface ListedClass {
   value: string;
+  /** The Tailwind prefix of the color the class sets (`bg`), when it sets one. */
+  prefix?: string | undefined;
   /** The color the class hardcodes (`bg-[#fff]`, `bg-neutral-100`), which no mode changes. */
   color?: Oklch | undefined;
   report?: Report | undefined;
+}
+
+/** Color keywords that are no token but set a color (`bg-white`, `border-transparent`). */
+const KEYWORD_COLORS = new Set(['white', 'black', 'transparent', 'current', 'inherit']);
+
+/** The prefix of a class that sets a token's color or a keyword color: `bg` for `bg-primary`. */
+function tokenColorPrefix(utility: Utility, colorKeys: ReadonlySet<string>): string | undefined {
+  const key = COLOR_UTILITY.exec(utility.base)?.[1];
+  if (!key || !(colorKeys.has(key) || KEYWORD_COLORS.has(key))) return undefined;
+  return utility.base.slice(0, -key.length - 1);
 }
 
 /**
@@ -473,33 +492,34 @@ interface ListedClass {
  * `bg-primary hover:bg-primary`, and the hover would change nothing. The state class gives way
  * first; a base class does when the state class already has the token it would get. `dark:` is
  * no such condition: dark classes are compared with the tokens' dark values, where the same
- * token is right. Two hardcoded classes of the same color keep their fixes: the condition
- * changed nothing before either (`border-red-500 focus:border-red-500` keeps an error border red
- * on focus), and a hardcoded color is the same in every mode. A token class is not: the class
- * list's `bg-primary` is another color in dark mode than a `hover:bg-[#171717]` next to it.
+ * token is right. Two hardcoded classes of exactly the same color keep their fixes: the
+ * condition changed nothing before either (`border-red-500 focus:border-red-500` keeps an error
+ * border red on focus), and a hardcoded color is the same in every mode. A token class is not:
+ * the class list's `bg-primary` is another color in dark mode than a `hover:bg-[#171717]` next
+ * to it. A `dark:` state class starts from the list's `dark:` class, when it has one.
  */
 function keepStatesApart(list: readonly ListedClass[]): void {
   const after = (listed: ListedClass) => listed.report?.fix?.[0]?.text ?? listed.value;
   for (const pass of ['state', 'base'] as const) {
     for (const listed of list) {
       const { report } = listed;
-      const edit = report?.fix?.[0]?.text;
-      if (!report || edit === undefined) continue;
+      if (!report?.fix?.[0]) continue;
       for (const other of list) {
-        if (other === listed || sameColor(listed.color, other.color)) continue;
-        const [state, base] = pass === 'state' ? [edit, after(other)] : [after(other), edit];
-        const conditions = conditionsBetween(parseUtility(state), parseUtility(base));
-        if (!conditions) continue;
+        if (other === listed || oneColor(listed.color, other.color)) continue;
+        const [stateListed, baseListed] = pass === 'state' ? [listed, other] : [other, listed];
+        const state = parseUtility(after(stateListed));
+        const base = parseUtility(after(baseListed));
+        const conditions = conditionsBetween(state, base);
+        if (!conditions || hasDarkBase(list, stateListed, baseListed, state, base, after)) continue;
         const had =
           pass === 'base'
             ? `\`${other.value}\` is in the class list too`
             : after(other) === other.value
               ? `The class list already has \`${other.value}\``
               : `\`${other.value}\` becomes \`${after(other)}\` too`;
-        const stateClass = parseUtility(state);
-        const apart = stateClass.modifier
+        const apart = state.modifier
           ? 'such as with another opacity modifier'
-          : `such as with \`${withBase({ ...stateClass, modifier: '/90' }, stateClass.base)}\``;
+          : `such as with \`${withBase({ ...state, modifier: '/90' }, state.base)}\``;
         report.message += ` ${had}, so with this fix \`${conditions}\` would change nothing: it is not applied automatically. Keep the two apart, ${apart}.`;
         report.fix = undefined;
         break;
@@ -508,9 +528,45 @@ function keepStatesApart(list: readonly ListedClass[]): void {
   }
 }
 
-/** Whether two hardcoded colors are the same, so that one in place of the other changes nothing. */
-function sameColor(a: Oklch | undefined, b: Oklch | undefined): boolean {
-  return a !== undefined && b !== undefined && colorDistance(a, b) < SAME_COLOR;
+/**
+ * Below this ΔE two hardcoded colors are one color written two ways: a palette class and its
+ * hex (`neutral-100` is 0.00015 from `#f5f5f5`), or an OKLCH value rounded to hex (red-500 is
+ * 0.00097 from `#fb2c36`). SAME_COLOR is too loose for this: `#fafafa` is 0.015 from `#fff`,
+ * and a hover from one to the other is a change the fix must not remove.
+ */
+const ONE_COLOR = 0.003;
+
+/** Whether two hardcoded colors are exactly one color, so one token for both changes nothing. */
+function oneColor(a: Oklch | undefined, b: Oklch | undefined): boolean {
+  return a !== undefined && b !== undefined && colorDistance(a, b) < ONE_COLOR;
+}
+
+/**
+ * Whether the class list has the base class's dark-mode counterpart, which a `dark:` state class
+ * starts from instead: with `bg-[#171717] dark:bg-[#0a0a0a]`, `dark:hover:` changes the dark
+ * background, not `bg-[#171717]`. Only a class that adds `dark:` and nothing else to the base
+ * class's variants counts: one that adds a condition (`group-hover:`) is off with it.
+ */
+function hasDarkBase(
+  list: readonly ListedClass[],
+  stateListed: ListedClass,
+  baseListed: ListedClass,
+  state: Utility,
+  base: Utility,
+  after: (listed: ListedClass) => string,
+): boolean {
+  if (baseListed.prefix === undefined) return false;
+  if (base.variants.includes('dark') || !state.variants.includes('dark')) return false;
+  return list.some((other) => {
+    if (other === stateListed || other === baseListed || other.prefix !== baseListed.prefix)
+      return false;
+    const { variants } = parseUtility(after(other));
+    return (
+      variants.includes('dark') &&
+      variants.every((variant) => variant === 'dark' || base.variants.includes(variant)) &&
+      base.variants.every((variant) => variants.includes(variant))
+    );
+  });
 }
 
 /**

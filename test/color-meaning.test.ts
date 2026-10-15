@@ -84,6 +84,35 @@ describe('no-hardcoded-color keeps state classes apart', () => {
     expect(neutral?.message).toContain('`bg-[#171717]` becomes `bg-primary` too');
   });
 
+  it('does not fix a subtle hover or stripe to the token its base class gets', () => {
+    // Under ΔE 0.02 apart, which the rule counts as one color for a token, but still a change:
+    // a light hover, zebra stripes, and a dark hover.
+    const cases: [string, string, string][] = [
+      [
+        `<tr className="bg-[#fff] hover:bg-[#fafafa]" />`,
+        `<tr className="bg-background hover:bg-[#fafafa]" />`,
+        'hover:',
+      ],
+      [
+        `<tr className="bg-[#fff] odd:bg-[#fafafa]" />`,
+        `<tr className="bg-background odd:bg-[#fafafa]" />`,
+        'odd:',
+      ],
+      [
+        `<a className="bg-[#0c0c0c] hover:bg-[#0f0f0f]" />`,
+        `<a className="bg-primary hover:bg-[#0f0f0f]" />`,
+        'hover:',
+      ],
+    ];
+    for (const [code, fixed, condition] of cases) {
+      const diagnostics = check(code, shadcn);
+      expect(diagnostics[1]?.message).toContain(
+        `so with this fix \`${condition}\` would change nothing`,
+      );
+      expect(applyFixes(code, diagnostics)).toBe(fixed);
+    }
+  });
+
   it('does not fix a state class to the token the class list already has', () => {
     const [hover] = check(`<a className="bg-primary hover:bg-[#262626]" />`, shadcn);
     expect(hover?.fix).toBeUndefined();
@@ -104,6 +133,16 @@ describe('no-hardcoded-color keeps state classes apart', () => {
       expect([code, d?.fix]).toEqual([code, undefined]);
       expect(d?.message).toContain('would change nothing');
     }
+    // A light group-hover color is off when the group is not hovered, so in dark mode the hover
+    // starts from bg-background (Midday's tracker table row).
+    const row = check(
+      `<td className="bg-background group-hover:bg-[#f2f1ef] group-hover:dark:bg-[#0f0f0f]" />`,
+      shadcn,
+    ).find((d) => d.source === 'group-hover:dark:bg-[#0f0f0f]');
+    expect(row?.fix).toBeUndefined();
+    expect(row?.message).toContain(
+      'The class list already has `bg-background`, so with this fix `group-hover:` would change nothing',
+    );
     // Nor a base class to the token its hover already has.
     const [base] = check(`<a className="bg-[#171717] hover:bg-primary" />`, shadcn);
     expect(base?.fix).toBeUndefined();
@@ -153,6 +192,19 @@ describe('no-hardcoded-color keeps state classes apart', () => {
       [
         `<a className="bg-[#ffffff] dark:bg-[#0a0a0a]" />`,
         `<a className="bg-background dark:bg-background" />`,
+      ],
+      // In dark mode a dark:hover: class starts from the dark: class, not the base class.
+      [
+        `<a className="bg-[#171717] dark:bg-[#0a0a0a] dark:hover:bg-[#e5e5e5]" />`,
+        `<a className="bg-primary dark:bg-background dark:hover:bg-primary" />`,
+      ],
+      [
+        `<a className="bg-[#171717] dark:bg-background dark:hover:bg-[#e5e5e5]" />`,
+        `<a className="bg-primary dark:bg-background dark:hover:bg-primary" />`,
+      ],
+      [
+        `<a className="bg-[#171717] dark:bg-[#0a0a0a] dark:hover:bg-primary" />`,
+        `<a className="bg-primary dark:bg-background dark:hover:bg-primary" />`,
       ],
     ];
     for (const [code, fixed] of cases) {
