@@ -2,9 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { DesignSystem, type DesignSystemModel, type ResolvedConfig } from 'onsystem';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { Preset } from '@/lib/playground';
+import { Playground } from '@/components/playground';
+import { PLAYGROUND_LIMITS, type Preset } from '@/lib/playground';
 import {
   applyEdits,
   applyFixes,
@@ -262,5 +265,40 @@ describe('reflow', () => {
     expect(reflow('', long)).toBe(long);
     const mixed = `<p className="${'a '.repeat(30)}">Hello <b>you</b></p>`;
     expect(reflow('', mixed)).toBe(mixed);
+  });
+});
+
+describe('on a phone', () => {
+  // Below lg the findings come after the editor: on a 390 px screen the Agent draft's 1,355 px
+  // editor puts them 2.4 screens down, so the status in the editor's bar is a link to them.
+  const html = renderToStaticMarkup(
+    createElement(Playground, { presets, maxBytes: PLAYGROUND_LIMITS.maxBytes }),
+  );
+  const bar = /<div class="code-bar[^"]*">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? '';
+
+  it('jumps from the editor’s bar to the findings', () => {
+    const link = /<a ([^>]*)>([\s\S]*?)<\/a>/.exec(bar);
+    expect(link?.[1] ?? '').toContain('href="#findings"');
+    expect(link?.[2]).toMatch(/^Jump to 11 findings/);
+    expect(html).toMatch(/<section [^>]*id="findings"/);
+  });
+
+  it('keeps the counts on wide screens, where the findings sit beside the editor', () => {
+    const link = /<a ([^>]*)>/.exec(bar)?.[1] ?? '';
+    expect(link).toMatch(/class="[^"]*\blg:hidden\b/);
+    const status = /<span class="([^"]*)">8 errors · 3 warnings<\/span>/.exec(bar)?.[1] ?? '';
+    expect(status).toMatch(/\bmax-lg:hidden\b/);
+  });
+
+  it('has no link for a draft with no findings', () => {
+    const clean = presets.filter((p) => p.result.diagnostics.length === 0);
+    expect(clean.length).toBeGreaterThan(0);
+    for (const p of clean) {
+      const page = renderToStaticMarkup(
+        createElement(Playground, { presets: [p], maxBytes: PLAYGROUND_LIMITS.maxBytes }),
+      );
+      expect(page).not.toContain('Jump to');
+      expect(page).toContain('No design-system problems');
+    }
   });
 });

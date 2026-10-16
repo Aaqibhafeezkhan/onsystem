@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { Line } from '@/components/code-line';
 import { FindingMessage } from '@/components/finding-message';
-import { ArrowUpRightIcon, CheckIcon, ReplayIcon } from '@/components/icons';
+import { ArrowRightIcon, ArrowUpRightIcon, CheckIcon, ReplayIcon } from '@/components/icons';
 import type { CheckError, CheckResponse } from '@/lib/check-service';
 import { highlightLines } from '@/lib/highlight';
 import type { Mark } from '@/lib/segments';
@@ -302,6 +302,12 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
         : current.result.errorCount + current.result.warningCount === 0
           ? 'No design-system problems'
           : `${plural(current.result.errorCount, 'error')} · ${plural(current.result.warningCount, 'warning')}`;
+  // Below lg the findings come after the editor, a long file further down: the status there is a
+  // link to them.
+  const found =
+    !empty && !problem && !pending && current
+      ? current.result.errorCount + current.result.warningCount
+      : 0;
 
   return (
     <div>
@@ -344,10 +350,19 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
               {preset && code === preset.code ? preset.file : 'Your code'}
             </label>
             <span
-              className={`shrink-0 text-[11px] ${empty || pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-error' : current.result.warningCount > 0 ? 'text-warn' : 'text-success'}`}
+              className={`shrink-0 text-[11px] ${found > 0 ? 'max-lg:hidden' : ''} ${empty || pending || !current || problem ? 'text-subtle' : current.result.errorCount > 0 ? 'text-error' : current.result.warningCount > 0 ? 'text-warn' : 'text-success'}`}
             >
               {status}
             </span>
+            {found > 0 && (
+              <a
+                href="#findings"
+                className={`tap inline-flex shrink-0 items-center gap-1 text-[11px] underline decoration-line-strong underline-offset-2 transition-colors hover:decoration-current lg:hidden ${current?.result.errorCount ? 'text-error' : 'text-warn'}`}
+              >
+                {`Jump to ${plural(found, 'finding')}`}
+                <ArrowRightIcon className="size-3 rotate-90" />
+              </a>
+            )}
           </div>
           <div
             ref={editor}
@@ -412,6 +427,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
 
         {/* Findings */}
         <section
+          id="findings"
           aria-labelledby={`${ids}-findings`}
           className="min-w-0 rounded-xl border border-line bg-raised lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto"
         >

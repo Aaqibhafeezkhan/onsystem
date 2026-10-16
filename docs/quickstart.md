@@ -23,7 +23,13 @@ To keep what it found in a file you can edit, run `npx -y onsystem init`: it wri
 
 ## Hold your agent to it
 
-Pick one:
+Give your agent this prompt, and it does the rest of the setup itself: the config and the baseline, onsystem in the agent, and the CI check. [setup.md](https://onsystem.vercel.app/setup.md) has the steps it follows.
+
+```text title="Prompt for your agent"
+Read https://onsystem.vercel.app/setup.md and set up onsystem in this project.
+```
+
+Or add it yourself. Pick one:
 
 - **Claude Code**: install the [plugin](plugin.md). Its hook checks every UI file Claude writes and hands the errors back before Claude moves on; it also brings the MCP server and a skill that has Claude look components up first.
 

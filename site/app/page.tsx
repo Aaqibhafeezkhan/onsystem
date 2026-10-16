@@ -15,6 +15,7 @@ import { InlineCode, Section, SubSection, TextLink } from '@/components/section'
 import { Tabs } from '@/components/tabs';
 import { count } from '@/lib/benchmark';
 import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
+import { SETUP_PROMPT } from '@/lib/llms';
 import { pageMetadata } from '@/lib/metadata';
 import { findingCard, HOME_CARD, TSC_RULES } from '@/lib/og';
 import { highlight } from '@/lib/render-code';
@@ -148,13 +149,17 @@ function Hero() {
               </TextLink>
               .
             </p>
-            <Link
-              href="/playground"
-              className="group mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
-            >
-              Try it in the browser
-              <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
-            </Link>
+            {/* One row, so wide screens are no taller; it wraps on a phone. */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <Link
+                href="/playground"
+                className="group inline-flex items-center gap-1.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
+              >
+                Try it in the browser
+                <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+              </Link>
+              <AgentPrompt />
+            </div>
           </div>
           <FindingCard className="lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-1.5" />
           <InstallTabs />
@@ -227,6 +232,29 @@ function CheckCommand() {
       </code>
       <CopyButton text={CHECK} label="Copy the check command" bare />
     </div>
+  );
+}
+
+/**
+ * The prompt that has the visitor's agent set onsystem up from /setup.md. The label makes its
+ * text part of the copy button: a click on either copies the prompt, which the title shows.
+ */
+function AgentPrompt() {
+  return (
+    // eslint-disable-next-line jsx-a11y/label-has-associated-control -- CopyButton is a <button>
+    <label
+      data-agent-prompt=""
+      title={SETUP_PROMPT}
+      className="group inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
+    >
+      Or ask your agent to set it up
+      <CopyButton
+        text={SETUP_PROMPT}
+        label={`Copy the prompt for your agent: ${SETUP_PROMPT}`}
+        bare
+        className="-my-1 group-hover:text-fg"
+      />
+    </label>
   );
 }
 

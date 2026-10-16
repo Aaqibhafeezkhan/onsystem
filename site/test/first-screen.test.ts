@@ -10,6 +10,7 @@ import Home, { metadata } from '@/app/page';
 import { STEPS } from '@/components/loop-demo';
 import { slug } from '@/components/markdown-blocks';
 import { benchmark, corpus, demo, designSystem } from '@/lib/data';
+import { SETUP_PROMPT } from '@/lib/llms';
 import { HOME_CARD, HomeCard } from '@/lib/og';
 import type { Preset } from '@/lib/playground';
 import { applyFixes } from '@/lib/playground-edits';
@@ -122,6 +123,24 @@ describe('the first screen', () => {
     expect(firstScreen).toMatch(/<a[^>]*href="\/playground"[^>]*>Try it in the browser/);
     // The star count lives in the header.
     expect(shown).not.toContain('Star on GitHub');
+  });
+
+  it('offers the setup prompt for your agent beside Try it in the browser, before the card', () => {
+    const at = (marker: string) => firstScreen.indexOf(marker);
+    expect(at('data-agent-prompt')).toBeGreaterThan(at('Try it in the browser'));
+    expect(at('data-agent-prompt')).toBeLessThan(at('data-finding-card'));
+    // One row with Try it in the browser, which wraps on a phone: no taller first screen on wide
+    // screens, where the install tabs and the proof row sit under it.
+    const row = /<div class="([^"]*)">\s*<a[^>]*href="\/playground"[\s\S]*?data-agent-prompt/.exec(
+      firstScreen,
+    );
+    expect(row?.[1]).toMatch(/\bflex\b/);
+    expect(row?.[1]).toMatch(/\bflex-wrap\b/);
+    const prompt = /<label[^>]*data-agent-prompt[\s\S]*?<\/label>/.exec(firstScreen)?.[0] ?? '';
+    expect(text(prompt)).toContain('Or ask your agent to set it up');
+    // The label's text and the button copy the same prompt; the button says which.
+    expect(decode(prompt)).toContain(`title="${SETUP_PROMPT}"`);
+    expect(decode(prompt)).toMatch(/<button[^>]*aria-label="Copy the prompt for your agent: Read /);
   });
 
   it('shows three of the demo’s findings in a card, with the import and what tsc reports', () => {
