@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { escapePath } from 'tinyglobby';
+
 import { BASELINE_FILE, LEGACY_BASELINE_FILE } from './baseline.js';
 import {
   CONFIG_FILES,
@@ -16,7 +18,8 @@ import {
   isDesignSystemName,
   PACKAGE_FIELD,
 } from './detect.js';
-import { matchesGlob, relativePath } from './util/paths.js';
+import { readProjectConfig, type ProjectConfig } from './extract/program.js';
+import { isInside, matchesGlob, relativePath } from './util/paths.js';
 import { NAME } from './version.js';
 import { loadTarget } from './workspace.js';
 
@@ -104,6 +107,8 @@ export async function init(
   const inherited = options.force ? undefined : config.designSystemPackage;
   // With --force, the config written here is read instead of the package's.
   const replaced = options.force ? config.designSystemPackage : undefined;
+  // "components" holds what zero config found, not globs the user gave.
+  let found = false;
   if (inherited) {
     notes.push(
       `This project takes on the config ${inherited.name} declares in its package.json (${relativePath(io.cwd, inherited.config) || inherited.config}), so it needs none of its own; nothing was written. Pass --force to write one, which is read instead.`,
@@ -133,6 +138,7 @@ export async function init(
       // The detected globs, spelled out; a package imported by one name keeps it. A pattern
       // (`@acme/ui/components/*`) is no import: zero config keeps giving each file its own.
       file.components = config.components;
+      found = true;
       const [specifier] = specifiers;
       if (specifier && !specifier.includes('*')) file.importPath = specifier;
       // Docs found next to the detected components stay found.
@@ -155,6 +161,7 @@ export async function init(
         : `Found the design system in the default folders: ${matching.join(', ')}.`,
     );
     file.components = matching;
+    found = true;
     // Imported as the package's config says, not by a path into it.
     if (declared && config.importPath) file.importPath = config.importPath;
     const tokens = (await tokenFiles(config)).map(relative);
@@ -199,6 +206,7 @@ export async function init(
     ).trim();
     if (importPath) file.importPath = importPath;
   }
+  if (!inherited && !workspace) notes.push(...(await registryCode(config, file, found)));
 
   const written: string[] = [];
   if (!inherited) {
@@ -492,6 +500,153 @@ async function replacedNote(
       ? `copy ${andList(fields)} from ${declared} into ${CONFIG_FILE}, or `
       : '';
   return `${replaced} It ${effects}: ${copy}delete ${CONFIG_FILE} to take on ${pkg.name}'s config again.`;
+}
+
+const REGISTRY_DOCS = 'https://onsystem.vercel.app/docs/configuration#code-from-shadcn-registries';
+
+/**
+ * Sets apart the code `npx shadcn add` copies from the registries components.json names
+ * (`"registries": { "@signoff-ui": … }`) into a folder of its own under the components alias
+ * (`components/signoff-ui`). When `found` says "components" holds what zero config found, and
+ * no `importPath` names a package for them, each such folder joins it: `check` and the hook skip
+ * that code, as they skip components/ui, and the app's code is checked against its components.
+ * A folder with no .tsx or .jsx file yet joins it too, and so does one that does not exist yet:
+ * a registry is often named in components.json before its first `shadcn add`, and an item of
+ * only .ts files (signoff-ui's ag-ui) makes the folder before a component comes. Otherwise the
+ * notes name the folders `check` reads as the app's own code, and what to add to set them apart.
+ * Folders the components already take in are left alone. Returns what to tell the user.
+ */
+async function registryCode(
+  config: ResolvedConfig,
+  file: Record<string, unknown>,
+  found: boolean,
+): Promise<string[]> {
+  const root = config.root;
+  const folders = registryFolders(root, config.tsconfig);
+  if (!folders.length) return [];
+  const globs = Array.isArray(file.components) ? (file.components as string[]) : config.components;
+  const taken = new Set(await componentFiles({ ...config, components: globs }));
+  // copied: holds .tsx or .jsx files the components don't take. pending: holds none yet, or is
+  // not there yet; the next `shadcn add` from that registry fills it.
+  const copied: RegistryFolder[] = [];
+  const pending: RegistryFolder[] = [];
+  const added: string[] = [];
+  for (const { namespace, dir } of folders) {
+    const glob = `${escapePath(dir)}/**/*.{tsx,jsx}`;
+    const files = await componentFiles({ ...config, components: [glob] });
+    const folder = { namespace, dir, glob, files: files.length };
+    if (files.some((f) => !taken.has(f))) copied.push(folder);
+    else if (files.length || globs.some((g) => matchesGlob(`${dir}/index.tsx`, g))) continue;
+    else pending.push(folder);
+    added.push(glob);
+  }
+  const add = found && file.importPath === undefined;
+  if (add && added.length) file.components = [...globs, ...added];
+  // What sets folders apart by hand: their globs in "components", when the config lists them
+  // and no package name would mislabel them, or else an "overrides" entry for their files.
+  const listed = Array.isArray(file.components) && file.importPath === undefined;
+  const how = (list: RegistryFolder[]) =>
+    listed
+      ? `add ${andList(list.map((f) => `"${f.glob}"`))} to "components" (${REGISTRY_DOCS})`
+      : `turn the rules off for ${andList(list.map((f) => `"${escapePath(f.dir)}/**"`))} in "overrides" (${REGISTRY_DOCS})`;
+  const notes: string[] = [];
+  if (copied.length) {
+    const one = copied.length === 1;
+    notes.push(
+      add
+        ? `Added ${andList(copied.map((f) => `${f.dir} (${f.namespace}, ${count(f.files, 'file')})`))} to "components": ${one ? 'it holds' : 'they hold'} the code \`shadcn add\` copied from ${one ? 'that registry' : 'those registries'} in components.json. \`check\` and the hook skip it as design-system code, and your code is checked against every component its files export, helpers included, so a native element such as <img> can be told to use one of them. To leave the helpers out, see ${REGISTRY_DOCS}; to check that code as your own, take ${one ? 'the folder' : 'the folders'} out of "components".`
+        : `components.json names the ${one ? 'registry' : 'registries'} ${andList(copied.map((f) => f.namespace))}, which \`shadcn add\` copies into ${andList(copied.map((f) => f.dir))}: \`check\` reads ${one ? 'its' : 'their'} code as your own. To set it apart, ${how(copied)}.`,
+    );
+  }
+  if (pending.length) {
+    const one = pending.length === 1;
+    // A folder that is not there holds no .tsx or .jsx file either.
+    const state = pending.some((f) => isDirectory(path.join(root, f.dir)))
+      ? `${one ? 'holds' : 'hold'} no .tsx or .jsx file yet`
+      : `${one ? 'does' : 'do'} not exist yet`;
+    notes.push(
+      add
+        ? `${copied.length ? 'Also added' : 'Added'} ${andList(pending.map((f) => `${f.dir} (${f.namespace})`))} to "components", though ${one ? 'it' : 'they'} ${state}: \`check\` and the hook skip the code \`shadcn add\` copies there from ${one ? 'that registry' : 'those registries'} in components.json. Code a registry copies somewhere else, such as loose into ${path.posix.dirname(pending[0]?.dir ?? '')}/, is checked as your own (${REGISTRY_DOCS}).`
+        : `components.json ${copied.length ? 'also ' : ''}names ${andList(pending.map((f) => f.namespace))}, and ${andList(pending.map((f) => f.dir))} ${state}: once \`shadcn add\` copies a .tsx or .jsx file there, \`check\` reads it as your own. To set it apart, ${how(pending)}.`,
+    );
+  }
+  return notes;
+}
+
+interface RegistryFolder {
+  namespace: string;
+  dir: string;
+  glob: string;
+  files: number;
+}
+
+function isDirectory(dir: string): boolean {
+  try {
+    return fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The folders, relative to the root, that `npx shadcn add` copies the code of the registries
+ * components.json names into: the components alias, resolved through tsconfig `paths`, and the
+ * namespace without its `@` (`@/components` and `@signoff-ui` → `components/signoff-ui`).
+ */
+function registryFolders(
+  root: string,
+  tsconfig: string | undefined,
+): { namespace: string; dir: string }[] {
+  let json: { registries?: unknown; aliases?: { components?: unknown } } | undefined;
+  try {
+    json = JSON.parse(fs.readFileSync(path.join(root, 'components.json'), 'utf8')) as typeof json;
+  } catch {
+    return [];
+  }
+  const alias = json?.aliases?.components;
+  const registries = json?.registries;
+  if (typeof alias !== 'string' || !registries || typeof registries !== 'object') return [];
+  // Namespaces as shadcn spells them, `@` and a name, so none leads out of the folder.
+  const namespaces = Object.keys(registries)
+    .filter((n) => /^@[a-z0-9][\w-]*$/i.test(n))
+    .sort();
+  const base = namespaces.length
+    ? aliasFolder(alias, readProjectConfig(root, tsconfig))
+    : undefined;
+  if (!base || !isInside(root, base)) return [];
+  return namespaces.map((namespace) => ({
+    namespace,
+    dir: relativePath(root, path.join(base, namespace.slice(1))),
+  }));
+}
+
+/**
+ * A components.json alias (`@/components`) through tsconfig `paths` (`"@/*": ["./*"]`), as zero
+ * config resolves the ui alias, when the folder exists.
+ */
+function aliasFolder(alias: string, project: ProjectConfig): string | undefined {
+  for (const [pattern, targets] of Object.entries(project.paths)) {
+    const star = pattern.indexOf('*');
+    const prefix = star === -1 ? pattern : pattern.slice(0, star);
+    const suffix = star === -1 ? '' : pattern.slice(star + 1);
+    const matches =
+      star === -1
+        ? alias === pattern
+        : alias.startsWith(prefix) &&
+          alias.endsWith(suffix) &&
+          alias.length >= prefix.length + suffix.length;
+    if (!matches) continue;
+    const middle = star === -1 ? '' : alias.slice(prefix.length, alias.length - suffix.length);
+    for (const target of targets) {
+      const dir = path.resolve(project.pathsBase, target.replace('*', middle));
+      try {
+        if (fs.statSync(dir).isDirectory()) return dir;
+      } catch {
+        // Not there: the next target.
+      }
+    }
+  }
+  return undefined;
 }
 
 /** Whether npm's `files` list publishes `file`, a path relative to the package. */
