@@ -15,11 +15,13 @@ import { InlineCode, Section, SubSection, TextLink } from '@/components/section'
 import { Tabs } from '@/components/tabs';
 import { count } from '@/lib/benchmark';
 import { benchmark, corpus, demo, readme, rules, tools } from '@/lib/data';
+import { SETUP_PROMPT } from '@/lib/llms';
 import { pageMetadata } from '@/lib/metadata';
 import { findingCard, HOME_CARD, TSC_RULES } from '@/lib/og';
 import { highlight } from '@/lib/render-code';
 import {
   AUTHOR,
+  CODEX_COMMANDS,
   CURSOR_INSTALL,
   docsHref,
   NPM,
@@ -105,9 +107,7 @@ function GetStarted() {
 /** What a visitor runs first: findings with fixes on their own app, nothing installed or written. */
 const CHECK = 'npx -y onsystem check .';
 
-/** The commands from docs/clients.md and docs/required-check.md (test/first-screen.test.ts checks). */
-const CODEX =
-  'codex plugin marketplace add dgesteves/onsystem\ncodex plugin add onsystem@dgesteves';
+/** The step from docs/required-check.md (test/first-screen.test.ts checks). */
 const ACTION = '- uses: dgesteves/onsystem@v0';
 const MARKETPLACE = 'https://github.com/marketplace/actions/onsystem-design-system-check';
 
@@ -148,13 +148,17 @@ function Hero() {
               </TextLink>
               .
             </p>
-            <Link
-              href="/playground"
-              className="group mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
-            >
-              Try it in the browser
-              <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
-            </Link>
+            {/* One row, so wide screens are no taller; it wraps on a phone. */}
+            <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <Link
+                href="/playground"
+                className="group inline-flex items-center gap-1.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
+              >
+                Try it in the browser
+                <ArrowRightIcon className="size-4 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-cyan" />
+              </Link>
+              <AgentPrompt />
+            </div>
           </div>
           <FindingCard className="lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:mt-1.5" />
           <InstallTabs />
@@ -227,6 +231,33 @@ function CheckCommand() {
       </code>
       <CopyButton text={CHECK} label="Copy the check command" bare />
     </div>
+  );
+}
+
+/**
+ * The prompt that has the visitor's agent set onsystem up from /setup.md. The label makes its
+ * text part of the copy button: a click on either copies the prompt, which the title shows.
+ * Touch screens show no title, so below sm the prompt itself is on the line under it. From sm
+ * up the control stays on one line, so the wide first screen is no taller.
+ */
+function AgentPrompt() {
+  return (
+    <label
+      data-agent-prompt=""
+      title={SETUP_PROMPT}
+      className="group inline-flex cursor-pointer flex-wrap items-center gap-x-1 gap-y-0.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
+    >
+      Or ask your agent to set it up
+      <CopyButton
+        text={SETUP_PROMPT}
+        label={`Copy the prompt for your agent: ${SETUP_PROMPT}`}
+        bare
+        className="-my-1 group-hover:text-fg"
+      />
+      <span data-agent-prompt-text="" className="basis-full font-normal text-muted sm:hidden">
+        “{SETUP_PROMPT}”
+      </span>
+    </label>
   );
 }
 
@@ -325,7 +356,7 @@ function InstallTabs() {
         label="Install for"
         // No-break spaces keep each label on one line; the row fits beside the card from 1024 px.
         labels={['Claude\u00a0Code', 'Cursor', 'VS\u00a0Code', 'Codex', 'Other\u00a0MCP', 'CI']}
-        copies={[PLUGIN_COMMANDS, undefined, undefined, CODEX, NPX, ACTION]}
+        copies={[PLUGIN_COMMANDS, undefined, undefined, CODEX_COMMANDS, NPX, ACTION]}
       >
         {[
           <Fragment key="claude-code">
@@ -365,7 +396,7 @@ function InstallTabs() {
                 <TextLink href={docsHref('setup')}>Other agents</TextLink>
               </>,
             )}
-            <CodeBody code={CODEX} lang="sh" />
+            <CodeBody code={CODEX_COMMANDS} lang="sh" />
           </Fragment>,
           <Fragment key="other">
             {note(

@@ -10,10 +10,11 @@ import Home, { metadata } from '@/app/page';
 import { STEPS } from '@/components/loop-demo';
 import { slug } from '@/components/markdown-blocks';
 import { benchmark, corpus, demo, designSystem } from '@/lib/data';
+import { SETUP_PROMPT } from '@/lib/llms';
 import { HOME_CARD, HomeCard } from '@/lib/og';
 import type { Preset } from '@/lib/playground';
 import { applyFixes } from '@/lib/playground-edits';
-import { DOCS_FILES } from '@/lib/site';
+import { CODEX_COMMANDS, DOCS_FILES } from '@/lib/site';
 
 // The home page's first screen (ROADMAP-v2 section 3.8), the demo it leads into, and the social
 // card drawn from the same finding card.
@@ -124,6 +125,32 @@ describe('the first screen', () => {
     expect(shown).not.toContain('Star on GitHub');
   });
 
+  it('offers the setup prompt for your agent beside Try it in the browser, before the card', () => {
+    const at = (marker: string) => firstScreen.indexOf(marker);
+    expect(at('data-agent-prompt')).toBeGreaterThan(at('Try it in the browser'));
+    expect(at('data-agent-prompt')).toBeLessThan(at('data-finding-card'));
+    // One row with Try it in the browser, which wraps on a phone: no taller first screen on wide
+    // screens, where the install tabs and the proof row sit under it.
+    const row = /<div class="([^"]*)">\s*<a[^>]*href="\/playground"[\s\S]*?data-agent-prompt/.exec(
+      firstScreen,
+    );
+    expect(row?.[1]).toMatch(/\bflex\b/);
+    expect(row?.[1]).toMatch(/\bflex-wrap\b/);
+    const prompt = /<label[^>]*data-agent-prompt[\s\S]*?<\/label>/.exec(firstScreen)?.[0] ?? '';
+    expect(text(prompt)).toContain('Or ask your agent to set it up');
+    // The label's text and the button copy the same prompt; the button says which.
+    expect(decode(prompt)).toContain(`title="${SETUP_PROMPT}"`);
+    expect(decode(prompt)).toMatch(/<button[^>]*aria-label="Copy the prompt for your agent: Read /);
+    // Touch screens never show the title: below sm the label shows the prompt it copies, so a
+    // phone visitor sees what they copy. From sm up it is hidden, and the row stays one line.
+    const shown = /<span[^>]*data-agent-prompt-text[^>]*class="([^"]*)"[^>]*>([^<]*)<\/span>/.exec(
+      prompt,
+    );
+    expect(decode(shown?.[2] ?? '')).toBe(`“${SETUP_PROMPT}”`);
+    expect(shown?.[1]).toMatch(/\bsm:hidden\b/);
+    expect(shown?.[1]).toMatch(/\bbasis-full\b/);
+  });
+
   it('shows three of the demo’s findings in a card, with the import and what tsc reports', () => {
     const card = /<figure[^>]*data-finding-card[\s\S]*?<\/figure>/.exec(firstScreen)?.[0] ?? '';
     const shown = flat(card);
@@ -151,10 +178,7 @@ describe('the first screen', () => {
     );
     const shown = flat(firstScreen);
     // The commands are the docs' own.
-    for (const command of [
-      'codex plugin marketplace add dgesteves/onsystem',
-      'codex plugin add onsystem@dgesteves',
-    ]) {
+    for (const command of CODEX_COMMANDS.split('\n')) {
       expect(shown).toContain(command);
       expect(read('docs/clients.md')).toContain(command);
     }
