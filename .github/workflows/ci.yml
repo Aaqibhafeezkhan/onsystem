@@ -107,7 +107,7 @@ jobs:
           grep -q '^::error file=examples/shadcn-demo/app/settings/members.tsx,line=45,col=28,.*title=onsystem%3A no-unknown-variant::"danger" is not a valid variant for <Badge>' action.out
 
   node20:
-    name: Built CLI on Node 20.19
+    name: Built CLI and pack test on Node 20.19
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -128,6 +128,13 @@ jobs:
       - name: Check the demo's clean page
         working-directory: examples/shadcn-demo
         run: node ../../dist/cli.js check app/settings/members.tsx
+      # pnpm pack-test, one script at a time, since pnpm itself needs a newer Node: npm pack, npm
+      # install into a new project, the installed bin, MCP in both protocol eras, the hook and the
+      # ESLint plugin, then the package in a project on ESLint 8.57.0.
+      - name: Pack, install and run the package
+        run: node scripts/pack-test.mjs
+      - name: Pack, install and run the package with ESLint 8.57.0
+        run: node scripts/pack-test-eslint8.mjs
 
   site:
     name: Website
@@ -156,7 +163,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [22, 24]
+        node: [22, 24, 26]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -166,6 +173,41 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+
+  coverage:
+    # The line, branch, function and statement coverage of src/ and action/, which mustn't fall
+    # below the thresholds in vitest.config.ts. Measuring it slows the suite down, so this is the
+    # one job that does.
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:coverage
+      - name: Write the coverage to the job summary
+        if: ${{ !cancelled() }}
+        run: |
+          node --input-type=module - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import fs from 'node:fs';
+          const file = 'coverage/coverage-summary.json';
+          if (!fs.existsSync(file)) {
+            console.log('No coverage report: the tests failed before Vitest wrote one.');
+            process.exit(0);
+          }
+          const { total } = JSON.parse(fs.readFileSync(file, 'utf8'));
+          console.log('### Coverage of src/ and action/\n');
+          console.log('| Metric | Coverage | Covered |');
+          console.log('| --- | --: | --: |');
+          for (const metric of ['Lines', 'Branches', 'Functions', 'Statements']) {
+            const { pct, covered, total: all } = total[metric.toLowerCase()];
+            console.log(`| ${metric} | ${pct}% | ${covered} of ${all} |`);
+          }
+          EOF
 
   os:
     name: Test on ${{ matrix.os }}
