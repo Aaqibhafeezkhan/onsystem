@@ -59,7 +59,7 @@ npm's `min-release-age` (a number of days, usually in `.npmrc`) makes npm and np
 
 ## Findings in code from a shadcn registry
 
-`check .` reports files in `components/ai-elements`, `components/signoff-ui` or another folder that `npx shadcn add` filled from a registry other than shadcn/ui's. Zero config takes only the `ui` folder of `components.json` as the design system. List the registry's folder in `components`, or turn the rules off for it in `overrides`: [code from shadcn registries](configuration.md#code-from-shadcn-registries) has both, and why `exclude` is not enough.
+`check .` reports files in `components/ai-elements`, `components/signoff-ui` or another folder that `npx shadcn add` filled from a registry other than shadcn/ui's. Zero config skips the folder of each registry in the `registries` of `components.json`, read-only, and checks other registry code as your own: a folder of a registry it does not name, or files a registry copies loose into `components/`. Name the registry in `components.json`, list its folder in `components`, or turn the rules off for it in `overrides`: [code from shadcn registries](configuration.md#code-from-shadcn-registries) has the details, and why `exclude` is not enough.
 
 ## Still stuck
 

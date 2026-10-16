@@ -128,7 +128,7 @@ async function tool(root: string, name: string, args: Record<string, unknown>): 
 }
 
 describe('code from shadcn registries (docs/configuration.md)', () => {
-  it('without a config, checks the registry folders as app code', async () => {
+  it('without a config, checks folders that components.json names no registry for as app code', async () => {
     const { reported } = await check(app(), '.');
     expect(reported).toEqual([MESSAGE, DIFF_REVIEW, PRIMITIVES]);
   });

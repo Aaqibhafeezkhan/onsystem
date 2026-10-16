@@ -41,7 +41,7 @@ export function renderComponentList(ds: DesignSystem, project?: string): string 
     '',
   ];
   const own = roots.filter((c) => !c.library);
-  for (const component of own) lines.push(...listItem(component));
+  for (const component of own) lines.push(...listItem(component, registryNote(ds, component)));
   // A library's components, imported alike: the import is said once.
   for (const library of new Set(roots.flatMap((c) => (c.library ? [c.library] : [])))) {
     if (own.length) lines.push('');
@@ -51,6 +51,12 @@ export function renderComponentList(ds: DesignSystem, project?: string): string 
     }
   }
   return lines.join('\n');
+}
+
+/** ` (from @signoff-ui, read-only)` for a component copied from a shadcn registry. */
+function registryNote(ds: DesignSystem, component: ComponentInfo): string {
+  const from = ds.registryOf(component);
+  return from ? ` (from ${from.registry}, read-only)` : '';
 }
 
 function listItem(component: ComponentInfo, note = '', withImport = true): string[] {
@@ -187,6 +193,12 @@ export function renderComponent(
   ].filter(Boolean);
   lines.push(facts.join(' · '));
   if (origin) lines.push(`From ${origin.package}, used by ${listOf(origin.projects)}.`);
+  const registry = ds.registryOf(component);
+  if (registry) {
+    lines.push(
+      `Installed from the shadcn registry ${registry.registry} into ${registry.folder}: use it as it is. Its code is the registry's, so change it upstream, not here; \`npx shadcn add --overwrite\` replaces the file.`,
+    );
+  }
 
   lines.push('', '## Props');
   if (!component.props.length && !component.inherits.length) lines.push('No props.');

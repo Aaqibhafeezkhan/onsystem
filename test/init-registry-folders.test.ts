@@ -119,22 +119,23 @@ describe('init writes the folders shadcn add fills from other registries', () =>
     expect(init.code).toBe(0);
     expect(written(root)).toEqual({
       $schema: 'https://unpkg.com/onsystem/schema.json',
+      // Zero config found the folders that hold code, read-only; init adds the one to come.
       components: [
         'components/ui/**/*.{tsx,jsx}',
         'components/ai-elements/**/*.{tsx,jsx}',
-        'components/react-bits/**/*.{tsx,jsx}',
         'components/signoff-ui/**/*.{tsx,jsx}',
+        'components/react-bits/**/*.{tsx,jsx}',
       ],
       tokens: ['app/globals.css'],
     });
     expect(init.stdout).toContain(
-      `Added components/ai-elements (@ai-elements, 1 file) and components/signoff-ui (@signoff-ui, 1 file) to "components": they hold the code \`shadcn add\` copied from those registries in components.json. \`check\` and the hook skip it as design-system code, and your code is checked against every component its files export, helpers included, so a native element such as <img> can be told to use one of them. To leave the helpers out, see ${LINK}; to check that code as your own, take the folders out of "components".`,
+      'Found the design system through components.json (ui: @/components/ui → components/ui); from shadcn registries, read-only: components/ai-elements (@ai-elements, 1 file), components/signoff-ui (@signoff-ui, 1 file).',
     );
     // No components/react-bits yet: a registry named before its first `shadcn add` gets its
     // folder too. React Bits puts its files loose in components/, which the config cannot tell
     // apart, so the line says that code is checked as the app's.
     expect(init.stdout).toContain(
-      `Also added components/react-bits (@react-bits) to "components", though it does not exist yet: \`check\` and the hook skip the code \`shadcn add\` copies there from that registry in components.json. Code a registry copies somewhere else, such as loose into components/, is checked as your own (${LINK}).`,
+      `Added components/react-bits (@react-bits) to "components", though it does not exist yet: \`check\` and the hook skip the code \`shadcn add\` copies there from that registry in components.json. Code a registry copies somewhere else, such as loose into components/, is checked as your own (${LINK}).`,
     );
     // The dry run and the baseline hold the app's findings only, and React Bits' loose file.
     expect(init.stdout).toContain('Baseline: 5 findings in 2 files');
@@ -183,8 +184,8 @@ describe('init writes the folders shadcn add fills from other registries', () =>
     expect(written(root).components).toEqual([
       'src/components/ui/**/*.{tsx,jsx}',
       'src/components/ai-elements/**/*.{tsx,jsx}',
-      'src/components/react-bits/**/*.{tsx,jsx}',
       'src/components/signoff-ui/**/*.{tsx,jsx}',
+      'src/components/react-bits/**/*.{tsx,jsx}',
     ]);
   });
 

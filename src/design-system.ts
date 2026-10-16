@@ -8,7 +8,13 @@ import { glob } from 'tinyglobby';
 import type ts from 'typescript';
 
 import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } from './config.js';
-import { presetResolver, stylesheetResolver, workspaceRootOf } from './detect.js';
+import {
+  presetResolver,
+  registryFolders,
+  stylesheetResolver,
+  workspaceRootOf,
+  type DesignSystemSource,
+} from './detect.js';
 import { extractComponents } from './extract/components.js';
 import { attachDocs, parseDoc, type ParsedDoc } from './extract/docs.js';
 import {
@@ -43,7 +49,7 @@ import type {
   TokenCategory,
 } from './types.js';
 import { silentLogger, type Logger } from './util/log.js';
-import { globBase, isHomeOrAbove, isInside, relativePath } from './util/paths.js';
+import { globBase, isHomeOrAbove, isInside, matchesGlob, relativePath } from './util/paths.js';
 import { closest, plural, unique } from './util/strings.js';
 import { COLOR_UTILITY, parseUtility } from './lint/tailwind.js';
 import { VERSION } from './version.js';
@@ -54,23 +60,56 @@ export class DesignSystem {
   private readonly searchIndex: Bm25Index<ComponentInfo>;
   /**
    * The components the tools offer: all of them, except a library's (MUI's) where the project
-   * has its own of that name, a wrapper the team means to be used. The rules still check code
-   * that imports the library's directly against the library's.
+   * has its own of that name, a wrapper the team means to be used, and the helpers in a
+   * registry folder's `lib/` (signoff-ui's `Img` and icons). The rules still check code that
+   * imports either directly against them.
    */
   private readonly offered: ComponentInfo[];
+  /** The design systems the rules rank, with the registry folders a config lists. */
+  private readonly sources: DesignSystemSource[] | undefined;
 
   constructor(
     readonly model: DesignSystemModel,
     readonly config: ResolvedConfig,
   ) {
-    this.lint = new LintTarget(model, config, new ModuleResolver(config));
+    this.sources = rankedSources(config);
+    this.lint = new LintTarget(
+      model,
+      this.sources === config.designSystems ? config : { ...config, designSystems: this.sources },
+      new ModuleResolver(config),
+    );
     const own = new Set(
       model.components.filter((c) => !c.library).flatMap((c) => [c.name, ...c.aliases]),
     );
     this.offered = model.components.filter(
-      (c) => !c.library || !(own.has(c.name) || (c.parent !== undefined && own.has(c.parent))),
+      (c) =>
+        (!c.library || !(own.has(c.name) || (c.parent !== undefined && own.has(c.parent)))) &&
+        !this.registryHelper(c),
     );
     this.searchIndex = buildSearchIndex(this.offered);
+  }
+
+  /**
+   * The shadcn registry a component was copied from (`@signoff-ui`), when its folder is one
+   * components.json names: a read-only design system, whose code is the registry's.
+   */
+  registryOf(component: ComponentInfo): { registry: string; folder: string } | undefined {
+    if (component.library) return undefined;
+    const file = component.source.file;
+    for (const source of this.sources ?? []) {
+      if (!source.registry) continue;
+      const glob = source.components.find((g) => matchesGlob(file, g));
+      // Its folder, as zero config wrote the glob: `components/signoff-ui/**/*.{tsx,jsx}`.
+      const folder = glob?.replace(/\/\*\*\/\*\.\{tsx,jsx\}$/, '').replace(/\\(.)/g, '$1');
+      if (folder !== undefined) return { registry: source.registry, folder };
+    }
+    return undefined;
+  }
+
+  /** A component in a registry folder's `lib/`: an internal of its items, not one of them. */
+  private registryHelper(component: ComponentInfo): boolean {
+    const from = this.registryOf(component);
+    return from !== undefined && component.source.file.startsWith(`${from.folder}/lib/`);
   }
 
   get root(): string {
@@ -196,6 +235,37 @@ export class DesignSystem {
 }
 
 const CONFIGURATION_DOCS = 'https://onsystem.vercel.app/docs/configuration';
+
+/**
+ * The design systems the rules rank, first to last: zero config's, or, for a config that lists
+ * the folders `npx shadcn add` copies the registries of components.json into (as `init` writes
+ * them), its other components first and each such folder after them, read-only, as zero config
+ * reads them.
+ */
+function rankedSources(config: ResolvedConfig): DesignSystemSource[] | undefined {
+  if (config.designSystems || !config.configured) return config.designSystems;
+  const listed = registryFolders(config.root, config.tsconfig).filter((f) =>
+    config.components.some((g) => matchesGlob(`${f.dir}/index.tsx`, g)),
+  );
+  if (!listed.length) return undefined;
+  const inRegistry = (glob: string) => {
+    const base = globBase(glob);
+    return listed.some((f) => base === f.dir || base.startsWith(`${f.dir}/`));
+  };
+  return [
+    {
+      source: 'components',
+      components: config.components.filter((g) => !inRegistry(g)),
+      imports: 0,
+    },
+    ...listed.map((f) => ({
+      source: `${f.dir} (${f.namespace})`,
+      components: [f.glob],
+      imports: 0,
+      registry: f.namespace,
+    })),
+  ];
+}
 
 /** `border-ring` → token `ring`, for color utilities a token's usage list does not spell out. */
 function matchUtility(base: string, tokens: Token[]): Token | undefined {
