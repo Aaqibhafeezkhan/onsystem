@@ -23,6 +23,8 @@ const docs = fs.readFileSync(
 );
 const whatAppsGet = section(docs, 'What apps get');
 const inTheApps = section(docs, 'In the apps');
+/** Its `### Without the config` part. */
+const withoutTheConfig = whatAppsGet.slice(whatAppsGet.indexOf('\n### Without the config\n'));
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
@@ -48,6 +50,20 @@ const PACKAGE = {
     'export function Button() {}\nexport function Card() {}\nexport function Input() {}\n',
   'dist/index.d.ts':
     'export declare function Button(props: { variant?: "default" | "outline" }): unknown;\nexport declare function Card(props: object): unknown;\nexport declare function Input(props: object): unknown;\n',
+};
+
+/**
+ * `@acme/ui` published with its sources and no build, its `exports` pointing at them: what zero
+ * config reads in an app without the config.
+ */
+const SOURCE_PACKAGE: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(PACKAGE).filter(([file]) => !file.startsWith('dist/'))),
+  'package.json': json({
+    name: '@acme/ui',
+    version: '1.0.0',
+    files: ['src', 'theme.css'],
+    exports: { '.': './src/index.tsx', './theme.css': './theme.css' },
+  }),
 };
 
 /** One mistake per rule; the icon-only <button> on the last line breaks two. */
@@ -235,12 +251,13 @@ async function tool(root: string, name: string, args: Record<string, unknown>): 
 }
 
 describe('what apps get from a design-system package (docs/design-system-packages.md)', () => {
-  it('has a row for a workspace package and for three ways of publishing one', () => {
+  it('has a row for a workspace package and for four ways of publishing one', () => {
     expect(rows().map(([how]) => how)).toEqual([
       'As a workspace package',
       'From a registry, with the config, the token files and the component sources (`src/`) published',
       'From a registry, with the config, the token files and compiled `dist/` published, but not `src/`',
-      'From a registry, without the config',
+      'From a registry, without the config, named like a design system (`@acme/ui`), with `exports` that point at the component sources (`./src/index.ts`)',
+      'From a registry, without the config, with `exports` that point at `dist/`, or named otherwise (`@acme/kit`)',
     ]);
     expect(RULE_IDS).toHaveLength(8);
   });
@@ -352,7 +369,134 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(stderr).toContain("@acme/ui's onsystem config was skipped");
     // The app itself has no components or tokens: only the accessibility rule, on <button>.
     expect(rules).toEqual(new Set(['icon-button-accessible-name']));
-    expect(rows()[3]?.[1]).toContain('the declaration is skipped with a warning');
+    expect(rows()[4]?.[1]).toContain(
+      'A declaration whose config is not published is skipped with a warning',
+    );
+  });
+
+  it('runs every rule from a package named like a design system whose exports point at its sources, with no config', async () => {
+    const cell = rows()[3]?.[1] ?? '';
+    expect(cell).toMatch(/^All eight, through zero config/);
+    // As published before init: no config, and no declaration.
+    const app = installedApp(published(SOURCE_PACKAGE));
+    expect((await check(app)).rules).toEqual(rulesIn(cell));
+    const explained = await run(['inspect', '--explain', '--no-cache'], app);
+    const found = 'found  installed package @acme/ui: node_modules/@acme/ui, 3 component files';
+    expect(explained.stdout).toContain(found);
+    expect(withoutTheConfig).toContain(`\`${found}\``);
+    // A declaration whose config is not published: skipped, and the package read the same way.
+    const pkg = await initialised(SOURCE_PACKAGE);
+    const unpublished = without(published(pkg), (file) => file === 'onsystem.config.json');
+    const skipped = await check(installedApp(unpublished));
+    expect(skipped.stderr).toContain("@acme/ui's onsystem config was skipped");
+    expect(skipped.rules).toEqual(rulesIn(cell));
+    expect(withoutTheConfig).toContain(
+      'An app reads an installed package that declares no config, or whose declared config is not published, as zero config reads a workspace package',
+    );
+  });
+
+  it('reads no component from a package without the config whose exports point at dist/, with src/ published or not, and says why', async () => {
+    const why =
+      'no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/dist/index.mjs), not at component sources, and only sources are read';
+    expect(withoutTheConfig).toContain(`\`${why}\``);
+    expect(rows()[4]?.[0]).toContain('with `exports` that point at `dist/`');
+    const distOnly = without(published(PACKAGE), (file) => file.startsWith('src/'));
+    // A `source` condition for the package's own repository, before the build that apps get.
+    const sourceCondition = {
+      ...published(PACKAGE),
+      'package.json': json({
+        name: '@acme/ui',
+        version: '1.0.0',
+        files: ['dist', 'src', 'theme.css'],
+        exports: {
+          '.': {
+            source: './src/index.tsx',
+            types: './dist/index.d.ts',
+            import: './dist/index.mjs',
+          },
+          './theme.css': './theme.css',
+        },
+      }),
+    };
+    for (const pkg of [published(PACKAGE), distOnly, sourceCondition]) {
+      const app = installedApp(pkg);
+      const { rules } = await check(app);
+      expect(rules).toEqual(new Set(['icon-button-accessible-name']));
+      const explained = await run(['inspect', '--explain', '--no-cache'], app);
+      expect(explained.stdout).toContain(why);
+    }
+    expect(withoutTheConfig).toContain(
+      'Unlike in a workspace package, exports that point at `dist/` are not followed back to `src/`',
+    );
+    expect(withoutTheConfig).toContain(
+      "A condition for the package's own repository, such as `source` (react-native-builder-bob) or `expo-source` (`@expo/ui`), is passed over",
+    );
+  });
+
+  it('reads a package through each condition the docs list, and through no other', async () => {
+    const sentence =
+      /read through the conditions an app resolves: those of Node\.js \(([^)]*)\), and ([^.]*)\./.exec(
+        withoutTheConfig,
+      );
+    const listed = [
+      ...`${sentence?.[1] ?? ''} ${sentence?.[2] ?? ''}`.matchAll(/`([a-z-]+)`/g),
+    ].map((m) => m[1] ?? '');
+    expect(listed).toEqual([
+      'import',
+      'require',
+      'module-sync',
+      'node',
+      'default',
+      'module',
+      'browser',
+      'style',
+    ]);
+    const detected = async (condition: string) => {
+      const pkg = {
+        ...SOURCE_PACKAGE,
+        'package.json': json({
+          name: '@acme/ui',
+          version: '1.0.0',
+          files: ['src', 'theme.css'],
+          exports: { '.': { [condition]: './src/index.tsx' }, './theme.css': './theme.css' },
+        }),
+      };
+      return (await load(installedApp(published(pkg)))).config.detected;
+    };
+    for (const condition of [...listed, 'development', 'react-native']) {
+      expect([condition, await detected(condition)]).toEqual([
+        condition,
+        listed.includes(condition) ? 'installed package @acme/ui' : undefined,
+      ]);
+    }
+  });
+
+  it('reads no component through an export that points at JavaScript outside a build folder', async () => {
+    // A `.js` barrel in front of `.jsx` files, published without a build.
+    const jsBarrel = {
+      'package.json': json({
+        name: '@acme/ui',
+        version: '1.0.0',
+        files: ['index.js', 'src', 'theme.css'],
+        exports: { '.': './index.js', './theme.css': './theme.css' },
+      }),
+      'theme.css': PACKAGE['theme.css'],
+      'index.js':
+        'export * from "./src/button.jsx";\nexport * from "./src/card.jsx";\nexport * from "./src/input.jsx";\n',
+      'src/button.jsx':
+        'export function Button({ variant }) { return <button data-variant={variant} /> }\n',
+      'src/card.jsx': 'export function Card({ children }) { return <div>{children}</div> }\n',
+      'src/input.jsx': 'export function Input({ name }) { return <input name={name} /> }\n',
+    };
+    const app = installedApp(published(jsBarrel));
+    expect((await check(app)).rules).toEqual(new Set(['icon-button-accessible-name']));
+    const explained = await run(['inspect', '--explain', '--no-cache'], app);
+    expect(explained.stdout).toContain(
+      'no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/index.js), not at component sources, and only sources are read',
+    );
+    expect(withoutTheConfig).toContain(
+      'and no export that points at JavaScript in any other folder (`./index.js`, `./es/index.mjs`, `./build-module/index.js`), whose re-exports are not followed. So a package that publishes a `.js` barrel in front of its `.jsx` files is not read either',
+    );
   });
 
   it('runs the token rules only for what the published tokens define', async () => {
@@ -374,7 +518,7 @@ describe('what apps get from a design-system package (docs/design-system-package
 describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () => {
   const own = json({ rules: { 'no-hardcoded-color': 'warn' } });
 
-  it("replaces the package's: an installed package's components and tokens are gone", async () => {
+  it("replaces the package's: the components and tokens of a package whose exports point at dist/ are gone", async () => {
     const pkg = await initialised();
     const app = installedApp(published(pkg), { 'onsystem.config.json': own });
     const { rules, stderr } = await check(app);
@@ -385,12 +529,16 @@ describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () 
     );
   });
 
-  it('still finds a workspace package named like a design system through zero config', async () => {
+  it('still finds a package named like a design system through zero config, in the workspace or installed with exports that point at its sources', async () => {
     const pkg = await initialised();
-    const { rules } = await check(workspaceApp(pkg, { 'onsystem.config.json': own }));
-    expect(rules).toContain('no-unknown-variant');
+    const config = { 'onsystem.config.json': own };
+    expect((await check(workspaceApp(pkg, config))).rules).toContain('no-unknown-variant');
+    const sources = await initialised(SOURCE_PACKAGE);
+    expect((await check(installedApp(published(sources), config))).rules).toContain(
+      'no-unknown-variant',
+    );
     expect(inTheApps).toContain(
-      'it finds a workspace package named like a design system, but never one installed in `node_modules`',
+      'it finds a package named like a design system, as a workspace package or installed in `node_modules` with `exports` that point at its component sources ([without the config](#without-the-config)), but not one named otherwise (`@acme/kit`) or one whose `exports` point at compiled code.',
     );
   });
 

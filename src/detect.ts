@@ -136,7 +136,9 @@ const STYLESHEETS = [
  *    workspace sources, read the same way or through their own `components.json`,
  *    or, for a package without `exports` that apps import by path
  *    (`@acme/ui/primitives/button`), from the files the root's code imports. They
- *    are added to what `components.json` found, not skipped for it.
+ *    are added to what `components.json` found, not skipped for it. One installed
+ *    from a registry is read through its `exports` alone, when they point at the
+ *    component sources it publishes, not from `dist/` back to `src/`.
  * 4. A flat folder of components that wrap a primitives library, the way React
  *    Aria's Tailwind starter ships them (`src/Button.tsx`, `src/Checkbox.tsx`).
  *
@@ -228,30 +230,31 @@ export function detectProject(
   for (const name of names) {
     // The package whose config the root takes on is read where it is, installed or not.
     const own = name === declared?.name ? declared : undefined;
-    const kind = own?.installed ? 'installed' : 'workspace';
+    // Else a workspace package, or one installed from a registry.
+    const workspaceDir = own ? undefined : packages.find(name);
+    const installedDir = own || workspaceDir ? undefined : packages.installed(name);
+    const kind = (own?.installed ?? installedDir !== undefined) ? 'installed' : 'workspace';
     const candidate = `${kind} package ${name}`;
     // What components.json already points into.
     if (found.some((f) => f.package === name)) {
       step(candidate, false, 'not added twice: components.json points into it');
       continue;
     }
-    // Only workspace sources: a package installed from the registry is compiled.
-    const dir = own ? own.dir : packages.find(name);
+    const dir = own?.dir ?? workspaceDir ?? installedDir;
     const pkg = dir ? readJson(path.join(dir, 'package.json')) : undefined;
     if (!dir || !pkg) {
-      step(
-        candidate,
-        false,
-        'not a workspace package: an installed package is compiled, and only sources are read',
-      );
+      step(candidate, false, 'not a workspace package, and not installed');
       continue;
     }
     const reasons: string[] = [];
     const note: Note = (r) => reasons.push(r);
-    const result =
-      fromPackage(root, dir, pkg, note) ??
-      fromPackageComponentsJson(root, dir, pkg, packages, note) ??
-      fromImports(root, dir, name, (imported ??= importedSubpaths(root, names)).get(name), note);
+    // An installed package that declares no config is read through its exports alone, when
+    // they point at the component sources it publishes: its compiled files are not read.
+    const result = installedDir
+      ? fromPackage(root, dir, pkg, note, true)
+      : (fromPackage(root, dir, pkg, note) ??
+        fromPackageComponentsJson(root, dir, pkg, packages, note) ??
+        fromImports(root, dir, name, (imported ??= importedSubpaths(root, names)).get(name), note));
     if (result && matchesAny(root, result)) {
       found.push({
         ...result,
@@ -559,13 +562,19 @@ function fromPackageComponentsJson(
  * A package whose `exports` point at component source files is a design system. An export
  * that leads to a barrel (`./components/button` → `components/button/index.ts`, or `.` →
  * `src/index.tsx` behind `dist/`) stands for the files the barrel re-exports, each
- * suggested with the export's specifier.
+ * suggested with the export's specifier. An `installed` package's exports are read as an app
+ * resolves them ({@link APP_CONDITIONS}), not from `dist/` back to `src/`: a widget kit
+ * publishes `src/` beside `dist/` for its source maps, or points a `source` condition at it for
+ * its own repository, and it is not the app's design system. Its compiled files ({@link isBuildOutput})
+ * are not read at all: no barrel, component or stylesheet in them. Nor is an export that points
+ * at JavaScript outside a build folder ({@link isCompiledExport}): its re-exports are not followed.
  */
 function fromPackage(
   root: string,
   dir: string,
   pkg: Record<string, unknown>,
   note: Note = ignore,
+  installed = false,
 ): Found | undefined {
   const imports: ImportMapping[] = [];
   const components: ImportMapping[] = [];
@@ -573,15 +582,17 @@ function fromPackage(
     imports.push(mapping);
     if (component && !components.some((m) => m.target === mapping.target)) components.push(mapping);
   };
-  for (const mapping of exportMappings(root, dir, pkg)) {
+  const mappings = exportMappings(root, dir, pkg, installed);
+  for (const mapping of mappings) {
     const file = path.resolve(root, mapping.target);
+    if (installed && isCompiledExport(dir, file)) continue;
     if (mapping.target.includes('*') || !SCRIPT_FILE.test(file) || !isFile(file)) {
       add(mapping, COMPONENT_FILE.test(mapping.target));
       continue;
     }
     // The .tsx/.jsx files it leads to, through barrels.
     for (const reached of exportedFiles(file, dir)) {
-      if (COMPONENT_FILE.test(reached)) {
+      if (COMPONENT_FILE.test(reached) && !(installed && isBuildOutput(dir, reached))) {
         add({ specifier: mapping.specifier, target: relativePath(root, reached) }, true);
       }
     }
@@ -590,17 +601,22 @@ function fromPackage(
   const patterns = components.filter((m) => m.target.includes('*'));
   // One or two .tsx exports are an app or a widget, not a component library.
   if (files.length < 3 && !patterns.length) {
-    const built = exportMappings(root, dir, pkg).filter((m) =>
-      /(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(m.target),
+    const built = mappings.filter(
+      (m) =>
+        /(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(m.target) ||
+        (installed && isCompiledExport(dir, path.resolve(root, m.target))),
     );
+    const output = built
+      .slice(0, 2)
+      .map((m) => m.target)
+      .join(', ');
     note(
       pkg.exports === undefined && typeof pkg.main !== 'string'
         ? 'no exports'
         : built.length
-          ? `its exports point at build output with no source found (${built
-              .slice(0, 2)
-              .map((m) => m.target)
-              .join(', ')})`
+          ? installed
+            ? `its exports point at build output (${output}), not at component sources, and only sources are read`
+            : `its exports point at build output with no source found (${output})`
           : `its exports lead to ${plural(files.length, 'component file')}; a design system exports at least 3`,
     );
     return undefined;
@@ -760,10 +776,16 @@ function importedSubpaths(root: string, names: string[]): Map<string, Set<string
 
 /**
  * `exports` subpaths with a source target, as specifiers relative to `root`. A target
- * built to `dist/` maps back to its source (`src/`, through the build config's entries);
- * without an `exports` map, `main` stands for `.`.
+ * built to `dist/` maps back to its source (`src/`, through the build config's entries),
+ * unless `asWritten`: then each target is the one an app that installs the package resolves
+ * ({@link APP_CONDITIONS}), as it is. Without an `exports` map, `main` stands for `.`.
  */
-function exportMappings(root: string, dir: string, pkg: Record<string, unknown>): ImportMapping[] {
+function exportMappings(
+  root: string,
+  dir: string,
+  pkg: Record<string, unknown>,
+  asWritten = false,
+): ImportMapping[] {
   const name = typeof pkg.name === 'string' ? pkg.name : undefined;
   if (!name) return [];
   const exports =
@@ -782,17 +804,40 @@ function exportMappings(root: string, dir: string, pkg: Record<string, unknown>)
   let build: ReturnType<typeof buildEntries> | undefined;
   const mappings: ImportMapping[] = [];
   for (const [key, value] of entries) {
-    const target = exportTarget(value);
+    const target = exportTarget(value, asWritten ? APP_CONDITIONS : undefined);
     if (!target) continue;
-    const source = target.includes('*')
-      ? sourcePattern(dir, target)
-      : sourceTarget(dir, key, target, (build ??= buildEntries(dir)));
+    const source = asWritten
+      ? undefined
+      : target.includes('*')
+        ? sourcePattern(dir, target)
+        : sourceTarget(dir, key, target, (build ??= buildEntries(dir)));
     mappings.push({
       specifier: key === '.' ? name : `${name}/${key.replace(/^\.\//, '')}`,
       target: relativePath(root, path.resolve(dir, source ?? target)),
     });
   }
   return mappings;
+}
+
+/**
+ * A compiled file in package `dir`'s build folder: JavaScript, JSX or CSS (`dist/index.mjs`,
+ * `lib/button.jsx`, `dist/index.css`), or a pattern of them (`dist/*.jsx`). TypeScript there
+ * (`lib/utils.ts`) is source.
+ */
+function isBuildOutput(dir: string, file: string): boolean {
+  return /^(?:dist|build|lib|out|esm|cjs)\/.*\.(?:[cm]?jsx?|css)$/.test(
+    toPosix(path.relative(dir, file)),
+  );
+}
+
+/**
+ * An `exports` target of installed package `dir` that is compiled: its build output, or
+ * JavaScript in any folder (`./index.js`, `./es/index.mjs`, `./build-module/index.js`), which a
+ * package published from TypeScript or JSX sources ships compiled. Its re-exports are not
+ * followed, so a package that ships a `.js` barrel in front of `.jsx` sources is not read.
+ */
+function isCompiledExport(dir: string, file: string): boolean {
+  return isBuildOutput(dir, file) || /\.[cm]?js$/.test(file);
 }
 
 /** `./dist/*.mjs` → `src/*.tsx` (or `.ts`) when files match it there; anything else as it is. */
@@ -808,20 +853,42 @@ function sourcePattern(dir: string, target: string): string {
   return relative;
 }
 
-/** The source file an export condition map points at: the first string target that is not a declaration file. */
-function exportTarget(value: unknown): string | undefined {
+/**
+ * The `exports` conditions an app resolves an installed package through: Node.js's own
+ * (`import`, `require`, `module-sync`, `node`, `default`), and the `module`, `browser` and
+ * `style` that bundlers and Tailwind CSS add. Others, such as `source`, `expo-source` and
+ * `development`, lead the package's own repository to its sources, and an app that installs it
+ * builds the target after them: `@expo/ui`'s `"default": "./build/universal/index.js"`, not its
+ * `"expo-source": "./src/universal/index.ts"` before it.
+ */
+const APP_CONDITIONS: ReadonlySet<string> = new Set([
+  'import',
+  'require',
+  'module-sync',
+  'node',
+  'module',
+  'browser',
+  'style',
+  'default',
+]);
+
+/**
+ * The source file an export condition map points at: the first string target that is not a
+ * declaration file, through any condition but `types`, or through `conditions` alone.
+ */
+function exportTarget(value: unknown, conditions?: ReadonlySet<string>): string | undefined {
   if (typeof value === 'string') return value.endsWith('.d.ts') ? undefined : value;
   if (Array.isArray(value)) {
     for (const item of value) {
-      const target = exportTarget(item);
+      const target = exportTarget(item, conditions);
       if (target) return target;
     }
     return undefined;
   }
   if (value && typeof value === 'object') {
     for (const [condition, nested] of Object.entries(value)) {
-      if (condition === 'types') continue;
-      const target = exportTarget(nested);
+      if (condition === 'types' || (conditions && !conditions.has(condition))) continue;
+      const target = exportTarget(nested, conditions);
       if (target) return target;
     }
   }
@@ -929,32 +996,101 @@ export function presetResolver(
  * Resolves a stylesheet's `@import` to a project file: a path next to the stylesheet
  * (`./theme.css`, or `theme.css` as plain CSS reads it), or a stylesheet of a workspace
  * package (`@acme/theme/colors.css`, or `@acme/theme` through its `exports` or its `style`
- * field). Installed packages (`tailwindcss`) and URLs resolve to nothing.
+ * field). An installed package resolves only when zero config reads it as a design system
+ * ({@link installedDesignSystem}), and a stylesheet in it imports others of that package alone.
+ * In an installed package, a stylesheet in a build folder (`dist/index.css`) is compiled, and
+ * resolves to nothing. Other installed packages (`tailwindcss`) and URLs resolve to nothing.
  */
 export function stylesheetResolver(
   root: string,
 ): (specifier: string, fromFile: string) => string | undefined {
   const packages = new PackageFinder(root);
-  const stylesheet = (file: string) =>
+  const designSystems = new Map<string, string | undefined>();
+  const designSystem = (name: string) => {
+    if (!designSystems.has(name)) {
+      designSystems.set(name, installedDesignSystem(root, name, packages));
+    }
+    return designSystems.get(name);
+  };
+  // On disk, and not in node_modules, unless in the installed package `within` (none below it),
+  // and then outside its build folders.
+  const stylesheet = (file: string, within?: string) =>
     [file, `${file}.css`].find(
-      (f) => f.endsWith('.css') && !/[\\/]node_modules[\\/]/.test(f) && isFile(f),
+      (f) =>
+        f.endsWith('.css') &&
+        (within === undefined || (isInside(within, f) && !isBuildOutput(within, f))) &&
+        !/(?:^|[\\/])node_modules[\\/]/.test(within === undefined ? f : path.relative(within, f)) &&
+        isFile(f),
     );
   return (specifier, fromFile) => {
     if (/^(?:[a-z][\w+.-]*:|\/)/i.test(specifier)) return undefined;
-    const relative = stylesheet(path.resolve(path.dirname(fromFile), specifier));
+    const relative = stylesheet(
+      path.resolve(path.dirname(fromFile), specifier),
+      installedPackageOf(fromFile),
+    );
     if (relative || specifier.startsWith('.')) return relative;
     const name = packageName(specifier);
-    const dir = name ? packages.find(name) : undefined;
+    const workspace = name ? packages.find(name) : undefined;
+    const installed = name && !workspace ? designSystem(name) : undefined;
+    const dir = workspace ?? installed;
     if (!name || !dir) return undefined;
     const subpath = specifier.slice(name.length + 1);
+    const key = subpath ? `./${subpath}` : '.';
+    // In an installed package, an export that maps the subpath decides, even to nothing.
+    const exported = installed
+      ? installedStylesheet(installed, key)
+      : exportedFile(dir, key, (f) => f.endsWith('.css'));
+    if (exported !== undefined) return exported ?? undefined;
     const style = readJson(path.join(dir, 'package.json'))?.style;
-    return (
-      exportedFile(dir, subpath ? `./${subpath}` : '.', (f) => f.endsWith('.css')) ??
-      (subpath
-        ? stylesheet(path.join(dir, subpath))
-        : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css')))
-    );
+    return subpath
+      ? stylesheet(path.join(dir, subpath), installed)
+      : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css'), installed);
   };
+}
+
+/**
+ * The stylesheet an app resolves `subpath` (`./globals.css`) of installed package `dir` to,
+ * as the package's exported stylesheets are found ({@link exportTarget}): the most specific
+ * `exports` entry that maps it decides, through its first stylesheet target under
+ * {@link APP_CONDITIONS}, and a later condition is not tried. `null` when that entry leads to no
+ * stylesheet, or to one in a build folder (`{ "style": "./dist/x.css", "default": "./src/x.css" }`
+ * gives apps the compiled `dist/x.css`); undefined when no entry maps the subpath.
+ */
+function installedStylesheet(dir: string, subpath: string): string | null | undefined {
+  const [match] = exportMatches(dir, subpath);
+  if (!match) return undefined;
+  const target = exportTargets(match.value, APP_CONDITIONS)
+    .map((t) => t.replaceAll('*', match.middle))
+    .find((t) => t.endsWith('.css'));
+  const file = target === undefined ? undefined : path.resolve(dir, target);
+  return file && isInside(dir, file) && !isBuildOutput(dir, file) && isFile(file) ? file : null;
+}
+
+/**
+ * The folder of `name` installed from a registry, when zero config reads it as a design system:
+ * named like one, with `exports` that point at the component sources it publishes.
+ */
+function installedDesignSystem(
+  root: string,
+  name: string,
+  packages: PackageFinder,
+): string | undefined {
+  if (!isDesignSystemName(name)) return undefined;
+  const dir = packages.installed(name);
+  const pkg = dir ? readJson(path.join(dir, 'package.json')) : undefined;
+  const found = dir && pkg ? fromPackage(root, dir, pkg, ignore, true) : undefined;
+  return found && matchesAny(root, found) ? dir : undefined;
+}
+
+/** The installed package a file is in: `…/node_modules/@acme/ui` for `…/node_modules/@acme/ui/src/a.css`. */
+function installedPackageOf(file: string): string | undefined {
+  const parts = path.resolve(file).split(path.sep);
+  const at = parts.lastIndexOf('node_modules');
+  const first = parts[at + 1] ?? '.';
+  // Not `.cache` or `.bin`, which hold no package.
+  if (at === -1 || first.startsWith('.')) return undefined;
+  const end = at + (first.startsWith('@') ? 3 : 2);
+  return end < parts.length ? parts.slice(0, end).join(path.sep) : undefined;
 }
 
 /**
@@ -967,6 +1103,20 @@ function exportedFile(
   subpath: string,
   accept: (file: string) => boolean,
 ): string | undefined {
+  for (const { middle, value } of exportMatches(dir, subpath)) {
+    for (const target of exportTargets(value)) {
+      const file = path.resolve(dir, target.replaceAll('*', middle));
+      if (isInside(dir, file) && accept(file) && isFile(file)) return file;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The entries of package `dir`'s `exports` that map `subpath`, with what their `*` stands for:
+ * an exact subpath first, then the most specific pattern, as Node.js picks them.
+ */
+function exportMatches(dir: string, subpath: string): { middle: string; value: unknown }[] {
   const exports = readJson(path.join(dir, 'package.json'))?.exports;
   const entries: [string, unknown][] =
     exports && typeof exports === 'object' && !Array.isArray(exports)
@@ -976,7 +1126,6 @@ function exportedFile(
       : exports === undefined
         ? []
         : [['.', exports]];
-  // An exact subpath first, then the most specific pattern, as Node.js picks them.
   const matches: { middle: string; value: unknown; rank: number }[] = [];
   for (const [key, value] of entries) {
     const star = key.indexOf('*');
@@ -995,23 +1144,18 @@ function exportedFile(
       matches.push({ middle, value, rank: prefix.length });
     }
   }
-  matches.sort((a, b) => b.rank - a.rank);
-  for (const { middle, value } of matches) {
-    for (const target of exportTargets(value)) {
-      const file = path.resolve(dir, target.replaceAll('*', middle));
-      if (isInside(dir, file) && accept(file) && isFile(file)) return file;
-    }
-  }
-  return undefined;
+  return matches.sort((a, b) => b.rank - a.rank);
 }
 
-/** Every target of an export condition map, in order, but its types. */
-function exportTargets(value: unknown): string[] {
+/** Every target of an export condition map, in order, but its types, or those of `conditions` alone. */
+function exportTargets(value: unknown, conditions?: ReadonlySet<string>): string[] {
   if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(exportTargets);
+  if (Array.isArray(value)) return value.flatMap((item) => exportTargets(item, conditions));
   if (value && typeof value === 'object') {
     return Object.entries(value).flatMap(([condition, nested]) =>
-      condition === 'types' ? [] : exportTargets(nested),
+      condition === 'types' || (conditions && !conditions.has(condition))
+        ? []
+        : exportTargets(nested, conditions),
     );
   }
   return [];
@@ -1203,7 +1347,7 @@ export class PackageFinder {
       const candidate = path.join(dir, 'node_modules', name);
       if (fs.existsSync(path.join(candidate, 'package.json'))) {
         const real = fs.realpathSync(candidate);
-        // A package installed from the registry is compiled; only linked workspace sources count.
+        // Only linked workspace sources count: an installed package is found by `installed`.
         if (!/[\\/]node_modules[\\/]/.test(real)) {
           // Express it from the root as given, so paths stay relative when the
           // root itself sits behind a link (`/var` → `/private/var` on macOS).
@@ -1222,11 +1366,8 @@ export class PackageFinder {
    * checkout that is not installed (only then is the workspace scanned). With its package.json.
    */
   locate(name: string): { dir: string; json: Record<string, unknown> } | undefined {
-    for (const nodeModules of this.nodeModulesDirs()) {
-      const dir = path.join(nodeModules, ...name.split('/'));
-      const json = cachedManifest(path.join(dir, 'package.json'));
-      if (json) return { dir, json };
-    }
+    const found = this.inNodeModules(name);
+    if (found) return found;
     // A dependency resolves only to a package the package manager links, never to a folder
     // only Nx knows of, so Nx's projects (a glob of the whole repository) are not looked for.
     this.linkable ??= scanWorkspace(this.root, false);
@@ -1246,6 +1387,31 @@ export class PackageFinder {
     const dir = path.resolve(this.root, real);
     const installed = /(?:^|[\\/])node_modules[\\/]/.test(real);
     return { dir, installed, boundary: installed ? dir : this.boundaryOf(dir) };
+  }
+
+  /**
+   * Where `name` is installed from a registry, rather than linked to a workspace package: its
+   * real folder, where pnpm puts its own dependencies beside it, expressed from the root. When
+   * that is outside the root and its workspace (pnpm's store elsewhere on the machine), the
+   * folder in `node_modules` it was found by, the only way the loader reads it.
+   */
+  installed(name: string): string | undefined {
+    const located = this.inNodeModules(name);
+    if (!located) return undefined;
+    const placed = this.place(located.dir);
+    if (!placed.installed) return undefined;
+    const near = isInside(this.root, placed.dir) || this.boundaryOf(placed.dir) !== placed.dir;
+    return near ? placed.dir : path.resolve(located.dir);
+  }
+
+  /** `name` in the nearest `node_modules` at or above the root that has it, with its package.json. */
+  private inNodeModules(name: string): { dir: string; json: Record<string, unknown> } | undefined {
+    for (const nodeModules of this.nodeModulesDirs()) {
+      const dir = path.join(nodeModules, ...name.split('/'));
+      const json = cachedManifest(path.join(dir, 'package.json'));
+      if (json) return { dir, json };
+    }
+    return undefined;
   }
 
   /** The `node_modules` folders at and above the root, nearest first, looked up once. */

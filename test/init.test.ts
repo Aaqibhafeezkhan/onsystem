@@ -95,7 +95,7 @@ describe('onsystem inspect --explain', () => {
       'no     package.json exports of shop: its exports lead to 1 component file; a design system exports at least 3',
     );
     expect(stdout).toContain(
-      'no     workspace package @acme/ui: not a workspace package: an installed package is compiled, and only sources are read',
+      'no     workspace package @acme/ui: not a workspace package, and not installed',
     );
     expect(stdout).toContain('no     a flat src/ of components: src/main.tsx makes src/ an app');
     expect(stdout).toContain(
