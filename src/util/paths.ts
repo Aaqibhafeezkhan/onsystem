@@ -82,6 +82,17 @@ export function matchesGlob(file: string, pattern: string): boolean {
 
 const globRegExps = new Map<string, RegExp>();
 
+/**
+ * Whether a root-relative path is one a glob matches, or is in a folder it matches, as a
+ * glob's `ignore` leaves a matching folder out: `app/legacy`, `app/legacy/`, `./app/legacy` and
+ * `app/legacy/**` all cover `app/legacy/old.tsx`, and `**\/legacy` covers every legacy folder.
+ * How `exclude` patterns are matched, wherever they apply.
+ */
+export function coveredByGlob(file: string, pattern: string): boolean {
+  const glob = pattern.replace(/^\.\//, '').replace(/\/+$/, '');
+  return matchesGlob(file, glob) || matchesGlob(file, `${glob}/**`);
+}
+
 function globSource(pattern: string): string {
   let out = '';
   for (let i = 0; i < pattern.length; i++) {

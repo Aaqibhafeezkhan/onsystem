@@ -23,7 +23,14 @@ import {
   type LibrarySource,
 } from './libraries/index.js';
 import { findTailwindConfig } from './tokens/tailwind-config.js';
-import { globBase, isInside, matchesGlob, slashGlob, toPosix } from './util/paths.js';
+import {
+  coveredByGlob,
+  globBase,
+  isInside,
+  matchesGlob,
+  slashGlob,
+  toPosix,
+} from './util/paths.js';
 import { closest } from './util/strings.js';
 
 export const RULE_IDS = [
@@ -130,7 +137,7 @@ const configShape = {
     .array(z.string())
     .optional()
     .describe(
-      'Globs to ignore when finding components and when `check` expands folders and globs (stories, tests). Replaces the defaults; node_modules is skipped either way unless a pattern names it.',
+      'Globs for files to leave out (stories, tests), relative to the root: `check` in folders and globs, the ESLint plugin, the Claude Code hook and check_ui leave them out, and finding components skips them. A folder (`app/legacy`) covers everything in it. Replaces the defaults; node_modules is skipped either way unless a pattern names it.',
     ),
   tokens: z
     .union([tokenSourceSchema, z.array(tokenSourceSchema)])
@@ -462,6 +469,8 @@ export async function loadConfigWith(
   const excludeFromBase = (e: string): string | undefined => {
     if (!inherited || e.startsWith('**/')) return e;
     if (declared) return fromBase(e);
+    // The project's own folder (`apps/web`) leaves out all of it, as `apps/web/**` does.
+    if (e === toProject) return '**';
     return e.startsWith(`${toProject}/`) ? e.slice(toProject.length + 1) : undefined;
   };
   // A dependency's config reads only within its package when installed, or its workspace: a
@@ -563,6 +572,8 @@ export async function loadConfigWith(
 
   const exclude = (config.exclude ?? DEFAULT_EXCLUDE)
     .map(slashGlob)
+    // `./app/legacy/` is the folder `app/legacy`, also when a root config's pattern is rebased.
+    .map((e) => e.replace(/^(?:\.\/)+/, '').replace(/(.)\/+$/, '$1'))
     .map(excludeFromBase)
     .filter((e): e is string => e !== undefined);
 
@@ -665,6 +676,28 @@ function legacyConfigNotice(legacy: string, current: string | undefined): string
 function resolveRule(setting: z.infer<typeof ruleSettingSchema>): ResolvedRule {
   if (typeof setting === 'string') return { severity: setting, options: {} };
   return { severity: setting[0], options: setting[1] ?? {} };
+}
+
+/** The default test and story patterns, which `--include-tests` lifts. */
+export function isTestPattern(pattern: string): boolean {
+  return pattern === DEFAULT_TEST_EXCLUDE || pattern === DEFAULT_TEST_FOLDERS;
+}
+
+/**
+ * The `exclude` pattern that leaves `file` (relative to the root) out, or undefined when none
+ * does. The one test `check` (in folders and globs, and for files named outright with
+ * `--skip-excluded`), the ESLint plugin, the Claude Code hook and check_ui all apply, so they
+ * leave out the same files. A pattern covers the files it matches and everything in a folder it
+ * matches. With `includeTests`, the default test and story patterns do not count.
+ */
+export function excludedBy(
+  config: Pick<ResolvedConfig, 'exclude'>,
+  file: string,
+  options: { includeTests?: boolean } = {},
+): string | undefined {
+  return config.exclude.find(
+    (pattern) => !(options.includeTests && isTestPattern(pattern)) && coveredByGlob(file, pattern),
+  );
 }
 
 /**
