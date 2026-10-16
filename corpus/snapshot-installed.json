@@ -1,0 +1,498 @@
+{
+  "$comment": "Written by `node scripts/corpus.mjs --installed --update`. Counts per run and rule with the dependencies installed from each repository's lockfile, as bench/v2 installs them; `labels` records which labelled findings were reported.",
+  "version": "0.7.0",
+  "runs": {
+    "saas-starter-installed": {
+      "inspect": {
+        "detected": "components.json (ui: @/components/ui → components/ui)",
+        "files": "7 component files, 1 token file, 0 docs",
+        "components": 7,
+        "parts": 23,
+        "tokens": {
+          "color": 40,
+          "radius": 8,
+          "spacing": 1
+        },
+        "warnings": 0
+      },
+      "files": 16,
+      "flagged": 13,
+      "rules": {
+        "no-hardcoded-color": {
+          "errors": 77,
+          "warnings": 32,
+          "fixes": 29
+        },
+        "prefer-design-system-component": {
+          "errors": 2,
+          "warnings": 0,
+          "fixes": 2
+        }
+      }
+    },
+    "chatbot-installed": {
+      "inspect": {
+        "detected": "components.json (ui: @/components/ui → components/ui)",
+        "files": "22 component files, 1 token file, 0 docs",
+        "components": 23,
+        "parts": 97,
+        "tokens": {
+          "radius": 8,
+          "color": 31,
+          "shadow": 6,
+          "other": 6,
+          "spacing": 1
+        },
+        "warnings": 0
+      },
+      "files": 61,
+      "flagged": 23,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 12,
+          "warnings": 0,
+          "fixes": 1
+        },
+        "no-hardcoded-color": {
+          "errors": 22,
+          "warnings": 19,
+          "fixes": 3
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 1,
+          "fixes": 1
+        },
+        "prefer-design-system-component": {
+          "errors": 19,
+          "warnings": 0,
+          "fixes": 19
+        }
+      }
+    },
+    "shadcn-website-installed": {
+      "inspect": {
+        "detected": "components.json (ui: @/registry/new-york-v4/ui → registry/new-york-v4/ui)",
+        "files": "61 component files, 2 token files, 0 docs",
+        "components": 68,
+        "parts": 263,
+        "tokens": {
+          "typography": 3,
+          "radius": 8,
+          "color": 40,
+          "spacing": 1
+        },
+        "warnings": 0
+      },
+      "files": 279,
+      "flagged": 36,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 1,
+          "warnings": 0,
+          "fixes": 0
+        },
+        "no-hardcoded-color": {
+          "errors": 76,
+          "warnings": 29,
+          "fixes": 40
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 5,
+          "fixes": 5
+        },
+        "no-hardcoded-spacing": {
+          "errors": 0,
+          "warnings": 4,
+          "fixes": 4
+        },
+        "prefer-design-system-component": {
+          "errors": 9,
+          "warnings": 0,
+          "fixes": 9
+        }
+      }
+    },
+    "openstatus-dashboard-installed": {
+      "inspect": {
+        "detected": "primary: workspace package @openstatus/ui (718 imports); also: components.json (ui: @/components/ui → src/components/ui) (69 imports)",
+        "files": "112 component files, 2 token files, 1 doc",
+        "components": 132,
+        "parts": 246,
+        "tokens": {
+          "color": 51,
+          "radius": 8,
+          "spacing": 3,
+          "typography": 4
+        },
+        "warnings": 1
+      },
+      "files": 445,
+      "flagged": 27,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 16,
+          "warnings": 0,
+          "fixes": 7
+        },
+        "no-hardcoded-color": {
+          "errors": 2,
+          "warnings": 0,
+          "fixes": 0
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 2,
+          "fixes": 2
+        },
+        "no-hardcoded-spacing": {
+          "errors": 0,
+          "warnings": 2,
+          "fixes": 1
+        },
+        "prefer-design-system-component": {
+          "errors": 15,
+          "warnings": 0,
+          "fixes": 15
+        }
+      }
+    },
+    "openstatus-web-installed": {
+      "inspect": {
+        "detected": "primary: workspace package @openstatus/ui (127 imports); also: components.json (ui: @/components/ui → src/components/ui) (0 imports)",
+        "files": "104 component files, 2 token files, 1 doc",
+        "components": 120,
+        "parts": 238,
+        "tokens": {
+          "color": 60,
+          "radius": 8,
+          "typography": 3,
+          "spacing": 1
+        },
+        "warnings": 1
+      },
+      "files": 172,
+      "flagged": 15,
+      "rules": {
+        "no-hardcoded-color": {
+          "errors": 18,
+          "warnings": 5,
+          "fixes": 3
+        },
+        "no-hardcoded-spacing": {
+          "errors": 0,
+          "warnings": 1,
+          "fixes": 1
+        },
+        "prefer-design-system-component": {
+          "errors": 21,
+          "warnings": 0,
+          "fixes": 21
+        }
+      }
+    },
+    "openstatus-ui-installed": {
+      "inspect": {
+        "detected": "components.json (ui: @openstatus/ui/components/ui → src/components/ui)",
+        "files": "42 component files, 1 token file, 0 docs",
+        "components": 47,
+        "parts": 158,
+        "tokens": {
+          "color": 51,
+          "radius": 8,
+          "spacing": 1
+        },
+        "warnings": 0
+      },
+      "files": 60,
+      "flagged": 9,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 2,
+          "warnings": 0,
+          "fixes": 1
+        },
+        "no-hardcoded-color": {
+          "errors": 5,
+          "warnings": 4,
+          "fixes": 3
+        },
+        "prefer-design-system-component": {
+          "errors": 8,
+          "warnings": 0,
+          "fixes": 8
+        }
+      }
+    },
+    "openstatus-root-installed": {
+      "inspect": {
+        "workspace": "45 packages (pnpm-workspace.yaml, turbo.json), 6 projects with a design system",
+        "projects": {
+          "apps/dashboard": {
+            "detected": "primary: workspace package @openstatus/ui (718 imports); also: components.json (ui: @/components/ui → src/components/ui) (69 imports)",
+            "files": "112 component files, 2 token files, 1 doc",
+            "components": 132,
+            "parts": 246,
+            "tokens": {
+              "color": 51,
+              "radius": 8,
+              "spacing": 3,
+              "typography": 4
+            },
+            "warnings": 1
+          },
+          "apps/status-page": {
+            "detected": "workspace package @openstatus/ui",
+            "files": "102 component files, 1 token file, 1 doc",
+            "components": 118,
+            "parts": 238,
+            "tokens": {
+              "color": 51,
+              "radius": 8,
+              "spacing": 1
+            },
+            "warnings": 1
+          },
+          "apps/web": {
+            "detected": "primary: workspace package @openstatus/ui (127 imports); also: components.json (ui: @/components/ui → src/components/ui) (0 imports)",
+            "files": "104 component files, 2 token files, 1 doc",
+            "components": 120,
+            "parts": 238,
+            "tokens": {
+              "color": 60,
+              "radius": 8,
+              "typography": 3,
+              "spacing": 1
+            },
+            "warnings": 1
+          },
+          "packages/emails": {
+            "detected": "package.json exports of @openstatus/emails",
+            "files": "16 component files, 0 token files, 0 docs",
+            "components": 12,
+            "parts": 0,
+            "tokens": {},
+            "warnings": 1
+          },
+          "packages/icons": {
+            "detected": "package.json exports of @openstatus/icons",
+            "files": "142 component files, 0 token files, 0 docs",
+            "components": 143,
+            "parts": 0,
+            "tokens": {},
+            "warnings": 1
+          },
+          "packages/ui": {
+            "detected": "components.json (ui: @openstatus/ui/components/ui → src/components/ui)",
+            "files": "42 component files, 1 token file, 0 docs",
+            "components": 47,
+            "parts": 158,
+            "tokens": {
+              "color": 51,
+              "radius": 8,
+              "spacing": 1
+            },
+            "warnings": 0
+          }
+        },
+        "others": 39
+      },
+      "files": 699,
+      "flagged": 51,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 18,
+          "warnings": 0,
+          "fixes": 8
+        },
+        "no-hardcoded-color": {
+          "errors": 25,
+          "warnings": 9,
+          "fixes": 6
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 2,
+          "fixes": 2
+        },
+        "no-hardcoded-spacing": {
+          "errors": 0,
+          "warnings": 3,
+          "fixes": 2
+        },
+        "prefer-design-system-component": {
+          "errors": 44,
+          "warnings": 0,
+          "fixes": 44
+        }
+      },
+      "added": {}
+    },
+    "dub-web-installed": {
+      "inspect": {
+        "detected": "workspace package @dub/ui",
+        "files": "430 component files, 2 token files, 1 doc",
+        "components": 430,
+        "parts": 17,
+        "tokens": {
+          "color": 24
+        },
+        "warnings": 1
+      },
+      "files": 1484,
+      "flagged": 1009,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 52,
+          "warnings": 0,
+          "fixes": 30
+        },
+        "no-hardcoded-color": {
+          "errors": 10910,
+          "warnings": 245,
+          "fixes": 6726
+        },
+        "no-unknown-prop": {
+          "errors": 4,
+          "warnings": 0,
+          "fixes": 0
+        },
+        "prefer-design-system-component": {
+          "errors": 1000,
+          "warnings": 0,
+          "fixes": 968
+        }
+      }
+    },
+    "dub-ui-installed": {
+      "inspect": {
+        "detected": "package.json exports of @dub/ui",
+        "files": "430 component files, 1 token file, 1 doc",
+        "components": 430,
+        "parts": 17,
+        "tokens": {
+          "color": 24
+        },
+        "warnings": 1
+      },
+      "files": 27,
+      "flagged": 20,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 2,
+          "warnings": 0,
+          "fixes": 2
+        },
+        "no-hardcoded-color": {
+          "errors": 297,
+          "warnings": 11,
+          "fixes": 137
+        },
+        "prefer-design-system-component": {
+          "errors": 15,
+          "warnings": 0,
+          "fixes": 15
+        }
+      }
+    },
+    "dub-web-configured-installed": {
+      "inspect": {
+        "detected": null,
+        "files": "104 component files, 2 token files, 0 docs",
+        "components": 108,
+        "parts": 17,
+        "tokens": {
+          "color": 24
+        },
+        "warnings": 0
+      },
+      "files": 1422,
+      "flagged": 989,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 56,
+          "warnings": 0,
+          "fixes": 30
+        },
+        "no-hardcoded-color": {
+          "errors": 10853,
+          "warnings": 215,
+          "fixes": 6726
+        },
+        "no-unknown-prop": {
+          "errors": 4,
+          "warnings": 0,
+          "fixes": 0
+        },
+        "prefer-design-system-component": {
+          "errors": 1000,
+          "warnings": 0,
+          "fixes": 995
+        }
+      }
+    },
+    "dub-root-installed": {
+      "inspect": {
+        "workspace": "11 packages (pnpm-workspace.yaml, turbo.json), 3 projects with a design system",
+        "projects": {
+          "apps/web": {
+            "detected": "workspace package @dub/ui",
+            "files": "430 component files, 2 token files, 1 doc",
+            "components": 430,
+            "parts": 17,
+            "tokens": {
+              "color": 24
+            },
+            "warnings": 1
+          },
+          "packages/email": {
+            "detected": "package.json exports of @dub/email",
+            "files": "114 component files, 0 token files, 0 docs",
+            "components": 114,
+            "parts": 0,
+            "tokens": {},
+            "warnings": 1
+          },
+          "packages/ui": {
+            "detected": "package.json exports of @dub/ui",
+            "files": "430 component files, 1 token file, 1 doc",
+            "components": 430,
+            "parts": 17,
+            "tokens": {
+              "color": 24
+            },
+            "warnings": 1
+          }
+        },
+        "others": 8
+      },
+      "files": 1521,
+      "flagged": 1029,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 54,
+          "warnings": 0,
+          "fixes": 32
+        },
+        "no-hardcoded-color": {
+          "errors": 11207,
+          "warnings": 256,
+          "fixes": 6863
+        },
+        "no-unknown-prop": {
+          "errors": 4,
+          "warnings": 0,
+          "fixes": 0
+        },
+        "prefer-design-system-component": {
+          "errors": 1015,
+          "warnings": 0,
+          "fixes": 983
+        }
+      },
+      "added": {}
+    }
+  },
+  "labels": {}
+}
