@@ -244,7 +244,7 @@ export const noHardcodedColor: Rule = {
 
         // `bg-white`, `text-black`: reported once the whole class list is known, since white
         // text on a colored surface in the same list is that surface's.
-        const keyword = keywordColor(utility);
+        const keyword = keywordColor(utility, tokens.colorKeys);
         if (keyword && !(element && isInsideMask(element))) {
           listed.color = keyword.color;
           listed.prefix = keyword.prefix;
@@ -265,14 +265,31 @@ export const noHardcodedColor: Rule = {
       }
     }
     const surfaces = new Surfaces(context, lists);
+    // White or black text, which stays as it is, and the class list of the surface it is on.
+    const texts: {
+      text: ListedClass;
+      list: readonly ListedClass[];
+      under: readonly ListedClass[] | undefined;
+    }[] = [];
     for (const list of lists.values()) {
       for (const listed of list) {
         if (!listed.keyword) continue;
-        // White or black text, icon fill or stroke on a colored surface is that surface's
-        // contrast color (shadcn/ui's `bg-destructive text-white`), not a theme color.
-        if (colorRole(listed.prefix) === 'text' && surfaces.colored(list, listed.keyword)) continue;
+        if (colorRole(listed.prefix) === 'text') {
+          // White or black text, icon fill or stroke on a colored surface is that surface's
+          // contrast color (shadcn/ui's `bg-destructive text-white`), not a theme color.
+          const placed = surfaces.place(list, listed);
+          texts.push({ text: listed, list, under: placed.under });
+          if (placed.contrasts) continue;
+        }
         listed.report = colorReport(context, listed.keyword);
       }
+    }
+    for (const { text, list, under } of texts) {
+      // Its own class list's backgrounds are under it in their states too (`hover:bg-black`).
+      surfaces.holdUnder(text, list, list);
+      if (under && under !== list) surfaces.holdUnder(text, list, under);
+    }
+    for (const list of lists.values()) {
       keepStatesApart(list);
       for (const { report } of list) if (report) context.report(report);
     }
@@ -571,13 +588,18 @@ const KEYWORD_CLASS = new RegExp(
 /**
  * The white or black an opaque class sets (`bg-white`, `text-black`). With an opacity modifier
  * (`bg-black/50`, `border-white/10`) it is a tint of whatever is under it, a scrim or a hairline
- * that suits both modes, so it is left alone.
+ * that suits both modes, so it is left alone. A theme that defines `--color-white` (after
+ * `--color-*: initial`) makes `bg-white` one of its tokens.
  */
-function keywordColor(utility: Utility): { prefix: string; color: Oklch } | undefined {
+function keywordColor(
+  utility: Utility,
+  colorKeys: ReadonlySet<string>,
+): { prefix: string; color: Oklch } | undefined {
   if (utility.modifier || utility.arbitrary !== undefined) return undefined;
   const [, prefix, name] = KEYWORD_CLASS.exec(utility.base) ?? [];
-  const color = name ? parseColor(TAILWIND_KEYWORD_COLORS[name] ?? '') : undefined;
-  return prefix && color ? { prefix, color } : undefined;
+  if (!prefix || !name || colorKeys.has(name)) return undefined;
+  const color = parseColor(TAILWIND_KEYWORD_COLORS[name] ?? '');
+  return color ? { prefix, color } : undefined;
 }
 
 /** The node around `node`, or undefined at the file. */
@@ -588,87 +610,364 @@ function parentOf(node: ts.Node): ts.Node | undefined {
 /** Background classes that set no background of their own: what is under them shows through. */
 const NO_BACKGROUND = /^bg-(?:transparent|current|inherit|none)$/;
 
+/** Style properties that set an element's background, and values that set none. */
+const STYLE_BACKGROUNDS = new Set(['background', 'backgroundColor', 'backgroundImage']);
+const NO_STYLE_BACKGROUND = /^(?:transparent|none|inherit|initial|unset|revert|currentcolor)$/i;
+
+/** `var(--primary)`: a custom property, which can be a token's. */
+const CSS_VARIABLE = /^var\(\s*(--[\w-]+)\s*\)$/;
+
 /**
  * How far apart in lightness (OKLCH L) white or black text and its surface must be for the
- * surface to be the text's own: white on `bg-primary`, `bg-indigo-600` or `bg-orange-500`
- * (0.705), not on `bg-amber-400` or `bg-muted`; black on `bg-yellow-300`, not on `bg-primary`.
+ * surface to be the text's own: white on `bg-indigo-600` or `bg-orange-500` (0.705), not on
+ * `bg-amber-400` or `bg-muted`; black on `bg-yellow-300`, not on `bg-indigo-600`. A token is
+ * judged in each mode the text shows in: shadcn/ui's `primary` is near white in dark mode, so
+ * white text on `bg-primary` is not its own there.
  */
 const SURFACE_CONTRAST = 0.25;
 
+/** Whether white or black text stands out from a surface of this color. */
+function standsOut(surface: Oklch, text: Oklch): boolean {
+  return Math.abs(surface.l - text.l) >= SURFACE_CONTRAST;
+}
+
+/** What white or black text sits on, in the mode where it stands out least. */
+interface Placement {
+  /** Whether it stands out from what it sits on in each mode it shows in. */
+  contrasts: boolean;
+  /** The class list that sets the surface it does not stand out from. */
+  under?: readonly ListedClass[] | undefined;
+}
+
+/** A background's color in a mode: `unknown` when one is set but its color cannot be read. */
+type SurfaceColor = Oklch | 'unknown';
+
 /**
  * Where white or black text sits, which says whether the text is the surface's contrast color
- * (shadcn/ui's `bg-destructive text-white`) or the theme's: the background its own class list
- * sets, its component's variants set (`<Button>` with `bg-*` variants), or the nearest element
- * around it that sets one.
+ * (shadcn/ui's `bg-destructive text-white`) or the theme's: the background its own element sets,
+ * in `style` or in its class list, its component's variants set (`<Button>` with `bg-*`
+ * variants), or the nearest element around it that sets one.
  */
 class Surfaces {
   private readonly byNode = new Map<ts.Node, JsxNode>();
-  private readonly tokenColors = new Map<string, Oklch>();
+  private readonly tokenColors = new Map<string, ColorCandidate>();
+  private readonly byVar = new Map<string, ColorCandidate>();
+  /** Backgrounds an element sets in `style`: each value's color, by mode. */
+  private readonly styled = new Map<ts.Node, ((mode: string | undefined) => SurfaceColor)[]>();
+  private readonly held = new Set<ListedClass>();
 
   constructor(
     private readonly context: RuleContext,
     private readonly lists: ReadonlyMap<object, readonly ListedClass[]>,
   ) {
     for (const element of context.analysis.elements) this.byNode.set(element.node, element);
-    for (const { token, color } of context.target.tokens.colors) {
-      if (token.tailwind) this.tokenColors.set(token.tailwind, color);
+    for (const candidate of context.target.tokens.colors) {
+      const { tailwind, cssVar } = candidate.token;
+      if (tailwind) this.tokenColors.set(tailwind, candidate);
+      if (cssVar) this.byVar.set(cssVar, candidate);
+    }
+    // `style={{ backgroundColor: swatch }}`: a surface whose color is known only at run time.
+    for (const { element, object } of context.analysis.styles) {
+      for (const prop of object.properties) {
+        if (!ts.isPropertyAssignment(prop) && !ts.isShorthandPropertyAssignment(prop)) continue;
+        const name = propertyName(prop.name);
+        if (name === undefined || !STYLE_BACKGROUNDS.has(name)) continue;
+        const values = ts.isPropertyAssignment(prop)
+          ? valueBranches(prop.initializer)
+          : [prop.name];
+        const colors = this.styled.get(element.node) ?? [];
+        for (const value of values) {
+          const read = this.styleColor(value);
+          if (read) colors.push(read);
+        }
+        if (colors.length) this.styled.set(element.node, colors);
+      }
     }
   }
 
-  /** Whether the text is on a surface of its own: a colored background it contrasts with. */
-  colored(list: readonly ListedClass[], text: ColorInput): boolean {
+  /**
+   * Where the text sits, in each mode it shows in: a `dark:` class in dark mode only, another
+   * one in its base mode and in dark mode, unless its class list sets its dark color itself
+   * (`text-black dark:text-white`). It is the surface's own only if it stands out in each.
+   */
+  place(list: readonly ListedClass[], text: ListedClass): Placement {
+    const input = text.keyword;
+    if (!input) return { contrasts: true };
+    const variants = input.utility?.variants ?? [];
+    const modes: (string | undefined)[] = variants.includes('dark')
+      ? ['dark']
+      : hasDarkCounterpart(list, text)
+        ? [undefined]
+        : [undefined, 'dark'];
+    for (const mode of modes) {
+      const state =
+        mode === 'dark' && !variants.includes('dark') ? [...variants, 'dark'] : variants;
+      const placed = this.placeIn(list, input, state, mode);
+      if (!placed.contrasts) return placed;
+    }
+    return { contrasts: true };
+  }
+
+  /**
+   * Takes back the fix of a white or black background when white or black text on it stays as it
+   * is and may no longer stand out: `bg-black text-white` would become `bg-primary text-white`,
+   * white on near white where `primary` is light (shadcn/ui's dark mode). A token without other
+   * modes may still have a dark one onsystem does not read (`.dark:not(.light)`), so it counts as
+   * changing there. The fix stays when the token stands out from the text in every mode the text
+   * shows in, or the class lists set the dark-mode background or text (`dark:bg-zinc-900`,
+   * `dark:text-white`).
+   */
+  holdUnder(text: ListedClass, list: readonly ListedClass[], under: readonly ListedClass[]): void {
+    const input = text.keyword;
+    if (!input) return;
+    const textIsDark = input.utility?.variants.includes('dark') === true;
+    const textInDark = textIsDark || !hasDarkCounterpart(list, text);
+    for (const surface of under) {
+      const { report, keyword } = surface;
+      const fix = report?.fix?.[0];
+      if (!report || !fix || !keyword || surface.prefix !== 'bg' || this.held.has(surface))
+        continue;
+      // A `dark:` class is compared with the tokens' dark values: where it applies, it is the same.
+      if (keyword.utility?.variants.includes('dark') || !standsOut(keyword.color, input.color))
+        continue;
+      const token = this.fixedTo(fix.text);
+      if (!token) continue;
+      const surfaceInDark = !hasDarkCounterpart(under, surface);
+      const modes: [string, Oklch | undefined][] = Object.entries(token.modes ?? {});
+      const known = modes.length > 0;
+      if (!known) modes.push(['dark', undefined]);
+      const lost = modes
+        .filter(([mode, value]) => {
+          const shows = mode === 'dark' ? textInDark && surfaceInDark : !textIsDark;
+          return shows && (value === undefined || !standsOut(value, input.color));
+        })
+        .map(([mode]) => mode);
+      if (!lost.length) continue;
+      this.held.add(surface);
+      const textUtility = parseUtility(text.value);
+      const shade = KEYWORD_CLASS.exec(textUtility.base)?.[2] ?? 'as it is';
+      const name = token.token.name;
+      const why = !known
+        ? `and ${name} may be another color in a dark mode`
+        : `which would not stand out from ${name} in ${lost.includes('dark') ? 'dark mode' : `the ${lost[0] ?? ''} mode`}`;
+      // In its own class list, the text changes in the background's state: `hover:text-…`.
+      const variants = [...textUtility.variants];
+      if (under === list) {
+        for (const variant of keyword.utility?.variants ?? []) {
+          if (!variants.includes(variant)) variants.push(variant);
+        }
+      }
+      const pair = this.foregroundOf(token, { ...textUtility, variants }, text.prefix);
+      report.message += ` \`${text.value}\` on it stays ${shade}, ${why}, so this is not applied automatically: change the text with it${pair ? `, to \`${pair}\`` : ''}.`;
+      report.fix = undefined;
+    }
+  }
+
+  /** The token a background's fix puts in: `bg-primary`, or `bg-[var(--chart-bg)]`. */
+  private fixedTo(fixed: string): ColorCandidate | undefined {
+    const utility = parseUtility(fixed);
+    const variable =
+      utility.arbitrary === undefined
+        ? undefined
+        : CSS_VARIABLE.exec(utility.arbitrary.trim())?.[1];
+    if (variable) return this.byVar.get(variable);
+    return this.tokenColors.get(utility.base.slice('bg-'.length));
+  }
+
+  /** The text class of the token made for text on `surface`: `text-foreground` on `background`. */
+  private foregroundOf(
+    surface: ColorCandidate,
+    text: Utility,
+    prefix: string | undefined,
+  ): string | undefined {
+    const key = surface.token.tailwind;
+    if (!key || !prefix) return undefined;
+    const pair = key === 'background' ? 'foreground' : `${key}-foreground`;
+    return this.tokenColors.has(pair) ? withBase(text, `${prefix}-${pair}`) : undefined;
+  }
+
+  /**
+   * Where the text sits in one mode, and the class list that says so. Under a tint it does not
+   * stand out from (`bg-white/10` under white text), what is under the tint decides; with nothing
+   * under it in the file, the page's `background` in that mode does.
+   */
+  private placeIn(
+    list: readonly ListedClass[],
+    text: ColorInput,
+    state: readonly string[],
+    mode: string | undefined,
+  ): Placement {
     const { color, element } = text;
-    const variants = text.utility?.variants ?? [];
-    const own = this.verdict(list, color, variants);
-    if (own !== undefined) return own;
-    if (!element) return false;
-    if (variantProp(this.context, element, 'bg')) return true;
-    for (let node: ts.Node | undefined = element.node.parent; node; node = parentOf(node)) {
+    /** Whether the text is under a tint it does not stand out from, which shows what is under it. */
+    const seen = { through: false };
+    /** What an element's `style`, then its class list, says: undefined to look further out. */
+    const at = (
+      node: ts.Node | undefined,
+      classes: readonly ListedClass[],
+      component: JsxNode | undefined,
+    ): Placement | undefined => {
+      const styled = node ? this.styleVerdict(node, color, mode) : undefined;
+      if (styled === 'through') seen.through = true;
+      if (styled !== undefined) return styled === 'through' ? undefined : { contrasts: styled };
+      const says = this.verdict(classes, color, state, mode);
+      if (says === 'through') seen.through = true;
+      else if (says !== undefined) return { contrasts: says, under: classes };
+      if (component && variantProp(this.context, component, 'bg')) return { contrasts: true };
+      return undefined;
+    };
+    const own = at(element?.node, list, element);
+    if (own) return own;
+    for (let node = element?.node.parent; node; node = parentOf(node)) {
       const around = this.byNode.get(node);
       if (!around) continue;
-      if (variantProp(this.context, around, 'bg')) return true;
-      const verdict = this.verdict(this.lists.get(around) ?? [], color, variants);
-      if (verdict !== undefined) return verdict;
+      const placed = at(node, this.lists.get(around) ?? [], around);
+      if (placed) return placed;
     }
-    return false;
+    if (!seen.through) return { contrasts: false };
+    const page = this.tokenColors.get('background');
+    return { contrasts: !page || standsOut(valueIn(page, mode), color) };
   }
 
-  /** What a class list's background says for the text, or undefined when it sets none. */
+  /**
+   * What a class list's background says for the text, or undefined when it sets none. Any
+   * background the text stands out from is its own: a list holds the classes of every branch
+   * of a `cn()` object, which never apply together. Then a tint it does not stand out from,
+   * whose surface is under it: in dark mode, `bg-neutral-50 dark:bg-white/10` is a tint over the
+   * page.
+   */
   private verdict(
     list: readonly ListedClass[],
     text: Oklch,
-    variants: readonly string[],
-  ): boolean | undefined {
-    let verdict: boolean | undefined;
+    state: readonly string[],
+    mode: string | undefined,
+  ): boolean | 'through' | undefined {
+    let verdict: boolean | 'through' | undefined;
     for (const { value } of list) {
-      const excuses = this.excuses(value, text, variants);
-      if (excuses) return true;
-      if (excuses === false) verdict = false;
+      const says = this.excuses(parseUtility(value), text, state, mode);
+      if (says === true) return true;
+      if (says === 'through' || verdict === undefined) verdict = says ?? verdict;
     }
     return verdict;
   }
 
   /**
-   * Whether a class sets a surface the text contrasts with: a gradient, a translucent tint
-   * (`bg-black/60`), an image, or a color far enough from the text's in lightness. An opaque
-   * `bg-white` or `bg-black` is the page's own color, as hardcoded as the text. Undefined for a
-   * class that sets no background, or sets one only in a state the text is not in: `hover:bg-red-600`
+   * What a background set in `style` says for the text: an inline style is over the classes.
+   * A color known only at run time (a swatch) or an image is a surface of its own.
+   */
+  private styleVerdict(
+    node: ts.Node,
+    text: Oklch,
+    mode: string | undefined,
+  ): boolean | 'through' | undefined {
+    const colors = this.styled.get(node);
+    if (!colors) return undefined;
+    let verdict: boolean | 'through' = 'through';
+    for (const read of colors) {
+      const color = read(mode);
+      if (color === 'unknown' || standsOut(color, text)) verdict = true;
+      else if ((color.alpha ?? 1) >= 1) return false;
+    }
+    return verdict;
+  }
+
+  /** How a style value colors the background: undefined when it sets none. */
+  private styleColor(
+    value: ts.Expression,
+  ): ((mode: string | undefined) => SurfaceColor) | undefined {
+    if (value.kind === ts.SyntaxKind.NullKeyword) return undefined;
+    if (ts.isIdentifier(value) && value.text === 'undefined') return undefined;
+    if (!ts.isStringLiteralLike(value)) return () => 'unknown';
+    const text = value.text.trim();
+    if (!text || NO_STYLE_BACKGROUND.test(text)) return undefined;
+    const variable = CSS_VARIABLE.exec(text)?.[1];
+    const token = variable ? this.byVar.get(variable) : undefined;
+    if (token) return (mode) => valueIn(token, mode);
+    const color = parseColor(text);
+    return () => color ?? 'unknown';
+  }
+
+  /**
+   * Whether a class sets a surface the text contrasts with: a gradient, an image, or a color far
+   * enough from the text's in lightness. An opaque `bg-white` or `bg-black` is the page's own
+   * color, as hardcoded as the text. A tint (`bg-black/60`) is a surface where it stands out;
+   * `bg-white/10` under white text shows what is under it (`through`). Undefined for a class
+   * that sets no background, or sets one only in a state the text is not in: `hover:bg-red-600`
    * is the surface of `hover:text-white`, not of `text-white`.
    */
-  private excuses(cls: string, text: Oklch, variants: readonly string[]): boolean | undefined {
-    const utility = parseUtility(cls);
+  private excuses(
+    utility: Utility,
+    text: Oklch,
+    state: readonly string[],
+    mode: string | undefined,
+  ): boolean | 'through' | undefined {
     const { base, modifier } = utility;
-    if (!utility.variants.every((variant) => variants.includes(variant))) return undefined;
+    if (!utility.variants.every((variant) => state.includes(variant))) return undefined;
     if (/^(?:from|via)-/.test(base)) return true;
     if (!base.startsWith('bg-') || NO_BACKGROUND.test(base)) return undefined;
-    if (modifier) return true;
-    if (keywordColor(utility)) return false;
-    const palette = paletteColor(base);
-    const arbitrary = utility.arbitrary !== undefined ? parseColor(utility.arbitrary) : undefined;
-    const color =
-      (palette && parseColor(palette.value)) ?? this.tokenColors.get(base.slice(3)) ?? arbitrary;
-    return color ? Math.abs(color.l - text.l) >= SURFACE_CONTRAST : true;
+    if (keywordColor(utility, this.context.target.tokens.colorKeys)) return false;
+    const color = this.backgroundColor(utility, mode);
+    if (color === 'unknown') return true;
+    const contrasts = standsOut(color, text);
+    return modifier && !contrasts ? 'through' : contrasts;
   }
+
+  /** The color a `bg-*` class sets in a mode: a token's, the palette's, or written in it. */
+  private backgroundColor(utility: Utility, mode: string | undefined): SurfaceColor {
+    const key = utility.base.slice('bg-'.length);
+    const token = this.tokenColors.get(key);
+    if (token) return valueIn(token, mode);
+    const palette = paletteColor(utility.base);
+    if (palette) return parseColor(palette.value) ?? 'unknown';
+    const keyword = TAILWIND_KEYWORD_COLORS[key];
+    if (keyword) return parseColor(keyword) ?? 'unknown';
+    if (utility.arbitrary === undefined) return 'unknown';
+    const value = utility.arbitrary.replace(/^color:/, '').trim();
+    const shade = PALETTE_VARIABLE.exec(value)?.[1];
+    const variable = shade ? undefined : CSS_VARIABLE.exec(value)?.[1];
+    const viaVariable = variable ? this.byVar.get(variable) : undefined;
+    if (viaVariable) return valueIn(viaVariable, mode);
+    const color = shade ? paletteColor(`bg-${shade}`)?.value : value;
+    return (color && parseColor(color)) || 'unknown';
+  }
+}
+
+/**
+ * Whether the class list sets the color of `listed` for dark mode too: `text-black dark:text-white`,
+ * `bg-white dark:bg-zinc-900`. Only a class that adds `dark:` and nothing else to its variants,
+ * whatever its color: `dark:bg-darkgray-50` names a color of a config onsystem may not read.
+ */
+function hasDarkCounterpart(list: readonly ListedClass[], listed: ListedClass): boolean {
+  const { prefix } = listed;
+  if (prefix === undefined) return false;
+  const { variants } = parseUtility(listed.value);
+  if (variants.includes('dark')) return false;
+  return list.some((other) => {
+    if (other === listed) return false;
+    const theirs = parseUtility(other.value);
+    if (other.prefix !== prefix && !(other.prefix === undefined && setsColor(theirs, prefix)))
+      return false;
+    return (
+      theirs.variants.includes('dark') &&
+      theirs.variants.every((variant) => variant === 'dark' || variants.includes(variant)) &&
+      variants.every((variant) => theirs.variants.includes(variant))
+    );
+  });
+}
+
+/** Utilities of a color prefix that set no color: `bg-cover`, `text-sm`, `stroke-2`. */
+const NOT_A_COLOR: Record<string, RegExp> = {
+  bg: /^bg-(?:auto|cover|contain|fixed|local|scroll|repeat.*|no-repeat|center|(?:top|bottom|left|right)(?:-.*)?|clip-.*|origin-.*|blend-.*|gradient-.*|linear.*|radial.*|conic.*|none|size-.*|position-.*|\[url\(.*)$/,
+  text: /^text-(?:xs|sm|base|lg|\d?xl|left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip|\[\d.*)$/,
+  fill: /^fill-none$/,
+  stroke: /^stroke-(?:none|\d.*|\[\d.*)$/,
+};
+
+/** Whether a class of no known color sets the color of `prefix`: `dark:bg-darkgray-50`. */
+function setsColor(utility: Utility, prefix: string): boolean {
+  if (!utility.base.startsWith(`${prefix}-`) || COLOR_UTILITY.exec(utility.base) === null)
+    return false;
+  if (utility.prefix !== undefined && utility.prefix !== prefix) return false;
+  return !NOT_A_COLOR[prefix]?.test(utility.base);
 }
 
 /**

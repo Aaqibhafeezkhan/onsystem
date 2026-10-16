@@ -66,11 +66,25 @@ function tenths(x: number) {
 }
 const pct = (x: number) => `${tenths(x)}%`;
 
+/**
+ * corpus/sample-stale.json: a change since the draw added or took out findings. Until a fresh draw
+ * replaces the sample and removes the file, the site and the README quote the sample with the
+ * corpus it was drawn from (test/readme.test.ts reads it the same way).
+ */
+interface Stale {
+  draw: string;
+  asDrawn: { repos: number; runs: number };
+}
+const STALE = 'corpus/sample-stale.json';
+const stale = (): Stale | undefined =>
+  fs.existsSync(path.join(root, STALE)) ? (JSON.parse(read(STALE)) as Stale) : undefined;
+
 /** The blind sample in corpus/labels.json, as test/readme.test.ts reads it, and the corpus size. */
 function blindSample() {
   const labels = JSON.parse(read('corpus/labels.json')) as Label[];
   const snapshot = JSON.parse(read('corpus/snapshot.json')) as Snapshot;
   const repos = JSON.parse(read('corpus/repos.json')) as Repos;
+  const marker = stale();
   // As labelKey in scripts/corpus-lib.ts: a label tied to a suggestion is keyed with it.
   const key = (l: Label) =>
     l.suggestion === undefined ? l.fingerprint : `${l.fingerprint}@${l.suggestion ?? 'none'}`;
@@ -83,14 +97,25 @@ function blindSample() {
     repos.repos.flatMap((r) => r.runs.filter((run) => run.config).map((run) => run.name)),
   );
   const byRule = new Map<string, number>();
-  // A run from a monorepo root counts only the findings it adds to the runs from its projects.
-  for (const [run, { rules, added }] of Object.entries(snapshot.runs)) {
-    if (rechecks.has(run)) continue;
-    for (const [rule, counts] of Object.entries(added ?? rules)) {
-      byRule.set(rule, (byRule.get(rule) ?? 0) + counts.errors + counts.warnings);
+  if (marker) {
+    // While the sample is stale: the findings it was drawn from, per rule, as its draw has them.
+    expect(marker.draw).toBe(draw);
+    const { allocation } = JSON.parse(read(`corpus/${draw}/allocation.json`)) as {
+      allocation: { rule: string; population: number }[];
+    };
+    for (const { rule, population } of allocation) byRule.set(rule, population);
+  } else {
+    // A run from a monorepo root counts only the findings it adds to the runs from its projects.
+    for (const [run, { rules, added }] of Object.entries(snapshot.runs)) {
+      if (rechecks.has(run)) continue;
+      for (const [rule, counts] of Object.entries(added ?? rules)) {
+        byRule.set(rule, (byRule.get(rule) ?? 0) + counts.errors + counts.warnings);
+      }
     }
   }
   const distinct = [...byRule.values()].reduce((a, b) => a + b, 0);
+  const repoCount = marker ? marker.asDrawn.repos : repos.repos.length;
+  const runs = marker ? marker.asDrawn.runs : Object.keys(snapshot.runs).length;
   const fps = (list: Label[]) => list.filter((l) => l.verdict === 'FP').length;
   const strata = [...byRule].map(([rule, size]) => {
     const stratum = blind.filter((l) => l.rule === rule);
@@ -121,12 +146,17 @@ function blindSample() {
   const words = ['no', 'one', 'two', 'three', 'four'];
   return {
     // The corpus size, and what runs without dependencies.
-    size: `on ${String(repos.repos.length)} public repositories pinned by commit (${String(Object.keys(snapshot.runs).length)} runs, ${distinct.toLocaleString('en-US')} distinct findings), without their dependencies installed (the ${words[mui.length] ?? String(mui.length)} MUI apps get MUI).`,
+    size: `on ${String(repoCount)} public repositories pinned by commit (${String(runs)} runs, ${distinct.toLocaleString('en-US')} distinct findings), without their dependencies installed (the ${words[mui.length] ?? String(mui.length)} MUI apps get MUI).`,
+    /** As the README's corpus paragraph has it too. */
+    counted: `${String(runs)} runs, ${distinct.toLocaleString('en-US')} distinct findings)`,
     draw,
     top: { rule: top?.rule ?? '', sentence: `(${String(top?.fp)} of ${String(top?.n)} sampled).` },
     // As CONTRIBUTING.md and test/readme.test.ts have it: labels in rules holding at least 80%
     // of the distinct findings, and every label the sample was drawn with still reported.
-    quotable: covered / distinct >= 0.8 && blind.every((l) => snapshot.labels[key(l)]),
+    // A stale sample is quoted as it was measured, with the corpus it was drawn from.
+    quotable:
+      covered / distinct >= 0.8 &&
+      (marker?.draw === draw || blind.every((l) => snapshot.labels[key(l)])),
     sentences: [
       `A seeded random sample of ${String(n)} of those findings, stratified by rule, was labelled from the code alone: blind labels by an AI reviewer (Claude Opus 5.5), not by a person.`,
       `${String(blind.filter((l) => l.verdict === 'TP').length)} are right, ${String(blind.filter((l) => l.verdict === 'D').length)} debatable and ${String(fp)} false positives: ${pct(fp / n)} (95% Wilson interval ${tenths(low)}-${pct(high)}), about the same when weighted by each rule's share of all findings (${pct(weighted)}).`,
@@ -155,6 +185,26 @@ describe('the home page on how often onsystem is wrong', () => {
     expect(paragraph.match(/\d+(?:\.\d+)?%(?! Wilson)/g)).toEqual(rates);
     expect(home).toContain(`href="https://github.com/dgesteves/onsystem/tree/main/corpus/${draw}"`);
     expect(paragraph).not.toMatch(/measured, not guessed/);
+  });
+});
+
+describe('the corpus size while the blind sample is stale', () => {
+  // PR #174 review: the site counted 15,764 findings from the regenerated snapshot next to a rate
+  // drawn from 14,539, while the README quoted 14,539.
+  it('is the corpus the sample was drawn from, on the home page, in the FAQ and in the README', () => {
+    const marker = stale();
+    if (!marker) return;
+    const { counted, size } = blindSample();
+    const home = text(renderToStaticMarkup(createElement(Home)));
+    const faq = pageMarkdown(docsPage('/docs/faq').page).replace(/\s+/g, ' ');
+    const readme = read('README.md').replace(/\s+/g, ' ');
+    expect(home).toContain(size);
+    expect(faq).toContain(size);
+    expect(readme).toContain(counted);
+    const { populationTotal } = JSON.parse(read(`corpus/${marker.draw}/allocation.json`)) as {
+      populationTotal: number;
+    };
+    expect(counted).toContain(`${populationTotal.toLocaleString('en-US')} distinct findings`);
   });
 });
 

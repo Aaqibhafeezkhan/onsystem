@@ -19,7 +19,7 @@ Run as is, with no config, on public apps: the counts the [corpus](../corpus) sn
 | ------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [vercel/ai-chatbot](https://github.com/vercel/ai-chatbot) `c2f8235`       | `components.json` → 23 components, 52 tokens   | 73 in `app/` and `components/`: 41 raw colors, 19 native elements the design system wraps, 12 icon-only buttons without an accessible name, 1 arbitrary radius |
 | [midday](https://github.com/midday-ai/midday) `5158731`, `apps/dashboard` | workspace package `@midday/ui` → 79 components | 1,340 in `src/`, including 98 icon-only buttons without an accessible name. Adopted with a [baseline](ci.md#adopting-it-in-an-existing-codebase)               |
-| [shadcn/ui](https://github.com/shadcn-ui/ui) website `0132174`            | custom `ui` alias → 68 components              | 123 in `app/` and `components/`, mostly raw colors (104)                                                                                                       |
+| [shadcn/ui](https://github.com/shadcn-ui/ui) website `0132174`            | custom `ui` alias → 68 components              | 124 in `app/` and `components/`, mostly raw colors (105)                                                                                                       |
 
 ## How it compares
 

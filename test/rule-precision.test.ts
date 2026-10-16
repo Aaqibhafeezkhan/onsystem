@@ -7,7 +7,7 @@ import type { DesignSystem } from '../src/design-system.js';
 import { applyFixes } from '../src/lint/index.js';
 import { TAILWIND_KEYWORD_COLORS, TAILWIND_VERSION } from '../src/lint/tailwind-palette.js';
 import type { Diagnostic } from '../src/types.js';
-import { DEMO_ROOT, loadOnce } from './helpers.js';
+import { DEMO_ROOT, fixture, load, loadOnce } from './helpers.js';
 
 // Valid code outside the main shadcn/ui path that the rules got wrong: white and black, which
 // passed as clean while `bg-[white]` and `fill="white"` did not; class strings kept in a variable
@@ -50,15 +50,16 @@ describe('no-hardcoded-color: white and black', () => {
       severity: 'error',
       suggestion: 'bg-background',
     });
-    expect(bg?.message).toBe(
-      '`bg-white` is a fixed color, not a design-system color. Matches token background (exact match, same value as card, popover) → `bg-background`.',
-    );
     // Text in white or black depends on the surface under it: named, as a warning, never fixed.
     expect(text).toMatchObject({ source: 'text-black', severity: 'warning' });
     expect(text?.fix).toBeUndefined();
-    expect(applyFixes(code, check(code, rule))).toBe(
-      'export const K = () => <div className="bg-background text-black">x</div>',
+    // So the background is not fixed without it: `bg-background text-black` is black on
+    // oklch(0.145) in dark mode, which `bg-white text-black` never was.
+    expect(bg?.message).toBe(
+      '`bg-white` is a fixed color, not a design-system color. Matches token background (exact match, same value as card, popover) → `bg-background`. `text-black` on it stays black, which would not stand out from background in dark mode, so this is not applied automatically: change the text with it, to `text-foreground`.',
     );
+    expect(bg?.fix).toBeUndefined();
+    expect(applyFixes(code, check(code, rule))).toBe(code);
   });
 
   it('reports both halves of a light and dark pair, and the create-next-app template', () => {
@@ -105,10 +106,20 @@ describe('no-hardcoded-color: white and black', () => {
       // On a translucent scrim or a gradient over an image, and on an element around it.
       '<div className="bg-black/60"><h3 className="text-white">Title</h3></div>',
       '<div className="bg-gradient-to-t from-black/60"><h3 className="text-white">Title</h3></div>',
-      '<div className="bg-primary p-4"><p><span className="text-white">Hi</span></p></div>',
+      '<div className="bg-destructive p-4"><p><span className="text-white">Hi</span></p></div>',
       // A component whose variants set its background.
       'import { Button } from "@/components/ui/button"\n<Button className="text-white">Go</Button>',
       'import { Badge } from "@/components/ui/badge"\n<Badge><span className="text-white">3</span></Badge>',
+      // A background set in style, such as a color swatch known only at run time.
+      '<button style={{ backgroundColor: swatch }}><svg className="text-white" /></button>',
+      '<span className="text-white" style={{ background: color }}>Aa</span>',
+      // A token that stands out in both modes, or the dark-mode surface the class list sets.
+      '<div className="bg-primary dark:bg-indigo-600 text-white" />',
+      '<div className="bg-primary text-white dark:text-black" />',
+      // In dark mode a translucent white is the background, over the page's dark one (Dub's nav).
+      '<a className="bg-neutral-50 dark:bg-white/10"><span className="text-neutral-900 dark:text-white">x</span></a>',
+      // A class list holds every branch of a cn() object, which never apply together (Documenso).
+      '<Button className={cn({ "hover:bg-yellow-100 dark:hover:bg-yellow-500": warn, "hover:bg-destructive hover:text-white": !warn })} />',
     ];
     // The surfaces themselves are reported where they are palette colors (`bg-indigo-600`).
     const whiteOrBlack = (code: string) => sources(code, rule).filter((s) => /white|black/.test(s));
@@ -128,6 +139,19 @@ describe('no-hardcoded-color: white and black', () => {
       'bg-black',
       'text-white',
     ]);
+    // A token judged in each mode: the demo's primary is oklch(0.922) in dark mode, near white.
+    expect(sources('<div className="bg-primary text-white" />', rule)).toEqual(['text-white']);
+    // A tint is a surface where it stands out: black on a black scrim is not.
+    expect(sources('<div className="bg-black/50 text-black" />', rule)).toEqual(['text-black']);
+    expect(
+      sources(
+        '<div className="bg-indigo-600"><p className="bg-white/10 text-white">x</p></div>',
+        rule,
+      ),
+    ).toEqual(['bg-indigo-600']);
+    expect(sources('<span className="text-white" style={{ background: "#fff" }} />', rule)).toEqual(
+      ['text-white', '#fff'],
+    );
     const [text] = check('<h1 className="text-4xl text-white">Hello</h1>', rule);
     expect(text?.severity).toBe('warning');
     expect(text?.fix).toBeUndefined();
@@ -150,6 +174,157 @@ describe('no-hardcoded-color: white and black', () => {
     expect(d?.fix?.[0]?.text).toBe('text-destructive');
     // A variable of the design system's own is a token.
     expect(check('<span className="bg-[var(--color-primary)]" />', rule)).toEqual([]);
+  });
+});
+
+/**
+ * A theme like the shadcn/ui website's: `primary` is pure black in light mode and near white in
+ * dark mode, so `bg-black` is exactly `bg-primary` until the mode changes.
+ */
+const BLACK_PRIMARY = `@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+}
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --muted: oklch(0.97 0 0);
+  --border: oklch(0.922 0 0);
+}
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 10%);
+}`;
+
+/** A theme with one mode: its background is white everywhere. */
+const LIGHT_ONLY = `@import "tailwindcss";
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+}`;
+
+/** A theme that resets Tailwind's colors and defines white and black as its own. */
+const OWN_WHITE_AND_BLACK = `@import "tailwindcss";
+@theme {
+  --color-*: initial;
+  --color-white: #fff;
+  --color-black: #000;
+  --color-surface: #ffffff;
+  --color-ink: #111111;
+  --color-accent: oklch(0.55 0.2 260);
+}`;
+
+describe('no-hardcoded-color: a white or black background under white or black text', () => {
+  const rule = 'no-hardcoded-color';
+  let blackPrimary: DesignSystem;
+  let lightOnly: DesignSystem;
+  let ownWhite: DesignSystem;
+  beforeAll(async () => {
+    blackPrimary = await load(fixture({ 'app/globals.css': BLACK_PRIMARY }));
+    lightOnly = await load(fixture({ 'app/globals.css': LIGHT_ONLY }));
+    ownWhite = await load(fixture({ 'app/globals.css': OWN_WHITE_AND_BLACK }));
+  });
+  const checkIn = (system: DesignSystem, code: string) =>
+    system.check(code, 'app/page.tsx').diagnostics.filter((d) => d.ruleId === rule);
+
+  it('is not fixed to a token that changes with the mode while the text stays', () => {
+    // The shadcn/ui website's tooltip: `bg-primary text-white` is white on near white in dark mode.
+    const tooltip = '<TooltipContent className="bg-black text-white">Copy</TooltipContent>';
+    const [bg, text] = checkIn(blackPrimary, tooltip);
+    expect(bg).toMatchObject({ source: 'bg-black', suggestion: 'bg-primary' });
+    expect(bg?.fix).toBeUndefined();
+    expect(bg?.message).toContain(
+      '`text-white` on it stays white, which would not stand out from primary in dark mode, so this is not applied automatically: change the text with it, to `text-primary-foreground`.',
+    );
+    expect(text).toMatchObject({ source: 'text-white', severity: 'warning' });
+    expect(applyFixes(tooltip, checkIn(blackPrimary, tooltip))).toBe(tooltip);
+    // The text on an element inside the surface, as in the website's code viewer.
+    const viewer =
+      '<div className="bg-black p-4"><pre><code className="text-white">x</code></pre></div>';
+    const found = checkIn(blackPrimary, viewer);
+    expect(found.map((d) => [d.source, Boolean(d.fix)])).toEqual([
+      ['bg-black', false],
+      ['text-white', false],
+    ]);
+    // A state's background is under the text in that state, whether the text is in it or not.
+    for (const code of [
+      '<a className="hover:bg-black hover:text-white">x</a>',
+      '<a className="text-white hover:bg-black">x</a>',
+      // The text stands out from the indigo, not from `bg-primary` in dark mode on hover.
+      '<a className="bg-indigo-600 text-white hover:bg-black">x</a>',
+    ]) {
+      const found = checkIn(blackPrimary, code).find((d) => d.source === 'hover:bg-black');
+      expect(found?.suggestion, code).toBe('bg-primary');
+      expect(found?.fix, code).toBeUndefined();
+      expect(found?.message, code).toContain(
+        'change the text with it, to `hover:text-primary-foreground`.',
+      );
+    }
+  });
+
+  it('is fixed when no white or black text is on it, or the class list pairs it for dark mode', () => {
+    expect(checkIn(blackPrimary, '<div className="bg-black p-4" />')[0]?.fix).toEqual([
+      expect.objectContaining({ text: 'bg-primary' }),
+    ]);
+    expect(
+      checkIn(blackPrimary, '<div className="bg-black text-primary-foreground" />')[0]?.fix,
+    ).toEqual([expect.objectContaining({ text: 'bg-primary' })]);
+    // The class list sets the dark-mode background or text itself.
+    const paired = '<div className="bg-white text-black dark:text-white" />';
+    expect(checkIn(blackPrimary, paired)[0]).toMatchObject({
+      source: 'bg-white',
+      fix: [expect.objectContaining({ text: 'bg-background' })],
+    });
+    // Its dark background can be a color of a config onsystem does not read (Cal.com's).
+    for (const dark of ['dark:bg-zinc-900', 'dark:bg-darkgray-50']) {
+      const code = `<div className="bg-white ${dark}"><svg className="text-black" /></div>`;
+      expect(checkIn(blackPrimary, code)[0], code).toMatchObject({
+        source: 'bg-white',
+        fix: [expect.objectContaining({ text: 'bg-background' })],
+      });
+    }
+    // A size or a background image is no dark-mode color.
+    const sized = '<div className="bg-white dark:bg-cover text-black dark:text-lg" />';
+    expect(checkIn(blackPrimary, sized)[0]?.fix).toBeUndefined();
+  });
+
+  it('is not fixed under the text either when the theme has no dark mode onsystem reads', () => {
+    // Documenso's dark mode is under `.dark:not(.dark-mode-disabled)`, which is not read: its
+    // `background` has no dark value here, but the page is dark there.
+    const [bg] = checkIn(lightOnly, '<div className="bg-white text-black">x</div>');
+    expect(bg?.fix).toBeUndefined();
+    expect(bg?.message).toContain(
+      '`text-black` on it stays black, and background may be another color in a dark mode, so this is not applied automatically: change the text with it, to `text-foreground`.',
+    );
+    const paired = '<div className="bg-white text-black dark:text-white">x</div>';
+    expect(checkIn(lightOnly, paired)[0]?.fix).toEqual([
+      expect.objectContaining({ text: 'bg-background' }),
+    ]);
+  });
+
+  it('leaves white and black alone where the theme defines them as tokens', () => {
+    // `--color-*: initial` then `--color-white`: `bg-white` is the theme's own class.
+    const code =
+      '<div className="bg-white border border-black text-black"><p className="text-white bg-ink">x</p></div>';
+    expect(checkIn(ownWhite, code)).toEqual([]);
+    // A white written as a value is still that token's color.
+    expect(checkIn(ownWhite, '<div className="bg-[#000]" />')[0]?.suggestion).toBe('bg-black');
   });
 });
 

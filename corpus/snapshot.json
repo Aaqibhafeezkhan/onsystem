@@ -85,7 +85,7 @@
         "warnings": 0
       },
       "files": 279,
-      "flagged": 35,
+      "flagged": 36,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 1,
@@ -94,8 +94,8 @@
         },
         "no-hardcoded-color": {
           "errors": 76,
-          "warnings": 28,
-          "fixes": 43
+          "warnings": 29,
+          "fixes": 40
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -175,7 +175,7 @@
         "no-hardcoded-color": {
           "errors": 207,
           "warnings": 107,
-          "fixes": 70
+          "fixes": 68
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -219,7 +219,7 @@
         "no-hardcoded-color": {
           "errors": 207,
           "warnings": 107,
-          "fixes": 70
+          "fixes": 68
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -261,8 +261,8 @@
         },
         "no-hardcoded-color": {
           "errors": 10910,
-          "warnings": 248,
-          "fixes": 7312
+          "warnings": 245,
+          "fixes": 7306
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -293,7 +293,7 @@
         "no-hardcoded-color": {
           "errors": 297,
           "warnings": 11,
-          "fixes": 151
+          "fixes": 148
         },
         "prefer-design-system-component": {
           "errors": 15,
@@ -323,8 +323,8 @@
         },
         "no-hardcoded-color": {
           "errors": 10853,
-          "warnings": 218,
-          "fixes": 7312
+          "warnings": 215,
+          "fixes": 7306
         },
         "prefer-design-system-component": {
           "errors": 973,
@@ -355,8 +355,8 @@
         },
         "no-hardcoded-color": {
           "errors": 10910,
-          "warnings": 248,
-          "fixes": 7312
+          "warnings": 245,
+          "fixes": 7306
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -411,8 +411,8 @@
         },
         "no-hardcoded-color": {
           "errors": 11207,
-          "warnings": 259,
-          "fixes": 7463
+          "warnings": 256,
+          "fixes": 7454
         },
         "prefer-design-system-component": {
           "errors": 1015,
@@ -660,8 +660,8 @@
         },
         "no-hardcoded-color": {
           "errors": 237,
-          "warnings": 22,
-          "fixes": 81
+          "warnings": 19,
+          "fixes": 80
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -854,8 +854,8 @@
         },
         "no-hardcoded-color": {
           "errors": 422,
-          "warnings": 22,
-          "fixes": 91
+          "warnings": 19,
+          "fixes": 90
         },
         "no-hardcoded-radius": {
           "errors": 0,
