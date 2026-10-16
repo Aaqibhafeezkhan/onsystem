@@ -252,6 +252,34 @@ const BOB_SOURCE = builtWithSource(
   'lib/module',
 );
 
+/**
+ * `@acme/ui` compiled to JavaScript outside a build folder, as `@cloudscape-design/components`
+ * (`./index.js`), `@lobehub/ui` (`es/`) and `@wordpress/components` (`build-module/`) publish
+ * theirs: `index` re-exports a barrel of components, here `.jsx` files, which only following
+ * the compiled re-exports would reach.
+ */
+function compiledJavaScript(index: string): Record<string, string> {
+  const folder = path.posix.dirname(index);
+  const inFolder = (file: string) => (folder === '.' ? file : `${folder}/${file}`);
+  return at('node_modules/@acme/ui', {
+    'package.json': json({
+      name: '@acme/ui',
+      version: '1.0.0',
+      main: `./${index}`,
+      exports: {
+        '.': { types: './index.d.ts', default: `./${index}` },
+        './package.json': './package.json',
+      },
+    }),
+    [index]: 'export * from "./components/index.js";\n',
+    [inFolder('components/index.js')]:
+      'export * from "./button.jsx";\nexport * from "./card.jsx";\nexport * from "./input.jsx";\n',
+    [inFolder('components/button.jsx')]: BUTTON,
+    [inFolder('components/card.jsx')]: CARD,
+    [inFolder('components/input.jsx')]: INPUT,
+  });
+}
+
 /** A shadcn/ui app (components.json, components/ui) that also uses the kit. */
 function shadcnApp(extra: Record<string, string> = {}): string {
   return fixture({
@@ -512,6 +540,85 @@ describe('installed packages zero config does not read', () => {
       );
     },
   );
+
+  it.each([
+    ['at its root, as @cloudscape-design/components has it', 'index.js'],
+    ['in es/, as @lobehub/ui has it', 'es/index.mjs'],
+    ['in build-module/, as @wordpress/components has it', 'build-module/index.js'],
+  ])('follows no re-export of an export that points at JavaScript %s', async (_, index) => {
+    const root = fixture({
+      'package.json': json({ name: 'web', dependencies: { '@acme/ui': '^1.0.0' } }),
+      'app/page.tsx': PAGE,
+      ...compiledJavaScript(index),
+    });
+    const ds = await load(root);
+    expect(ds.config.detected).toBeUndefined();
+    expect(ds.components).toEqual([]);
+    const { stdout } = await run(['inspect', '--explain', '--no-cache'], root);
+    expect(stdout).toContain(
+      `no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/${index}), not at component sources, and only sources are read`,
+    );
+  });
+
+  it('reads a package through its exports into its sources, not through one that points at JavaScript', async () => {
+    const manifest = JSON.parse(PACKAGE['package.json']) as { exports: Record<string, unknown> };
+    const root = npmApp({
+      'node_modules/@acme/design-system/package.json': json({
+        ...manifest,
+        exports: {
+          '.': { types: './index.d.ts', default: './index.js' },
+          './atoms/*': './src/components/atoms/*.tsx',
+          './molecules/*': './src/components/molecules/*.tsx',
+          './globals.css': './src/styles/globals.css',
+        },
+      }),
+      'node_modules/@acme/design-system/index.js': 'export * from "./src/index.ts";\n',
+    });
+    const ds = await load(root);
+    expect(ds.config.detected).toBe('installed package @acme/design-system');
+    expect(ds.components.map((c) => c.name).sort()).toEqual(['Button', 'Card', 'Input']);
+    expect(ds.getComponent('Card')?.importPath).toBe('@acme/design-system/molecules/card');
+  });
+
+  it("follows an app stylesheet's @import through the first condition an app resolves, not past a compiled one", async () => {
+    const manifest = JSON.parse(PACKAGE['package.json']) as {
+      exports: Record<string, unknown>;
+      files: string[];
+    };
+    const pkg = {
+      'node_modules/@acme/design-system/package.json': json({
+        ...manifest,
+        exports: {
+          ...manifest.exports,
+          // Tailwind CSS resolves `style`, which apps get compiled; `default` is never reached.
+          './x.css': { style: './dist/x.css', default: './src/styles/x.css' },
+        },
+        files: [...manifest.files, 'dist'],
+      }),
+      'node_modules/@acme/design-system/dist/x.css':
+        ':root {\n  --compiled-x: oklch(0.6 0.2 30);\n}\n',
+      'node_modules/@acme/design-system/src/styles/x.css':
+        ':root {\n  --source-x: oklch(0.6 0.2 60);\n}\n',
+      'app/globals.css':
+        '@import "tailwindcss";\n@import "@acme/design-system/globals.css";\n@import "@acme/design-system/x.css";\n',
+    };
+    const xNames = (names: string[]) => names.filter((n) => n.endsWith('-x'));
+    // Zero config, and a config that names only the components, which follows the app's @import.
+    const zero = await tokenNames(npmApp(pkg));
+    expect(zero).toContain('primary');
+    expect(xNames(zero)).toEqual([]);
+    const configured = await tokenNames(
+      npmApp({
+        ...pkg,
+        'onsystem.config.json': json({
+          components: ['node_modules/@acme/design-system/src/components/**/*.tsx'],
+          importPath: '@acme/design-system',
+        }),
+      }),
+    );
+    expect(configured).toEqual(expect.arrayContaining(['primary', 'muted']));
+    expect(xNames(configured)).toEqual([]);
+  });
 
   it('adds nothing to an app with its own design system from a package laid out like @expo/ui', async () => {
     // Expo's template installs @expo/ui beside the app's own components: no component, prop or

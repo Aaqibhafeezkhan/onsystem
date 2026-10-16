@@ -433,6 +433,72 @@ describe('what apps get from a design-system package (docs/design-system-package
     );
   });
 
+  it('reads a package through each condition the docs list, and through no other', async () => {
+    const sentence =
+      /read through the conditions an app resolves: those of Node\.js \(([^)]*)\), and ([^.]*)\./.exec(
+        withoutTheConfig,
+      );
+    const listed = [
+      ...`${sentence?.[1] ?? ''} ${sentence?.[2] ?? ''}`.matchAll(/`([a-z-]+)`/g),
+    ].map((m) => m[1] ?? '');
+    expect(listed).toEqual([
+      'import',
+      'require',
+      'module-sync',
+      'node',
+      'default',
+      'module',
+      'browser',
+      'style',
+    ]);
+    const detected = async (condition: string) => {
+      const pkg = {
+        ...SOURCE_PACKAGE,
+        'package.json': json({
+          name: '@acme/ui',
+          version: '1.0.0',
+          files: ['src', 'theme.css'],
+          exports: { '.': { [condition]: './src/index.tsx' }, './theme.css': './theme.css' },
+        }),
+      };
+      return (await load(installedApp(published(pkg)))).config.detected;
+    };
+    for (const condition of [...listed, 'development', 'react-native']) {
+      expect([condition, await detected(condition)]).toEqual([
+        condition,
+        listed.includes(condition) ? 'installed package @acme/ui' : undefined,
+      ]);
+    }
+  });
+
+  it('reads no component through an export that points at JavaScript outside a build folder', async () => {
+    // A `.js` barrel in front of `.jsx` files, published without a build.
+    const jsBarrel = {
+      'package.json': json({
+        name: '@acme/ui',
+        version: '1.0.0',
+        files: ['index.js', 'src', 'theme.css'],
+        exports: { '.': './index.js', './theme.css': './theme.css' },
+      }),
+      'theme.css': PACKAGE['theme.css'],
+      'index.js':
+        'export * from "./src/button.jsx";\nexport * from "./src/card.jsx";\nexport * from "./src/input.jsx";\n',
+      'src/button.jsx':
+        'export function Button({ variant }) { return <button data-variant={variant} /> }\n',
+      'src/card.jsx': 'export function Card({ children }) { return <div>{children}</div> }\n',
+      'src/input.jsx': 'export function Input({ name }) { return <input name={name} /> }\n',
+    };
+    const app = installedApp(published(jsBarrel));
+    expect((await check(app)).rules).toEqual(new Set(['icon-button-accessible-name']));
+    const explained = await run(['inspect', '--explain', '--no-cache'], app);
+    expect(explained.stdout).toContain(
+      'no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/index.js), not at component sources, and only sources are read',
+    );
+    expect(withoutTheConfig).toContain(
+      'and no export that points at JavaScript in any other folder (`./index.js`, `./es/index.mjs`, `./build-module/index.js`), whose re-exports are not followed. So a package that publishes a `.js` barrel in front of its `.jsx` files is not read either',
+    );
+  });
+
   it('runs the token rules only for what the published tokens define', async () => {
     const pkg = await initialised();
     const distOnly = without(published(pkg), (file) => file.startsWith('src/'));

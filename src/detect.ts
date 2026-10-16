@@ -566,7 +566,8 @@ function fromPackageComponentsJson(
  * resolves them ({@link APP_CONDITIONS}), not from `dist/` back to `src/`: a widget kit
  * publishes `src/` beside `dist/` for its source maps, or points a `source` condition at it for
  * its own repository, and it is not the app's design system. Its compiled files ({@link isBuildOutput})
- * are not read at all: no barrel, component or stylesheet in them.
+ * are not read at all: no barrel, component or stylesheet in them. Nor is an export that points
+ * at JavaScript outside a build folder ({@link isCompiledExport}): its re-exports are not followed.
  */
 function fromPackage(
   root: string,
@@ -581,9 +582,10 @@ function fromPackage(
     imports.push(mapping);
     if (component && !components.some((m) => m.target === mapping.target)) components.push(mapping);
   };
-  for (const mapping of exportMappings(root, dir, pkg, installed)) {
+  const mappings = exportMappings(root, dir, pkg, installed);
+  for (const mapping of mappings) {
     const file = path.resolve(root, mapping.target);
-    if (installed && isBuildOutput(dir, file)) continue;
+    if (installed && isCompiledExport(dir, file)) continue;
     if (mapping.target.includes('*') || !SCRIPT_FILE.test(file) || !isFile(file)) {
       add(mapping, COMPONENT_FILE.test(mapping.target));
       continue;
@@ -599,8 +601,10 @@ function fromPackage(
   const patterns = components.filter((m) => m.target.includes('*'));
   // One or two .tsx exports are an app or a widget, not a component library.
   if (files.length < 3 && !patterns.length) {
-    const built = exportMappings(root, dir, pkg, installed).filter((m) =>
-      /(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(m.target),
+    const built = mappings.filter(
+      (m) =>
+        /(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(m.target) ||
+        (installed && isCompiledExport(dir, path.resolve(root, m.target))),
     );
     const output = built
       .slice(0, 2)
@@ -826,6 +830,16 @@ function isBuildOutput(dir: string, file: string): boolean {
   );
 }
 
+/**
+ * An `exports` target of installed package `dir` that is compiled: its build output, or
+ * JavaScript in any folder (`./index.js`, `./es/index.mjs`, `./build-module/index.js`), which a
+ * package published from TypeScript or JSX sources ships compiled. Its re-exports are not
+ * followed, so a package that ships a `.js` barrel in front of `.jsx` sources is not read.
+ */
+function isCompiledExport(dir: string, file: string): boolean {
+  return isBuildOutput(dir, file) || /\.[cm]?js$/.test(file);
+}
+
 /** `./dist/*.mjs` → `src/*.tsx` (or `.ts`) when files match it there; anything else as it is. */
 function sourcePattern(dir: string, target: string): string {
   const relative = target.replace(/^\.\//, '');
@@ -1021,19 +1035,35 @@ export function stylesheetResolver(
     const dir = workspace ?? installed;
     if (!name || !dir) return undefined;
     const subpath = specifier.slice(name.length + 1);
+    const key = subpath ? `./${subpath}` : '.';
+    // In an installed package, an export that maps the subpath decides, even to nothing.
+    const exported = installed
+      ? installedStylesheet(installed, key)
+      : exportedFile(dir, key, (f) => f.endsWith('.css'));
+    if (exported !== undefined) return exported ?? undefined;
     const style = readJson(path.join(dir, 'package.json'))?.style;
-    return (
-      exportedFile(
-        dir,
-        subpath ? `./${subpath}` : '.',
-        (f) => f.endsWith('.css') && !(installed && isBuildOutput(installed, f)),
-        installed ? APP_CONDITIONS : undefined,
-      ) ??
-      (subpath
-        ? stylesheet(path.join(dir, subpath), installed)
-        : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css'), installed))
-    );
+    return subpath
+      ? stylesheet(path.join(dir, subpath), installed)
+      : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css'), installed);
   };
+}
+
+/**
+ * The stylesheet an app resolves `subpath` (`./globals.css`) of installed package `dir` to,
+ * as the package's exported stylesheets are found ({@link exportTarget}): the most specific
+ * `exports` entry that maps it decides, through its first stylesheet target under
+ * {@link APP_CONDITIONS}, and a later condition is not tried. `null` when that entry leads to no
+ * stylesheet, or to one in a build folder (`{ "style": "./dist/x.css", "default": "./src/x.css" }`
+ * gives apps the compiled `dist/x.css`); undefined when no entry maps the subpath.
+ */
+function installedStylesheet(dir: string, subpath: string): string | null | undefined {
+  const [match] = exportMatches(dir, subpath);
+  if (!match) return undefined;
+  const target = exportTargets(match.value, APP_CONDITIONS)
+    .map((t) => t.replaceAll('*', match.middle))
+    .find((t) => t.endsWith('.css'));
+  const file = target === undefined ? undefined : path.resolve(dir, target);
+  return file && isInside(dir, file) && !isBuildOutput(dir, file) && isFile(file) ? file : null;
 }
 
 /**
@@ -1065,15 +1095,28 @@ function installedPackageOf(file: string): string | undefined {
 
 /**
  * The file a package's `exports` map `subpath` (`.`, `./theme`) to, through any condition
- * (`style`, `import`, `default`), or through `conditions` alone, and `*` patterns: the first
- * target on disk, inside the package, that `accept` takes.
+ * (`style`, `import`, `default`) and `*` patterns: the first target on disk, inside the
+ * package, that `accept` takes.
  */
 function exportedFile(
   dir: string,
   subpath: string,
   accept: (file: string) => boolean,
-  conditions?: ReadonlySet<string>,
 ): string | undefined {
+  for (const { middle, value } of exportMatches(dir, subpath)) {
+    for (const target of exportTargets(value)) {
+      const file = path.resolve(dir, target.replaceAll('*', middle));
+      if (isInside(dir, file) && accept(file) && isFile(file)) return file;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The entries of package `dir`'s `exports` that map `subpath`, with what their `*` stands for:
+ * an exact subpath first, then the most specific pattern, as Node.js picks them.
+ */
+function exportMatches(dir: string, subpath: string): { middle: string; value: unknown }[] {
   const exports = readJson(path.join(dir, 'package.json'))?.exports;
   const entries: [string, unknown][] =
     exports && typeof exports === 'object' && !Array.isArray(exports)
@@ -1083,7 +1126,6 @@ function exportedFile(
       : exports === undefined
         ? []
         : [['.', exports]];
-  // An exact subpath first, then the most specific pattern, as Node.js picks them.
   const matches: { middle: string; value: unknown; rank: number }[] = [];
   for (const [key, value] of entries) {
     const star = key.indexOf('*');
@@ -1102,14 +1144,7 @@ function exportedFile(
       matches.push({ middle, value, rank: prefix.length });
     }
   }
-  matches.sort((a, b) => b.rank - a.rank);
-  for (const { middle, value } of matches) {
-    for (const target of exportTargets(value, conditions)) {
-      const file = path.resolve(dir, target.replaceAll('*', middle));
-      if (isInside(dir, file) && accept(file) && isFile(file)) return file;
-    }
-  }
-  return undefined;
+  return matches.sort((a, b) => b.rank - a.rank);
 }
 
 /** Every target of an export condition map, in order, but its types, or those of `conditions` alone. */
