@@ -1,85 +1,348 @@
 name: Release
 
+# On a push to main: with pending changesets, open or update the release pull request; with none
+# (once it is merged), publish to npm what npm doesn't have yet, then give the version on main
+# whatever it lacks of its tags (onsystem@X.Y.Z, and vX.Y.Z and v0 for the GitHub Action), its
+# GitHub releases and its MCP Registry entry, and run it from npm and as the Action at v0. Started
+# by hand (Actions, Release, Run workflow, or `gh workflow run release.yml --ref <branch>`), it is
+# a dry run of that branch: in place of the release job, a job with read permissions versions the
+# package without pushing and packs it without publishing. A dry run publishes nothing, pushes
+# nothing, and opens no pull request, tag or release. RELEASING.md says what each step does, and
+# what to do when one fails.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+# One release at a time. A push's run that is waiting is replaced by a newer push's run, so
+# RELEASING.md asks for nothing to merge right after the release pull request. A dry run only
+# reads, so it has a group of its own: started on main, it never replaces a push's waiting run, nor
+# waits for one.
+concurrency: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
 
-permissions:
-  contents: write # the version commit, tags (and the action's major tag) and GitHub releases
-  pull-requests: write # the version pull request
-  id-token: write # npm trusted publishing (with provenance) and the MCP Registry login
-  actions: write # starting CI on the version pull request
+# Each job asks for what it needs: only the release job can write, or publish.
+permissions: {}
+
+env:
+  # mcp-publisher, which publishes server.json to the MCP Registry, and the sha256 of its
+  # linux_amd64 archive, from registry_1.8.1_checksums.txt in its release. That release can still
+  # be changed (it isn't immutable), so the archive is checked against this copy of the checksum,
+  # not against a checksum file downloaded from beside it.
+  MCP_PUBLISHER_VERSION: 1.8.1
+  MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
 
 jobs:
+  # The checks on what npm gets, on the commit the release job versions or publishes, with read
+  # permissions only: the build and the tests run the dependencies' code, which never sees the
+  # release job's tokens.
+  validate:
+    name: Validate the package
+    if: github.repository == 'dgesteves/onsystem'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Smoke test the built server over stdio
+        run: pnpm smoke
+      - run: pnpm test
+      # npm pack with the publish hooks, then the tarball installed into a new project and run.
+      - run: pnpm pack-test
+
+  # Only on a push to main: a run started by hand gets the dry-run job below instead.
   release:
     name: Version or publish
+    needs: validate
+    if: github.repository == 'dgesteves/onsystem' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Install and build take a few minutes, and after a publish the MCP Registry step can wait about
+    # 5 more for npm to serve the new version.
+    timeout-minutes: 25
+    permissions:
+      contents: write # the tags and the GitHub releases, and the version commit without the App
+      pull-requests: write # the release pull request, without the App
+      id-token: write # npm trusted publishing (with provenance) and the MCP Registry login
+      actions: write # starting CI on the release pull request, without the App
+    outputs:
+      has-changesets: ${{ steps.changesets.outputs.has-changesets }}
+      version: ${{ steps.main.outputs.version }}
+    env:
+      # 'true' once both of the release App's secrets are set; their values stay out of the env.
+      HAS_APP: ${{ secrets.RELEASE_APP_ID != '' && secrets.RELEASE_APP_PRIVATE_KEY != '' }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      # main only accepts a pull request whose CI passed. The pull_request runs of a push made with
+      # this workflow's own token wait for approval, and the checks of a CI run it starts itself
+      # don't count for the pull request: each release pull request needed an empty commit by hand.
+      # A push made with a GitHub App's token runs CI as any other push does. Without the App's
+      # secrets, the job uses its own token, as before.
+      - name: Get a token from the release GitHub App
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      # changesets/action and scripts/check-published.mjs write through the GitHub API with the
+      # token they are given, so the checkout keeps no credentials.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
       # No registry-url and no token: npm trusted publishing authenticates this workflow with
       # OIDC, so there is no secret to leak or rotate. The package `onsystem` trusts this
       # repository's release.yml (`npm trust github onsystem --repo dgesteves/onsystem
       # --file release.yml --allow-publish`); provenance also checks that package.json's
-      # `repository` is the repository this runs in.
-      - uses: actions/setup-node@v7
+      # `repository` is the repository this runs in. No pnpm store cache: CI and the validate job,
+      # which run the dependencies' build and test code, save one, and this job would restore it
+      # next to the OIDC token.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
-          cache: pnpm
+          node-version-file: .nvmrc
       - run: pnpm install --frozen-lockfile
-      # With pending changesets this opens or updates the release pull request. Once that is
-      # merged, it publishes to npm and creates the GitHub release.
+      # With pending changesets, changesets/action switches to changeset-release/main and versions
+      # the package there, so package.json then holds the next version, not main's.
+      - name: Read the version on main
+        id: main
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      # Opens or updates the release pull request from pending changesets; once that is merged,
+      # publishes to npm and creates the tag onsystem@X.Y.Z and its GitHub release. The action runs
+      # these without a shell, so each must be one command: put `&&` in a package.json script.
       - id: changesets
-        uses: changesets/action@v2.1.2
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
           version-script: pnpm version-packages
           publish-script: pnpm release
           commit-message: 'chore: release'
           pr-title: 'chore: release'
-      # `uses: dgesteves/onsystem@v0` runs the action at the commit this tag names, and the action
-      # runs the CLI version in its package.json: after a publish, move the major version's tag to
-      # the release commit, so the action runs the release that is now on npm.
-      - name: Move the GitHub Action's major version tag
-        if: steps.changesets.outputs.published == 'true'
-        run: |
-          tag="v$(node -p "require('./package.json').version.split('.')[0]")"
-          git tag --force "$tag" HEAD
-          git push --force origin "refs/tags/$tag"
-      # The release pull request is pushed with this workflow's token, and pushes made with it
-      # start no workflows, so start CI on it here: main only accepts pull requests that pass.
-      - name: Run CI on the release pull request
+      # With pending changesets, the version on main is the last release: npm has it, or it was
+      # tagged moments ago. If neither, the run for the release pull request's merge was replaced
+      # by this one before it started, and that version was never published: this step fails and
+      # names it. Re-run that run (RELEASING.md). It comes right after changesets/action, so no
+      # other step's failure can skip it, and when it fails the steps after it don't run: the next
+      # release pull request never merges by itself over a version npm doesn't have.
+      - name: The version on main is on npm
         if: steps.changesets.outputs.has-changesets == 'true'
+        run: node scripts/check-published.mjs npm
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          VERSION: ${{ steps.main.outputs.version }}
+      # Without the App only. Its checks show on the version commit, but GitHub doesn't count them
+      # for the pull request: approve its waiting CI run, or push an empty commit (RELEASING.md).
+      - name: Run CI on the release pull request
+        if: steps.changesets.outputs.has-changesets == 'true' && steps.app-token.outputs.token == ''
         run: gh workflow run ci.yml --ref changeset-release/main
         env:
           GH_TOKEN: ${{ github.token }}
+      # Off unless the repository variable RELEASE_AUTO_MERGE is 'true' and the App is set up: then
+      # each release pull request merges, and so publishes, as soon as its CI passes. Skipped when
+      # the check above fails.
+      - name: Merge the release pull request once its CI passes
+        if: steps.changesets.outputs.pr-number != '' && steps.app-token.outputs.token != '' && vars.RELEASE_AUTO_MERGE == 'true'
+        run: gh pr merge "$PR" --auto --merge --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.changesets.outputs.pr-number }}
+      # With no pending changesets, onsystem@<version on main> gets what it lacks, if npm has it:
+      # its tag and GitHub release, the tag vX.Y.Z and its GitHub release (the one the Marketplace
+      # lists), and v0 on its commit while npm's latest is this version. `uses: dgesteves/onsystem@v0`
+      # runs the action at the commit v0 names, and the action runs the CLI version in its
+      # package.json, so v0 follows each release. This covers a publish whose tags or releases
+      # failed, on a re-run (which publishes nothing new) or on the next push.
+      - name: Create the tags and GitHub releases, and move v0, if they are missing
+        if: ${{ !cancelled() && steps.changesets.outputs.has-changesets == 'false' }}
+        run: node scripts/check-published.mjs release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          VERSION: ${{ steps.main.outputs.version }}
+          # What this run published, as changesets/action lists it ([{ "name", "version" }]).
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+          # 'true' to mark the release vX.Y.Z as the latest, in place of onsystem@X.Y.Z (RELEASING.md).
+          RELEASE_ACTION_LATEST: ${{ vars.RELEASE_ACTION_LATEST }}
       # The registry entry points at the npm package, and the plugin pins its version: both follow
-      # the npm publish above. It runs whenever main has no pending release and does nothing when
-      # the registry already lists this version, so a publish that failed (or a re-run, where
-      # changesets publishes nothing new) is completed by the next push to main.
+      # the npm publish above. Whether the registry needs this version: not when it lists it
+      # already, or when npm's latest is another one (after a rollback). When this run published
+      # it, npm can take minutes to serve it, and the registry checks that it does, so this waits
+      # for npm. A publish whose registry step failed is completed by a re-run or the next push.
+      - name: Does the MCP Registry need this version
+        id: registry
+        if: ${{ !cancelled() && steps.changesets.outputs.has-changesets == 'false' }}
+        run: node scripts/check-published.mjs registry
+        env:
+          VERSION: ${{ steps.main.outputs.version }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+      # mcp-publisher runs here, next to the OIDC token, only once its archive matches the checksum.
       - name: Publish to the MCP Registry
-        if: steps.changesets.outputs.has-changesets == 'false'
+        if: ${{ !cancelled() && steps.registry.outputs.publish == 'true' }}
         run: |
-          version=$(node -p "require('./package.json').version")
-          listed=$(curl -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.dgesteves/onsystem" \
-            | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
-                const servers = JSON.parse(s).servers ?? [];
-                const listed = servers.some(
-                  ({ server = {} }) => server.name === "io.github.dgesteves/onsystem" && server.version === process.argv[1],
-                );
-                console.log(listed ? "yes" : "no");
-              });' "$version")
-          if [ "$listed" = yes ]; then
-            echo "The MCP Registry already lists $version."
-            exit 0
-          fi
-          # The registry checks that npm serves the version, and npm can take a minute to serve
-          # one it has just accepted.
+          archive="$RUNNER_TEMP/mcp-publisher.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v$MCP_PUBLISHER_VERSION/mcp-publisher_linux_amd64.tar.gz"
+          echo "$MCP_PUBLISHER_SHA256  $archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" mcp-publisher
+          "$RUNNER_TEMP/mcp-publisher" login github-oidc
+          "$RUNNER_TEMP/mcp-publisher" publish
+
+  # After the release job, with no pending changesets, and with read permissions only: the version
+  # on main as npm serves it, and the Action as `uses: dgesteves/onsystem@v0` runs it, on the demo.
+  published:
+    name: Run the release from npm and the Action at v0
+    needs: release
+    if: needs.release.outputs.has-changesets == 'false'
+    runs-on: ubuntu-latest
+    # npm can take minutes to serve a new version: the first step waits about 5 for it.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      # Outside the checkout, whose package.json is onsystem's own.
+      - name: npx -y onsystem@<version> runs, and prints its version
+        working-directory: ${{ runner.temp }}
+        run: |
           for attempt in $(seq 1 30); do
-            npm view "onsystem@$version" version > /dev/null 2>&1 && break
+            npm view "onsystem@$VERSION" version > /dev/null 2>&1 && break
+            echo "npm doesn't serve onsystem@$VERSION yet (try $attempt of 30)."
             sleep 10
           done
-          curl -fsSL https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz | tar xz mcp-publisher
-          ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+          printed=$(npx -y "onsystem@$VERSION" --version)
+          echo "npx -y onsystem@$VERSION --version printed $printed."
+          test "$printed" = "$VERSION"
+      # After a rollback, v0 names the version npm gives, not the one on main (RELEASING.md).
+      - name: v0 runs npm's latest
+        run: |
+          latest=$(npm view onsystem dist-tags.latest)
+          at_v0=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=v0" --jq .content | base64 -d | jq -r .version)
+          echo "npm's latest is onsystem@$latest, and v0 runs onsystem@$at_v0."
+          test "$at_v0" = "$latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # The moving tag users follow, on purpose: this checks what they get.
+      - id: action
+        name: The Action at v0 passes the demo's clean page
+        uses: dgesteves/onsystem@v0
+        with:
+          working-directory: examples/shadcn-demo
+          paths: app/settings/members.tsx
+      - name: Check what the Action reported
+        env:
+          ERRORS: ${{ steps.action.outputs.errors }}
+          WARNINGS: ${{ steps.action.outputs.warnings }}
+        run: |
+          echo "errors=$ERRORS warnings=$WARNINGS"
+          test "$ERRORS" = 0
+
+  # A run started by hand, in place of the release job, and with read permissions only: what the
+  # release job would do, kept in this runner. The version commit and the tarball stay here.
+  dry-run:
+    name: 'Dry run: version and pack, without pushing or publishing'
+    needs: validate
+    if: github.repository == 'dgesteves/onsystem' && github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read # @changesets/changelog-github reads each changeset's pull request
+    env:
+      HAS_APP: ${{ secrets.RELEASE_APP_ID != '' && secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+    steps:
+      # With the App's secrets set, a token that can only read, so the dry run shows that the App
+      # is installed and its secrets work before a release needs them.
+      - name: Get a read-only token from the release GitHub App
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: read
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `changeset version` fails ('No unreleased changesets found.') when there is nothing to
+      # version, as right after a release. The dry run then skips only the version step: it still
+      # packs the package and shows what its tags and releases need, at the version it has now.
+      # This step makes the same check as `changeset version` (@changesets/cli 3). The changesets
+      # are the .md files @changesets/read lists in .changeset and in .changeset/pre (where pre
+      # mode moves the ones it has used), less README.md, AGENTS.md, CLAUDE.md, GEMINI.md and
+      # dotfiles. With .changeset/pre.json in mode 'exit', it versions even with none.
+      - name: 'Dry run: find the pending changesets'
+        id: pending
+        run: |
+          count=$(find .changeset -maxdepth 2 -type f -name '*.md' \( -path '.changeset/pre/*' -o ! -path '.changeset/*/*' \) ! -name '.*' ! -iname README.md ! -name AGENTS.md ! -name CLAUDE.md ! -name GEMINI.md | wc -l | tr -d ' ')
+          pre_mode=
+          if [ -f .changeset/pre.json ]; then pre_mode=$(node -p "require('./.changeset/pre.json').mode"); fi
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -gt 0 ] || [ "$pre_mode" = exit ]; then
+            echo "version=true" >> "$GITHUB_OUTPUT"
+            echo "Pending changesets: $count${pre_mode:+, pre mode: $pre_mode}. The release job would open or update the release pull request."
+          else
+            echo "version=false" >> "$GITHUB_OUTPUT"
+            echo "No pending changesets${pre_mode:+ (pre mode: $pre_mode)}: nothing to version. The release job would publish what npm doesn't have of $(node -p "require('./package.json').version"), the version on this branch."
+          fi
+      # What the release job would check or create after changesets/action, read-only: with pending
+      # changesets, that npm has the version on the branch; with none, the tags and releases that
+      # version would get, v0, and whether the MCP Registry needs it.
+      - name: 'Dry run: npm, the tags, the GitHub releases and the MCP Registry'
+        run: |
+          if [ "$PENDING" = true ]; then
+            node scripts/check-published.mjs npm
+          else
+            node scripts/check-published.mjs release --dry-run
+            node scripts/check-published.mjs registry --dry-run
+          fi
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          PENDING: ${{ steps.pending.outputs.version }}
+          RELEASE_ACTION_LATEST: ${{ vars.RELEASE_ACTION_LATEST }}
+      - name: 'Dry run: version the package as the release pull request would, without pushing'
+        if: steps.pending.outputs.version == 'true'
+        env:
+          # @changesets/changelog-github reads each changeset's commit and pull request with it.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+        run: |
+          pnpm version-packages
+          git status --short
+          git diff
+      - name: 'Dry run: pack the package as changeset publish would, without publishing'
+        run: |
+          pnpm build
+          pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+          for tarball in "$RUNNER_TEMP"/pack/*.tgz; do
+            tar -xOzf "$tarball" package/package.json | jq -c '{ name, version }'
+            tar -tzf "$tarball" | wc -l | xargs echo files:
+          done
+      - name: 'Dry run: check the mcp-publisher archive against its checksum, without running it'
+        run: |
+          archive="$RUNNER_TEMP/mcp-publisher.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v$MCP_PUBLISHER_VERSION/mcp-publisher_linux_amd64.tar.gz"
+          echo "$MCP_PUBLISHER_SHA256  $archive" | sha256sum -c -
+          tar -tzf "$archive"

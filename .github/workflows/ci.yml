@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Started by the release workflow on its release pull request, which its own pushes can't trigger.
+  # Started by the release workflow on its release pull request when the release GitHub App isn't
+  # set up: the pull_request runs of a push made with the workflow's own token wait for approval,
+  # and GitHub doesn't count a run started this way for the pull request (RELEASING.md).
   workflow_dispatch:
 
 permissions:
