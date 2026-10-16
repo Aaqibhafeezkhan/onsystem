@@ -1,0 +1,5 @@
+---
+'onsystem': patch
+---
+
+`init` in a shadcn/ui app now adds to `components`, next to `components/ui`, the folders `npx shadcn add` copies other registries' code into: for each registry in the `registries` of `components.json`, the folder of that name under the `components` alias (`@signoff-ui` → `components/signoff-ui`, `@ai-elements` → `components/ai-elements`), when it holds `.tsx` or `.jsx` files. `check`, the Claude Code hook, the dry run and the baseline skip that code as they skip `components/ui`, so the next `shadcn add` no longer brings findings in registry files nobody edited, and the app's code is checked against those components. `init` names each folder it added and says how to check it as your own code again. When it cannot add them (`--components` given, or an `importPath` that names a package), or a registry has no folder of its own (React Bits puts its files loose in `components/`), it says that `check` reads that code as the app's own, with a link to the docs. Configs written before are not changed.
