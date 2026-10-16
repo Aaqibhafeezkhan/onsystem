@@ -48,16 +48,16 @@ Install the dependencies first, as above: without them the props of components t
 
 `@v0` follows the latest 0.x release, and each release of the action runs the CLI of the same version (`npx onsystem@<version>`). To stay on one release, pin a commit SHA.
 
-| Input                   | Default | What it does                                                                                                                     |
-| ----------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `paths`                 | `.`     | Files, folders or globs to check, relative to `working-directory`, separated by spaces or new lines                              |
-| `working-directory`     | `.`     | Where to run the check, such as one app of a monorepo; its config and baseline are used                                          |
-| `baseline`              |         | Baseline file, relative to `working-directory`; by default `onsystem.baseline.json` in the project root, whenever it exists      |
-| `fail-on`               | `error` | `error`, `warning` (errors or warnings) or `none`                                                                                |
-| `only-changed-lines`    | `true`  | On pull requests and merge groups, report only findings on the changed lines; `false` reports every finding in the checked files |
-| `require-design-system` | `true`  | Fail when no components or no color tokens are found, so the check cannot pass by checking nothing ([CI and baselines](ci.md))   |
+| Input                   | Default | What it does                                                                                                                                                            |
+| ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paths`                 | `.`     | Files, folders or globs to check, relative to `working-directory`, separated by spaces or new lines, without quotes                                                     |
+| `working-directory`     | `.`     | Where to run the check, such as one app of a monorepo; its config and baseline are used                                                                                 |
+| `baseline`              |         | Baseline file, relative to `working-directory`; by default `onsystem.baseline.json` in the project root, whenever it exists                                             |
+| `fail-on`               | `error` | `error`, `warning` (errors or warnings) or `none`                                                                                                                       |
+| `only-changed-lines`    | `true`  | On pull requests and merge groups, report only findings on the changed lines; `false` reports every finding in the checked files                                        |
+| `require-design-system` | `true`  | Fail when no components or no color tokens are found, or when `paths` leaves no file to check, so the check cannot pass by checking nothing ([CI and baselines](ci.md)) |
 
-An app on a [published library](configuration.md#published-libraries-mui) (MUI) passes `require-design-system` with the library's components alone; when its theme's colors cannot be read, the step's log says that `no-hardcoded-color` did not run. The outputs `errors`, `warnings` and `outside-diff` count what was reported and what was left out. In a monorepo, add a job per app with `working-directory: apps/web`, each with its own design system and baseline.
+A folder in `paths` stands for its `.tsx` and `.jsx` files. A JavaScript app whose pages are `.js` files (Next.js's JavaScript template) checks them with `paths: . **/*.js`, with no quotes, since the action passes each path as it is. With `paths: .` alone the step's log names them, and `require-design-system` fails when that leaves nothing to check. An app on a [published library](configuration.md#published-libraries-mui) (MUI) passes `require-design-system` with the library's components alone; when its theme's colors cannot be read, the step's log says that `no-hardcoded-color` did not run. The outputs `errors`, `warnings` and `outside-diff` count what was reported and what was left out. In a monorepo, add a job per app with `working-directory: apps/web`, each with its own design system and baseline.
 
 ## Make the check required
 

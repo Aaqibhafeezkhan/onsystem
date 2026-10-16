@@ -1,8 +1,14 @@
 import type { CheckResult } from '../types.js';
 import { plural } from '../util/strings.js';
 import { formatSarif } from './sarif.js';
+import { paletteColor, parseUtility, withBase } from './tailwind.js';
 
 export type OutputFormat = 'pretty' | 'json' | 'github' | 'sarif';
+
+/** From this many findings, `pretty` ends with a summary: more than a screen to scroll back through. */
+const SUMMARY_FROM = 50;
+/** The palette classes the summary lists. */
+const TOP_CLASSES = 10;
 
 const color = (code: number) => (text: string, enabled: boolean) =>
   enabled ? `\u001b[${code}m${text}\u001b[39m` : text;
@@ -71,6 +77,7 @@ export function formatDiagnostics(
     lines.push('');
   }
   const total = errors + warnings;
+  if (total >= SUMMARY_FROM) lines.push(...summarize(results), '');
   const notes = [
     options.baselined === undefined
       ? ''
@@ -91,6 +98,59 @@ export function formatDiagnostics(
   );
   if (fixedHint) lines.push(dim(fixedHint, useColor));
   return lines.join('\n');
+}
+
+/**
+ * What a long run's findings add up to: the count per rule, as `init`'s dry run gives it, and
+ * the Tailwind palette classes found most, each with the token to use. On a palette-heavy app
+ * (Dub's web app, over 14,000 lines of findings) that reads as a plan for moving to the tokens.
+ */
+function summarize(results: readonly CheckResult[]): string[] {
+  const byRule = new Map<string, number>();
+  const pairs = new Map<string, { text: string; count: number }>();
+  const paletteFiles = new Set<string>();
+  let palette = 0;
+  for (const result of results) {
+    for (const d of result.diagnostics) {
+      byRule.set(d.ruleId, (byRule.get(d.ruleId) ?? 0) + 1);
+      if (d.ruleId !== 'no-hardcoded-color') continue;
+      const utility = parseUtility(d.source);
+      if (!paletteColor(utility.base)) continue;
+      palette++;
+      paletteFiles.add(result.file);
+      // The fix's class, with the variants and modifier of the one it replaces; a suggestion
+      // that is not applied names the bare class (or a variant, `variant="ghost"`).
+      const fix = d.fix?.length === 1 ? d.fix[0]?.text : undefined;
+      const to =
+        fix ??
+        (d.suggestion && /^[^\s"'=]+$/.test(d.suggestion)
+          ? withBase(utility, d.suggestion)
+          : d.suggestion);
+      // `Nearest token`, not `Matches token`: another color, to check before replacing.
+      const nearest = d.message.includes('. Nearest token ') ? ' (nearest token)' : '';
+      const text = `${d.source} → ${to ? `${to}${nearest}` : 'no close token'}`;
+      const pair = pairs.get(text) ?? { text, count: 0 };
+      pair.count++;
+      pairs.set(text, pair);
+    }
+  }
+  const lines = [
+    `By rule: ${[...byRule]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([rule, n]) => `${rule} ${n.toLocaleString('en-US')}`)
+      .join(', ')}.`,
+  ];
+  const top = [...pairs.values()]
+    .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
+    .slice(0, TOP_CLASSES);
+  if (top.length) {
+    const width = Math.max(...top.map((pair) => pair.count.toLocaleString('en-US').length));
+    lines.push(
+      `Tailwind palette classes: ${palette.toLocaleString('en-US')} in ${plural(paletteFiles.size, 'file')}. The most common, with the token to use:`,
+      ...top.map((pair) => `  ${pair.count.toLocaleString('en-US').padStart(width)}× ${pair.text}`),
+    );
+  }
+  return lines;
 }
 
 /** Escapes a workflow command's message, so `%` and line breaks reach GitHub as written. */

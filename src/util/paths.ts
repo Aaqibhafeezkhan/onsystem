@@ -18,6 +18,13 @@ export function slashGlob(pattern: string): string {
   return pattern.replace(/\\(?![()[\]{}*?!+@])/g, '/');
 }
 
+/**
+ * The files `check` and `check_ui` read: `.tsx`, `.jsx`, `.ts`, `.js` and the `.mts`, `.cts`,
+ * `.mjs` and `.cjs` forms, in any case. CSS, Markdown or JSON parsed as TSX gives hundreds of
+ * syntax errors (209 for a shadcn/ui `app/globals.css`).
+ */
+export const SCRIPT_FILE = /\.(?:[jt]sx?|[cm][jt]s)$/i;
+
 /** Path relative to `root`, always with forward slashes. */
 export function relativePath(root: string, file: string): string {
   return toPosix(path.relative(root, file));
