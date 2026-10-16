@@ -29,6 +29,9 @@ export function compactNumber(value: number): string {
 
 export const NPX = 'npx -y onsystem';
 export const PLUGIN_COMMANDS = readme.install.plugin;
+/** The Codex CLI plugin, as docs/clients.md installs it (site/test/setup.test.ts checks). */
+export const CODEX_COMMANDS =
+  'codex plugin marketplace add dgesteves/onsystem\ncodex plugin add onsystem@dgesteves';
 export const CURSOR_INSTALL = readme.install.cursor;
 export const VSCODE_INSTALL = readme.install.vscode;
 

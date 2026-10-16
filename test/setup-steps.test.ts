@@ -7,10 +7,25 @@ import { main, type Io } from '../src/cli.js';
 import { DEMO_ROOT, fixture } from './helpers.js';
 
 // /setup.md (site/lib/llms.ts) has an agent run these commands, and says what each one does. They
-// run here, on the demo app as a stranger's app is before anything of onsystem is in it, with no
-// terminal to answer questions in, as an agent runs them.
+// run here, on the demo app as a stranger's app is before anything of onsystem is in it, and as it
+// is when the user ran `init` by hand and declined the baseline, with no terminal to answer
+// questions in, as an agent runs them. site/test/setup.test.ts checks that /setup.md names them.
 
-const steps = fs.readFileSync(path.join(import.meta.dirname, '../site/lib/llms.ts'), 'utf8');
+/** A copy of the demo app, without its dependencies and with only the onsystem files in `keep`. */
+function demo(keep: string[] = []): string {
+  const root = fixture({});
+  const leftOut = ['onsystem.config.json', 'onsystem.baseline.json'].filter(
+    (f) => !keep.includes(f),
+  );
+  fs.cpSync(DEMO_ROOT, root, {
+    recursive: true,
+    filter: (src) => {
+      const rel = path.relative(DEMO_ROOT, src);
+      return rel !== 'node_modules' && !leftOut.includes(rel);
+    },
+  });
+  return root;
+}
 
 async function run(args: string[], cwd: string) {
   const out: string[] = [];
@@ -25,21 +40,8 @@ async function run(args: string[], cwd: string) {
 }
 
 describe('the steps /setup.md gives an agent', () => {
-  it('names these commands', () => {
-    expect(steps).toContain('npx -y onsystem init --yes');
-    expect(steps).toContain('check . --require-design-system');
-    expect(steps).toContain('check . --ignore-baseline');
-  });
-
   it('write the config and the baseline, then pass the check, and keep a config that is there', async () => {
-    const root = fixture({});
-    fs.cpSync(DEMO_ROOT, root, {
-      recursive: true,
-      filter: (src) => {
-        const rel = path.relative(DEMO_ROOT, src);
-        return rel !== 'node_modules' && rel !== 'onsystem.config.json';
-      },
-    });
+    const root = demo();
 
     // Step 2: the config, a check of the project by rule, and the baseline.
     const init = await run(['init', '--yes'], root);
@@ -61,6 +63,32 @@ describe('the steps /setup.md gives an agent', () => {
     const again = await run(['init', '--yes'], root);
     expect(again.code).toBe(2);
     expect(again.text).toContain('onsystem.config.json already exists');
+  });
+
+  it('record a baseline next to a config that has none, so the check passes', async () => {
+    // The quickstart's step 1 has the user run `init`, which only offers the baseline.
+    const root = demo(['onsystem.config.json']);
+    expect(fs.existsSync(path.join(root, 'onsystem.config.json'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'onsystem.baseline.json'))).toBe(false);
+
+    // Step 2: the config is kept, and nothing records the baseline...
+    const init = await run(['init', '--yes'], root);
+    expect(init.code).toBe(2);
+    expect(init.text).toContain('onsystem.config.json already exists');
+    expect(fs.existsSync(path.join(root, 'onsystem.baseline.json'))).toBe(false);
+    // ...so the check fails on the findings already in the code ("1: errors not in the baseline").
+    expect((await run(['check', '.', '--require-design-system'], root)).code).toBe(1);
+
+    // "If there is no onsystem.baseline.json next to it, record the findings already in the code."
+    const update = await run(['check', '.', '--update-baseline'], root);
+    expect(update.code).toBe(0);
+    expect(update.text).toMatch(
+      /^Baseline: \d+ findings? in \d+ files? → onsystem\.baseline\.json/m,
+    );
+    expect(fs.existsSync(path.join(root, 'onsystem.baseline.json'))).toBe(true);
+
+    // Step 5: the check passes.
+    expect((await run(['check', '.', '--require-design-system'], root)).code).toBe(0);
   });
 
   it('say when zero config finds no design system, and take --components and --tokens', async () => {

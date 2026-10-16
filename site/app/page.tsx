@@ -21,6 +21,7 @@ import { findingCard, HOME_CARD, TSC_RULES } from '@/lib/og';
 import { highlight } from '@/lib/render-code';
 import {
   AUTHOR,
+  CODEX_COMMANDS,
   CURSOR_INSTALL,
   docsHref,
   NPM,
@@ -106,9 +107,7 @@ function GetStarted() {
 /** What a visitor runs first: findings with fixes on their own app, nothing installed or written. */
 const CHECK = 'npx -y onsystem check .';
 
-/** The commands from docs/clients.md and docs/required-check.md (test/first-screen.test.ts checks). */
-const CODEX =
-  'codex plugin marketplace add dgesteves/onsystem\ncodex plugin add onsystem@dgesteves';
+/** The step from docs/required-check.md (test/first-screen.test.ts checks). */
 const ACTION = '- uses: dgesteves/onsystem@v0';
 const MARKETPLACE = 'https://github.com/marketplace/actions/onsystem-design-system-check';
 
@@ -238,14 +237,15 @@ function CheckCommand() {
 /**
  * The prompt that has the visitor's agent set onsystem up from /setup.md. The label makes its
  * text part of the copy button: a click on either copies the prompt, which the title shows.
+ * Touch screens show no title, so below sm the prompt itself is on the line under it. From sm
+ * up the control stays on one line, so the wide first screen is no taller.
  */
 function AgentPrompt() {
   return (
-    // eslint-disable-next-line jsx-a11y/label-has-associated-control -- CopyButton is a <button>
     <label
       data-agent-prompt=""
       title={SETUP_PROMPT}
-      className="group inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
+      className="group inline-flex cursor-pointer flex-wrap items-center gap-x-1 gap-y-0.5 text-sm font-medium text-fg-soft transition-colors hover:text-fg"
     >
       Or ask your agent to set it up
       <CopyButton
@@ -254,6 +254,9 @@ function AgentPrompt() {
         bare
         className="-my-1 group-hover:text-fg"
       />
+      <span data-agent-prompt-text="" className="basis-full font-normal text-muted sm:hidden">
+        “{SETUP_PROMPT}”
+      </span>
     </label>
   );
 }
@@ -353,7 +356,7 @@ function InstallTabs() {
         label="Install for"
         // No-break spaces keep each label on one line; the row fits beside the card from 1024 px.
         labels={['Claude\u00a0Code', 'Cursor', 'VS\u00a0Code', 'Codex', 'Other\u00a0MCP', 'CI']}
-        copies={[PLUGIN_COMMANDS, undefined, undefined, CODEX, NPX, ACTION]}
+        copies={[PLUGIN_COMMANDS, undefined, undefined, CODEX_COMMANDS, NPX, ACTION]}
       >
         {[
           <Fragment key="claude-code">
@@ -393,7 +396,7 @@ function InstallTabs() {
                 <TextLink href={docsHref('setup')}>Other agents</TextLink>
               </>,
             )}
-            <CodeBody code={CODEX} lang="sh" />
+            <CodeBody code={CODEX_COMMANDS} lang="sh" />
           </Fragment>,
           <Fragment key="other">
             {note(

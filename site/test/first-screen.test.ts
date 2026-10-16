@@ -14,7 +14,7 @@ import { SETUP_PROMPT } from '@/lib/llms';
 import { HOME_CARD, HomeCard } from '@/lib/og';
 import type { Preset } from '@/lib/playground';
 import { applyFixes } from '@/lib/playground-edits';
-import { DOCS_FILES } from '@/lib/site';
+import { CODEX_COMMANDS, DOCS_FILES } from '@/lib/site';
 
 // The home page's first screen (ROADMAP-v2 section 3.8), the demo it leads into, and the social
 // card drawn from the same finding card.
@@ -141,6 +141,14 @@ describe('the first screen', () => {
     // The label's text and the button copy the same prompt; the button says which.
     expect(decode(prompt)).toContain(`title="${SETUP_PROMPT}"`);
     expect(decode(prompt)).toMatch(/<button[^>]*aria-label="Copy the prompt for your agent: Read /);
+    // Touch screens never show the title: below sm the label shows the prompt it copies, so a
+    // phone visitor sees what they copy. From sm up it is hidden, and the row stays one line.
+    const shown = /<span[^>]*data-agent-prompt-text[^>]*class="([^"]*)"[^>]*>([^<]*)<\/span>/.exec(
+      prompt,
+    );
+    expect(decode(shown?.[2] ?? '')).toBe(`“${SETUP_PROMPT}”`);
+    expect(shown?.[1]).toMatch(/\bsm:hidden\b/);
+    expect(shown?.[1]).toMatch(/\bbasis-full\b/);
   });
 
   it('shows three of the demo’s findings in a card, with the import and what tsc reports', () => {
@@ -170,10 +178,7 @@ describe('the first screen', () => {
     );
     const shown = flat(firstScreen);
     // The commands are the docs' own.
-    for (const command of [
-      'codex plugin marketplace add dgesteves/onsystem',
-      'codex plugin add onsystem@dgesteves',
-    ]) {
+    for (const command of CODEX_COMMANDS.split('\n')) {
       expect(shown).toContain(command);
       expect(read('docs/clients.md')).toContain(command);
     }

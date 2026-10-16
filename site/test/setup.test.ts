@@ -8,7 +8,7 @@ import { slug } from '@/components/markdown-blocks';
 import { docs } from '@/lib/data';
 import { DOCS_PAGES } from '@/lib/docs';
 import { llmsTxt, SETUP_PROMPT } from '@/lib/llms';
-import { PLUGIN_COMMANDS, SITE_URL } from '@/lib/site';
+import { CODEX_COMMANDS, PLUGIN_COMMANDS, SITE_URL } from '@/lib/site';
 
 // /setup.md: the steps an agent follows to set onsystem up in a project, and the one prompt that
 // points it there, as @shadcn/lint's quickstart does with its SETUP.md.
@@ -45,9 +45,16 @@ describe('/setup.md', () => {
       '4. Check pull requests',
       '5. Check it works, and report',
     ]);
-    expect(body).toContain('npx -y onsystem init --yes');
-    expect(body).toContain('npx -y onsystem inspect --explain');
-    expect(body).toContain('npx -y onsystem check .');
+    // The commands test/setup-steps.test.ts runs on the demo app.
+    for (const command of [
+      'init --yes',
+      'inspect --explain',
+      'check . --update-baseline',
+      'check . --require-design-system',
+      'check . --ignore-baseline',
+    ]) {
+      expect(body).toContain(`npx -y onsystem ${command}`);
+    }
     // Every agent the home page's tabs install for, and any other.
     for (const agent of ['Claude Code', 'Cursor', 'VS Code', 'Codex CLI', 'Any other agent']) {
       expect(body).toContain(`- **${agent}**`);
@@ -56,6 +63,25 @@ describe('/setup.md', () => {
     // AGENTS.md line, from the docs, is for a project that has it installed.)
     expect(body.replace(/^ *```[\s\S]*?^ *```/gm, '')).not.toMatch(/npx onsystem/);
     expect(body).toContain('Tell the user');
+  });
+
+  it('records a baseline beside a config that is already there, and says what the check’s codes mean', async () => {
+    const body = await setup();
+    // The user may have run `init` by hand (quickstart step 1) and declined the baseline.
+    expect(body.slice(body.indexOf('## 2. '), body.indexOf('## 3. '))).toContain(
+      'If it says a config already exists, keep that config: do not pass `--force`. If there is no `onsystem.baseline.json` next to it, record the findings already in the code with `npx -y onsystem check . --update-baseline`.',
+    );
+    const check = body.slice(body.indexOf('## 5. '));
+    for (const code of [
+      '0: the check passes',
+      '1: it found errors that are not in the baseline',
+      '2: it found no design system',
+    ]) {
+      expect(check).toContain(`   - ${code}`);
+    }
+    // Code 1: the agent reports the new findings and leaves them.
+    expect(check).toContain('Do not fix them: list them for the user in the next step.');
+    expect(check).toContain('with code 1, the findings the check printed, each with its fix');
   });
 
   it('gives the configs and the workflow the docs give, word for word', async () => {
@@ -68,10 +94,7 @@ describe('/setup.md', () => {
     expect(body).toContain(titled(docs.rollout, 'AGENTS.md'));
     expect(body).toContain(titled(docs.requiredCheck, '.github/workflows/onsystem.yml'));
     for (const command of PLUGIN_COMMANDS.split('\n')) expect(body).toContain(`\`${command}\``);
-    for (const command of [
-      'codex plugin marketplace add dgesteves/onsystem',
-      'codex plugin add onsystem@dgesteves',
-    ]) {
+    for (const command of CODEX_COMMANDS.split('\n')) {
       expect(body).toContain(`\`${command}\``);
       expect(read('docs/clients.md')).toContain(command);
     }

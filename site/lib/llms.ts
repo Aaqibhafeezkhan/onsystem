@@ -6,6 +6,7 @@ import { faqMarkdown } from '@/lib/faq';
 import { withoutMarkers } from '@/lib/markers';
 import { playground } from '@/lib/playground';
 import {
+  CODEX_COMMANDS,
   NPM,
   NPX,
   PLUGIN_COMMANDS,
@@ -59,6 +60,7 @@ function fence({ lang, code }: { lang: string; code: string }, indent = ''): str
 export function setupMd(): string {
   const config = (file: string) => fence(titled(docs.rollout, file), '  ');
   const [marketplace, install] = PLUGIN_COMMANDS.split('\n');
+  const [codexMarketplace, codexInstall] = CODEX_COMMANDS.split('\n');
   const node = readme.engines.node.replace('>=', '');
   return `# Set up onsystem
 
@@ -82,7 +84,7 @@ npx -y onsystem init --yes
 
 It writes \`onsystem.config.json\` from the components and tokens it finds, checks the project once, and records the findings already in the code in \`onsystem.baseline.json\`, so that the check fails only on new ones. Keep what it prints for step 5.
 
-- If it says a config already exists, keep that config: do not pass \`--force\`.
+- If it says a config already exists, keep that config: do not pass \`--force\`. If there is no \`onsystem.baseline.json\` next to it, record the findings already in the code with \`npx -y onsystem check . --update-baseline\`.
 - If it found no design system, run \`npx -y onsystem inspect --explain\` to see where it looked, ask the user where the components and tokens are, and run it again with them: \`npx -y onsystem init --yes --components "src/components/ui/**/*.tsx" --tokens src/app/globals.css\`.
 
 ## 3. Add it to your agent
@@ -102,7 +104,7 @@ ${config('.cursor/mcp.json')}
 
 ${config('.vscode/mcp.json')}
 
-- **Codex CLI**: the plugin, with the MCP server and the skill: \`codex plugin marketplace add dgesteves/onsystem\`, then \`codex plugin add onsystem@dgesteves\`.
+- **Codex CLI**: the plugin, with the MCP server and the skill: \`${codexMarketplace ?? ''}\`, then \`${codexInstall ?? ''}\`.
 - **Any other agent**: the MCP server runs over stdio as \`${NPX} --root <the project's absolute path>\`, and [Set up your agent](${SITE_URL}/docs/clients#other-clients) has the config for each client. If the project has an \`AGENTS.md\`, add this line to it:
 
 ${config('AGENTS.md')}
@@ -117,10 +119,14 @@ Install the dependencies the way the project does: with pnpm, add \`pnpm/action-
 
 ## 5. Check it works, and report
 
-1. Run \`${NPX} check . --require-design-system\` in the folder from step 1. It exits with code 0: the findings already there are in the baseline. Code 2 means it found no design system or could not read the config: go back to step 2.
+1. Run \`${NPX} check . --require-design-system\` in the folder from step 1, and look at its exit code:
+   - 0: the check passes. The findings already in the code are in the baseline.
+   - 1: it found errors that are not in the baseline, such as ones in code written since it was recorded. Do not fix them: list them for the user in the next step.
+   - 2: it found no design system or could not read the config: go back to step 2.
 2. Tell the user:
    - the files you added or changed, to review and commit: \`onsystem.config.json\`, \`onsystem.baseline.json\`, and the agent's and CI's files;
-   - what \`init\`'s check found, by rule, and that \`${NPX} check . --ignore-baseline\` lists each finding with its fix;
+   - what the baseline holds (what \`init\` printed by rule, or the count \`check . --update-baseline\` printed), and that \`${NPX} check . --ignore-baseline\` lists each finding with its fix;
+   - with code 1, the findings the check printed, each with its fix;
    - what is left for them to do, such as restarting the agent so it loads the plugin or the MCP server.
 3. Leave the findings as they are unless the user asks you to fix them.
 `;
