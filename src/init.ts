@@ -360,7 +360,7 @@ async function agentRules(root: string, ask: InitIo['prompt'], io: InitIo): Prom
     .filter((f) => f.next !== f.text);
   if (!changes.length) return [];
   const names = andList(changes.map((f) => f.name));
-  const update = changes.every((f) => f.text.includes(RULES_BEGIN));
+  const update = changes.every((f) => rulesSection(f.text) !== undefined);
   const answer = (
     await ask(
       update
@@ -389,11 +389,23 @@ async function agentRules(root: string, ask: InitIo['prompt'], io: InitIo): Prom
 function withAgentRules(text: string): string {
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
   const rules = AGENT_RULES.replaceAll('\n', eol);
-  const start = text.indexOf(RULES_BEGIN);
-  const end = start === -1 ? -1 : text.indexOf(RULES_END, start);
-  if (end !== -1) return `${text.slice(0, start)}${rules}${text.slice(end + RULES_END.length)}`;
+  const found = rulesSection(text);
+  if (found) return `${text.slice(0, found.start)}${rules}${text.slice(found.end)}`;
   if (!text.trim()) return `${rules}${eol}`;
   return `${text.endsWith('\n') ? text : `${text}${eol}`}${eol}${rules}${eol}`;
+}
+
+/**
+ * Where onsystem's section is in `text`, from its BEGIN marker to the end of its END marker: the
+ * first END with a BEGIN before it, and the BEGIN nearest that END. A BEGIN whose END was deleted
+ * is then not a section, so the text after it, which may be the user's, is never replaced.
+ */
+function rulesSection(text: string): { start: number; end: number } | undefined {
+  for (let end = text.indexOf(RULES_END); end !== -1; end = text.indexOf(RULES_END, end + 1)) {
+    const start = text.lastIndexOf(RULES_BEGIN, end);
+    if (start !== -1) return { start, end: end + RULES_END.length };
+  }
+  return undefined;
 }
 
 /** A package.json as read, with the indentation to write it back in. */

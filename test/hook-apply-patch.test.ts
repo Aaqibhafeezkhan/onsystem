@@ -230,6 +230,26 @@ describe('check-ui hook: a Codex apply_patch', () => {
     expect(context(brace.stdout)).toContain('could not tell which lines it changed');
   });
 
+  it('holds a patch to its placed hunks when another hunk only deletes lines', () => {
+    // The second hunk's context, `}`, is on lines 2 to 6, but it changes no line of its own.
+    const { code, stderr } = hook({
+      command: patch(
+        '*** Update File: app/toolbar.tsx',
+        '@@',
+        '-  const redo = <button className="bg-destructive" onClick={() => {}}>Redo</button>;',
+        `+${TOOLBAR[3]}`,
+        '@@',
+        ` ${TOOLBAR[5]}`,
+        '-// An old comment.',
+      ),
+    });
+    expect(code).toBe(2);
+    expect(stderr).toMatch(/^app\/toolbar\.tsx: this change breaks/);
+    expect(stderr).toMatch(/^4:\d+ error \[no-hardcoded-color\] Hardcoded color `bg-\[#dc2626\]`/m);
+    expect(stderr).not.toMatch(/^[23]:\d+ error/m);
+    expect(stderr).toContain('(2 other findings elsewhere in the file predate this edit');
+  });
+
   it('reads the file from path or filePath, as other clients name it', () => {
     // A file written whole.
     const created = hook({ path: path.join(project, 'app/banner.tsx'), file_text: '' }, 'create');
@@ -251,6 +271,27 @@ describe('check-ui hook: a Codex apply_patch', () => {
     const card = path.join(project, 'app/settings-card.tsx');
     expect(hook({ filePath: card, startLine: 1, endLine: 9 }, 'read_file')).toEqual(silent);
     expect(hook({ path: card }, 'view')).toEqual(silent);
+  });
+
+  it('leaves a code snippet alone: it is not the file', () => {
+    // VS Code's insert_edit_into_file sends the lines it changes, with the rest elided. The file
+    // has older findings; the hook runs after every tool there, and must not blame this edit.
+    const toolbar = path.join(project, 'app/toolbar.tsx');
+    const snippet = [
+      '// ...existing code...',
+      '  return <div className="flex gap-3">{save}{undo}{redo}</div>;',
+      '// ...existing code...',
+    ].join('\n');
+    expect(
+      hook(
+        { explanation: 'Widen the gap', filePath: toolbar, code: snippet },
+        'insert_edit_into_file',
+      ),
+    ).toEqual(silent);
+    // Nor is check_ui's code, which it checks unsaved, under the path it will be saved to.
+    expect(
+      hook({ code: TOOLBAR.join('\n'), path: toolbar }, 'mcp__plugin_onsystem_onsystem__check_ui'),
+    ).toEqual(silent);
   });
 
   it("finds each file's findings in the real CLI's answer", async () => {

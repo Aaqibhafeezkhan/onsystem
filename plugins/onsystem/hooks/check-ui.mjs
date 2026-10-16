@@ -273,7 +273,9 @@ function cannotRun({ root, cli, files }, reason) {
  * apply_patch names its files in the patch, in `command`. Other clients' tools name it `path` or
  * `filePath`, with the replaced text in `oldString` and `newString`, or `old_str` and `new_str`.
  * Their tools that read a file name it the same way, and VS Code runs hooks after every tool, so
- * a file named so counts only when the input carries the text written: new text, or the content.
+ * a file named so counts only when the input carries the text written: new text, or the content
+ * (`content` or `file_text`). A `code` field is not one: VS Code's insert_edit_into_file sends a
+ * snippet with `...existing code...` lines in it, and check_ui sends code it has not saved.
  */
 function editedFiles(payload) {
   const tool = payload?.tool_input;
@@ -286,8 +288,7 @@ function editedFiles(payload) {
     ['oldString', 'newString'],
     ['old_str', 'new_str'],
   ].find(([, after]) => typeof tool[after] === 'string');
-  const writes =
-    fields || ['content', 'file_text', 'code'].some((k) => typeof tool[k] === 'string');
+  const writes = fields || ['content', 'file_text'].some((k) => typeof tool[k] === 'string');
   const file = [tool.file_path, ...(writes ? [tool.path, tool.filePath] : [])].find(
     (f) => typeof f === 'string' && f,
   );
@@ -726,9 +727,10 @@ function installedCli(dir) {
  * The 1-based lines `edits` changed in `file`, or undefined for the whole file (a Write, or a
  * file a patch adds). Each edit is the text it replaced and its new text: an Edit's old_string
  * and new_string, or a patch hunk. Lines an edit repeats unchanged from the old text are not its
- * own. `placed` is false when the hook cannot tell where an edit is: its new text is in the file
- * more than once, or no longer as written (a formatter rewrote it); `lines` are then the lines it
- * may be on, or undefined for any.
+ * own, and an edit that only removes lines, which changes none, is not looked for. `placed` is
+ * false when the hook cannot tell where an edit is: its new text is in the file more than once, or
+ * no longer as written (a formatter rewrote it); `lines` are then the lines it may be on, or
+ * undefined for any.
  */
 function editedLines(file, edits, structuredPatch) {
   if (!edits) return undefined;
@@ -752,6 +754,8 @@ function editedLines(file, edits, structuredPatch) {
       typeof before === 'string'
         ? changedLines(before.replace(/\r\n/g, '\n').split('\n'), replacement.split('\n'))
         : replacement.split('\n').map((_, i) => i);
+    // A patch hunk that only deletes lines keeps its context, which may well be in the file twice.
+    if (!changed.length) continue;
     let matches = 0;
     // One pass over the file: lines are counted from the previous match, not from the top.
     for (

@@ -104,6 +104,32 @@ describe('onsystem init: instructions for coding agents', () => {
     expect(section(read(root, 'CLAUDE.md'))).toBe(section(read(root, 'AGENTS.md')));
   });
 
+  it('keeps what follows a BEGIN marker whose END was deleted', async () => {
+    const mine = `# Agents\n\n${BEGIN}\n## User notes\n\nkeep me\n`;
+    const root = fixture({ ...APP, 'AGENTS.md': mine });
+    // Without its END, the old BEGIN is no section: a new one is added, after the user's notes.
+    const first = await run(['init', '--no-cache'], root, ['']);
+    expect(first.asked).toEqual([
+      'Add a short onsystem section to AGENTS.md, so coding agents check the UI they write? [Y/n] ',
+    ]);
+    const added = read(root, 'AGENTS.md');
+    expect(added.startsWith(`${mine}\n${BEGIN}\n# Design system\n`)).toBe(true);
+    expect(added.endsWith(`${END}\n`)).toBe(true);
+    // The next run finds the new section current: nothing is asked, and the notes stay.
+    const again = await run(['init', '--force', '--no-cache'], root, []);
+    expect(again.asked).toEqual([]);
+    expect(read(root, 'AGENTS.md')).toBe(added);
+
+    // An older section after the stray BEGIN is the one updated, and the notes stay.
+    fs.writeFileSync(
+      path.join(root, 'AGENTS.md'),
+      `${mine}\n${BEGIN}\nAn older section.\n${END}\n`,
+    );
+    const update = await run(['init', '--force', '--no-cache'], root, ['']);
+    expect(update.asked).toEqual(['Update the onsystem section in AGENTS.md? [Y/n] ']);
+    expect(read(root, 'AGENTS.md')).toBe(added);
+  });
+
   it('writes nothing when declined, with --yes, without a terminal, or with neither file', async () => {
     const files = { ...APP, 'AGENTS.md': NEXT_AGENTS };
     const declined = fixture(files);
