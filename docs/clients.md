@@ -2,11 +2,11 @@
 
 The server speaks MCP over stdio, in both protocol eras: the 2026-07-28 revision (stateless, with `server/discover`) and the 2025 one (the `initialize` handshake), the era chosen by the client's first message. It finds the project from `--root`, a config file in the working directory, or the working directory itself when it holds a project (a `package.json` or `components.json`). MCP roots, which 2026-07-28 deprecates, are the fallback: when the working directory is none of those (Claude Desktop starts servers in `/`), a 2025-era client that reports roots has its first `file://` root used. When none of these gives a project (a client that starts servers in your home or the plugin's folder and reports no roots), each tool call's project is found from the absolute path it names, `path` (or `filename`, for `check_ui` with `code`): the nearest folder at or above it with a `package.json`, `components.json` or config, or the monorepo root above that, but never your home folder or the filesystem root. A project found this way loads a JSON config (`onsystem.config.json`) only: the server runs a JavaScript or TypeScript config only in a project it was started in. Until a call names one, the tools return an error that asks for it; after that, a call without one answers from the project found, as long as only one has been. Started at a [monorepo root](configuration.md#monorepo-roots), it serves every app and design-system package in it: the tools take the `path` of the file the agent is editing and answer for that file's project.
 
-Every client gets the same five tools, including `check_ui`, which the agent runs on its own output. Only Claude Code has a hook that checks each edit as it happens, so there use the [plugin](plugin.md) instead; with other agents, add the [CI check](ci.md) so what the agent skips still gets caught.
+Every client gets the same five tools, including `check_ui`, which the agent runs on its own output. Claude Code and Codex CLI also run the [plugin](plugin.md)'s hook, which checks each edit as it happens, so there use the plugin instead; with other agents, add the [CI check](ci.md) so what the agent skips still gets caught.
 
 ## Plugins for other agents
 
-The skill and the MCP server also come packaged for other agents, pinned to the same release as the Claude Code plugin. Only the Claude Code plugin has the hook that checks each edit; elsewhere, the [CI check](ci.md) catches what the agent skips.
+The skill and the MCP server also come packaged for other agents, pinned to the same release as the Claude Code plugin. Only the Claude Code plugin has the hook that checks each edit, and Codex runs it too; elsewhere, the [CI check](ci.md) catches what the agent skips.
 
 - **Any agent with Agent Skills** (Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode and others): the skill, from the repository. It goes to `.agents/skills/onsystem`, which most agents read, and is linked into `.claude/skills` for Claude Code. Add the MCP server with your client's config below.
 
@@ -14,7 +14,7 @@ The skill and the MCP server also come packaged for other agents, pinned to the 
   npx skills add dgesteves/onsystem
   ```
 
-- **Codex CLI:** Codex reads the same marketplace as Claude Code and installs that plugin's server and skill. It also lists the plugin's hook, which is written for Claude Code's `Write` and `Edit` tools.
+- **Codex CLI:** Codex reads the same marketplace as Claude Code and installs that plugin: the server, the skill and the hook, which checks each `.tsx` or `.jsx` file an `apply_patch` adds or updates. Codex runs a plugin's hooks only after you review and trust them: open `/hooks` once after installing.
 
   ```sh
   codex plugin marketplace add dgesteves/onsystem
@@ -266,4 +266,4 @@ To share it with your team, add `--scope project`, which writes `.mcp.json` at t
 
 Any other MCP client: run `npx -y onsystem --root /absolute/path/to/app` as a stdio server. On native Windows, wrap it as `cmd /c npx ...`.
 
-The server sends usage instructions in its `initialize` result and in `server/discover`. Clients that ignore them benefit from one line in `CLAUDE.md`, `AGENTS.md` or `.cursor/rules`: _"Before writing UI, use the onsystem tools. Run check_ui on every file you change and fix all errors."_
+The server sends usage instructions in its `initialize` result and in `server/discover`. Clients that ignore them benefit from one line in `CLAUDE.md`, `AGENTS.md` or `.cursor/rules`: _"Before writing UI, use the onsystem tools. Run check_ui on every file you change and fix all errors."_ Run in a terminal, `onsystem init` offers to add a short section that says so to the project's `AGENTS.md` or `CLAUDE.md`, with `npx -y onsystem check <file>` for agents without the tools. It sits between `BEGIN:onsystem-agent-rules` and `END:onsystem-agent-rules` comment markers, which a later run updates in place.

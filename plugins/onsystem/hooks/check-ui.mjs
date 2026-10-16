@@ -2,11 +2,17 @@
 // Claude Code PostToolUse hook: after Claude writes or edits a .tsx/.jsx file,
 // run `onsystem check` on it and hand the findings back.
 //
+// Codex runs it too, from the same plugin: its `apply_patch` matches `Write|Edit`,
+// and carries the patch in `tool_input.command`. Every .tsx/.jsx file the patch
+// adds or updates is checked, in one run per project, a moved file where it moved
+// to. Other clients' tools that name the file `path` or `filePath` are read too,
+// when their input carries the text they wrote.
+//
 // - Errors: exit 2 with the findings on stderr, which Claude Code shows to
-//   Claude so it fixes them before moving on. For an Edit, only findings on
-//   the lines it changed are listed; older ones are counted, not pushed.
-//   When the hook cannot tell which lines an Edit changed, the findings it
-//   may have caused go back as a non-blocking note instead.
+//   Claude so it fixes them before moving on. For an Edit, or a patch's hunks,
+//   only findings on the lines it changed are listed; older ones are counted,
+//   not pushed. When the hook cannot tell which lines an Edit changed, the
+//   findings it may have caused go back as a non-blocking note instead.
 // - Warnings only: exit 0 with `additionalContext`, a non-blocking note.
 // - Clean file, other files, a file `check .` leaves out (what the config's
 //   `exclude` covers, tests and stories by default: `check --skip-excluded`), or a
@@ -94,128 +100,262 @@ const PRIMITIVES =
 const BIN = process.env.ONSYSTEM_BIN || process.env.DESIGN_SYSTEM_MCP_BIN || undefined;
 
 const input = await readInput();
-const filePath = input?.tool_input?.file_path;
-if (typeof filePath !== 'string' || !UI_FILE.test(filePath)) process.exit(0);
-
 const sessionDir =
-  typeof input.cwd === 'string' && input.cwd
+  typeof input?.cwd === 'string' && input.cwd
     ? input.cwd
     : (process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
-const file = path.resolve(sessionDir, filePath);
-const project = projectRoot(path.dirname(file));
-// Where `check` runs: the project's folder, or the monorepo root whose config or baseline covers it.
-const root = (project && monorepoRoot(project)) ?? project ?? sessionDir;
-// Forward slashes, as the CLI prints paths, on Windows too.
-const name = path.relative(root, file).split(path.sep).join('/') || file;
+// The .tsx and .jsx files the tool wrote, each with the edits it made there.
+const targets = editedFiles(input).filter((t) => UI_FILE.test(t.path));
+if (!targets.length) process.exit(0);
+
+// One run of `check` per folder it runs from and CLI, with the files it checks there.
+const jobs = new Map();
+for (const target of targets) {
+  const file = path.resolve(sessionDir, target.path);
+  const project = projectRoot(path.dirname(file));
+  // Where `check` runs: the project's folder, or the monorepo root whose config or baseline covers it.
+  const root = (project && monorepoRoot(project)) ?? project ?? sessionDir;
+  // The project's own install, which may be in the project's node_modules rather than the root's.
+  const cli = resolveCli(project ?? root);
+  const key = `${root}\0${cli.argv?.join('\0')}`;
+  const job = jobs.get(key) ?? { root, cli, files: [] };
+  jobs.set(key, job);
+  // Forward slashes, as the CLI prints paths, on Windows too.
+  const name = path.relative(root, file).split(path.sep).join('/') || file;
+  if (!job.files.some((f) => f.file === file)) job.files.push({ ...target, file, name });
+}
 if (!process.env.ONSYSTEM_BIN && process.env.DESIGN_SYSTEM_MCP_BIN) {
   // On stderr, the debug log, and only when the hook passes: a blocked edit's stderr is Claude's.
   const text = 'DESIGN_SYSTEM_MCP_BIN is the name ONSYSTEM_BIN had before the rename: rename it.';
+  const [{ root }] = jobs.values();
   process.on('exit', (code) => {
-    if (code === 0) once('env-notice', text, () => fs.writeSync(2, `${text}\n`));
+    if (code === 0) once('env-notice', root, text, () => fs.writeSync(2, `${text}\n`));
   });
 }
-// The project's own install, which may be in the project's node_modules rather than the root's.
-const cli = resolveCli(project ?? root);
-if (!cli.argv) cannotRun('npx was not found next to this Node.js.');
-// npm could not reach the registry, or npx ran out of time, less than OFFLINE_PAUSE ago: the
-// notice has been shown, and npx would wait as long again.
-const pause = markerPath('offline');
-if (cli.npx && paused()) process.exit(0);
 
 const deadline = Date.now() + TIMEOUT;
-let run = check(cli.npx ? ['--prefer-offline'] : []);
-let results = resultsOf(run);
-// A run from the cache can fail where the registry would not: npm's cached list of versions can
-// predate this release, after the plugin moves to it. When npm itself failed, then, once more with
-// the registry, unless npm could not reach it, which a second run would not change. When the CLI
-// ran and failed (a broken config, a crash), npm did its part: the registry would not change that.
-if (results === undefined && cli.npx && npmFailed(run) && !unreachable(run)) {
-  run = check(['--prefer-online']);
-  results = resultsOf(run);
-}
-// Anything else (a config error, npx unable to fetch the package) is not Claude's to fix: tell
-// the user once, and move on.
-if (results === undefined) {
-  // The next edit would wait as long: npx is paused.
-  if (cli.npx && (timedOut(run) || unreachable(run))) {
-    try {
-      fs.mkdirSync(path.dirname(pause), { recursive: true });
-      fs.writeFileSync(pause, '');
-    } catch {
-      // Without the marker the next edit waits for npm again; it still never blocks.
-    }
-  }
-  cannotRun(failure(run));
-}
-if (!Array.isArray(results)) process.exit(0);
-const diagnostics = results.flatMap((r) => (Array.isArray(r?.diagnostics) ? r.diagnostics : []));
-if (!diagnostics.length) process.exit(0);
+// What each run found: errors that block, notes that don't, and notices for the user.
+const blocks = [];
+const notes = [];
+const notices = [];
+for (const job of jobs.values()) checkFiles(job);
 
-// An Edit is held to the lines it changed; a Write wrote the whole file.
-const edited = editedLines(input);
-const inScope = edited?.lines ? diagnostics.filter((d) => edited.lines.has(d.line)) : diagnostics;
-const elsewhere = diagnostics.length - inScope.length;
-if (!inScope.length) process.exit(0);
-
-// Errors first, so a long list of warnings never hides one.
-const ordered = [
-  ...inScope.filter((d) => d.severity === 'error'),
-  ...inScope.filter((d) => d.severity !== 'error'),
-];
-const errors = ordered.filter((d) => d.severity === 'error').length;
-const shown = ordered.slice(0, MAX_FINDINGS).map(describe);
-if (ordered.length > shown.length) {
-  shown.push(
-    `…and ${ordered.length - shown.length} more. Run check_ui on the file to see them all.`,
-  );
-}
-const note = elsewhere
-  ? `\n(${elsewhere} other ${elsewhere === 1 ? 'finding' : 'findings'} elsewhere in the file predate this edit; leave them unless asked.)`
-  : '';
-
-// An Edit the hook cannot place never blocks: its findings, errors included, go back as a note.
-const unplaced = edited?.placed === false;
-if (errors && !unplaced) {
-  process.stderr.write(
-    `${name}: this change breaks the project's design system (onsystem check). ` +
-      'Fix these errors before moving on; get_component and get_tokens list the valid props, variants and tokens.\n\n' +
-      `${shown.join('\n')}${note}\n`,
-  );
+if (blocks.length) {
+  // Notes on the other files go with the errors: after exit 2, only stderr reaches the agent.
+  process.stderr.write(`${[...blocks, ...notes].join('\n\n')}\n`);
   process.exit(2);
 }
-const lead = unplaced
-  ? `onsystem check: findings in ${name} that this edit may not have caused, since the hook could not tell which lines it changed. Fix the ones it introduced and leave the rest unless asked.`
-  : `onsystem check: warnings in ${name}. Prefer the suggested scale values and tokens.`;
-process.stdout.write(
-  JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PostToolUse',
-      additionalContext: `${lead}\n${shown.join('\n')}${note}`,
-    },
-  }),
-);
+const output = {};
+for (const { root, text } of notices) {
+  once('hook-notice', root, text, () => {
+    process.stderr.write(`${text}\n`);
+    output.systemMessage = output.systemMessage ? `${output.systemMessage}\n${text}` : text;
+  });
+}
+if (notes.length) {
+  output.hookSpecificOutput = {
+    hookEventName: 'PostToolUse',
+    additionalContext: notes.join('\n\n'),
+  };
+}
+if (Object.keys(output).length) process.stdout.write(JSON.stringify(output));
 process.exit(0);
 
+/** Runs `check` on a job's files, and adds what it found to `blocks`, `notes` and `notices`. */
+function checkFiles(job) {
+  const { root, cli, files } = job;
+  if (!cli.argv) return cannotRun(job, 'npx was not found next to this Node.js.');
+  // npm could not reach the registry, or npx ran out of time, less than OFFLINE_PAUSE ago: the
+  // notice has been shown, and npx would wait as long again.
+  const pause = markerPath('offline', root);
+  if (cli.npx && paused(pause)) return;
+
+  let run = check(job, cli.npx ? ['--prefer-offline'] : []);
+  let results = resultsOf(run);
+  // A run from the cache can fail where the registry would not: npm's cached list of versions can
+  // predate this release, after the plugin moves to it. When npm itself failed, then, once more with
+  // the registry, unless npm could not reach it, which a second run would not change. When the CLI
+  // ran and failed (a broken config, a crash), npm did its part: the registry would not change that.
+  if (results === undefined && cli.npx && npmFailed(run) && !unreachable(run)) {
+    run = check(job, ['--prefer-online']);
+    results = resultsOf(run);
+  }
+  // Anything else (a config error, npx unable to fetch the package) is not Claude's to fix: tell
+  // the user once, and move on.
+  if (results === undefined) {
+    // The next edit would wait as long: npx is paused.
+    if (cli.npx && (timedOut(run) || unreachable(run))) {
+      try {
+        fs.mkdirSync(path.dirname(pause), { recursive: true });
+        fs.writeFileSync(pause, '');
+      } catch {
+        // Without the marker the next edit waits for npm again; it still never blocks.
+      }
+    }
+    return cannotRun(job, failure(cli, run));
+  }
+  if (!Array.isArray(results)) return;
+  for (const target of files) {
+    // A run of several files names each result's file relative to the folder it ran in.
+    const own =
+      files.length === 1
+        ? results
+        : results.filter(
+            (r) => typeof r?.file === 'string' && path.resolve(root, r.file) === target.file,
+          );
+    report(
+      target,
+      own.flatMap((r) => (Array.isArray(r?.diagnostics) ? r.diagnostics : [])),
+    );
+  }
+}
+
+/** Adds the findings in one file to `blocks` (errors) or `notes` (warnings, or an unplaced edit). */
+function report({ file, name, edits, patch }, diagnostics) {
+  if (!diagnostics.length) return;
+  // An Edit, or a patch's hunks, is held to the lines it changed; a Write wrote the whole file.
+  const edited = editedLines(file, edits, patch);
+  const inScope = edited?.lines ? diagnostics.filter((d) => edited.lines.has(d.line)) : diagnostics;
+  const elsewhere = diagnostics.length - inScope.length;
+  if (!inScope.length) return;
+
+  // Errors first, so a long list of warnings never hides one.
+  const ordered = [
+    ...inScope.filter((d) => d.severity === 'error'),
+    ...inScope.filter((d) => d.severity !== 'error'),
+  ];
+  const errors = ordered.filter((d) => d.severity === 'error').length;
+  const shown = ordered.slice(0, MAX_FINDINGS).map(describe);
+  if (ordered.length > shown.length) {
+    shown.push(
+      `…and ${ordered.length - shown.length} more. Run check_ui on the file to see them all.`,
+    );
+  }
+  const note = elsewhere
+    ? `\n(${elsewhere} other ${elsewhere === 1 ? 'finding' : 'findings'} elsewhere in the file predate this edit; leave them unless asked.)`
+    : '';
+
+  // An Edit the hook cannot place never blocks: its findings, errors included, go back as a note.
+  const unplaced = edited?.placed === false;
+  if (errors && !unplaced) {
+    blocks.push(
+      `${name}: this change breaks the project's design system (onsystem check). ` +
+        'Fix these errors before moving on; get_component and get_tokens list the valid props, variants and tokens.\n\n' +
+        `${shown.join('\n')}${note}`,
+    );
+    return;
+  }
+  const lead = unplaced
+    ? `onsystem check: findings in ${name} that this edit may not have caused, since the hook could not tell which lines it changed. Fix the ones it introduced and leave the rest unless asked.`
+    : `onsystem check: warnings in ${name}. Prefer the suggested scale values and tokens.`;
+  notes.push(`${lead}\n${shown.join('\n')}${note}`);
+}
+
 /**
- * Says once per session and project that edits are not being checked, and why,
- * on stderr (the debug log) and as a `systemMessage` the user sees. Never blocks.
+ * Adds a notice that the job's files are not being checked, and why, said once per session and
+ * project on stderr (the debug log) and as a `systemMessage` the user sees. Never blocks.
  */
-function cannotRun(reason) {
+function cannotRun({ root, cli, files }, reason) {
+  const names = files.map((f) => f.name);
   const advice = /config|tsconfig|Token file/i.test(reason)
     ? 'Fix the config, or run `onsystem inspect` to see the problem.'
     : cli.npx
       ? `Install it in the project to run it without npx: npm install --save-dev ${PACKAGE}`
-      : `Run \`onsystem check ${name}\` to see why.`;
-  const text = `onsystem could not check ${name}, so edits are not being checked against the design system: ${reason} ${advice}`;
-  once('hook-notice', text, () => {
-    process.stderr.write(`${text}\n`);
-    process.stdout.write(JSON.stringify({ systemMessage: text }));
-  });
-  process.exit(0);
+      : `Run \`onsystem check ${names.join(' ')}\` to see why.`;
+  const text = `onsystem could not check ${names.join(', ')}, so edits are not being checked against the design system: ${reason} ${advice}`;
+  notices.push({ root, text });
+}
+
+/**
+ * The files the tool wrote, as `{ path, edits, patch }`: `edits` are the `{ before, after }` texts
+ * it replaced, or undefined for a file written whole, and `patch` is Claude Code's diff of them.
+ * Claude Code's Write and Edit (old_string, new_string) name the file in `file_path`. A Codex
+ * apply_patch names its files in the patch, in `command`. Other clients' tools name it `path` or
+ * `filePath`, with the replaced text in `oldString` and `newString`, or `old_str` and `new_str`.
+ * Their tools that read a file name it the same way, and VS Code runs hooks after every tool, so
+ * a file named so counts only when the input carries the text written: new text, or the content
+ * (`content` or `file_text`). A `code` field is not one: VS Code's insert_edit_into_file sends a
+ * snippet with `...existing code...` lines in it, and check_ui sends code it has not saved.
+ */
+function editedFiles(payload) {
+  const tool = payload?.tool_input;
+  if (!tool || typeof tool !== 'object') return [];
+  if (payload.tool_name === 'apply_patch') {
+    return typeof tool.command === 'string' ? patchedFiles(tool.command) : [];
+  }
+  const fields = [
+    ['old_string', 'new_string'],
+    ['oldString', 'newString'],
+    ['old_str', 'new_str'],
+  ].find(([, after]) => typeof tool[after] === 'string');
+  const writes = fields || ['content', 'file_text'].some((k) => typeof tool[k] === 'string');
+  const file = [tool.file_path, ...(writes ? [tool.path, tool.filePath] : [])].find(
+    (f) => typeof f === 'string' && f,
+  );
+  if (!file) return [];
+  const edits = fields && [{ before: tool[fields[0]], after: tool[fields[1]] }];
+  return [{ path: file, edits, patch: payload.tool_response?.structuredPatch }];
+}
+
+/**
+ * The files a Codex apply_patch adds or updates, from its `*** Add File:`, `*** Update File:` and
+ * `*** Move to:` lines. An added file is written whole. An updated one is held to its hunks, each
+ * the text before (its context and `-` lines) and after (its context and `+` lines), and is
+ * checked where `*** Move to:` moved it. A deleted file leaves nothing to check.
+ */
+function patchedFiles(text) {
+  const files = new Map();
+  let current;
+  let hunk;
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    const marker = /^\*\*\* (Add File|Update File|Delete File|Move to): (.+)$/.exec(line);
+    if (marker) {
+      const kind = marker[1];
+      const file = marker[2].trim();
+      hunk = undefined;
+      if (kind === 'Move to') {
+        if (current) {
+          files.delete(current.path);
+          current.path = file;
+          files.set(file, current);
+        }
+        continue;
+      }
+      if (kind === 'Delete File') {
+        files.delete(file);
+        current = undefined;
+        continue;
+      }
+      current = files.get(file) ?? { path: file, edits: [] };
+      if (kind === 'Add File') current.edits = undefined;
+      files.set(file, current);
+      continue;
+    }
+    // `*** Begin Patch`, `*** End Patch`, `*** End of File` and the like.
+    if (line.startsWith('***')) {
+      if (/^\*\*\* (Begin|End) Patch/.test(line)) current = undefined;
+      continue;
+    }
+    // An added file's lines, or none of a file's.
+    if (!current?.edits) continue;
+    if (line.startsWith('@@') || !hunk) {
+      hunk = { before: [], after: [] };
+      current.edits.push(hunk);
+      if (line.startsWith('@@')) continue;
+    }
+    const [kind, rest] = [line[0], line.slice(1)];
+    if (kind === '-' || kind === ' ' || !line) hunk.before.push(rest);
+    if (kind === '+' || kind === ' ' || !line) hunk.after.push(rest);
+  }
+  return [...files.values()].map(({ path: file, edits }) => ({
+    path: file,
+    edits: edits?.map((h) => ({ before: h.before.join('\n'), after: h.after.join('\n') })),
+  }));
 }
 
 /** A marker file in the system temp folder, per session and project (per day without a session). */
-function markerPath(kind) {
+function markerPath(kind, root) {
   const day = new Date().toISOString().slice(0, 10);
   const key = createHash('sha256')
     .update(`${input.session_id ?? day}\0${root}`)
@@ -225,8 +365,8 @@ function markerPath(kind) {
 }
 
 /** Runs `say` once per session and project (per day without a session), through a marker file. */
-function once(kind, text, say) {
-  const marker = markerPath(kind);
+function once(kind, root, text, say) {
+  const marker = markerPath(kind, root);
   if (fs.existsSync(marker)) return;
   try {
     fs.mkdirSync(path.dirname(marker), { recursive: true });
@@ -238,7 +378,7 @@ function once(kind, text, say) {
 }
 
 /** Whether npx was paused, in this session and project, less than OFFLINE_PAUSE ago. */
-function paused() {
+function paused(pause) {
   try {
     return Date.now() - fs.statSync(pause).mtimeMs < OFFLINE_PAUSE;
   } catch {
@@ -246,19 +386,21 @@ function paused() {
   }
 }
 
-/** Runs `check` on the file, through npx with `npm` flags, in what is left of TIMEOUT. */
-function check(npm) {
+/** Runs `check` on the job's files, through npx with `npm` flags, in what is left of TIMEOUT. */
+function check({ root, cli, files }, npm) {
   const [command, ...args] = cli.npx
     ? [...cli.argv, ...npm, '--yes', `${PACKAGE}@${VERSION}`]
     : cli.argv;
   // Relative to the folder it runs in, which the CLI sees by its real path: an absolute path
   // through a symlink (macOS's /tmp) would fall outside it, and outside every project in it.
-  const relative = path.relative(root, file);
-  const target = relative && !path.isAbsolute(relative) ? `.${path.sep}${relative}` : file;
+  const paths = files.map(({ file }) => {
+    const relative = path.relative(root, file);
+    return relative && !path.isAbsolute(relative) ? `.${path.sep}${relative}` : file;
+  });
   const spawn = (flags) =>
     spawnSync(
       command,
-      [...args, 'check', target, '--format', 'json', '--quiet-without-design-system', ...flags],
+      [...args, 'check', ...paths, '--format', 'json', '--quiet-without-design-system', ...flags],
       {
         cwd: root,
         encoding: 'utf8',
@@ -319,7 +461,7 @@ function unreachable(result) {
 }
 
 /** Why the CLI did not run, in a sentence, without anything that could hold a credential. */
-function failure(result) {
+function failure(cli, result) {
   if (result.error?.code === 'ENOENT') return 'npx was not found.';
   if (timedOut(result)) {
     // npm may have been waiting for the registry, or the CLI for itself: it cannot be told apart.
@@ -582,17 +724,19 @@ function installedCli(dir) {
 }
 
 /**
- * The 1-based lines an Edit changed, or undefined for the whole file (a Write). Lines it
- * repeats unchanged from old_string are not its own. `placed` is false when the hook cannot
- * tell where the edit is: its new text is in the file more than once, or no longer as written
- * (a formatter rewrote it); `lines` are then the lines it may be on, or undefined for any.
+ * The 1-based lines `edits` changed in `file`, or undefined for the whole file (a Write, or a
+ * file a patch adds). Each edit is the text it replaced and its new text: an Edit's old_string
+ * and new_string, or a patch hunk. Lines an edit repeats unchanged from the old text are not its
+ * own, and an edit that only removes lines, which changes none, is not looked for. `placed` is
+ * false when the hook cannot tell where an edit is: its new text is in the file more than once, or
+ * no longer as written (a formatter rewrote it); `lines` are then the lines it may be on, or
+ * undefined for any.
  */
-function editedLines(payload) {
-  if (payload.tool_name !== 'Edit') return undefined;
-  const { old_string: before, new_string: after } = payload.tool_input ?? {};
-  if (typeof after !== 'string') return undefined;
+function editedLines(file, edits, structuredPatch) {
+  if (!edits) return undefined;
   // Removing text adds no finding of its own.
-  if (!after.trim()) return { lines: new Set(), placed: true };
+  const adding = edits.filter((edit) => edit.after.trim());
+  if (!adding.length) return { lines: new Set(), placed: true };
   let text;
   try {
     text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
@@ -600,26 +744,33 @@ function editedLines(payload) {
     return { lines: undefined, placed: false };
   }
   // Claude Code's own diff of the edit, while the file still matches it.
-  const patched = patchLines(payload.tool_response?.structuredPatch, text.split('\n'));
+  const patched = patchLines(structuredPatch, text.split('\n'));
   if (patched) return { lines: patched, placed: true };
-  const replacement = after.replace(/\r\n/g, '\n');
-  const changed =
-    typeof before === 'string'
-      ? changedLines(before.replace(/\r\n/g, '\n').split('\n'), replacement.split('\n'))
-      : replacement.split('\n').map((_, i) => i);
   const lines = new Set();
-  let matches = 0;
-  // One pass over the file: lines are counted from the previous match, not from the top.
-  for (
-    let at = text.indexOf(replacement), line = 1, counted = 0;
-    at !== -1;
-    at = text.indexOf(replacement, at + 1)
-  ) {
-    for (; counted < at; counted++) if (text.charCodeAt(counted) === 10) line++;
-    matches++;
-    for (const offset of changed) lines.add(line + offset);
+  let placed = true;
+  for (const { before, after } of adding) {
+    const replacement = after.replace(/\r\n/g, '\n');
+    const changed =
+      typeof before === 'string'
+        ? changedLines(before.replace(/\r\n/g, '\n').split('\n'), replacement.split('\n'))
+        : replacement.split('\n').map((_, i) => i);
+    // A patch hunk that only deletes lines keeps its context, which may well be in the file twice.
+    if (!changed.length) continue;
+    let matches = 0;
+    // One pass over the file: lines are counted from the previous match, not from the top.
+    for (
+      let at = text.indexOf(replacement), line = 1, counted = 0;
+      at !== -1;
+      at = text.indexOf(replacement, at + 1)
+    ) {
+      for (; counted < at; counted++) if (text.charCodeAt(counted) === 10) line++;
+      matches++;
+      for (const offset of changed) lines.add(line + offset);
+    }
+    if (!matches) return { lines: undefined, placed: false };
+    if (matches > 1) placed = false;
   }
-  return matches ? { lines, placed: matches === 1 } : { lines: undefined, placed: false };
+  return { lines, placed };
 }
 
 /** The new-file lines a structuredPatch adds, if every line it shows is still in the file there. */

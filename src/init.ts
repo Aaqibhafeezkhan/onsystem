@@ -62,6 +62,9 @@ export const GUIDE_FILE = 'ONSYSTEM.md';
  * every app that depends on the package reads it, and writes ONSYSTEM.md, which tells those
  * apps' teams how to add the agent tools and the CI check. In an app that takes on such a
  * package's config, it writes no config of its own unless --force says to.
+ *
+ * In a terminal, it offers to add a short section on onsystem to the project's AGENTS.md or
+ * CLAUDE.md, for coding agents.
  */
 export async function init(
   configOptions: LoadConfigOptions,
@@ -301,7 +304,8 @@ export async function init(
       io.stdout(`No baseline written; \`${NAME} check . --update-baseline\` records one later.`);
     }
   }
-  const commit = [...written, ...(baselineWritten ? [BASELINE_FILE] : [])];
+  const instructed = await agentRules(root, ask, io);
+  const commit = [...written, ...(baselineWritten ? [BASELINE_FILE] : []), ...instructed];
   const files =
     commit.length > 1 ? `${commit.slice(0, -1).join(', ')} and ${commit.at(-1) ?? ''}` : commit[0];
   io.stdout(
@@ -315,6 +319,94 @@ export async function init(
 }
 
 const CONFIG_FILE = 'onsystem.config.json';
+
+/** The instruction files agents read, which `init` offers to add onsystem's section to. */
+const AGENT_FILES = ['AGENTS.md', 'CLAUDE.md'];
+const RULES_BEGIN = '<!-- BEGIN:onsystem-agent-rules -->';
+const RULES_END = '<!-- END:onsystem-agent-rules -->';
+/** onsystem's section of AGENTS.md or CLAUDE.md: the MCP tools, and the CLI for agents without them. */
+const AGENT_RULES = [
+  RULES_BEGIN,
+  '# Design system',
+  '',
+  `This project's UI is checked against its design system by ${NAME}.`,
+  '',
+  `- Before writing UI, look up its components, props, variants and tokens with the ${NAME} tools (\`list_components\`, \`get_component\`, \`get_tokens\`).`,
+  `- After changing a \`.tsx\` or \`.jsx\` file, run \`check_ui\` on it and fix every error. Without the ${NAME} tools, run \`npx -y ${NAME} check <file>\` instead.`,
+  RULES_END,
+].join('\n');
+
+/**
+ * Offers to add onsystem's section to the AGENTS.md and CLAUDE.md in the root, between markers a
+ * later run updates in place, so agents that read them check the UI they write, through the CLI
+ * when they have no MCP config. A CLAUDE.md that imports AGENTS.md (an `@AGENTS.md` line) is left
+ * alone: Claude Code reads the section there. Asked only in a terminal, never with --yes; nothing
+ * is asked when neither file exists or the section is current. Returns the files it wrote.
+ */
+async function agentRules(root: string, ask: InitIo['prompt'], io: InitIo): Promise<string[]> {
+  if (!ask) return [];
+  const found = AGENT_FILES.flatMap((name) => {
+    const file = path.join(root, name);
+    try {
+      return [{ name, file, text: fs.readFileSync(file, 'utf8') }];
+    } catch {
+      return [];
+    }
+  });
+  const imports = (text: string) => /^\s*@(?:\.\/)?AGENTS\.md\s*$/m.test(text);
+  const changes = found
+    .filter((f) => !(f.name === 'CLAUDE.md' && imports(f.text) && found.length > 1))
+    .map((f) => ({ ...f, next: withAgentRules(f.text) }))
+    .filter((f) => f.next !== f.text);
+  if (!changes.length) return [];
+  const names = andList(changes.map((f) => f.name));
+  const update = changes.every((f) => rulesSection(f.text) !== undefined);
+  const answer = (
+    await ask(
+      update
+        ? `Update the onsystem section in ${names}? [Y/n] `
+        : `Add a short onsystem section to ${names}, so coding agents check the UI they write? [Y/n] `,
+    )
+  )
+    .trim()
+    .toLowerCase();
+  if (answer !== '' && !answer.startsWith('y')) {
+    io.stdout(
+      `${names} ${changes.length === 1 ? 'was' : 'were'} left as ${changes.length === 1 ? 'it is' : 'they are'}.`,
+    );
+    return [];
+  }
+  for (const f of changes) fs.writeFileSync(f.file, f.next);
+  io.stdout(
+    update
+      ? `Updated the onsystem section in ${names}.`
+      : `Added an onsystem section to ${names}: it tells agents to run check_ui, or \`npx -y ${NAME} check <file>\` without the ${NAME} tools, on the UI files they change.`,
+  );
+  return changes.map((f) => f.name);
+}
+
+/** `text` with onsystem's section: replaced between its markers, or added at the end. */
+function withAgentRules(text: string): string {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const rules = AGENT_RULES.replaceAll('\n', eol);
+  const found = rulesSection(text);
+  if (found) return `${text.slice(0, found.start)}${rules}${text.slice(found.end)}`;
+  if (!text.trim()) return `${rules}${eol}`;
+  return `${text.endsWith('\n') ? text : `${text}${eol}`}${eol}${rules}${eol}`;
+}
+
+/**
+ * Where onsystem's section is in `text`, from its BEGIN marker to the end of its END marker: the
+ * first END with a BEGIN before it, and the BEGIN nearest that END. A BEGIN whose END was deleted
+ * is then not a section, so the text after it, which may be the user's, is never replaced.
+ */
+function rulesSection(text: string): { start: number; end: number } | undefined {
+  for (let end = text.indexOf(RULES_END); end !== -1; end = text.indexOf(RULES_END, end + 1)) {
+    const start = text.lastIndexOf(RULES_BEGIN, end);
+    if (start !== -1) return { start, end: end + RULES_END.length };
+  }
+  return undefined;
+}
 
 /** A package.json as read, with the indentation to write it back in. */
 interface Manifest {
