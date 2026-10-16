@@ -66,6 +66,19 @@ function walk(root: ts.Node, enter: (node: ts.Node) => boolean): void {
   }
 }
 const VARIANT_FUNCTIONS = /^(cva|tv)$/;
+/** How many names deep a class value is followed: `className={tone}` with `const tone = base`. */
+const MAX_FOLLOW = 4;
+
+/** The node around `node`, or undefined at the file. */
+function parentScope(node: ts.Node): ts.Node | undefined {
+  return ts.isSourceFile(node) ? undefined : node.parent;
+}
+
+/** Whether a declared name (`tone`, or one in `{ tone, size }`) binds `name`. */
+function binds(declared: ts.BindingName, name: string): boolean {
+  if (ts.isIdentifier(declared)) return declared.text === name;
+  return declared.elements.some((e) => !ts.isOmittedExpression(e) && binds(e.name, name));
+}
 
 export function analyze(sourceFile: ts.SourceFile): Analysis {
   const analysis: Analysis = {
@@ -117,10 +130,167 @@ export function analyze(sourceFile: ts.SourceFile): Analysis {
     }
   };
 
+  /**
+   * The `const` value or function a name refers to where it is used, declared in this file and
+   * in scope there: undefined for a parameter, an import, a `let` or anything else that can
+   * hold another value.
+   */
+  const declarationOf = (
+    use: ts.Identifier,
+  ): ts.Expression | ts.FunctionDeclaration | undefined => {
+    const name = use.text;
+    // Up to the file itself, the last scope.
+    for (let node: ts.Node | undefined = use.parent; node; node = parentScope(node)) {
+      if (ts.isFunctionLike(node) && node.parameters.some((p) => binds(p.name, name))) return;
+      if (ts.isCatchClause(node) && node.variableDeclaration) {
+        if (binds(node.variableDeclaration.name, name)) return;
+      }
+      if (
+        (ts.isForStatement(node) || ts.isForOfStatement(node) || ts.isForInStatement(node)) &&
+        node.initializer &&
+        ts.isVariableDeclarationList(node.initializer) &&
+        node.initializer.declarations.some((d) => binds(d.name, name))
+      ) {
+        return;
+      }
+      const statements =
+        ts.isBlock(node) ||
+        ts.isSourceFile(node) ||
+        ts.isModuleBlock(node) ||
+        ts.isCaseClause(node) ||
+        ts.isDefaultClause(node)
+          ? node.statements
+          : undefined;
+      for (const statement of statements ?? []) {
+        if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return statement;
+        if (
+          (ts.isClassDeclaration(statement) || ts.isEnumDeclaration(statement)) &&
+          statement.name?.text === name
+        ) {
+          return;
+        }
+        if (!ts.isVariableStatement(statement)) continue;
+        const list = statement.declarationList;
+        const declaration = list.declarations.find((d) => binds(d.name, name));
+        if (!declaration) continue;
+        const constant = (list.flags & ts.NodeFlags.Const) !== 0;
+        return constant && ts.isIdentifier(declaration.name) ? declaration.initializer : undefined;
+      }
+    }
+    return undefined;
+  };
+
+  /** A same-file `const` value: `"bg-green-50"`, a condition, an object map. */
+  const constValue = (use: ts.Identifier): ts.Expression | undefined => {
+    const declaration = declarationOf(use);
+    return declaration && !ts.isFunctionDeclaration(declaration) ? declaration : undefined;
+  };
+
+  /** The object literals a value can be: a `const` map, or a map in one (`styles.badge`). */
+  const objectsOf = (expr: ts.Expression, depth: number): ts.ObjectLiteralExpression[] => {
+    if (depth > MAX_FOLLOW) return [];
+    return valueBranches(expr).flatMap((leaf) => {
+      if (ts.isObjectLiteralExpression(leaf)) return [leaf];
+      if (ts.isIdentifier(leaf)) {
+        const value = constValue(leaf);
+        return value ? objectsOf(value, depth + 1) : [];
+      }
+      if (ts.isPropertyAccessExpression(leaf) || ts.isElementAccessExpression(leaf)) {
+        return entriesOf(leaf, depth).flatMap((value) => objectsOf(value, depth + 1));
+      }
+      return [];
+    });
+  };
+
+  /** What a key reads from a same-file map: `styles.badge`, or every value of `styles[status]`. */
+  const entriesOf = (
+    access: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+    depth: number,
+  ): ts.Expression[] => {
+    const key = ts.isPropertyAccessExpression(access)
+      ? access.name.text
+      : ts.isStringLiteralLike(access.argumentExpression) ||
+          ts.isNumericLiteral(access.argumentExpression)
+        ? access.argumentExpression.text
+        : undefined;
+    return objectsOf(access.expression, depth + 1).flatMap((object) =>
+      object.properties.flatMap((prop) =>
+        ts.isPropertyAssignment(prop) && (key === undefined || propertyName(prop.name) === key)
+          ? [prop.initializer]
+          : [],
+      ),
+    );
+  };
+
+  /** What a call to a function of this file returns: `toneOf(status)`. */
+  const returnsOf = (call: ts.CallExpression): ts.Expression[] => {
+    if (!ts.isIdentifier(call.expression)) return [];
+    const declaration = declarationOf(call.expression);
+    if (declaration && ts.isFunctionDeclaration(declaration))
+      return returnedExpressions(declaration);
+    const fn = declaration && asFunction(declaration);
+    return fn ? returnedExpressions(fn) : [];
+  };
+
+  // Each value is followed once, for the first place that uses it.
+  const followed = new Set<ts.Node>();
+  const follow = (value: ts.Expression, element: JsxNode | undefined, depth: number): void => {
+    if (followed.has(value)) return;
+    followed.add(value);
+    classValue(value, element, depth + 1);
+  };
+
+  /**
+   * The classes a class value holds where it is not written out: a `const` (`className={tone}`,
+   * `cn("p-4", extra)`), a key of a `const` map (`statusStyles[status]`), what a function of
+   * this file returns (`toneOf(status)`), and the parts of a template or a concatenation,
+   * through conditions. Strings written out in it are collected as well, once.
+   */
+  const classValue = (expr: ts.Expression, element: JsxNode | undefined, depth: number): void => {
+    if (depth > MAX_FOLLOW) return;
+    for (const leaf of valueBranches(expr)) {
+      if (ts.isStringLiteralLike(leaf) || ts.isObjectLiteralExpression(leaf)) {
+        // An object's keys are its classes, as clsx reads `{ "bg-red-500": isError }`.
+        collectStrings(leaf, element);
+      } else if (ts.isTemplateExpression(leaf)) {
+        collectStrings(leaf, element);
+        for (const span of leaf.templateSpans) classValue(span.expression, element, depth);
+      } else if (
+        ts.isBinaryExpression(leaf) &&
+        leaf.operatorToken.kind === ts.SyntaxKind.PlusToken
+      ) {
+        classValue(leaf.left, element, depth);
+        classValue(leaf.right, element, depth);
+      } else if (ts.isArrayLiteralExpression(leaf)) {
+        for (const item of leaf.elements) {
+          classValue(ts.isSpreadElement(item) ? item.expression : item, element, depth);
+        }
+      } else if (ts.isIdentifier(leaf)) {
+        const value = constValue(leaf);
+        if (value) follow(value, element, depth);
+      } else if (ts.isPropertyAccessExpression(leaf) || ts.isElementAccessExpression(leaf)) {
+        for (const value of entriesOf(leaf, depth)) follow(value, element, depth);
+      } else if (ts.isCallExpression(leaf)) {
+        const callee = leaf.expression.getText(sourceFile);
+        if (CLASS_FUNCTIONS.test(callee)) {
+          // Written in the class value, its arguments are the element's. One kept elsewhere
+          // (`const cls = cn(...)`) is read where it is called, as before; a cva()/tv() config
+          // always is.
+          if (depth === 0 && !VARIANT_FUNCTIONS.test(callee)) {
+            for (const arg of leaf.arguments) classValue(arg, element, depth);
+          }
+        } else {
+          for (const value of returnsOf(leaf)) follow(value, element, depth);
+        }
+      }
+    }
+  };
+
   /** A class value, or an object of them: tv slots, and variant options that style slots. */
   const collectClassValues = (node: ts.Expression): void => {
     if (!ts.isObjectLiteralExpression(node)) {
       collectStrings(node);
+      classValue(node, undefined, 0);
       return;
     }
     for (const prop of node.properties) {
@@ -212,7 +382,10 @@ export function analyze(sourceFile: ts.SourceFile): Analysis {
         const name = attribute.name.getText(sourceFile);
         const init = attribute.initializer;
         if (!init) continue;
-        if (name === 'className' || name === 'class') collectStrings(init, element);
+        if (name === 'className' || name === 'class') {
+          collectStrings(init, element);
+          if (ts.isJsxExpression(init) && init.expression) classValue(init.expression, element, 0);
+        }
         if (name === 'style' && ts.isJsxExpression(init) && init.expression) {
           for (const object of styleObjects(init.expression)) {
             analysis.styles.push({ element, object });
@@ -225,7 +398,10 @@ export function analyze(sourceFile: ts.SourceFile): Analysis {
       const variants = VARIANT_FUNCTIONS.test(node.expression.getText(sourceFile));
       node.arguments.forEach((arg) => {
         if (variants && ts.isObjectLiteralExpression(arg)) collectVariantConfig(arg);
-        else collectStrings(arg);
+        else {
+          collectStrings(arg);
+          classValue(arg, undefined, 0);
+        }
       });
     }
     return true;
@@ -336,7 +512,10 @@ export function valueBranches(expr: ts.Expression): ts.Expression[] {
  * not counting functions nested inside it. Render props (`{({ isPressed }) => <Icon />}`) and
  * style functions (`style={({ isPressed }) => ({ ... })}`) are read through this.
  */
-export function returnedExpressions(fn: ts.ArrowFunction | ts.FunctionExpression): ts.Expression[] {
+export function returnedExpressions(
+  fn: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
+): ts.Expression[] {
+  if (!fn.body) return [];
   if (!ts.isBlock(fn.body)) return [fn.body];
   const out: ts.Expression[] = [];
   const stack: ts.Node[] = [fn.body];

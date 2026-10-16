@@ -726,9 +726,19 @@ const blind = readCorpus('labels.json').filter((label) => label.sample === 'blin
 const draws = [...new Set(blind.map((label) => label.draw))];
 assert.equal(draws.length, 1, 'corpus/labels.json should have one blind draw');
 const [draw] = draws;
+// A change since the draw that adds or takes out findings marks the sample stale
+// (corpus/sample-stale.json). Until a fresh draw replaces it, the site quotes the sample with the
+// corpus it was drawn from, as the README does (test/readme.test.ts): the marker's repositories
+// and runs, and the draw's own allocation.json for the findings, per rule. The launch waits.
+const staleFile = path.join(corpusDir, 'sample-stale.json');
+const stale = fs.existsSync(staleFile) ? readCorpus('sample-stale.json') : undefined;
+assert.ok(
+  !stale || stale.draw === draw,
+  `corpus/sample-stale.json names ${stale?.draw}, but the blind sample is ${draw}`,
+);
 // Every label it was drawn with, still reported: once a fix takes one out, it under-counts.
 assert.ok(
-  blind.every((label) => corpusSnapshot.labels[labelKey(label)] === true),
+  stale || blind.every((label) => corpusSnapshot.labels[labelKey(label)] === true),
   `a finding of the blind sample ${draw} is no longer reported: draw a fresh sample`,
 );
 const corpusRepos = readCorpus('repos.json').repos;
@@ -748,11 +758,23 @@ const rechecks = new Set(
 );
 // Distinct findings per rule: the strata the blind sample is drawn from.
 const findingsByRule = new Map();
-// A run from a monorepo root counts only the findings it adds to the runs from its projects.
-for (const [run, { rules, added }] of Object.entries(corpusSnapshot.runs)) {
-  if (rechecks.has(run)) continue;
-  for (const [rule, counts] of Object.entries(added ?? rules)) {
-    findingsByRule.set(rule, (findingsByRule.get(rule) ?? 0) + counts.errors + counts.warnings);
+if (stale) {
+  const drawnFrom = JSON.parse(
+    fs.readFileSync(path.join(corpusDir, draw, 'allocation.json'), 'utf8'),
+  );
+  for (const { rule, population } of drawnFrom.allocation) findingsByRule.set(rule, population);
+  assert.equal(
+    [...findingsByRule.values()].reduce((a, b) => a + b, 0),
+    drawnFrom.populationTotal,
+    `corpus/${draw}/allocation.json: its strata should add up to its population`,
+  );
+} else {
+  // A run from a monorepo root counts only the findings it adds to the runs from its projects.
+  for (const [run, { rules, added }] of Object.entries(corpusSnapshot.runs)) {
+    if (rechecks.has(run)) continue;
+    for (const [rule, counts] of Object.entries(added ?? rules)) {
+      findingsByRule.set(rule, (findingsByRule.get(rule) ?? 0) + counts.errors + counts.warnings);
+    }
   }
 }
 const corpusFindings = [...findingsByRule.values()].reduce((a, b) => a + b, 0);
@@ -813,9 +835,12 @@ assert.ok(
 const midday = corpusSnapshot.runs['midday-dashboard'];
 assert.ok(midday?.flagged !== undefined, 'the corpus snapshot should have midday-dashboard');
 write('corpus.json', {
-  repos: corpusRepos.length,
-  runs: Object.keys(corpusSnapshot.runs).length,
-  /** Distinct findings: a root run counts what it adds, a run with a config not at all. */
+  repos: stale ? stale.asDrawn.repos : corpusRepos.length,
+  runs: stale ? stale.asDrawn.runs : Object.keys(corpusSnapshot.runs).length,
+  /**
+   * Distinct findings: a root run counts what it adds, a run with a config not at all. While the
+   * sample is stale, those it was drawn from.
+   */
   findings: corpusFindings,
   /** The blind sample. Percentages to one decimal; intervals are 95% Wilson. */
   sample: {

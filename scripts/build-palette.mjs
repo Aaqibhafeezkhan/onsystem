@@ -14,6 +14,11 @@ const palette = {};
 for (const [, name, shade, value] of css.matchAll(/--color-([a-z]+)-(\d+):\s*([^;]+);/g)) {
   (palette[name] ??= {})[shade] = value.trim();
 }
+// `--color-white` and `--color-black` have no shade: `bg-white`, `text-black`.
+const keywords = {};
+for (const [, name, value] of css.matchAll(/--color-(white|black):\s*([^;]+);/g)) {
+  keywords[name] = value.trim();
+}
 
 const body = Object.entries(palette)
   .map(([name, shades]) => {
@@ -31,9 +36,16 @@ export const TAILWIND_PALETTE: Record<string, Record<string, string>> = {
 ${body}
 };
 
+/** Tailwind's colors without shades: \`white\` and \`black\`. */
+export const TAILWIND_KEYWORD_COLORS: Record<string, string> = {
+${Object.entries(keywords)
+  .map(([name, value]) => `  ${name}: '${value}',`)
+  .join('\n')}
+};
+
 export const TAILWIND_VERSION = '${version}';
 `;
 fs.writeFileSync(path.join(root, 'src/lint/tailwind-palette.ts'), out);
 console.log(
-  `wrote src/lint/tailwind-palette.ts (${Object.keys(palette).length} colors, tailwindcss@${version})`,
+  `wrote src/lint/tailwind-palette.ts (${Object.keys(palette).length} colors, ${Object.keys(keywords).join(' and ')}, tailwindcss@${version})`,
 );

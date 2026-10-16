@@ -150,11 +150,61 @@ describe('the README', () => {
   };
 
   /**
+   * A blind sample goes stale once the findings it was drawn from change: a fix takes some out,
+   * or a rule reports findings the draw never saw. The change that does so adds
+   * corpus/sample-stale.json, naming the draw and what the README quoted of the corpus then. Until
+   * a fresh draw replaces the sample and removes the file, the README quotes the sample with the
+   * corpus as it was drawn from, and the launch waits for that draw.
+   */
+  interface Stale {
+    draw: string;
+    why: string;
+    asDrawn: { repos: number; runs: number; unknown: number; unknownInFlowise: number };
+  }
+  const STALE = 'corpus/sample-stale.json';
+  const stale = (): Stale | undefined =>
+    fs.existsSync(path.join(root, STALE)) ? (JSON.parse(read(STALE)) as Stale) : undefined;
+  /** The population a draw was taken from, per rule, as its allocation.json has it. */
+  const drawnFrom = (draw: string) => {
+    const { populationTotal, allocation } = JSON.parse(read(`corpus/${draw}/allocation.json`)) as {
+      populationTotal: number;
+      allocation: { rule: string; population: number }[];
+    };
+    return {
+      distinct: populationTotal,
+      byRule: new Map(allocation.map((a) => [a.rule, a.population])),
+    };
+  };
+
+  /** The corpus the README quotes: as it is, or as the sample was drawn from while it is stale. */
+  const quoted = () => {
+    const live = corpus();
+    const marker = stale();
+    if (!marker) {
+      return {
+        ...live,
+        repoCount: live.repos.repos.length,
+        runs: Object.keys(live.snapshot.runs).length,
+        stale: marker,
+      };
+    }
+    return {
+      ...live,
+      ...drawnFrom(marker.draw),
+      repoCount: marker.asDrawn.repos,
+      runs: marker.asDrawn.runs,
+      unknown: marker.asDrawn.unknown,
+      unknownInFlowise: marker.asDrawn.unknownInFlowise,
+      stale: marker,
+    };
+  };
+
+  /**
    * The blind sample: a seeded random draw from every distinct finding, stratified by rule, with
    * labels from a reviewer who saw no other label. Its folder in corpus/ is named by `draw`.
    */
   const blindSample = () => {
-    const { labels, snapshot, distinct, byRule } = corpus();
+    const { labels, snapshot, distinct, byRule, stale } = quoted();
     const blind = labels.filter((l) => l.sample === 'blind');
     const draws = [...new Set(blind.map((l) => l.draw))];
     expect(draws, 'one blind draw at a time').toHaveLength(1);
@@ -192,6 +242,7 @@ describe('the README', () => {
       weighted,
       top,
       strict,
+      stale,
     };
   };
   /** A 95% Wilson score interval, as corpus/<draw>/scripts/stats.py computes it. */
@@ -213,12 +264,12 @@ describe('the README', () => {
   const paragraph = /\*\*How often it is wrong\.\*\*.*/.exec(readme)?.[0] ?? '';
 
   it('quotes the corpus size, and what the sample says about the rules for invented API', () => {
-    const { snapshot, repos, distinct, unknown, unknownInFlowise } = corpus();
+    const { repos, repoCount, runs, distinct, unknown, unknownInFlowise } = quoted();
     const { blind } = blindSample();
     const text = paragraph.replace(/\s+/g, ' ');
-    expect(text).toContain(`on ${String(repos.repos.length)} public repositories pinned by commit`);
+    expect(text).toContain(`on ${String(repoCount)} public repositories pinned by commit`);
     expect(text).toContain(
-      `${String(Object.keys(snapshot.runs).length)} runs, ${distinct.toLocaleString('en-US')} distinct findings), without their dependencies installed (the two MUI apps get MUI).`,
+      `${String(runs)} runs, ${distinct.toLocaleString('en-US')} distinct findings), without their dependencies installed (the two MUI apps get MUI).`,
     );
     // Only the repositories with an `install` get dependencies: the two MUI apps, and MUI.
     const installs = repos.repos.filter((r) => r.install);
@@ -258,13 +309,21 @@ describe('the README', () => {
   });
 
   it("quotes the blind sample's false-positive rate with its interval, while the sample is intact", () => {
-    const { draw, lost, coverage, n, tp, d, fp, weighted, top, strict } = blindSample();
+    const { draw, lost, coverage, n, tp, d, fp, weighted, top, strict, stale } = blindSample();
     // As CONTRIBUTING.md says: a rate needs labels where at least 80% of the distinct findings
     // are, and every label the sample was drawn with still reported. Once a fix takes some out,
     // what is left under-counts them: draw a fresh sample, or take the rate out of the README.
+    // A sample marked stale is quoted as it was measured, with the corpus it was drawn from.
     const state = `the blind sample ${draw} has labels in rules holding ${pct(coverage)} of the distinct findings, and ${String(lost.length)} of its ${String(n)} labels are no longer reported`;
-    console.info(`corpus labels: ${state}`);
-    expect(coverage >= 0.8 && lost.length === 0, `no rate to quote: ${state}`).toBe(true);
+    console.info(
+      stale
+        ? `corpus labels: ${state}; it is stale (${STALE}): draw a fresh sample before launch`
+        : `corpus labels: ${state}`,
+    );
+    expect(
+      coverage >= 0.8 && (lost.length === 0 || stale?.draw === draw),
+      `no rate to quote: ${state}`,
+    ).toBe(true);
 
     const text = paragraph.replace(/\s+/g, ' ');
     const [low, high] = wilson(fp, n);
@@ -289,6 +348,35 @@ describe('the README', () => {
     expect(paragraph.match(/\d+(?:\.\d+)?%(?! Wilson)/g)).toEqual(
       [fp / n, high, weighted, strict / n, strictHigh].map(pct),
     );
+  });
+
+  it('marks the blind sample stale only while the corpus differs from what it was drawn from', () => {
+    const marker = stale();
+    if (!marker) return;
+    const live = corpus();
+    const { draw, lost } = blindSample();
+    expect(marker.draw).toBe(draw);
+    expect(marker.why).toMatch(/\S/);
+    // What the marker keeps is what the draw's own files say: its population and its corpus.
+    const drawn = drawnFrom(draw);
+    const unknownDrawn = [...drawn.byRule]
+      .filter(([rule]) => /^no-unknown-(component|prop|variant)$/.test(rule))
+      .reduce((sum, [, population]) => sum + population, 0);
+    expect(marker.asDrawn.unknown).toBe(unknownDrawn);
+    expect(read(`corpus/${draw}/README.md`)).toContain(
+      `${drawn.distinct.toLocaleString('en-US')} distinct findings that the corpus job reported on onsystem`,
+    );
+    expect(read(`corpus/${draw}/README.md`)).toContain(
+      `(${String(marker.asDrawn.repos)} repositories pinned by commit, ${String(marker.asDrawn.runs)} runs)`,
+    );
+    // Stale: the findings changed since the draw. Once they are as drawn again, the file goes.
+    const changed =
+      lost.length > 0 ||
+      live.distinct !== drawn.distinct ||
+      [...new Set([...live.byRule.keys(), ...drawn.byRule.keys()])].some(
+        (rule) => (live.byRule.get(rule) ?? 0) !== (drawn.byRule.get(rule) ?? 0),
+      );
+    expect(changed, `the corpus is as ${draw} was drawn from: remove ${STALE}`).toBe(true);
   });
 
   it('says who made the corpus labels, and never that they were made by hand', () => {
