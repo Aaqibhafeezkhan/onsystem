@@ -1,6 +1,6 @@
 # shadcn-demo
 
-A small shadcn/ui-style design system used to exercise `onsystem`:
+A small shadcn/ui-style design system to try `onsystem` on:
 
 | Path                           | What it is                                                                                                                      |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -11,7 +11,38 @@ A small shadcn/ui-style design system used to exercise `onsystem`:
 | `app/settings/danger-zone.tsx` | UI written without it. `check` reports one problem per rule.                                                                    |
 | `onsystem.config.json`         | The config that ties it together                                                                                                |
 
-From the repository root:
+## Try it
+
+Copy the folder, install it and run onsystem, with Node.js 20.19 or later:
+
+```sh
+npx degit dgesteves/onsystem/examples/shadcn-demo onsystem-demo
+cd onsystem-demo
+npm install
+npm run inspect   # what onsystem read: components, variants and tokens
+npm run check     # check the pages (exits 1: danger-zone.tsx has errors)
+```
+
+The scripts run the latest onsystem release with npx. Install first: onsystem reads props from the components' types, and `Dialog`'s come from Radix.
+
+To have an agent write UI against it, open the folder in Claude Code and install the plugin, which brings the MCP server and checks each UI file Claude writes:
+
+```text
+/plugin marketplace add dgesteves/onsystem
+/plugin install onsystem@dgesteves
+```
+
+Or, without the plugin, add only the MCP server, from this folder:
+
+```sh
+claude mcp add onsystem -- npx -y onsystem
+```
+
+Then ask for some UI, such as _"Add a billing card to the settings page."_ [Set up your agent](https://onsystem.vercel.app/docs/clients) has the config for other clients.
+
+## Working on onsystem
+
+From the repository root, to run this checkout's build on the demo:
 
 ```sh
 pnpm install && pnpm build
@@ -19,7 +50,7 @@ pnpm demo:inspect   # what the server extracted
 pnpm demo:check     # lint app/**/*.tsx (exits 1: danger-zone.tsx has errors)
 ```
 
-To use it from an agent, point the server at this folder:
+To point an agent at this checkout's build:
 
 ```sh
 claude mcp add onsystem -- node /absolute/path/to/dist/cli.js --root /absolute/path/to/examples/shadcn-demo

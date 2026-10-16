@@ -5,6 +5,8 @@
   "type": "module",
   "description": "A small shadcn/ui-style design system (cva + Tailwind v4 tokens) used to demo onsystem.",
   "scripts": {
+    "inspect": "npx -y onsystem inspect",
+    "check": "npx -y onsystem check .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
