@@ -14,6 +14,19 @@
       "runs": [{ "name": "chatbot", "cwd": ".", "check": ["app", "components"] }]
     },
     {
+      "name": "voltagent",
+      "url": "https://github.com/VoltAgent/voltagent",
+      "sha": "72a46c76b4507e1f98b41d5050a92bd30587eb70",
+      "paths": ["examples/next-js-chatbot-starter-template"],
+      "runs": [
+        {
+          "name": "voltagent-chatbot",
+          "cwd": "examples/next-js-chatbot-starter-template",
+          "check": ["."]
+        }
+      ]
+    },
+    {
       "name": "shadcn-ui",
       "url": "https://github.com/shadcn-ui/ui",
       "sha": "0132174664c07d41262fb51012d0cc782e458e6c",

@@ -1,6 +1,6 @@
 {
   "$comment": "Written by `node scripts/corpus.mjs --update`. Counts per run and rule; `labels` records which labelled findings were reported.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "runs": {
     "saas-starter": {
       "inspect": {
@@ -67,6 +67,35 @@
           "errors": 19,
           "warnings": 0,
           "fixes": 19
+        }
+      }
+    },
+    "voltagent-chatbot": {
+      "inspect": {
+        "detected": "components.json (ui: @/components/ui → components/ui); from shadcn registries, read-only: components/ai-elements (@ai-elements, 31 files)",
+        "files": "49 component files, 1 token file, 0 docs",
+        "components": 53,
+        "parts": 208,
+        "tokens": {
+          "color": 36,
+          "typography": 2,
+          "radius": 8,
+          "spacing": 1
+        },
+        "warnings": 0
+      },
+      "files": 3,
+      "flagged": 1,
+      "rules": {
+        "icon-button-accessible-name": {
+          "errors": 1,
+          "warnings": 0,
+          "fixes": 0
+        },
+        "no-hardcoded-color": {
+          "errors": 0,
+          "warnings": 3,
+          "fixes": 0
         }
       }
     },
