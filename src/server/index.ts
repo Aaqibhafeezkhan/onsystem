@@ -5,6 +5,7 @@ import { McpServer, ResourceTemplate, type CallToolResult } from '@modelcontextp
 import * as z from 'zod';
 
 import type { Catalog, CatalogEntry, ProjectSet, ServedProject } from '../catalog.js';
+import { excludedBy } from '../config.js';
 import type { DesignSystem } from '../design-system.js';
 import { uncheckedNotice } from '../lint/index.js';
 import { notReadNotices } from '../not-read.js';
@@ -591,7 +592,9 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
         skipped: z
           .string()
           .optional()
-          .describe('Why the file was not checked: it renders an image (next/og) or an email.'),
+          .describe(
+            "Why the file was not checked: it renders an image (next/og) or an email, or the config's `exclude` leaves it out.",
+          ),
         unchecked: z
           .object({ names: z.array(z.string()), modules: z.array(z.string()) })
           .optional()
@@ -657,7 +660,21 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
         file = relativePath(ds.root, absolute);
         shown = relativePath(base, absolute);
       }
-      const checked = ds.check(source, file);
+      // A file the config's `exclude` covers is left out, as `check .`, the ESLint plugin and the
+      // hook leave it out. Code without a filename is checked.
+      const excluded =
+        (filename !== undefined || code === undefined) && !path.isAbsolute(file)
+          ? excludedBy(ds.config, file)
+          : undefined;
+      const checked = excluded
+        ? {
+            file,
+            diagnostics: [],
+            errorCount: 0,
+            warningCount: 0,
+            skipped: `It is left out by "${excluded}" in the config's exclude, as in check, the ESLint plugin and the Claude Code hook.`,
+          }
+        : ds.check(source, file);
       const result = file === shown ? checked : { ...checked, file: shown };
       const capped = capDiagnostics(result, limit);
       // A clean result without components or color tokens, with components the model leaves

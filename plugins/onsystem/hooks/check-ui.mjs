@@ -8,10 +8,12 @@
 //   When the hook cannot tell which lines an Edit changed, the findings it
 //   may have caused go back as a non-blocking note instead.
 // - Warnings only: exit 0 with `additionalContext`, a non-blocking note.
-// - Clean file, other files, or a project without design-system components
-//   (tokens alone are not one) and without a config: exit 0 silently. A project
-//   in a monorepo whose root has a config takes that config on, so it is checked
-//   (by the accessibility rule, for one), as `check .` at the root checks it.
+// - Clean file, other files, a file `check .` leaves out (what the config's
+//   `exclude` covers, tests and stories by default: `check --skip-excluded`), or a
+//   project without design-system components (tokens alone are not one) and
+//   without a config: exit 0 silently. A project in a monorepo whose root has a
+//   config takes that config on, so it is checked (by the accessibility rule, for
+//   one), as `check .` at the root checks it.
 // - The CLI cannot run (npx fails, a min-release-age policy, offline, a private
 //   registry, a broken config): exit 0 with a one-time notice, once per session
 //   and project, on stderr and as a `systemMessage` the user sees. It never
@@ -253,18 +255,27 @@ function check(npm) {
   // through a symlink (macOS's /tmp) would fall outside it, and outside every project in it.
   const relative = path.relative(root, file);
   const target = relative && !path.isAbsolute(relative) ? `.${path.sep}${relative}` : file;
-  return spawnSync(
-    command,
-    [...args, 'check', target, '--format', 'json', '--quiet-without-design-system'],
-    {
-      cwd: root,
-      encoding: 'utf8',
-      env: { ...process.env, NO_COLOR: '1' },
-      maxBuffer: 64 * 1024 * 1024,
-      timeout: Math.max(deadline - Date.now(), 1),
-      windowsHide: true,
-    },
-  );
+  const spawn = (flags) =>
+    spawnSync(
+      command,
+      [...args, 'check', target, '--format', 'json', '--quiet-without-design-system', ...flags],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...process.env, NO_COLOR: '1' },
+        maxBuffer: 64 * 1024 * 1024,
+        timeout: Math.max(deadline - Date.now(), 1),
+        windowsHide: true,
+      },
+    );
+  // --skip-excluded leaves the file alone when the config's `exclude` covers it, as `check .`
+  // and the ESLint plugin do. An older CLI, such as a project's own install, does not know the
+  // flag: it runs again without it, and checks the file as it always has.
+  const result = spawn(['--skip-excluded']);
+  if (result.status === 2 && /Unknown option '--skip-excluded'/.test(result.stderr ?? '')) {
+    return spawn([]);
+  }
+  return result;
 }
 
 /** The JSON a run printed, when it exited with 0 (clean or warnings) or 1 (errors). */

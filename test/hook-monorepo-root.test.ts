@@ -196,6 +196,7 @@ describe('check-ui hook at a monorepo root with a config or a baseline', () => {
         '--format',
         'json',
         '--quiet-without-design-system',
+        '--skip-excluded',
       ],
     });
   });

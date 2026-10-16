@@ -228,8 +228,9 @@ describe('code from shadcn registries (docs/configuration.md)', () => {
     expect(all.reported).toEqual(['app/page.stories.tsx', MESSAGE]);
     const named = await check(root, DIFF_REVIEW);
     expect([named.code, named.reported]).toEqual([1, [DIFF_REVIEW]]);
+    // check_ui leaves it out, as `check .` and the hook do.
     expect(await tool(root, 'check_ui', { path: DIFF_REVIEW })).toMatch(
-      new RegExp(`^${DIFF_REVIEW}: 1 error`),
+      new RegExp(`^${DIFF_REVIEW}: not checked\\.`),
     );
   });
 

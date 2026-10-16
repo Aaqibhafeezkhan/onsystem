@@ -7,10 +7,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parentPort, type MessagePort } from 'node:worker_threads';
 
-import { DEFAULT_TEST_EXCLUDE, DEFAULT_TEST_FOLDERS, type ResolvedConfig } from '../config.js';
+import { excludedBy, type ResolvedConfig } from '../config.js';
 import { buildModel, componentFiles } from '../design-system.js';
 import type { DesignSystemModel } from '../types.js';
-import { matchesGlob, relativePath } from '../util/paths.js';
+import { relativePath } from '../util/paths.js';
 import { loadTarget } from '../workspace.js';
 
 type Target = Awaited<ReturnType<typeof loadTarget>>;
@@ -54,8 +54,6 @@ const warned = new Set<string>();
 const FRESH_MS = 2000;
 
 const targets = new Map<string, { at: number; target: Promise<Target> }>();
-/** The default test and story patterns: the recommended config ignores those files itself. */
-const TEST_PATTERNS = new Set([DEFAULT_TEST_EXCLUDE, DEFAULT_TEST_FOLDERS]);
 const projects = new Map<
   string,
   {
@@ -109,13 +107,12 @@ export async function load(request: LoadRequest): Promise<LoadResponse> {
     projects.set(config.root, project);
   }
 
-  // What `check .` leaves out of a folder: the config's `exclude` and the design system's own
-  // component files. Tests and stories are left to the ESLint config (the recommended one
-  // ignores them), as `--include-tests` lifts them for `check`.
+  // What `check .` leaves out of a folder: the config's `exclude`, by the same test, and the
+  // design system's own component files. The default test and story patterns are left to the
+  // ESLint config (the recommended one ignores those files), as `--include-tests` lifts them
+  // for `check`.
   const relative = relativePath(config.root, request.file);
-  const excluded = config.exclude.find(
-    (pattern) => !TEST_PATTERNS.has(pattern) && matchesGlob(relative, pattern),
-  );
+  const excluded = excludedBy(config, relative, { includeTests: true });
   if (excluded) return { skip: `excluded by "${excluded}"` };
   if (!config.includeDesignSystem && project.own.has(realPath(request.file))) {
     return { skip: 'one of the design system’s own component files' };

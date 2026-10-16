@@ -22,8 +22,7 @@ import {
 } from './baseline.js';
 import {
   ConfigError,
-  DEFAULT_TEST_EXCLUDE,
-  DEFAULT_TEST_FOLDERS,
+  excludedBy,
   RULE_IDS,
   rulesFor,
   type LoadConfigOptions,
@@ -40,7 +39,7 @@ import { serveStdio } from './server/stdio.js';
 import { toDesignMd, toDtcg } from './tokens/export.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
 import { stderrLogger, silentLogger } from './util/log.js';
-import { isInside, matchesGlob, relativePath, toPosix } from './util/paths.js';
+import { isInside, relativePath, toPosix } from './util/paths.js';
 import { plural, unique } from './util/strings.js';
 import { NAME, VERSION } from './version.js';
 import { loadTarget, type Project, type Workspace } from './workspace.js';
@@ -95,6 +94,9 @@ Options
                           files, which are skipped by default
   --include-tests         check: also lint tests and stories (*.test.tsx,
                           *.spec.tsx, *.stories.tsx) in folders and globs
+  --skip-excluded         check: leave out files named outright that the config's
+                          exclude covers, as folders and globs leave them out
+                          (the Claude Code hook passes it)
   --quiet-without-design-system
                           check: print nothing and exit 0 when the project has no
                           design-system components and no config (tokens alone
@@ -180,6 +182,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         'quiet-without-design-system': { type: 'boolean', default: false },
         'include-design-system': { type: 'boolean' },
         'include-tests': { type: 'boolean', default: false },
+        'skip-excluded': { type: 'boolean', default: false },
         'require-design-system': { type: 'boolean', default: false },
         explain: { type: 'boolean', default: false },
         yes: { type: 'boolean', short: 'y', default: false },
@@ -291,6 +294,7 @@ interface CheckValues {
   'quiet-without-design-system': boolean;
   'require-design-system': boolean;
   'include-tests': boolean;
+  'skip-excluded': boolean;
 }
 
 /** The files a run checks, and what to say about the rest. */
@@ -601,30 +605,32 @@ async function selectInProject(
   io: Io,
 ): Promise<Selection | number> {
   const ds = await loadDesignSystem(config, { cache: values.cache, logger: silentLogger });
-  // A file named outright is always checked; folders and globs leave out what the
-  // config excludes (tests and stories by default) and what git ignores.
+  // Folders and globs leave out what the config excludes (tests and stories by default) and
+  // what git ignores. A file named outright is checked, unless --skip-excluded.
   const { named, globs } = expandPatterns(patterns, io.cwd);
   const options = { cwd: io.cwd, absolute: true, expandDirectories: false };
   const all = globs.length
     ? await findFiles(globs, { ...options, ignore: ['**/node_modules/**'] })
     : [];
-  const excludes = config.exclude
-    .filter((e) => !(values['include-tests'] && isTestPattern(e)))
-    .map((e) => excludeFromCwd(e, config.root, io.cwd))
-    .filter((e): e is string => e !== undefined);
-  const kept = globs.length
-    ? await findFiles(globs, { ...options, ignore: unique(['**/node_modules/**', ...excludes]) })
-    : [];
+  const excluded = (file: string) =>
+    excludedBy(config, relativePath(config.root, file), {
+      includeTests: values['include-tests'],
+    }) !== undefined;
+  const skip = values['skip-excluded'];
+  const leftOut = unique([...(skip ? named : []), ...all]).filter(excluded);
+  const leftOutSet = new Set(leftOut);
+  const kept = all.filter((file) => !leftOutSet.has(file));
   const ignored = gitIgnored(io.cwd, kept);
-  const keptSet = new Set(kept);
-  const leftOut = all.filter((file) => !keptSet.has(file));
   const left = {
     tests: leftOut.filter((file) => TEST_FILE.test(file)).length,
     excluded: leftOut.filter((file) => !TEST_FILE.test(file)).length,
     gitignored: ignored.size,
   };
-  let files = oncePerFile([...named, ...kept.filter((file) => !ignored.has(file))]).sort();
-  if (!files.length && !all.length) {
+  let files = oncePerFile([
+    ...(skip ? named.filter((file) => !leftOutSet.has(file)) : named),
+    ...kept.filter((file) => !ignored.has(file)),
+  ]).sort();
+  if (!files.length && !all.length && !leftOut.length) {
     io.stderr(`check: no files match ${patterns.join(' ')}`);
     return 2;
   }
@@ -708,14 +714,15 @@ async function selectInWorkspace(
     return ds;
   };
 
-  // Each project's `exclude` applies to its own files, relative to its folder.
-  const leftOut = all.filter((file) => {
+  // Each project's `exclude` applies to its own files, relative to its folder, as `check` there
+  // applies it.
+  const excluded = (file: string) => {
     const { root, config } = project(file);
     const relative = relativePath(root, file);
-    return config.exclude.some(
-      (e) => !(values['include-tests'] && isTestPattern(e)) && matchesGlob(relative, e),
-    );
-  });
+    return excludedBy(config, relative, { includeTests: values['include-tests'] }) !== undefined;
+  };
+  const skip = values['skip-excluded'];
+  const leftOut = unique([...(skip ? named : []), ...all]).filter(excluded);
   const leftOutSet = new Set(leftOut);
   const kept = all.filter((file) => !leftOutSet.has(file));
   const ignored = gitIgnored(io.cwd, kept);
@@ -724,8 +731,11 @@ async function selectInWorkspace(
     excluded: leftOut.filter((file) => !TEST_FILE.test(file)).length,
     gitignored: ignored.size,
   };
-  let files = oncePerFile([...named, ...kept.filter((file) => !ignored.has(file))]).sort();
-  if (!files.length && !all.length) {
+  let files = oncePerFile([
+    ...(skip ? named.filter((file) => !leftOutSet.has(file)) : named),
+    ...kept.filter((file) => !ignored.has(file)),
+  ]).sort();
+  if (!files.length && !all.length && !leftOut.length) {
     io.stderr(`check: no files match ${patterns.join(' ')}`);
     return 2;
   }
@@ -1125,11 +1135,6 @@ function defaultBaseline(root: string, warn: ((text: string) => void) | undefine
 /** Tests and stories, which `check` leaves out of folders and globs unless asked. */
 const TEST_FILE = /\.(?:test|spec|stories)\.[cm]?[jt]sx?$|[\\/]__(?:tests|stories|mocks)__[\\/]/;
 
-/** The default patterns `--include-tests` lifts. */
-function isTestPattern(pattern: string): boolean {
-  return pattern === DEFAULT_TEST_EXCLUDE || pattern === DEFAULT_TEST_FOLDERS;
-}
-
 /** What a run left out, for the summary line: `5 design-system files skipped`. */
 function scopeNotes(
   skipped: number,
@@ -1143,19 +1148,6 @@ function scopeNotes(
     left.excluded ? `${plural(left.excluded, 'excluded file')} left out` : '',
     left.gitignored ? `${plural(left.gitignored, 'file')} git ignores left out` : '',
   ].filter(Boolean);
-}
-
-/**
- * A config `exclude` pattern, relative to the root, as a pattern relative to the
- * working directory the globs run from; undefined when it only covers files
- * outside that directory. `**\/` patterns hold anywhere.
- */
-function excludeFromCwd(pattern: string, root: string, cwd: string): string | undefined {
-  if (pattern.startsWith('**/')) return pattern;
-  const fromRoot = toPosix(path.relative(root, cwd));
-  if (!fromRoot) return pattern;
-  if (fromRoot.startsWith('..')) return toPosix(path.join(path.relative(cwd, root), pattern));
-  return pattern.startsWith(`${fromRoot}/`) ? pattern.slice(fromRoot.length + 1) : undefined;
 }
 
 /**
@@ -1219,6 +1211,7 @@ function checkCommand(
     args.push(`--${configOptions.includeDesignSystem ? '' : 'no-'}include-design-system`);
   }
   if (values['include-tests']) args.push('--include-tests');
+  if (values['skip-excluded']) args.push('--skip-excluded');
   return `check ${args.map(shellQuote).join(' ')} ${flag}`;
 }
 
