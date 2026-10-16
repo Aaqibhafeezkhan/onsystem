@@ -510,10 +510,11 @@ const REGISTRY_DOCS = 'https://onsystem.vercel.app/docs/configuration#code-from-
  * (`components/signoff-ui`). When `found` says "components" holds what zero config found, and
  * no `importPath` names a package for them, each such folder joins it: `check` and the hook skip
  * that code, as they skip components/ui, and the app's code is checked against its components.
- * A folder that does not exist yet joins it too, since a registry is often named in
- * components.json before its first `shadcn add`. Otherwise the notes name the folders `check`
- * reads as the app's own code. Folders the components already take in are left alone. Returns
- * what to tell the user.
+ * A folder with no .tsx or .jsx file yet joins it too, and so does one that does not exist yet:
+ * a registry is often named in components.json before its first `shadcn add`, and an item of
+ * only .ts files (signoff-ui's ag-ui) makes the folder before a component comes. Otherwise the
+ * notes name the folders `check` reads as the app's own code, and what to add to set them apart.
+ * Folders the components already take in are left alone. Returns what to tell the user.
  */
 async function registryCode(
   config: ResolvedConfig,
@@ -525,54 +526,48 @@ async function registryCode(
   if (!folders.length) return [];
   const globs = Array.isArray(file.components) ? (file.components as string[]) : config.components;
   const taken = new Set(await componentFiles({ ...config, components: globs }));
-  // copied: holds .tsx or .jsx files the components don't take. missing: not there yet.
-  // empty: there, with no .tsx or .jsx file, so the registry's components went elsewhere.
-  const byKind: Record<'copied' | 'missing' | 'empty', RegistryFolder[]> = {
-    copied: [],
-    missing: [],
-    empty: [],
-  };
+  // copied: holds .tsx or .jsx files the components don't take. pending: holds none yet, or is
+  // not there yet; the next `shadcn add` from that registry fills it.
+  const copied: RegistryFolder[] = [];
+  const pending: RegistryFolder[] = [];
   const added: string[] = [];
   for (const { namespace, dir } of folders) {
     const glob = `${escapePath(dir)}/**/*.{tsx,jsx}`;
     const files = await componentFiles({ ...config, components: [glob] });
-    let kind: keyof typeof byKind;
-    if (files.some((f) => !taken.has(f))) kind = 'copied';
+    const folder = { namespace, dir, glob, files: files.length };
+    if (files.some((f) => !taken.has(f))) copied.push(folder);
     else if (files.length || globs.some((g) => matchesGlob(`${dir}/index.tsx`, g))) continue;
-    else kind = isDirectory(path.join(root, dir)) ? 'empty' : 'missing';
-    byKind[kind].push({ namespace, dir, glob, files: files.length });
-    if (kind !== 'empty') added.push(glob);
+    else pending.push(folder);
+    added.push(glob);
   }
-  const { copied, missing, empty } = byKind;
   const add = found && file.importPath === undefined;
   if (add && added.length) file.components = [...globs, ...added];
-  // "components" the user can add a glob to, without a package name that would mislabel it.
+  // What sets folders apart by hand: their globs in "components", when the config lists them
+  // and no package name would mislabel them, or else an "overrides" entry for their files.
   const listed = Array.isArray(file.components) && file.importPath === undefined;
+  const how = (list: RegistryFolder[]) =>
+    listed
+      ? `add ${andList(list.map((f) => `"${f.glob}"`))} to "components" (${REGISTRY_DOCS})`
+      : `turn the rules off for ${andList(list.map((f) => `"${escapePath(f.dir)}/**"`))} in "overrides" (${REGISTRY_DOCS})`;
   const notes: string[] = [];
   if (copied.length) {
     const one = copied.length === 1;
     notes.push(
       add
         ? `Added ${andList(copied.map((f) => `${f.dir} (${f.namespace}, ${count(f.files, 'file')})`))} to "components": ${one ? 'it holds' : 'they hold'} the code \`shadcn add\` copied from ${one ? 'that registry' : 'those registries'} in components.json. \`check\` and the hook skip it as design-system code, and your code is checked against every component its files export, helpers included, so a native element such as <img> can be told to use one of them. To leave the helpers out, see ${REGISTRY_DOCS}; to check that code as your own, take ${one ? 'the folder' : 'the folders'} out of "components".`
-        : `components.json names the ${one ? 'registry' : 'registries'} ${andList(copied.map((f) => f.namespace))}, which \`shadcn add\` copies into ${andList(copied.map((f) => f.dir))}: \`check\` reads ${one ? 'its' : 'their'} code as your own. To set it apart, see ${REGISTRY_DOCS}.`,
+        : `components.json names the ${one ? 'registry' : 'registries'} ${andList(copied.map((f) => f.namespace))}, which \`shadcn add\` copies into ${andList(copied.map((f) => f.dir))}: \`check\` reads ${one ? 'its' : 'their'} code as your own. To set it apart, ${how(copied)}.`,
     );
   }
-  if (missing.length) {
-    const one = missing.length === 1;
-    const also = copied.length ? 'also ' : '';
-    const dirs = andList(missing.map((f) => f.dir));
+  if (pending.length) {
+    const one = pending.length === 1;
+    // A folder that is not there holds no .tsx or .jsx file either.
+    const state = pending.some((f) => isDirectory(path.join(root, f.dir)))
+      ? `${one ? 'holds' : 'hold'} no .tsx or .jsx file yet`
+      : `${one ? 'does' : 'do'} not exist yet`;
     notes.push(
       add
-        ? `${copied.length ? 'Also added' : 'Added'} ${andList(missing.map((f) => `${f.dir} (${f.namespace})`))} to "components", though ${one ? 'it does' : 'they do'} not exist yet: \`check\` and the hook skip the code \`shadcn add\` copies there from ${one ? 'that registry' : 'those registries'} in components.json. Code a registry copies somewhere else, such as loose into ${path.posix.dirname(missing[0]?.dir ?? '')}/, is checked as your own (${REGISTRY_DOCS}).`
-        : `components.json ${also}names ${andList(missing.map((f) => f.namespace))}, and ${dirs} ${one ? 'does' : 'do'} not exist yet: once \`shadcn add\` copies code there, \`check\` reads it as your own. To set it apart then, ${listed ? `add ${andList(missing.map((f) => `"${f.glob}"`))} to "components" (${REGISTRY_DOCS})` : `see ${REGISTRY_DOCS}`}.`,
-    );
-  }
-  if (empty.length) {
-    notes.push(
-      `components.json ${copied.length || missing.length ? 'also ' : ''}names ${andList(empty.map((f) => f.namespace))}, and no .tsx or .jsx file is in ${andList(
-        empty.map((f) => f.dir),
-        'or',
-      )}: \`check\` reads what \`shadcn add\` copies from ${empty.length === 1 ? 'it' : 'them'} into other folders as your own code (${REGISTRY_DOCS}).`,
+        ? `${copied.length ? 'Also added' : 'Added'} ${andList(pending.map((f) => `${f.dir} (${f.namespace})`))} to "components", though ${one ? 'it' : 'they'} ${state}: \`check\` and the hook skip the code \`shadcn add\` copies there from ${one ? 'that registry' : 'those registries'} in components.json. Code a registry copies somewhere else, such as loose into ${path.posix.dirname(pending[0]?.dir ?? '')}/, is checked as your own (${REGISTRY_DOCS}).`
+        : `components.json ${copied.length ? 'also ' : ''}names ${andList(pending.map((f) => f.namespace))}, and ${andList(pending.map((f) => f.dir))} ${state}: once \`shadcn add\` copies a .tsx or .jsx file there, \`check\` reads it as your own. To set it apart, ${how(pending)}.`,
     );
   }
   return notes;
