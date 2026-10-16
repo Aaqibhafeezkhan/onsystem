@@ -67,6 +67,19 @@ export type LibraryId = (typeof LIBRARY_IDS)[number];
 /** The libraries onsystem can read, by package. */
 export const LIBRARIES: readonly LibraryAdapter[] = [mui];
 
+/**
+ * Published component libraries onsystem does not read yet, by package. A project that depends
+ * on one is told so, since nothing in it is checked and a clean result would look like a
+ * misconfigured one.
+ */
+export const UNREAD_LIBRARIES: readonly { package: string; title: string }[] = [
+  { package: '@chakra-ui/react', title: 'Chakra UI' },
+  { package: '@mantine/core', title: 'Mantine' },
+  { package: '@heroui/react', title: 'HeroUI' },
+  { package: '@radix-ui/themes', title: 'Radix Themes' },
+  { package: 'antd', title: 'Ant Design' },
+];
+
 /** A library an app depends on, and where it is installed. */
 export interface LibrarySource {
   package: string;
@@ -80,39 +93,51 @@ export function libraryAdapter(name: string): LibraryAdapter | undefined {
   return LIBRARIES.find((library) => library.package === name);
 }
 
+/** A library's name for messages, read or not: `MUI`, `Chakra UI`. */
+export function libraryTitle(name: string): string {
+  return [...LIBRARIES, ...UNREAD_LIBRARIES].find((l) => l.package === name)?.title ?? name;
+}
+
+/** Why a library in `UNREAD_LIBRARIES` is not read: `a dependency onsystem does not read yet (…)`. */
+export function notReadYet(): string {
+  return `a dependency onsystem does not read yet (it reads only ${LIBRARIES.map((l) => l.title).join(', ')} so far)`;
+}
+
 /**
  * The libraries `root`'s package.json depends on (dependencies, devDependencies or
  * peerDependencies), each found where Node.js would find it: in `node_modules` at the root or a
  * folder above it, as a monorepo hoists it. Nothing in the package is run. `ids` is the config's
  * `libraries`: undefined reads every library onsystem supports, false none, a list those named;
- * the dependencies it leaves out are `off`.
+ * the dependencies it leaves out are `off`. Those in `UNREAD_LIBRARIES` are `unread`.
  */
 export function detectLibraries(
   root: string,
   ids?: false | readonly LibraryId[],
-): { read: LibrarySource[]; off: LibrarySource[] } {
+): { read: LibrarySource[]; off: LibrarySource[]; unread: LibrarySource[] } {
   const pkg = readJson(path.join(root, 'package.json'));
-  if (!pkg) return { read: [], off: [] };
+  if (!pkg) return { read: [], off: [], unread: [] };
   const dependencies = new Set(
     ['dependencies', 'devDependencies', 'peerDependencies'].flatMap((field) => {
       const value = pkg[field];
       return value && typeof value === 'object' ? Object.keys(value) : [];
     }),
   );
-  const found = LIBRARIES.filter((library) => dependencies.has(library.package)).map((library) => {
-    const dir = installedPackage(root, library.package);
+  const sourceOf = (name: string): LibrarySource => {
+    const dir = installedPackage(root, name);
     const version = dir ? readJson(path.join(dir, 'package.json'))?.version : undefined;
-    const source: LibrarySource = {
-      package: library.package,
-      dir,
-      version: typeof version === 'string' ? version : undefined,
-    };
-    return { id: library.id, source };
-  });
+    return { package: name, dir, version: typeof version === 'string' ? version : undefined };
+  };
+  const found = LIBRARIES.filter((library) => dependencies.has(library.package)).map((library) => ({
+    id: library.id,
+    source: sourceOf(library.package),
+  }));
   const wanted = (id: LibraryId) => ids === undefined || (ids !== false && ids.includes(id));
   return {
     read: found.filter((f) => wanted(f.id)).map((f) => f.source),
     off: found.filter((f) => !wanted(f.id)).map((f) => f.source),
+    unread: UNREAD_LIBRARIES.filter((library) => dependencies.has(library.package)).map((library) =>
+      sourceOf(library.package),
+    ),
   };
 }
 

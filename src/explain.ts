@@ -5,7 +5,7 @@ import { DEFAULT_SEVERITY, RULE_IDS, type ResolvedConfig } from './config.js';
 import type { DesignSystem } from './design-system.js';
 import { detectProject, findDesignSystemPackage, type DetectionStep } from './detect.js';
 import { defaultProjectConfig } from './extract/program.js';
-import { LIBRARY_IDS, type LibrarySource } from './libraries/index.js';
+import { LIBRARY_IDS, notReadYet, type LibrarySource } from './libraries/index.js';
 import { relativePath } from './util/paths.js';
 
 /**
@@ -52,6 +52,9 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
   }
   for (const library of config.librariesOff ?? []) {
     out(`  ${'no'.padEnd(6)} ${named(library)}: a dependency, ${librariesLeftOut(config, cwd)}`);
+  }
+  for (const library of config.librariesUnread ?? []) {
+    out(`  ${'no'.padEnd(6)} ${named(library)}: ${notReadYet()}`);
   }
 
   out();
@@ -203,7 +206,7 @@ function importPaths(ds: DesignSystem): string {
 }
 
 /** The nearest node_modules at or above `dir`, if any. */
-function nodeModulesFor(dir: string): string | undefined {
+export function nodeModulesFor(dir: string): string | undefined {
   for (let current = path.resolve(dir); ; current = path.dirname(current)) {
     const candidate = path.join(current, 'node_modules');
     if (fs.existsSync(candidate)) return candidate;
