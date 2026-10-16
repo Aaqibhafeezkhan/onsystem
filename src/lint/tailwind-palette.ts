@@ -342,4 +342,10 @@ export const TAILWIND_PALETTE: Record<string, Record<string, string>> = {
   },
 };
 
+/** Tailwind's colors without shades: `white` and `black`. */
+export const TAILWIND_KEYWORD_COLORS: Record<string, string> = {
+  black: '#000',
+  white: '#fff',
+};
+
 export const TAILWIND_VERSION = '4.3.3';

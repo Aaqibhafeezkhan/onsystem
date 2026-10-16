@@ -19,9 +19,9 @@
       "flagged": 13,
       "rules": {
         "no-hardcoded-color": {
-          "errors": 71,
-          "warnings": 31,
-          "fixes": 32
+          "errors": 77,
+          "warnings": 32,
+          "fixes": 35
         },
         "prefer-design-system-component": {
           "errors": 2,
@@ -49,7 +49,7 @@
       "flagged": 23,
       "rules": {
         "icon-button-accessible-name": {
-          "errors": 11,
+          "errors": 12,
           "warnings": 0,
           "fixes": 1
         },
@@ -85,7 +85,7 @@
         "warnings": 0
       },
       "files": 279,
-      "flagged": 34,
+      "flagged": 35,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 1,
@@ -93,9 +93,9 @@
           "fixes": 0
         },
         "no-hardcoded-color": {
-          "errors": 73,
-          "warnings": 23,
-          "fixes": 40
+          "errors": 76,
+          "warnings": 28,
+          "fixes": 43
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -127,17 +127,17 @@
         "warnings": 0
       },
       "files": 569,
-      "flagged": 269,
+      "flagged": 272,
       "rules": {
         "icon-button-accessible-name": {
-          "errors": 97,
+          "errors": 98,
           "warnings": 0,
           "fixes": 11
         },
         "no-hardcoded-color": {
-          "errors": 874,
-          "warnings": 150,
-          "fixes": 492
+          "errors": 927,
+          "warnings": 204,
+          "fixes": 534
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -165,7 +165,7 @@
         "warnings": 0
       },
       "files": 506,
-      "flagged": 120,
+      "flagged": 128,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 35,
@@ -173,9 +173,9 @@
           "fixes": 16
         },
         "no-hardcoded-color": {
-          "errors": 190,
-          "warnings": 93,
-          "fixes": 61
+          "errors": 207,
+          "warnings": 107,
+          "fixes": 70
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -209,7 +209,7 @@
         "others": 15
       },
       "files": 693,
-      "flagged": 127,
+      "flagged": 135,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 42,
@@ -217,9 +217,9 @@
           "fixes": 21
         },
         "no-hardcoded-color": {
-          "errors": 190,
-          "warnings": 93,
-          "fixes": 61
+          "errors": 207,
+          "warnings": 107,
+          "fixes": 70
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -252,7 +252,7 @@
         "warnings": 1
       },
       "files": 1484,
-      "flagged": 996,
+      "flagged": 1009,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 52,
@@ -260,9 +260,9 @@
           "fixes": 30
         },
         "no-hardcoded-color": {
-          "errors": 10024,
-          "warnings": 164,
-          "fixes": 6583
+          "errors": 10910,
+          "warnings": 248,
+          "fixes": 7312
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -283,7 +283,7 @@
         "warnings": 1
       },
       "files": 27,
-      "flagged": 18,
+      "flagged": 20,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 2,
@@ -291,9 +291,9 @@
           "fixes": 2
         },
         "no-hardcoded-color": {
-          "errors": 276,
-          "warnings": 6,
-          "fixes": 133
+          "errors": 297,
+          "warnings": 11,
+          "fixes": 151
         },
         "prefer-design-system-component": {
           "errors": 15,
@@ -314,7 +314,7 @@
         "warnings": 0
       },
       "files": 1422,
-      "flagged": 976,
+      "flagged": 989,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 56,
@@ -322,9 +322,9 @@
           "fixes": 30
         },
         "no-hardcoded-color": {
-          "errors": 9967,
-          "warnings": 134,
-          "fixes": 6583
+          "errors": 10853,
+          "warnings": 218,
+          "fixes": 7312
         },
         "prefer-design-system-component": {
           "errors": 973,
@@ -346,7 +346,7 @@
         "warnings": 1
       },
       "files": 1484,
-      "flagged": 996,
+      "flagged": 1009,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 52,
@@ -354,9 +354,9 @@
           "fixes": 30
         },
         "no-hardcoded-color": {
-          "errors": 10024,
-          "warnings": 164,
-          "fixes": 6583
+          "errors": 10910,
+          "warnings": 248,
+          "fixes": 7312
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -402,7 +402,7 @@
         "others": 8
       },
       "files": 1521,
-      "flagged": 1014,
+      "flagged": 1029,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 54,
@@ -410,9 +410,9 @@
           "fixes": 32
         },
         "no-hardcoded-color": {
-          "errors": 10300,
-          "warnings": 170,
-          "fixes": 6716
+          "errors": 11207,
+          "warnings": 259,
+          "fixes": 7463
         },
         "prefer-design-system-component": {
           "errors": 1015,
@@ -437,10 +437,10 @@
         "warnings": 1
       },
       "files": 445,
-      "flagged": 25,
+      "flagged": 27,
       "rules": {
         "icon-button-accessible-name": {
-          "errors": 14,
+          "errors": 16,
           "warnings": 0,
           "fixes": 7
         },
@@ -481,12 +481,12 @@
         "warnings": 1
       },
       "files": 172,
-      "flagged": 13,
+      "flagged": 15,
       "rules": {
         "no-hardcoded-color": {
-          "errors": 5,
-          "warnings": 0,
-          "fixes": 0
+          "errors": 18,
+          "warnings": 5,
+          "fixes": 3
         },
         "no-hardcoded-spacing": {
           "errors": 0,
@@ -514,7 +514,7 @@
         "warnings": 0
       },
       "files": 60,
-      "flagged": 8,
+      "flagged": 9,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 2,
@@ -522,9 +522,9 @@
           "fixes": 1
         },
         "no-hardcoded-color": {
-          "errors": 0,
-          "warnings": 2,
-          "fixes": 0
+          "errors": 5,
+          "warnings": 4,
+          "fixes": 3
         },
         "prefer-design-system-component": {
           "errors": 8,
@@ -607,17 +607,17 @@
         "others": 39
       },
       "files": 699,
-      "flagged": 46,
+      "flagged": 51,
       "rules": {
         "icon-button-accessible-name": {
-          "errors": 16,
+          "errors": 18,
           "warnings": 0,
           "fixes": 8
         },
         "no-hardcoded-color": {
-          "errors": 7,
-          "warnings": 2,
-          "fixes": 0
+          "errors": 25,
+          "warnings": 9,
+          "fixes": 6
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -651,7 +651,7 @@
         "warnings": 1
       },
       "files": 576,
-      "flagged": 131,
+      "flagged": 140,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 17,
@@ -659,9 +659,9 @@
           "fixes": 5
         },
         "no-hardcoded-color": {
-          "errors": 201,
-          "warnings": 13,
-          "fixes": 72
+          "errors": 237,
+          "warnings": 22,
+          "fixes": 81
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -845,7 +845,7 @@
         "others": 102
       },
       "files": 928,
-      "flagged": 149,
+      "flagged": 159,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 18,
@@ -853,9 +853,9 @@
           "fixes": 5
         },
         "no-hardcoded-color": {
-          "errors": 384,
-          "warnings": 13,
-          "fixes": 81
+          "errors": 422,
+          "warnings": 22,
+          "fixes": 91
         },
         "no-hardcoded-radius": {
           "errors": 0,
@@ -880,9 +880,9 @@
       },
       "added": {
         "no-hardcoded-color": {
-          "errors": 172,
+          "errors": 174,
           "warnings": 0,
-          "fixes": 2
+          "fixes": 3
         },
         "no-hardcoded-radius": {
           "errors": 0,

@@ -25,7 +25,7 @@ import { cssReference } from '../../tokens/usage.js';
 import type { Token } from '../../types.js';
 import { attributeName, literalValues, valueBranches, type JsxNode } from '../analyze.js';
 import type { Report, Rule, RuleContext } from '../context.js';
-import { TAILWIND_PALETTE } from '../tailwind-palette.js';
+import { TAILWIND_KEYWORD_COLORS, TAILWIND_PALETTE } from '../tailwind-palette.js';
 import {
   COLOR_PREFIXES,
   COLOR_UTILITY,
@@ -45,6 +45,9 @@ import {
 } from '../tailwind.js';
 
 // ─── Colors ─────────────────────────────────────────────────────────────────
+
+/** `var(--color-green-50)`: a shade of Tailwind's palette through its CSS variable. */
+const PALETTE_VARIABLE = /^var\(\s*--color-([a-z]+-(?:50|[1-9]00|950))\s*\)$/;
 
 /** Luminance values, not design colors: `white`/`black` (and hex twins). */
 const MASK_LUMINANCE = new Set(['white', 'black', '#fff', '#ffffff', '#000', '#000000']);
@@ -149,6 +152,31 @@ export const noHardcodedColor: Rule = {
           COLOR_PREFIXES.includes(utility.prefix)
         ) {
           const value = utility.arbitrary.replace(/^color:/, '').trim();
+          // `bg-[var(--color-green-50)]` is the palette class `bg-green-50`, written as its variable.
+          const shade = PALETTE_VARIABLE.exec(value)?.[1];
+          const viaVariable = shade ? paletteColor(`${utility.prefix}-${shade}`) : undefined;
+          if (viaVariable) {
+            const color = tokens.colorKeys.has(viaVariable.key)
+              ? undefined
+              : parseColor(viaVariable.value);
+            if (!color) continue;
+            listed.color = color;
+            listed.prefix = viaVariable.prefix;
+            listed.report = colorReport(context, {
+              start: token.start,
+              end: token.end,
+              what: `\`${token.value}\` is Tailwind's default palette (\`${viaVariable.key}\`), not a design-system color`,
+              color,
+              tinted: !viaVariable.gray,
+              palette: viaVariable.key,
+              prefix: viaVariable.prefix,
+              place: 'class',
+              utility,
+              element,
+              classes: classString.text,
+            });
+            continue;
+          }
           const whole = parseColor(value);
           // `shadow-[0_1px_2px_#000]`: report the color inside, but no class can replace it 1:1.
           const literal = whole ? { text: value, color: whole } : findColorLiterals(value)[0];
@@ -211,10 +239,40 @@ export const noHardcodedColor: Rule = {
             element,
             classes: classString.text,
           });
+          continue;
+        }
+
+        // `bg-white`, `text-black`: reported once the whole class list is known, since white
+        // text on a colored surface in the same list is that surface's.
+        const keyword = keywordColor(utility);
+        if (keyword && !(element && isInsideMask(element))) {
+          listed.color = keyword.color;
+          listed.prefix = keyword.prefix;
+          listed.keyword = {
+            start: token.start,
+            end: token.end,
+            what: `\`${token.value}\` is a fixed color, not a design-system color`,
+            color: keyword.color,
+            tinted: false,
+            keyword: true,
+            prefix: keyword.prefix,
+            place: 'class',
+            utility,
+            element,
+            classes: classString.text,
+          };
         }
       }
     }
+    const surfaces = new Surfaces(context, lists);
     for (const list of lists.values()) {
+      for (const listed of list) {
+        if (!listed.keyword) continue;
+        // White or black text, icon fill or stroke on a colored surface is that surface's
+        // contrast color (shadcn/ui's `bg-destructive text-white`), not a theme color.
+        if (colorRole(listed.prefix) === 'text' && surfaces.colored(list, listed.keyword)) continue;
+        listed.report = colorReport(context, listed.keyword);
+      }
       keepStatesApart(list);
       for (const { report } of list) if (report) context.report(report);
     }
@@ -333,6 +391,11 @@ interface ColorInput {
   element?: JsxNode | undefined;
   /** The class string the color is in, which can place it in a sidebar or chart. */
   classes?: string | undefined;
+  /**
+   * `white` or `black` (`bg-white`, `text-black`): fixed only to a token of exactly that color,
+   * and text in them only named, as a warning, since it depends on the surface under it.
+   */
+  keyword?: boolean;
 }
 
 /** The finding for a color, or undefined when the design system has no color to name. */
@@ -377,6 +440,17 @@ function colorReport(context: RuleContext, input: ColorInput): Report | undefine
   // a gray or another hue's token (`chart-2` in a chart), led agents to swap the meaning away, so
   // the message names none and leaves two ways out, as a warning.
   const noHue = !close && reason === 'hue' && tinted;
+  // White and black: text in them depends on the surface under it, so it is named, as a warning;
+  // anything else is fixed only to a token of exactly that color (`bg-white` → `bg-background`).
+  const keywordText = input.keyword === true && role === 'text';
+  const keptBack =
+    input.keyword && close && edit && !held && !status
+      ? keywordText
+        ? 'White or black text depends on the surface under it, so this is not applied automatically: use the foreground token of that surface.'
+        : nearest.distance >= SAME_COLOR
+          ? 'Only a token of exactly this color is applied automatically.'
+          : undefined
+      : undefined;
   let message: string;
   if (close) {
     message = `${input.what}. ${nearest.distance < SAME_COLOR ? 'Matches token' : 'Nearest token'} ${found}`;
@@ -386,6 +460,7 @@ function colorReport(context: RuleContext, input: ColorInput): Report | undefine
     if (opacityGap) message += ` ${opacityGap}`;
     if (status) message += ` ${status}`;
     else if (held) message += ` ${held}`;
+    else if (keptBack) message += ` ${keptBack}`;
   } else if (noHue) {
     message = `${input.what}. ${NO_TOKEN_HAS_HUE}`;
   } else {
@@ -404,10 +479,10 @@ function colorReport(context: RuleContext, input: ColorInput): Report | undefine
     message,
     suggestion: close ? (variant ?? replacement) : undefined,
     fix:
-      close && edit && !held && !status
+      close && edit && !held && !status && !keptBack
         ? [{ range: [input.start, input.end], text: edit }]
         : undefined,
-    severity: noHue ? 'warning' : undefined,
+    severity: noHue || keywordText ? 'warning' : undefined,
   };
 }
 
@@ -474,6 +549,8 @@ interface ListedClass {
   /** The color the class hardcodes (`bg-[#fff]`, `bg-neutral-100`), which no mode changes. */
   color?: Oklch | undefined;
   report?: Report | undefined;
+  /** A white or black class (`bg-white`), reported once the whole list is known. */
+  keyword?: ColorInput | undefined;
 }
 
 /** Color keywords that are no token but set a color (`bg-white`, `border-transparent`). */
@@ -484,6 +561,114 @@ function tokenColorPrefix(utility: Utility, colorKeys: ReadonlySet<string>): str
   const key = COLOR_UTILITY.exec(utility.base)?.[1];
   if (!key || !(colorKeys.has(key) || KEYWORD_COLORS.has(key))) return undefined;
   return utility.base.slice(0, -key.length - 1);
+}
+
+/** `bg-white`, `border-black`: Tailwind's colors without a shade, as a color utility sets them. */
+const KEYWORD_CLASS = new RegExp(
+  `^(${COLOR_PREFIXES.join('|')})-(${Object.keys(TAILWIND_KEYWORD_COLORS).join('|')})$`,
+);
+
+/**
+ * The white or black an opaque class sets (`bg-white`, `text-black`). With an opacity modifier
+ * (`bg-black/50`, `border-white/10`) it is a tint of whatever is under it, a scrim or a hairline
+ * that suits both modes, so it is left alone.
+ */
+function keywordColor(utility: Utility): { prefix: string; color: Oklch } | undefined {
+  if (utility.modifier || utility.arbitrary !== undefined) return undefined;
+  const [, prefix, name] = KEYWORD_CLASS.exec(utility.base) ?? [];
+  const color = name ? parseColor(TAILWIND_KEYWORD_COLORS[name] ?? '') : undefined;
+  return prefix && color ? { prefix, color } : undefined;
+}
+
+/** The node around `node`, or undefined at the file. */
+function parentOf(node: ts.Node): ts.Node | undefined {
+  return ts.isSourceFile(node) ? undefined : node.parent;
+}
+
+/** Background classes that set no background of their own: what is under them shows through. */
+const NO_BACKGROUND = /^bg-(?:transparent|current|inherit|none)$/;
+
+/**
+ * How far apart in lightness (OKLCH L) white or black text and its surface must be for the
+ * surface to be the text's own: white on `bg-primary`, `bg-indigo-600` or `bg-orange-500`
+ * (0.705), not on `bg-amber-400` or `bg-muted`; black on `bg-yellow-300`, not on `bg-primary`.
+ */
+const SURFACE_CONTRAST = 0.25;
+
+/**
+ * Where white or black text sits, which says whether the text is the surface's contrast color
+ * (shadcn/ui's `bg-destructive text-white`) or the theme's: the background its own class list
+ * sets, its component's variants set (`<Button>` with `bg-*` variants), or the nearest element
+ * around it that sets one.
+ */
+class Surfaces {
+  private readonly byNode = new Map<ts.Node, JsxNode>();
+  private readonly tokenColors = new Map<string, Oklch>();
+
+  constructor(
+    private readonly context: RuleContext,
+    private readonly lists: ReadonlyMap<object, readonly ListedClass[]>,
+  ) {
+    for (const element of context.analysis.elements) this.byNode.set(element.node, element);
+    for (const { token, color } of context.target.tokens.colors) {
+      if (token.tailwind) this.tokenColors.set(token.tailwind, color);
+    }
+  }
+
+  /** Whether the text is on a surface of its own: a colored background it contrasts with. */
+  colored(list: readonly ListedClass[], text: ColorInput): boolean {
+    const { color, element } = text;
+    const variants = text.utility?.variants ?? [];
+    const own = this.verdict(list, color, variants);
+    if (own !== undefined) return own;
+    if (!element) return false;
+    if (variantProp(this.context, element, 'bg')) return true;
+    for (let node: ts.Node | undefined = element.node.parent; node; node = parentOf(node)) {
+      const around = this.byNode.get(node);
+      if (!around) continue;
+      if (variantProp(this.context, around, 'bg')) return true;
+      const verdict = this.verdict(this.lists.get(around) ?? [], color, variants);
+      if (verdict !== undefined) return verdict;
+    }
+    return false;
+  }
+
+  /** What a class list's background says for the text, or undefined when it sets none. */
+  private verdict(
+    list: readonly ListedClass[],
+    text: Oklch,
+    variants: readonly string[],
+  ): boolean | undefined {
+    let verdict: boolean | undefined;
+    for (const { value } of list) {
+      const excuses = this.excuses(value, text, variants);
+      if (excuses) return true;
+      if (excuses === false) verdict = false;
+    }
+    return verdict;
+  }
+
+  /**
+   * Whether a class sets a surface the text contrasts with: a gradient, a translucent tint
+   * (`bg-black/60`), an image, or a color far enough from the text's in lightness. An opaque
+   * `bg-white` or `bg-black` is the page's own color, as hardcoded as the text. Undefined for a
+   * class that sets no background, or sets one only in a state the text is not in: `hover:bg-red-600`
+   * is the surface of `hover:text-white`, not of `text-white`.
+   */
+  private excuses(cls: string, text: Oklch, variants: readonly string[]): boolean | undefined {
+    const utility = parseUtility(cls);
+    const { base, modifier } = utility;
+    if (!utility.variants.every((variant) => variants.includes(variant))) return undefined;
+    if (/^(?:from|via)-/.test(base)) return true;
+    if (!base.startsWith('bg-') || NO_BACKGROUND.test(base)) return undefined;
+    if (modifier) return true;
+    if (keywordColor(utility)) return false;
+    const palette = paletteColor(base);
+    const arbitrary = utility.arbitrary !== undefined ? parseColor(utility.arbitrary) : undefined;
+    const color =
+      (palette && parseColor(palette.value)) ?? this.tokenColors.get(base.slice(3)) ?? arbitrary;
+    return color ? Math.abs(color.l - text.l) >= SURFACE_CONTRAST : true;
+  }
 }
 
 /**
@@ -860,18 +1045,25 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
           if (spec.category === 'spacing' && Math.abs(px) <= 1 && (!replacement.exact || negative))
             continue;
           const fixed = withBase({ ...utility, negative }, replacement.cls);
-          const message = replacement.exact
-            ? `\`${token.value}\` is ${formatPx(px)}, which is on the ${spec.category} scale: use \`${fixed}\`.`
-            : replacement.pill
-              ? `\`${token.value}\` (${formatPx(px)}) is far above the radius scale, so it reads as fully rounded: use \`${fixed}\`.`
-              : `Hardcoded ${spec.category} \`${token.value}\` (${formatPx(px)}) is off the scale. Nearest: \`${fixed}\` (${formatPx(replacement.px)})` +
-                (replacement.far ? ', too far off to replace automatically.' : '.');
+          // `px-[0.5em]` grows with the font, which no step of the scale does: 8px only at 16px.
+          const relative = !replacement.pill && FONT_RELATIVE.test(utility.arbitrary.trim());
+          const message = relative
+            ? `\`${token.value}\` is font-relative: ${utility.arbitrary.trim()} is ${formatPx(px)} only at a 16px font. Nearest step: \`${fixed}\` (${formatPx(replacement.px)}), which does not grow with the font, so it is not applied automatically.`
+            : replacement.exact
+              ? `\`${token.value}\` is ${formatPx(px)}, which is on the ${spec.category} scale: use \`${fixed}\`.`
+              : replacement.pill
+                ? `\`${token.value}\` (${formatPx(px)}) is far above the radius scale, so it reads as fully rounded: use \`${fixed}\`.`
+                : `Hardcoded ${spec.category} \`${token.value}\` (${formatPx(px)}) is off the scale. Nearest: \`${fixed}\` (${formatPx(replacement.px)})` +
+                  (replacement.far ? ', too far off to replace automatically.' : '.');
           context.report({
             start: token.start,
             end: token.end,
             message,
             suggestion: fixed,
-            fix: replacement.far ? undefined : [{ range: [token.start, token.end], text: fixed }],
+            fix:
+              replacement.far || relative
+                ? undefined
+                : [{ range: [token.start, token.end], text: fixed }],
           });
         }
       }
@@ -918,13 +1110,20 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
                 ? `Use \`${cls}\` (${size}) in className instead of an inline style.`
                 : `Use \`${cssVar ?? cls}\` (${size}).`
               : `Use ${spec.category} tokens instead.`;
+            // `padding: "0.5em"` grows with the font, which no step of the scale does.
+            const relative =
+              number === undefined &&
+              !replacement?.pill &&
+              values.some((v) => FONT_RELATIVE.test(v));
             context.report({
               start: init.getStart(context.sourceFile),
               end: init.end,
-              message: `Hardcoded ${spec.category} \`${shown}\` in style. ${advice}`,
+              message: relative
+                ? `Hardcoded ${spec.category} \`${shown}\` in style, font-relative: ${formatPx(px)} only at a 16px font. ${advice} No step of the scale grows with the font, so it is not applied automatically.`
+                : `Hardcoded ${spec.category} \`${shown}\` in style. ${advice}`,
               suggestion: replacement ? (replacement.tailwind ? cls : cssVar) : undefined,
               fix:
-                replacement && !replacement.tailwind && cssVar && replacement.exact
+                replacement && !replacement.tailwind && cssVar && replacement.exact && !relative
                   ? [{ range: [init.getStart(context.sourceFile), init.end], text: `"${cssVar}"` }]
                   : undefined,
             });
@@ -942,6 +1141,9 @@ function lengthRule(id: Rule['id'], description: string, spec: LengthRuleSpec): 
 function unnamed(replacement: { exact: boolean; tailwind: boolean; cssVar?: string | undefined }) {
   return replacement.exact && !replacement.tailwind && !replacement.cssVar;
 }
+
+/** A length in `em`, relative to the element's font size (`0.5em`, not `0.5rem`). */
+const FONT_RELATIVE = /^-?(?:\d+\.?\d*|\.\d+)em$/i;
 
 /** The nearest step is "far" when it is off by more than half the value and more than 4px. */
 const FAR_RATIO = 0.5;

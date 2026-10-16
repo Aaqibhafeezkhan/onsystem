@@ -2209,7 +2209,7 @@ describe('icon-button-accessible-name', () => {
       `<Button size="icon"><Trash2 /><span className="sr-only">Delete</span></Button>`,
       `<Button><Trash2 /> Delete</Button>`,
       `<Button>{label}</Button>`,
-      `<Button asChild><a href="/x"><Trash2 /></a></Button>`,
+      `<Button asChild><a href="/x" aria-label="Delete"><Trash2 /></a></Button>`,
       `<Button {...props}><Trash2 /></Button>`,
       `<button title="Close"><svg /></button>`,
       `<Button size="icon"><svg viewBox="0 0 24 24"><title>Close</title><path /></svg></Button>`,

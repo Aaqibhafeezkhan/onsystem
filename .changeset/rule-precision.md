@@ -1,0 +1,10 @@
+---
+'onsystem': minor
+---
+
+`check`, `check_ui`, the hook and the ESLint plugin report more of the hardcoded styling agents write, so code that passed can get new findings:
+
+- `no-hardcoded-color` reports Tailwind's `white` and `black` (`bg-white`, `text-black`, `border-white`), which passed while `bg-[white]`, `style={{ color: "white" }}` and `fill="white"` were reported, so `bg-white dark:bg-zinc-900` had only its dark half fixed. They are fixed only to a token of exactly that color (`bg-white` → `bg-background` in a stock shadcn/ui theme), and suggested without a fix otherwise. White or black text, fill or stroke is a warning without a fix, since its token depends on the surface under it, and is not reported on a surface it stands out from: one its class list sets (shadcn/ui's `bg-destructive text-white`), its component's variants set, or the nearest element around it sets. With an opacity modifier (`bg-black/50`, `border-white/10`) white and black are left alone, as they are inside an SVG `<mask>`. A palette color written as its CSS variable (`bg-[var(--color-green-50)]`) is reported as the palette class.
+- Class strings are followed to where the same file keeps them: a `const` (`className={tone}`, `cn("p-4", extra)`), a key of a `const` object map (`className={statusStyles[status]}`), or what a function of the file returns (`className={toneOf(status)}`). A palette color in a status map passed as clean. A value from another file, a prop or a `let` is still not followed.
+- `icon-button-accessible-name` checks an icon-only link that a button renders through `asChild` (`<Button asChild size="icon"><Link href="/users/1/edit"><Pencil /></Link></Button>`), which it skipped, and puts the label fix on the link.
+- `no-hardcoded-spacing` and `no-hardcoded-radius` no longer fix a length in `em`: `px-[0.5em]` grows with the font, and was fixed to `px-2` with the message that it "is 8px, which is on the spacing scale". The nearest step is suggested without a fix.

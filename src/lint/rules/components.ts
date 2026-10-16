@@ -1190,6 +1190,54 @@ function isHidden(element: JsxNode): boolean {
   return hidden !== undefined;
 }
 
+/**
+ * A link a design system renders through `asChild`: `<a>`, a component that renders one, or a
+ * router's `Link` (`next/link`, `NavLink`) with its `href` or `to`, not an icon named `ExternalLink`.
+ */
+function isLink(context: RuleContext, element: JsxNode): boolean {
+  const resolution = context.resolve(element);
+  if (resolution.kind === 'intrinsic') return resolution.tag === 'a';
+  if (resolution.kind === 'component' && resolution.component.element === 'a') return true;
+  return (
+    /Link$/.test(element.tag) &&
+    Boolean(findAttribute(element, 'href') ?? findAttribute(element, 'to'))
+  );
+}
+
+/**
+ * `<Button asChild size="icon"><Link href="/users/1/edit"><Pencil /></Link></Button>`: Radix's
+ * Slot renders the link with the button's props, so the link is the button, and an icon alone
+ * in it names nothing. A label on either counts (`aria-label`, `title`, visually hidden text in
+ * the link). A child that is a button itself is checked on its own; any other child (a `<span>`
+ * under a tooltip's trigger) is not a control.
+ */
+function checkAsChildLink(context: RuleContext, button: JsxNode): void {
+  const children = button.children.filter((c) => !ts.isJsxText(c) || c.text.trim());
+  const [child] = children;
+  if (children.length !== 1 || !child) return;
+  const link = context.analysis.elements.find((e) => e.node === child);
+  if (!link || link.hasSpread || !isLink(context, link)) return;
+  if (hasLabel(button.attributes) || hasLabel(link.attributes)) return;
+  if (labelledByParent(context, button)) return;
+  const icons: string[] = [];
+  const content = classify(link.children, context, icons);
+  const sizeIcon = attributeLiterals(button, 'size').some((v) => v.text.includes('icon'));
+  if (content !== 'icon' && !(content === 'empty' && sizeIcon)) return;
+  const { label, fixed } = iconLabel(context, link, button, icons[0]);
+  const attribute = `aria-label="${label ?? '…'}"`;
+  context.report({
+    ...tagRange(context, link),
+    message:
+      content === 'icon'
+        ? `Icon-only <${link.tag}> in <${button.tag} asChild> has no accessible name. Add ${attribute} describing the action, or visually hidden text.`
+        : `<${link.tag}> in <${button.tag} asChild> has no content and no accessible name. Add ${attribute}.`,
+    suggestion: attribute,
+    fix: fixed
+      ? [{ range: [link.tagName.end, link.tagName.end], text: ` ${attribute}` }]
+      : undefined,
+  });
+}
+
 export const iconButtonAccessibleName: Rule = {
   id: 'icon-button-accessible-name',
   description:
@@ -1197,8 +1245,11 @@ export const iconButtonAccessibleName: Rule = {
   run(context) {
     for (const element of context.analysis.elements) {
       const resolution = context.resolve(element);
-      if (!isButton(context, element) || element.hasSpread) continue;
-      if (findAttribute(element, 'asChild') || isHidden(element)) continue;
+      if (!isButton(context, element) || element.hasSpread || isHidden(element)) continue;
+      if (findAttribute(element, 'asChild')) {
+        checkAsChildLink(context, element);
+        continue;
+      }
       // A button passed as `render` is judged by its host's children and label, and its own;
       // a host that is a button itself is checked on its own. A story's `args.render` is
       // rendered with args the rule does not follow.

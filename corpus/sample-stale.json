@@ -1,0 +1,6 @@
+{
+  "draw": "fp-sample-20261016",
+  "why": "no-hardcoded-color reports white and black now, and the rules read class strings kept in same-file consts, object maps and functions, so the corpus has findings this sample was not drawn from. The README quotes the sample's rate as it was measured, with the corpus it was drawn from (onsystem cb495c0), until a fresh sample replaces it.",
+  "until": "A fresh seeded draw with blind labels replaces corpus/fp-sample-20261016 and the README's corpus paragraph; the change that adds it removes this file.",
+  "asDrawn": { "repos": 12, "runs": 24, "unknown": 56, "unknownInFlowise": 55 }
+}
