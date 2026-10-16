@@ -10,7 +10,7 @@ import type { DesignSystem } from '../design-system.js';
 import { uncheckedNotice } from '../lint/index.js';
 import { notReadNotices } from '../not-read.js';
 import { TOKEN_CATEGORIES, type ComponentInfo } from '../types.js';
-import { isInside, relativePath } from '../util/paths.js';
+import { isInside, relativePath, SCRIPT_FILE } from '../util/paths.js';
 import { NAME, VERSION } from '../version.js';
 import {
   capDiagnostics,
@@ -54,12 +54,6 @@ const MAX_CODE = 1_000_000;
 /** Diagnostics check_ui returns by default: a 3,000-line file can have thousands, more than a context holds. */
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
-/**
- * The files check_ui reads: JS and TS. globals.css parsed as TSX gave 209 syntax errors. Keep
- * it in step with `SCRIPT_FILE` in src/cli.ts.
- */
-const SCRIPT_FILE = /\.[cm]?[jt]sx?$/i;
-
 /** check_ui's answer for a path or filename that is not JS or TS. */
 function notScript(name: string): CallToolResult {
   return errorResult(

@@ -7,7 +7,7 @@ branding:
 
 inputs:
   paths:
-    description: Files, folders or globs to check, relative to working-directory, separated by spaces or new lines.
+    description: Files, folders or globs to check, relative to working-directory, separated by spaces or new lines, without quotes. A folder stands for its .tsx and .jsx files, so a JavaScript app lists its .js pages too, as in `. **/*.js`.
     default: .
   working-directory:
     description: Where to run the check, such as one app of a monorepo. The config and the default baseline are read from there.
@@ -22,7 +22,7 @@ inputs:
     description: On pull requests and merge groups, report only findings on the lines the change touches. false reports every finding in the checked files.
     default: 'true'
   require-design-system:
-    description: Fail when no components or no color tokens are found, so the check cannot pass by checking nothing. An app on a component library such as MUI passes with its components alone.
+    description: Fail when no components or no color tokens are found, or when paths leaves no file to check, so the check cannot pass by checking nothing. An app on a component library such as MUI passes with its components alone.
     default: 'true'
 
 outputs:

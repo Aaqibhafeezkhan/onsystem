@@ -104,6 +104,42 @@ describe('check: files that are not JS or TS', () => {
     expect(gated).toEqual({ code: 0, stdout: '[]', stderr: '' });
   });
 
+  it('skips them when a glob matches them, and fails the gate when nothing else matches', async () => {
+    const root = project();
+    // A glob that matches only styles has no UI code to check.
+    const css = await run(['check', 'app/**/*.css', '--no-cache'], root);
+    expect(css).toEqual({
+      code: 0,
+      stdout: 'Nothing to check: 1 file that is not JS or TS skipped.',
+      stderr: '',
+    });
+    // In CI that glob points at the wrong code, as a folder with nothing to check does.
+    const gated = await run(['check', 'app/**/*.css', '--require-design-system'], root);
+    expect(gated).toEqual({
+      code: 2,
+      stdout: '',
+      stderr:
+        'check --require-design-system: nothing was checked (1 file that is not JS or TS skipped).',
+    });
+
+    // Every file: the page is checked, the rest counted, and no syntax error from the others.
+    const everything = await run(['check', '**/*', '--format', 'json', '--no-cache'], root);
+    const results = JSON.parse(everything.stdout) as {
+      file: string;
+      diagnostics: { ruleId: string }[];
+    }[];
+    expect(results.map((r) => r.file)).toEqual(['app/page.tsx']);
+    expect(results.flatMap((r) => r.diagnostics.map((d) => d.ruleId))).not.toContain('syntax');
+    const pretty = await run(['check', '**/*', '--no-cache'], root);
+    expect(pretty.stdout).not.toContain('syntax');
+    expect(pretty.stdout.split('\n').at(-1)).toBe(
+      '2 errors, 0 warnings in 1 file (1 design-system file skipped; 4 files that are not JS or TS skipped)',
+    );
+    // A file both named and matched by a glob is counted once.
+    const both = await run(['check', 'app/globals.css', 'app/**/*.css', '--no-cache'], root);
+    expect(both.stdout).toBe('Nothing to check: 1 file that is not JS or TS skipped.');
+  });
+
   it('still checks .ts, .js, .mjs and .cjs files named outright', async () => {
     const root = fixture({
       'components/ui/button.tsx': BUTTON_TSX,
@@ -130,12 +166,12 @@ describe('check: files that are not JS or TS', () => {
 describe('check: JSX in .js files', () => {
   it("says that a folder's .js files with JSX were not checked, and how to check them", async () => {
     const root = jsApp();
+    // It takes the place of --include-design-system's hint, which would check the button and
+    // pass with the page still unchecked.
     expect(await run(['check', '.', '--no-cache'], root)).toEqual({
       code: 0,
-      stdout: [
-        'Nothing to check: 1 design-system file skipped. Pass --include-design-system to check it.',
-        'app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check . "**/*.js"`.',
-      ].join('\n'),
+      stdout:
+        'Nothing to check: 1 design-system file skipped. app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check . "**/*.js"`.',
       stderr: '',
     });
     // The command the notice gives checks it.
@@ -181,10 +217,11 @@ describe('check: JSX in .js files', () => {
     );
     expect(gated.code).toBe(2);
     expect(gated.stdout).toBe('');
-    expect(gated.stderr.split('\n')).toEqual([
-      'check --require-design-system: nothing was checked (1 design-system file skipped). Pass --include-design-system to check it.',
-      'app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check . "**/*.js"`.',
-    ]);
+    // One line, which is all the GitHub Action's error annotation shows: what to name, not
+    // --include-design-system, which would pass with the page still unchecked.
+    expect(gated.stderr).toBe(
+      'check --require-design-system: nothing was checked (1 design-system file skipped). app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check . "**/*.js"`.',
+    );
     // With the pages named, it checks them and fails on their findings, not on the gate.
     const named = await run(
       ['check', '.', '**/*.js', '--require-design-system', '--format', 'json', '--no-cache'],
@@ -202,6 +239,88 @@ describe('check: JSX in .js files', () => {
         'check --require-design-system: nothing was checked (1 design-system file skipped). Pass --include-design-system to check it.',
     });
   });
+});
+
+describe('check: a folder of .js pages', () => {
+  const LAYOUT_JS = `export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`;
+
+  it('names them when the folder has no .tsx or .jsx file, and still exits 2', async () => {
+    const root = jsApp({ 'app/layout.js': LAYOUT_JS });
+    const expected = {
+      code: 2,
+      stdout: '',
+      stderr:
+        'check: nothing to check in app. 2 .js files have JSX (app/layout.js and app/page.js), but folders are checked for .tsx and .jsx files, so they were not checked. Name them to check them: `check app "app/**/*.js"`.',
+    };
+    expect(await run(['check', 'app', '--no-cache'], root)).toEqual(expected);
+    expect(await run(['check', 'app', '--format', 'json', '--no-cache'], root)).toEqual(expected);
+    // The command it gives checks them.
+    const named = await run(
+      ['check', 'app', 'app/**/*.js', '--format', 'json', '--no-cache'],
+      root,
+    );
+    expect((JSON.parse(named.stdout) as { file: string }[]).map((r) => r.file)).toEqual([
+      'app/layout.js',
+      'app/page.js',
+    ]);
+    // A folder with no page at all is still a folder that matches nothing.
+    const empty = jsApp({ 'lib/format.js': 'export const format = (n) => `${n} items`;\n' });
+    expect(await run(['check', 'lib', '--no-cache'], empty)).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: 'check: no files match lib',
+    });
+  });
+
+  it('finds JSX as pages write it, and not in bundles, minified files or HTML in strings', async () => {
+    const big = `export const data = ${JSON.stringify('x'.repeat(600 * 1024))};\nexport default () => <p>Big</p>;\n`;
+    const root = jsApp({
+      // Before the element: a comment, an arrow, a generic call in its props, a fragment.
+      'app/a/page.js':
+        'export default function A() {\n  return (\n    // A comment first\n    <div className="p-[13px]" />\n  );\n}\n',
+      'app/b/page.js': 'export const B = ({ children }) => <section>{children}</section>;\n',
+      'app/c/page.js':
+        'export default function C(props) {\n  return <Field {...useField(props)} count={props.a < props.b ? 1 : 2} />;\n}\n',
+      'app/d/page.js': 'export default () => (\n  <>\n    <h1>D</h1>\n  </>\n);\n',
+      // Not pages: HTML in strings and comments, a named regex group, a minified file and one
+      // over 512 KB.
+      'app/vendor/escape.js':
+        '// e.g. <del>abc</del>\nconst re = /(?<tag>[a-z]+)/;\nexport const html = "(<b>bold</b>)" + \'<br/>\';\nexport const lt = (a, b) => a < b;\n',
+      'app/vendor/lib.min.js': 'export default () => <p>min</p>;\n',
+      'app/vendor/big.js': big,
+    });
+    const result = await run(['check', 'app', '--no-cache'], root);
+    expect(result.stderr).toBe(
+      'check: nothing to check in app. 5 .js files have JSX (app/a/page.js, app/b/page.js, app/c/page.js and 2 more), but folders are checked for .tsx and .jsx files, so they were not checked. Name them to check them: `check app "app/**/*.js"`.',
+    );
+    const json = await run(['check', '.', '--format', 'json', '--no-cache'], root);
+    expect(json.stderr).toContain('5 .js files have JSX');
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'leaves out a .js file it cannot read',
+    async () => {
+      const root = jsApp({ 'app/locked.js': 'export default () => <p>Locked</p>;\n' });
+      fs.chmodSync(path.join(root, 'app/locked.js'), 0o000);
+      try {
+        expect(await run(['check', '.', '--no-cache'], root)).toEqual({
+          code: 0,
+          stdout:
+            'Nothing to check: 1 design-system file skipped. app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check . "**/*.js"`.',
+          stderr: '',
+        });
+      } finally {
+        fs.chmodSync(path.join(root, 'app/locked.js'), 0o644);
+      }
+    },
+  );
 });
 
 describe('check at a monorepo root', () => {
@@ -224,10 +343,15 @@ describe('check at a monorepo root', () => {
     const root = monorepo();
     expect(await run(['check', '.', '--no-cache'], root)).toMatchObject({
       code: 0,
-      stdout: [
-        'Nothing to check: 1 design-system file skipped. Pass --include-design-system to check it.',
-        'apps/web/app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check . "**/*.js"`.',
-      ].join('\n'),
+      stdout:
+        'Nothing to check: 1 design-system file skipped. apps/web/app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check . "**/*.js"`.',
+    });
+    // A folder with nothing but .js pages.
+    expect(await run(['check', 'apps/web/app', '--no-cache'], root)).toEqual({
+      code: 2,
+      stdout: '',
+      stderr:
+        'check: nothing to check in apps/web/app. apps/web/app/page.js has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: `check apps/web/app "apps/web/app/**/*.js"`.',
     });
     expect((await run(['check', '.', '--require-design-system', '--no-cache'], root)).code).toBe(2);
     const named = await run(
@@ -237,6 +361,12 @@ describe('check at a monorepo root', () => {
     expect((JSON.parse(named.stdout) as { file: string }[]).map((r) => r.file)).toEqual([
       'apps/web/app/page.js',
     ]);
+    // A glob that matches every file checks the JS and TS ones, each in its own project.
+    const everything = await run(['check', '**/*', '--no-cache'], root);
+    expect(everything.stdout).not.toContain('syntax');
+    expect(everything.stdout.split('\n').at(-1)).toBe(
+      '2 errors, 1 warning in 1 file (1 design-system file skipped; 1 test or story left out; 7 files that are not JS or TS skipped)',
+    );
   });
 });
 
@@ -268,6 +398,20 @@ describe('check_ui: files that are not JS or TS', () => {
     })) as CallToolResult;
     expect(vue.isError).toBe(true);
     expect(text(vue)).toContain('x.vue is not one');
+    // Only real extensions: `.mts` is TypeScript, `.mtsx` and `.cjsx` are not.
+    for (const filename of ['x.mtsx', 'x.cjsx']) {
+      const made = (await client.callTool({
+        name: 'check_ui',
+        arguments: { code: '<button>x</button>', filename },
+      })) as CallToolResult;
+      expect(text(made)).toContain(`${filename} is not one`);
+    }
+    const mts = (await client.callTool({
+      name: 'check_ui',
+      arguments: { code: 'export const tone = "bg-[#ef4444]";', filename: 'lib/tone.mts' },
+    })) as CallToolResult;
+    expect(mts.isError).toBeFalsy();
+    expect(mts.structuredContent).toMatchObject({ file: 'lib/tone.mts' });
     // JS and TS files are checked as before.
     const page = (await client.callTool({
       name: 'check_ui',
