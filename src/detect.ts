@@ -137,8 +137,8 @@ const STYLESHEETS = [
  *    or, for a package without `exports` that apps import by path
  *    (`@acme/ui/primitives/button`), from the files the root's code imports. They
  *    are added to what `components.json` found, not skipped for it. One installed
- *    from a registry is read through its `exports` alone, when they lead to the
- *    component sources it publishes.
+ *    from a registry is read through its `exports` alone, when they point at the
+ *    component sources it publishes, not from `dist/` back to `src/`.
  * 4. A flat folder of components that wrap a primitives library, the way React
  *    Aria's Tailwind starter ships them (`src/Button.tsx`, `src/Checkbox.tsx`).
  *
@@ -249,7 +249,7 @@ export function detectProject(
     const reasons: string[] = [];
     const note: Note = (r) => reasons.push(r);
     // An installed package that declares no config is read through its exports alone, when
-    // they lead to the component sources it publishes: its build output is not read.
+    // they point at the component sources it publishes: its compiled files are not read.
     const result = installedDir
       ? fromPackage(root, dir, pkg, note, true)
       : (fromPackage(root, dir, pkg, note) ??
@@ -562,8 +562,10 @@ function fromPackageComponentsJson(
  * A package whose `exports` point at component source files is a design system. An export
  * that leads to a barrel (`./components/button` → `components/button/index.ts`, or `.` →
  * `src/index.tsx` behind `dist/`) stands for the files the barrel re-exports, each
- * suggested with the export's specifier. In an `installed` package, compiled JavaScript in a
- * build folder (`dist/index.mjs`) is not followed: it leads to no source.
+ * suggested with the export's specifier. An `installed` package's exports are read as they
+ * are, not from `dist/` back to `src/`: a widget kit publishes `src/` beside `dist/` for its
+ * source maps, and it is not the app's design system. Its compiled files ({@link isBuildOutput})
+ * are not read at all: no barrel, component or stylesheet in them.
  */
 function fromPackage(
   root: string,
@@ -578,20 +580,16 @@ function fromPackage(
     imports.push(mapping);
     if (component && !components.some((m) => m.target === mapping.target)) components.push(mapping);
   };
-  for (const mapping of exportMappings(root, dir, pkg)) {
+  for (const mapping of exportMappings(root, dir, pkg, installed)) {
     const file = path.resolve(root, mapping.target);
-    if (
-      mapping.target.includes('*') ||
-      !SCRIPT_FILE.test(file) ||
-      !isFile(file) ||
-      (installed && isBuildOutput(dir, file))
-    ) {
+    if (installed && isBuildOutput(dir, file)) continue;
+    if (mapping.target.includes('*') || !SCRIPT_FILE.test(file) || !isFile(file)) {
       add(mapping, COMPONENT_FILE.test(mapping.target));
       continue;
     }
     // The .tsx/.jsx files it leads to, through barrels.
     for (const reached of exportedFiles(file, dir)) {
-      if (COMPONENT_FILE.test(reached)) {
+      if (COMPONENT_FILE.test(reached) && !(installed && isBuildOutput(dir, reached))) {
         add({ specifier: mapping.specifier, target: relativePath(root, reached) }, true);
       }
     }
@@ -600,7 +598,7 @@ function fromPackage(
   const patterns = components.filter((m) => m.target.includes('*'));
   // One or two .tsx exports are an app or a widget, not a component library.
   if (files.length < 3 && !patterns.length) {
-    const built = exportMappings(root, dir, pkg).filter((m) =>
+    const built = exportMappings(root, dir, pkg, installed).filter((m) =>
       /(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(m.target),
     );
     const output = built
@@ -612,7 +610,7 @@ function fromPackage(
         ? 'no exports'
         : built.length
           ? installed
-            ? `it publishes build output (${output}) and no component source, and only sources are read`
+            ? `its exports point at build output (${output}), not at component sources, and only sources are read`
             : `its exports point at build output with no source found (${output})`
           : `its exports lead to ${plural(files.length, 'component file')}; a design system exports at least 3`,
     );
@@ -773,10 +771,15 @@ function importedSubpaths(root: string, names: string[]): Map<string, Set<string
 
 /**
  * `exports` subpaths with a source target, as specifiers relative to `root`. A target
- * built to `dist/` maps back to its source (`src/`, through the build config's entries);
- * without an `exports` map, `main` stands for `.`.
+ * built to `dist/` maps back to its source (`src/`, through the build config's entries),
+ * unless `asWritten`; without an `exports` map, `main` stands for `.`.
  */
-function exportMappings(root: string, dir: string, pkg: Record<string, unknown>): ImportMapping[] {
+function exportMappings(
+  root: string,
+  dir: string,
+  pkg: Record<string, unknown>,
+  asWritten = false,
+): ImportMapping[] {
   const name = typeof pkg.name === 'string' ? pkg.name : undefined;
   if (!name) return [];
   const exports =
@@ -797,9 +800,11 @@ function exportMappings(root: string, dir: string, pkg: Record<string, unknown>)
   for (const [key, value] of entries) {
     const target = exportTarget(value);
     if (!target) continue;
-    const source = target.includes('*')
-      ? sourcePattern(dir, target)
-      : sourceTarget(dir, key, target, (build ??= buildEntries(dir)));
+    const source = asWritten
+      ? undefined
+      : target.includes('*')
+        ? sourcePattern(dir, target)
+        : sourceTarget(dir, key, target, (build ??= buildEntries(dir)));
     mappings.push({
       specifier: key === '.' ? name : `${name}/${key.replace(/^\.\//, '')}`,
       target: relativePath(root, path.resolve(dir, source ?? target)),
@@ -808,9 +813,15 @@ function exportMappings(root: string, dir: string, pkg: Record<string, unknown>)
   return mappings;
 }
 
-/** Compiled JavaScript in a package's build folder: `dist/index.mjs`, `lib/button.cjs`. */
+/**
+ * A compiled file in package `dir`'s build folder: JavaScript, JSX or CSS (`dist/index.mjs`,
+ * `lib/button.jsx`, `dist/index.css`), or a pattern of them (`dist/*.jsx`). TypeScript there
+ * (`lib/utils.ts`) is source.
+ */
 function isBuildOutput(dir: string, file: string): boolean {
-  return /^(?:dist|build|lib|out|esm|cjs)\/.*\.[cm]?js$/.test(toPosix(path.relative(dir, file)));
+  return /^(?:dist|build|lib|out|esm|cjs)\/.*\.(?:[cm]?jsx?|css)$/.test(
+    toPosix(path.relative(dir, file)),
+  );
 }
 
 /** `./dist/*.mjs` → `src/*.tsx` (or `.ts`) when files match it there; anything else as it is. */
@@ -948,8 +959,9 @@ export function presetResolver(
  * (`./theme.css`, or `theme.css` as plain CSS reads it), or a stylesheet of a workspace
  * package (`@acme/theme/colors.css`, or `@acme/theme` through its `exports` or its `style`
  * field). An installed package resolves only when zero config reads it as a design system
- * ({@link installedDesignSystem}), and a stylesheet in it imports others of that package
- * alone. Other installed packages (`tailwindcss`) and URLs resolve to nothing.
+ * ({@link installedDesignSystem}), and a stylesheet in it imports others of that package alone.
+ * In an installed package, a stylesheet in a build folder (`dist/index.css`) is compiled, and
+ * resolves to nothing. Other installed packages (`tailwindcss`) and URLs resolve to nothing.
  */
 export function stylesheetResolver(
   root: string,
@@ -962,12 +974,13 @@ export function stylesheetResolver(
     }
     return designSystems.get(name);
   };
-  // On disk, and not in node_modules, unless in the installed package `within` (none below it).
+  // On disk, and not in node_modules, unless in the installed package `within` (none below it),
+  // and then outside its build folders.
   const stylesheet = (file: string, within?: string) =>
     [file, `${file}.css`].find(
       (f) =>
         f.endsWith('.css') &&
-        (within === undefined || isInside(within, f)) &&
+        (within === undefined || (isInside(within, f) && !isBuildOutput(within, f))) &&
         !/(?:^|[\\/])node_modules[\\/]/.test(within === undefined ? f : path.relative(within, f)) &&
         isFile(f),
     );
@@ -986,7 +999,11 @@ export function stylesheetResolver(
     const subpath = specifier.slice(name.length + 1);
     const style = readJson(path.join(dir, 'package.json'))?.style;
     return (
-      exportedFile(dir, subpath ? `./${subpath}` : '.', (f) => f.endsWith('.css')) ??
+      exportedFile(
+        dir,
+        subpath ? `./${subpath}` : '.',
+        (f) => f.endsWith('.css') && !(installed && isBuildOutput(installed, f)),
+      ) ??
       (subpath
         ? stylesheet(path.join(dir, subpath), installed)
         : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css'), installed))
@@ -996,7 +1013,7 @@ export function stylesheetResolver(
 
 /**
  * The folder of `name` installed from a registry, when zero config reads it as a design system:
- * named like one, with `exports` that lead to the component sources it publishes.
+ * named like one, with `exports` that point at the component sources it publishes.
  */
 function installedDesignSystem(
   root: string,

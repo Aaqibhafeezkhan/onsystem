@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
 import { createServer } from '../src/server/index.js';
-import { fixture, load } from './helpers.js';
+import { fixture, load, TSCONFIG } from './helpers.js';
 
 // An app that installs its design system from a registry, with no config anywhere: zero config
 // reads the package when it is named like a design system and publishes its component sources.
@@ -137,8 +137,8 @@ async function run(args: string[], cwd: string) {
 
 type Results = { file: string; diagnostics: { ruleId: string; message: string }[] }[];
 
-async function findings(cwd: string): Promise<string[]> {
-  const { stdout } = await run(['check', 'app/page.tsx', '--format', 'json', '--no-cache'], cwd);
+async function findings(cwd: string, file = 'app/page.tsx'): Promise<string[]> {
+  const { stdout } = await run(['check', file, '--format', 'json', '--no-cache'], cwd);
   return (JSON.parse(stdout) as Results).flatMap((r) =>
     r.diagnostics.map((d) => `${d.ruleId}: ${d.message}`),
   );
@@ -163,6 +163,82 @@ async function getComponent(root: string, name: string): Promise<string> {
 }
 
 const tokenNames = async (root: string) => (await load(root)).tokens.map((t) => t.name);
+
+/**
+ * A chat widget kit named like a design system, laid out like `@copilotkit/react-ui` and
+ * `@assistant-ui/react-ui`: its exports point at `dist/`, with `src/` published beside it for
+ * its source maps, and its stylesheet compiled to `dist/index.css`.
+ */
+const KIT = {
+  'package.json': json({
+    name: '@acme/react-ui',
+    version: '1.0.0',
+    type: 'module',
+    main: './dist/index.cjs',
+    exports: {
+      '.': { types: './dist/index.d.ts', import: './dist/index.mjs', require: './dist/index.cjs' },
+      './styles.css': './dist/index.css',
+      './styles/*': { default: './dist/styles/*' },
+    },
+    files: ['dist', 'src'],
+  }),
+  'dist/index.mjs':
+    'export * from "./chat.mjs";\nexport { default as Thread } from "./thread.mjs";\n',
+  'dist/index.cjs': 'module.exports = require("./chat.cjs");\n',
+  'dist/index.css':
+    ':root {\n  --kit-primary-color: rgb(28, 28, 28);\n  --kit-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);\n}\n',
+  'dist/styles/theme.css': ':root {\n  --kit-accent: #6366f1;\n}\n',
+  'src/index.tsx':
+    'export * from "./chat";\nexport * from "./popup";\nexport { default as Thread } from "./thread";\n',
+  'src/chat.tsx':
+    'export function Chat(props: { labels?: { title?: string } }) { return <div /> }\n',
+  'src/popup.tsx': 'export function Popup(props: { open?: boolean }) { return <div /> }\n',
+  'src/thread.tsx':
+    'function Root() { return <div /> }\nfunction Viewport() { return <div /> }\nexport default Object.assign(Root, { Viewport });\n',
+  'src/styles.css': ':root {\n  --kit-primary-color: rgb(28, 28, 28);\n}\n',
+};
+
+/** A shadcn/ui app (components.json, components/ui) that also uses the kit. */
+function shadcnApp(extra: Record<string, string> = {}): string {
+  return fixture({
+    'package.json': json({ name: 'web', dependencies: { '@acme/react-ui': '^1.0.0' } }),
+    'tsconfig.json': TSCONFIG,
+    'components.json': json({
+      tailwind: { css: 'app/globals.css' },
+      aliases: { components: '@/components', ui: '@/components/ui' },
+    }),
+    'components/ui/button.tsx': BUTTON,
+    'components/ui/card.tsx': CARD,
+    'components/ui/input.tsx': INPUT,
+    'app/globals.css':
+      '@import "tailwindcss";\n@import "@acme/react-ui/styles.css";\n@import "@acme/react-ui/styles/theme.css";\n\n:root {\n  --primary: oklch(0.55 0.2 260);\n}\n\n@theme inline {\n  --color-primary: var(--primary);\n}\n',
+    'app/chat.tsx': `import { Chat, Thread } from "@acme/react-ui";
+import { Button } from "@/components/ui/button";
+
+export default function Page() {
+  return (
+    <div>
+      <Chat labels={{ title: "Help" }} />
+      <Thread />
+      <Button variant="danger">Close</Button>
+      <button className="bg-[#1c1c1c]">Native</button>
+    </div>
+  );
+}
+`,
+    ...extra,
+  });
+}
+
+/** What an app's design system is made of: what it detected, its components and its tokens. */
+async function contents(root: string) {
+  const ds = await load(root);
+  return {
+    detected: ds.config.detected,
+    components: ds.components.map((c) => c.name).sort(),
+    tokens: ds.tokens.map((t) => `${t.name}: ${t.value}`).sort(),
+  };
+}
 
 /** Token files from installed packages other than the design system. */
 const OTHER_FILES = /node_modules\/(?:tailwindcss|tw-animate-css)\//;
@@ -238,7 +314,7 @@ describe('an installed design-system package that publishes its sources', () => 
   });
 
   it("is read through the app's node_modules when pnpm's store is elsewhere", async () => {
-    const store = fixture({ ...at(`${STORE}/@acme/design-system`, PACKAGE) });
+    const store = fixture({ ...at(`${STORE}/@acme/design-system`, PACKAGE), ...WITH_PRIMITIVE });
     const root = fixture({
       'package.json': json({ name: 'web', dependencies: { '@acme/design-system': '^1.1.0' } }),
       'app/page.tsx': PAGE,
@@ -251,6 +327,11 @@ describe('an installed design-system package that publishes its sources', () => 
     );
     expect(ds.tokens.map((t) => t.name)).toContain('muted');
     expect(ds.model.warnings.join('\n')).not.toContain('Not read');
+    // Read through the link, the package's own dependencies, beside it in the store, do not
+    // resolve: the props its Button takes from one are not known.
+    const button = ds.getComponent('Button');
+    expect(button?.props.map((p) => p.name)).toContain('variant');
+    expect(button?.props.map((p) => p.name)).not.toContain('render');
   });
 
   it('is read from the workspace root, where npm hoists it', async () => {
@@ -277,7 +358,7 @@ describe('an installed design-system package that publishes its sources', () => 
 });
 
 describe('installed packages zero config does not read', () => {
-  it('says that a package publishing build output alone publishes no component source', async () => {
+  it('says that a package whose exports point at build output exports no component source', async () => {
     // Three .jsx files in dist/: the build output is not read, even where it could be.
     const root = fixture({
       'package.json': json({ name: 'web', dependencies: { '@acme/ui': '^1.0.0' } }),
@@ -297,9 +378,74 @@ describe('installed packages zero config does not read', () => {
     expect(ds.components).toEqual([]);
     const { stdout } = await run(['inspect', '--explain', '--no-cache'], root);
     expect(stdout).toContain(
-      'no     installed package @acme/ui: it publishes build output (node_modules/@acme/ui/dist/index.mjs) and no component source, and only sources are read',
+      'no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/dist/index.mjs), not at component sources, and only sources are read',
     );
     expect(stdout).not.toContain('is compiled');
+  });
+
+  it('leaves out a kit named like a design system whose exports point at dist/, with src/ published beside it', async () => {
+    // In a shadcn/ui app, the kit adds no component, no token and no finding: the app reads
+    // exactly what it reads without the kit installed.
+    const root = shadcnApp(at('node_modules/@acme/react-ui', KIT));
+    const bare = shadcnApp();
+    expect(await contents(root)).toEqual(await contents(bare));
+    expect((await contents(root)).detected).toBe(
+      'components.json (ui: @/components/ui → components/ui)',
+    );
+    expect(await findings(root, 'app/chat.tsx')).toEqual(await findings(bare, 'app/chat.tsx'));
+    const { stdout } = await run(['inspect', '--explain', '--no-cache'], root);
+    expect(stdout).toContain(
+      'no     installed package @acme/react-ui: its exports point at build output (node_modules/@acme/react-ui/dist/index.mjs, node_modules/@acme/react-ui/dist/index.css), not at component sources, and only sources are read',
+    );
+    // As the only candidate, it is not read either.
+    const alone = fixture({
+      'package.json': json({ name: 'web', dependencies: { '@acme/react-ui': '^1.0.0' } }),
+      'app/globals.css': '@import "@acme/react-ui/styles.css";\n',
+      'app/page.tsx': 'import { Chat } from "@acme/react-ui";\nexport default () => <Chat />;\n',
+      ...at('node_modules/@acme/react-ui', KIT),
+    });
+    const ds = await load(alone);
+    expect(ds.config.detected).toBeUndefined();
+    expect(ds.components).toEqual([]);
+    expect(ds.tokens.filter((t) => t.name.startsWith('kit-'))).toEqual([]);
+  });
+
+  it('takes no tokens from a stylesheet in the build folder of a package it reads', async () => {
+    const manifest = JSON.parse(PACKAGE['package.json']) as {
+      exports: Record<string, unknown>;
+      files: string[];
+    };
+    const compiled = {
+      'node_modules/@acme/design-system/package.json': json({
+        ...manifest,
+        exports: { ...manifest.exports, './styles.css': './dist/styles.css' },
+        files: [...manifest.files, 'dist'],
+      }),
+      'node_modules/@acme/design-system/dist/styles.css':
+        ':root {\n  --compiled: oklch(0.6 0.2 30);\n}\n',
+      'node_modules/@acme/design-system/dist/partial.css':
+        ':root {\n  --compiled-partial: oklch(0.6 0.2 90);\n}\n',
+      // A source stylesheet that imports one from the build folder, by a relative path.
+      'node_modules/@acme/design-system/src/styles/theme.css': `@import '../../dist/partial.css';\n${PACKAGE['src/styles/theme.css']}`,
+    };
+    const compiledNames = (names: string[]) => names.filter((n) => n.startsWith('compiled'));
+    // Zero config: the exported stylesheets are the tokens, but the one in dist/.
+    const names = await tokenNames(npmApp(compiled));
+    expect(names).toEqual(expect.arrayContaining(['primary', 'muted', 'radius-card']));
+    expect(compiledNames(names)).toEqual([]);
+    // The app's own @import of it, by its export or by its path, is not followed either.
+    const configured = npmApp({
+      ...compiled,
+      'app/globals.css':
+        '@import "@acme/design-system/globals.css";\n@import "@acme/design-system/styles.css";\n@import "@acme/design-system/dist/partial.css";\n',
+      'onsystem.config.json': json({
+        components: ['node_modules/@acme/design-system/src/components/**/*.tsx'],
+        importPath: '@acme/design-system',
+      }),
+    });
+    const fromApp = await tokenNames(configured);
+    expect(fromApp).toEqual(expect.arrayContaining(['primary', 'muted']));
+    expect(compiledNames(fromApp)).toEqual([]);
   });
 
   it('leaves out a package that is not named like a design system', async () => {
