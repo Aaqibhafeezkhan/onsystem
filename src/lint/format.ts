@@ -93,7 +93,8 @@ export function formatDiagnostics(
   return lines.join('\n');
 }
 
-function escapeData(value: string): string {
+/** Escapes a workflow command's message, so `%` and line breaks reach GitHub as written. */
+export function escapeData(value: string): string {
   return value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 }
 

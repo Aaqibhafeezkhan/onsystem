@@ -137,4 +137,4 @@ Then check every line against it, on pull requests and on pushes to `main`:
     only-changed-lines: false
 ```
 
-Only findings that are not in the baseline fail. When findings get fixed, `check` says so and prints the command that drops them from the baseline; run it and commit the smaller file, so they cannot come back.
+Only findings that are not in the baseline fail. When findings get fixed, `check` says so and prints the command that drops them from the baseline, with `--prune-baseline`; run it and commit the smaller file, so they cannot come back. It only removes entries, so a new finding still fails.

@@ -550,11 +550,11 @@ describe('onsystem check with a baseline', () => {
     expect(code).toBe(0);
     expect(stdout.split('\n')).toEqual([
       'No new problems in 1 file (1 in the baseline).',
-      '1 baseline finding no longer occurs: run `check app/a.tsx --update-baseline` to drop it.',
+      '1 baseline finding no longer occurs: run `check app/a.tsx --prune-baseline` to drop it.',
     ]);
     const github = await run(['check', 'app/a.tsx', '--no-cache', '--format', 'github'], root);
     expect(github.stdout).toBe(
-      '::notice title=onsystem baseline::1 baseline finding no longer occurs: run `check app/a.tsx --update-baseline` to drop it.',
+      '::notice title=onsystem baseline::1 baseline finding no longer occurs: run `check app/a.tsx --prune-baseline` to drop it.',
     );
 
     // Only a.tsx is checked: its entry shrinks, b.tsx is gone from disk and is dropped.
@@ -609,8 +609,9 @@ describe('onsystem check with a baseline', () => {
       }
     }
 
+    // A missing folder is created; one that is a file cannot be.
     const unwritable = await run(
-      ['check', 'app', '--no-cache', '--update-baseline', '--baseline', 'missing/dir/b.json'],
+      ['check', 'app', '--no-cache', '--update-baseline', '--baseline', 'app/a.tsx/b.json'],
       root,
     );
     expect(unwritable.code).toBe(2);

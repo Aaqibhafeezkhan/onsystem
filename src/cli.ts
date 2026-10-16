@@ -13,7 +13,10 @@ import {
   BASELINE_FILE,
   countBaseline,
   LEGACY_BASELINE_FILE,
+  pruneBaseline,
   readBaseline,
+  rulesRun,
+  unrecordedRules,
   updateBaseline,
   writeBaseline,
 } from './baseline.js';
@@ -21,15 +24,17 @@ import {
   ConfigError,
   DEFAULT_TEST_EXCLUDE,
   DEFAULT_TEST_FOLDERS,
+  RULE_IDS,
   rulesFor,
   type LoadConfigOptions,
   type ResolvedConfig,
+  type RuleId,
 } from './config.js';
 import { componentFiles, loadDesignSystem, type DesignSystem } from './design-system.js';
 import { explainProject, librariesLeftOut } from './explain.js';
 import { init } from './init.js';
 import { libraryAdapter, type LibrarySource } from './libraries/index.js';
-import { formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
+import { escapeData, formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
 import { serveStdio } from './server/stdio.js';
 import { toDesignMd, toDtcg } from './tokens/export.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
@@ -79,6 +84,8 @@ Options
   --out <file>            export: write to this file instead of stdout
   --max-warnings <n>      check: exit 1 when there are more than n warnings
   --update-baseline       check: record the current findings as accepted, and exit 0
+  --prune-baseline        check: drop baseline entries that no longer occur, and
+                          accept nothing new
   --baseline <file>       check: baseline file (default: ${BASELINE_FILE} in the root,
                           used whenever it exists)
   --ignore-baseline       check: report every finding, baseline or not
@@ -167,6 +174,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         'max-warnings': { type: 'string' },
         baseline: { type: 'string' },
         'update-baseline': { type: 'boolean', default: false },
+        'prune-baseline': { type: 'boolean', default: false },
         'ignore-baseline': { type: 'boolean', default: false },
         'quiet-without-design-system': { type: 'boolean', default: false },
         'include-design-system': { type: 'boolean' },
@@ -277,6 +285,7 @@ interface CheckValues {
   'max-warnings'?: string | undefined;
   baseline?: string | undefined;
   'update-baseline': boolean;
+  'prune-baseline': boolean;
   'ignore-baseline': boolean;
   'quiet-without-design-system': boolean;
   'require-design-system': boolean;
@@ -307,6 +316,12 @@ async function check(
   if (values['quiet-without-design-system'] && values['require-design-system']) {
     io.stderr('check: pass --quiet-without-design-system or --require-design-system, not both');
     return 2;
+  }
+  for (const other of ['update-baseline', 'ignore-baseline'] as const) {
+    if (values['prune-baseline'] && values[other]) {
+      io.stderr(`check: pass --prune-baseline or --${other}, not both`);
+      return 2;
+    }
   }
   if (!patterns.length) {
     io.stderr(`check: pass files, folders or globs, e.g. ${NAME} check .`);
@@ -346,6 +361,7 @@ async function check(
   }
 
   const update = values['update-baseline'];
+  const prune = values['prune-baseline'];
   const baselineFile = values.baseline
     ? path.resolve(io.cwd, values.baseline)
     : defaultBaseline(
@@ -360,6 +376,12 @@ async function check(
   const baseline = values['ignore-baseline'] ? undefined : readBaseline(baselineFile);
   if (values.baseline && !update && !values['ignore-baseline'] && !baseline) {
     io.stderr(`check: baseline not found: ${displayPath(io.cwd, baselineFile)}`);
+    return 2;
+  }
+  if (prune && !baseline) {
+    io.stderr(
+      `check --prune-baseline: no baseline to prune at ${displayPath(io.cwd, baselineFile)}. Pass --baseline <file> to prune another one, or record the current findings with \`${checkCommand(patterns, configOptions, values, '--update-baseline')}\`.`,
+    );
     return 2;
   }
   // Entries of rules that are off for a file (in `rules` or an override) are kept, not reported as fixed.
@@ -380,6 +402,8 @@ async function check(
 
   const results: CheckResult[] = [];
   const checked = new Map<string, Diagnostic[]>();
+  // The rules that ran, which the baseline records, so a later run can say why a rule's findings are new to it.
+  const ran = new Set<RuleId>();
   let baselined = 0;
   let fixed = 0;
   for (const file of files) {
@@ -389,9 +413,12 @@ async function check(
     const key = baselineKey(file);
     const disabled = disabledFor(file);
     disabledByKey.set(key, disabled);
-    if (update) checked.set(key, result.diagnostics);
+    if (update || prune) checked.set(key, result.diagnostics);
+    if (update) {
+      for (const rule of RULE_IDS) if (!disabled.has(rule) && canRun(ds, rule)) ran.add(rule);
+    }
     if (baseline && !update) {
-      const match = applyBaseline(baseline, key, result, disabled);
+      const match = applyBaseline(baseline.entries, key, result, disabled);
       result = { ...match.result, baselined: match.baselined };
       baselined += match.baselined;
       fixed += match.fixed;
@@ -408,19 +435,65 @@ async function check(
 
   if (update) {
     const next = updateBaseline(
-      baseline,
+      baseline?.entries,
       checked,
       realRoot,
       (key) => disabledByKey.get(key) ?? new Set(),
     );
-    writeBaseline(baselineFile, next);
+    // A pattern that names the root or a folder above it: the run checked every file under the
+    // root that a later run with the same options checks.
+    const wholeRoot = patterns.some((pattern) => {
+      const dir = path.resolve(io.cwd, pattern);
+      return Boolean(
+        fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() &&
+        isInside(realPath(dir), realRoot),
+      );
+    });
+    writeBaseline(baselineFile, next, {
+      onsystem: VERSION,
+      // One list for the whole baseline: in a workspace, a rule that ran in one project counts
+      // as run in all of them.
+      rules: rulesRun(baseline, next, checked, ran, wholeRoot),
+    });
     const counts = countBaseline(next);
-    io.stdout(
-      `Baseline: ${count(counts.findings, 'finding')} in ${count(counts.files, 'file')} → ${displayPath(io.cwd, baselineFile)}`,
-    );
+    const summary = `Baseline: ${count(counts.findings, 'finding')} in ${count(counts.files, 'file')} → ${displayPath(io.cwd, baselineFile)}`;
+    // On stderr unless pretty: JSON and SARIF on stdout must parse.
+    if (format === 'pretty') io.stdout(summary);
+    else io.stderr(summary);
     for (const text of selection.notices) io.stderr(text);
     if (unchecked) io.stderr(unchecked);
     return 0;
+  }
+
+  // The hints repeat the options that decide the findings and the baseline, so the command they
+  // suggest rewrites the same file from the same findings.
+  const command = (flag: string) => checkCommand(patterns, configOptions, values, flag);
+  const baselineNotes: string[] = [];
+  if (baseline) {
+    const fresh = results.flatMap((r) => r.diagnostics);
+    const unrecorded = unrecordedRules(baseline, fresh);
+    if (unrecorded.size) {
+      baselineNotes.push(
+        unrecordedNote(unrecorded, fresh.length, baseline.onsystem, command('--update-baseline')),
+      );
+    }
+  }
+  if (prune && baseline) {
+    // Only drops entries: a new finding is still reported, and still fails the check.
+    const next = pruneBaseline(
+      baseline.entries,
+      checked,
+      realRoot,
+      (key) => disabledByKey.get(key) ?? new Set(),
+    );
+    const left = countBaseline(next);
+    const dropped = countBaseline(baseline.entries).findings - left.findings;
+    if (dropped) {
+      writeBaseline(baselineFile, next, { onsystem: baseline.onsystem, rules: baseline.rules });
+    }
+    baselineNotes.push(
+      `Baseline: ${dropped ? `dropped ${count(dropped, 'finding')} that no longer ${dropped === 1 ? 'occurs' : 'occur'}` : 'nothing to drop'}; ${count(left.findings, 'finding')} in ${count(left.files, 'file')} → ${displayPath(io.cwd, baselineFile)}`,
+    );
   }
 
   const output = formatDiagnostics(
@@ -434,12 +507,19 @@ async function check(
           : undefined,
       baselined: baseline ? baselined : undefined,
       notes,
-      fixedHint: fixed
-        ? `${count(fixed, 'baseline finding')} no longer ${fixed === 1 ? 'occurs' : 'occur'}: run \`check ${patterns.map(shellQuote).join(' ')} --update-baseline\` to drop ${fixed === 1 ? 'it' : 'them'}.`
-        : undefined,
+      // `--prune-baseline`, not `--update-baseline`, which would also accept any new finding.
+      fixedHint:
+        fixed && !prune
+          ? `${count(fixed, 'baseline finding')} no longer ${fixed === 1 ? 'occurs' : 'occur'}: run \`${command('--prune-baseline')}\` to drop ${fixed === 1 ? 'it' : 'them'}.`
+          : undefined,
     },
   );
   if (output) io.stdout(output);
+  for (const text of baselineNotes) {
+    if (format === 'pretty') io.stdout(text);
+    else if (format === 'github') io.stdout(`::notice title=${NAME} baseline::${escapeData(text)}`);
+    else io.stderr(text);
+  }
   for (const text of [...selection.notices, unchecked]) {
     if (!text) continue;
     if (format === 'pretty') io.stdout(text);
@@ -1099,6 +1179,72 @@ function gitIgnored(cwd: string, files: readonly string[]): Set<string> {
 /** `1,307 findings`. */
 function count(n: number, word: string): string {
   return `${n.toLocaleString('en-US')} ${n === 1 ? word : `${word}s`}`;
+}
+
+/**
+ * `check` as this run was given, with `flag`: the patterns and the options that decide what it
+ * finds and which baseline it reads (output options left out).
+ */
+function checkCommand(
+  patterns: string[],
+  configOptions: LoadConfigOptions,
+  values: CheckValues,
+  flag: string,
+): string {
+  const args = [...patterns];
+  const option = (name: string, value: string | undefined) => {
+    if (value !== undefined) args.push(`--${name}`, value);
+  };
+  option('root', configOptions.root);
+  option('config', configOptions.config);
+  for (const name of ['components', 'tokens', 'docs'] as const) {
+    for (const value of configOptions[name] ?? []) option(name, value);
+  }
+  option('baseline', values.baseline);
+  if (configOptions.includeDesignSystem !== undefined) {
+    args.push(`--${configOptions.includeDesignSystem ? '' : 'no-'}include-design-system`);
+  }
+  if (values['include-tests']) args.push('--include-tests');
+  return `check ${args.map(shellQuote).join(' ')} ${flag}`;
+}
+
+/**
+ * Whether a rule has something to compare against in a design system, as `notice()` says when
+ * it has not: no-hardcoded-color needs color tokens, the spacing and radius rules tokens of
+ * their kind, and the component rules components. Keep it in step with `DesignSystem.notice()`
+ * in src/design-system.ts, or the baseline records a rule as run when it was skipped, or the
+ * other way round.
+ */
+function canRun(ds: DesignSystem, rule: RuleId): boolean {
+  switch (rule) {
+    case 'no-hardcoded-color':
+      return ds.tokenIndex.has('color');
+    case 'no-hardcoded-spacing':
+      return ds.tokenIndex.has('spacing');
+    case 'no-hardcoded-radius':
+      return ds.tokenIndex.has('radius');
+    case 'icon-button-accessible-name':
+      return true;
+    default:
+      return ds.model.components.length > 0;
+  }
+}
+
+/** Why findings of rules that did not run when the baseline was recorded are new to it. */
+function unrecordedNote(
+  byRule: ReadonlyMap<string, number>,
+  total: number,
+  version: string | undefined,
+  update: string,
+): string {
+  const rules = [...byRule.keys()].sort();
+  const n = [...byRule.values()].reduce((sum, k) => sum + k, 0);
+  const others = total - n;
+  return (
+    `${listOf(rules, rules.length)} did not run when the baseline was written${version ? ` (onsystem ${version})` : ''}, ` +
+    `so ${rules.length === 1 ? 'its' : 'their'} ${count(n, 'finding')} ${n === 1 ? 'is' : 'are'} new to the baseline, not necessarily to the code. ` +
+    `To accept ${n === 1 ? 'it' : 'them'}, run \`${update}\`${others ? `, which also accepts the ${count(others, 'other new finding')}` : ''}.`
+  );
 }
 
 /** Quotes a pattern for the hint when the shell would expand or split it. */
