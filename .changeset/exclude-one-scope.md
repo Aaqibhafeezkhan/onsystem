@@ -1,7 +1,0 @@
----
-'onsystem': patch
----
-
-`exclude` leaves out the same files everywhere. A folder in it (`app/legacy`, `app/legacy/`, `./app/legacy`, `app\legacy` or `**/legacy`) left out everything in it only for `check` in the project: `check .` at a monorepo root and the ESLint plugin matched it against each file's own path, so they still reported the folder's files, and a CI job at the root failed on code the team had excluded. Now all of them leave the folder out, and `check .` at the root reports what `check .` in each project does. Patterns are read the same way everywhere, with `*`, `**`, `?`, `{a,b}`, `[abc]` and `\` escapes: an unescaped Next.js route group (`app/(marketing)/**`) now matches that folder in a project too, and extglobs (`app/@(old|legacy)/**`), which only `check` in a project read before, match nothing.
-
-The Claude Code hook no longer blocks Claude on a file that `exclude` covers, tests and stories by default (`*.test.tsx`, `*.stories.tsx`) or a folder you list: it runs the new `check --skip-excluded`, which leaves such a file out even though it is named, and says so in the summary line. Without the flag, a file named outright is still checked whatever `exclude` says. With a project's own install from before this release, which does not know the flag, the hook checks the file as before. `check_ui` leaves out a `path` or `filename` that `exclude` covers, and says why in `skipped`; code without a `filename` is still checked.
