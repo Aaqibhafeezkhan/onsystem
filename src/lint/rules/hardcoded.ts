@@ -635,7 +635,7 @@ function standsOut(surface: Oklch, text: Oklch): boolean {
 interface Placement {
   /** Whether it stands out from what it sits on in each mode it shows in. */
   contrasts: boolean;
-  /** The class list that sets the surface it does not stand out from. */
+  /** The class list that sets that surface: the one it does not stand out from, if any. */
   under?: readonly ListedClass[] | undefined;
 }
 
@@ -699,23 +699,25 @@ class Surfaces {
       : hasDarkCounterpart(list, text)
         ? [undefined]
         : [undefined, 'dark'];
+    let under: readonly ListedClass[] | undefined;
     for (const mode of modes) {
       const state =
         mode === 'dark' && !variants.includes('dark') ? [...variants, 'dark'] : variants;
       const placed = this.placeIn(list, input, state, mode);
       if (!placed.contrasts) return placed;
+      under ??= placed.under;
     }
-    return { contrasts: true };
+    return { contrasts: true, under };
   }
 
   /**
-   * Takes back the fix of a white or black background when white or black text on it stays as it
-   * is and may no longer stand out: `bg-black text-white` would become `bg-primary text-white`,
-   * white on near white where `primary` is light (shadcn/ui's dark mode). A token without other
-   * modes may still have a dark one onsystem does not read (`.dark:not(.light)`), so it counts as
-   * changing there. The fix stays when the token stands out from the text in every mode the text
-   * shows in, or the class lists set the dark-mode background or text (`dark:bg-zinc-900`,
-   * `dark:text-white`).
+   * Takes back the fix of a hardcoded background when white or black text on it stays as it is
+   * and may no longer stand out: `bg-black text-white` or `bg-zinc-900 text-white` would become
+   * `bg-primary text-white`, white on near white where `primary` is light (shadcn/ui's dark
+   * mode). A token without other modes may still have a dark one onsystem does not read
+   * (`.dark:not(.light)`), so it counts as changing there. The fix stays when the token stands
+   * out from the text in every mode the text shows in, or the class lists set the dark-mode
+   * background or text (`dark:bg-zinc-900`, `dark:text-white`).
    */
   holdUnder(text: ListedClass, list: readonly ListedClass[], under: readonly ListedClass[]): void {
     const input = text.keyword;
@@ -723,12 +725,13 @@ class Surfaces {
     const textIsDark = input.utility?.variants.includes('dark') === true;
     const textInDark = textIsDark || !hasDarkCounterpart(list, text);
     for (const surface of under) {
-      const { report, keyword } = surface;
+      const { report, color: surfaceColor } = surface;
       const fix = report?.fix?.[0];
-      if (!report || !fix || !keyword || surface.prefix !== 'bg' || this.held.has(surface))
+      if (!report || !fix || !surfaceColor || surface.prefix !== 'bg' || this.held.has(surface))
         continue;
       // A `dark:` class is compared with the tokens' dark values: where it applies, it is the same.
-      if (keyword.utility?.variants.includes('dark') || !standsOut(keyword.color, input.color))
+      const surfaceUtility = parseUtility(surface.value);
+      if (surfaceUtility.variants.includes('dark') || !standsOut(surfaceColor, input.color))
         continue;
       const token = this.fixedTo(fix.text);
       if (!token) continue;
@@ -753,7 +756,7 @@ class Surfaces {
       // In its own class list, the text changes in the background's state: `hover:text-…`.
       const variants = [...textUtility.variants];
       if (under === list) {
-        for (const variant of keyword.utility?.variants ?? []) {
+        for (const variant of surfaceUtility.variants) {
           if (!variants.includes(variant)) variants.push(variant);
         }
       }

@@ -160,6 +160,26 @@ describe('no-hardcoded-color: white and black', () => {
     );
   });
 
+  it('does not fix a palette background to a token white text would not stand out from', () => {
+    // The demo's primary is oklch(0.205) in light mode and oklch(0.922) in dark mode: the text
+    // stands out from zinc-900, and would not from `bg-primary` in dark mode.
+    for (const code of [
+      '<a className="bg-zinc-900 text-white">Upgrade</a>',
+      '<div className="bg-zinc-900 p-4"><p className="text-white">Hi</p></div>',
+    ]) {
+      const [bg] = check(code, rule);
+      expect(bg, code).toMatchObject({ source: 'bg-zinc-900', suggestion: 'bg-primary' });
+      expect(bg?.fix, code).toBeUndefined();
+      expect(bg?.message, code).toContain(
+        '`text-white` on it stays white, which would not stand out from primary in dark mode, so this is not applied automatically: change the text with it, to `text-primary-foreground`.',
+      );
+    }
+    // Text set for dark mode too keeps the fix: `bg-primary text-white dark:text-black` reads.
+    expect(
+      check('<a className="bg-zinc-900 text-white dark:text-black">x</a>', rule)[0]?.fix,
+    ).toEqual([expect.objectContaining({ text: 'bg-primary' })]);
+  });
+
   it('keeps a state class apart from a white it would become the same token as', () => {
     // `bg-white` → `bg-background`, so `hover:bg-gray-50` → `hover:bg-background` would change
     // nothing on hover (saas-starter's sign-in button).

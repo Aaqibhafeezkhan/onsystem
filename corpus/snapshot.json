@@ -21,7 +21,7 @@
         "no-hardcoded-color": {
           "errors": 77,
           "warnings": 32,
-          "fixes": 35
+          "fixes": 34
         },
         "prefer-design-system-component": {
           "errors": 2,
@@ -262,7 +262,7 @@
         "no-hardcoded-color": {
           "errors": 10910,
           "warnings": 245,
-          "fixes": 7306
+          "fixes": 7272
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -293,7 +293,7 @@
         "no-hardcoded-color": {
           "errors": 297,
           "warnings": 11,
-          "fixes": 148
+          "fixes": 146
         },
         "prefer-design-system-component": {
           "errors": 15,
@@ -324,7 +324,7 @@
         "no-hardcoded-color": {
           "errors": 10853,
           "warnings": 215,
-          "fixes": 7306
+          "fixes": 7272
         },
         "prefer-design-system-component": {
           "errors": 973,
@@ -356,7 +356,7 @@
         "no-hardcoded-color": {
           "errors": 10910,
           "warnings": 245,
-          "fixes": 7306
+          "fixes": 7272
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -412,7 +412,7 @@
         "no-hardcoded-color": {
           "errors": 11207,
           "warnings": 256,
-          "fixes": 7454
+          "fixes": 7418
         },
         "prefer-design-system-component": {
           "errors": 1015,
