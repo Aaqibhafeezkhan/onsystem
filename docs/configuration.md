@@ -43,7 +43,7 @@ The root stays one project, as before, when it has a design system of its own (a
 {
   "$schema": "https://unpkg.com/onsystem/schema.json",
   "components": ["src/components/**/*.tsx"],
-  "exclude": ["**/*.stories.tsx", "**/*.test.tsx"],
+  "exclude": ["src/legacy/**"],
   "tokens": ["src/styles/globals.css", { "path": "tokens/*.tokens.json", "prefix": "acme" }],
   "docs": ["docs/components/**/*.mdx"],
   "importPath": "@acme/ui",
@@ -62,7 +62,7 @@ The root stays one project, as before, when it has a design system of its own (a
 | Field                 | Default                                                                                                                                                                                                        |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `components`          | [Detected](#zero-config), else `components/ui/**/*.{tsx,jsx}`, `src/components/ui/**/*.{tsx,jsx}`                                                                                                              |
-| `exclude`             | `**/*.{test,spec,stories}.{ts,tsx,js,jsx}`, `**/__{tests,stories,mocks}__/**`, `**/*.d.ts`. A list replaces these, so repeat the ones to keep; `node_modules` is left out either way unless a pattern names it |
+| `exclude`             | `**/*.{test,spec,stories}.{ts,tsx,js,jsx}`, `**/__{tests,stories,mocks}__/**`, `**/*.d.ts`. A list adds to these, and `!` takes one out (`"!**/*.d.ts"`). `node_modules` is left out unless a pattern names it |
 | `tokens`              | Detected, else `app/globals.css`, `src/app/globals.css`, `styles/globals.css`, `src/styles/globals.css`, `src/index.css`, `app/app.css`, `**/*.tokens.json`; and the stylesheets they import                   |
 | `docs`                | `docs/components/**/*.{md,mdx}` and `.md`/`.mdx` files next to the components                                                                                                                                  |
 | `importPath`          | Inferred from package `exports` (`@acme/ui/button`), then `tsconfig` `paths` (`@/components/ui/button`). `@acme/ui/{path}` suggests each file by its path in its package                                       |
@@ -127,6 +127,6 @@ Every component the folder's files export counts, helpers too: with all of signo
 `exclude` is not enough on its own:
 
 - A file named outright on the command line is checked whatever `exclude` says (`npx onsystem check components/signoff-ui/diff-review.tsx`). The Claude Code hook and `check_ui` leave it out, as `check .` does, so an agent that edits a registry file is not told to fix it.
-- In an app's config, `exclude` replaces the default list rather than adding to it: with `"exclude": ["components/signoff-ui/**"]`, `check .` leaves the folder out and reports tests and stories from then on. Repeat the defaults ([`exclude`](#config-file)) to keep them out.
+- `exclude` adds to the default list: with `"exclude": ["components/signoff-ui/**"]`, `check .` leaves the folder out, and tests and stories stay out ([`exclude`](#config-file)).
 
 After `npx shadcn add` from a registry you have not set apart yet, add its folder to the config, or `check` reports its files as your code.

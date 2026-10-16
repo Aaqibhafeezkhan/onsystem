@@ -246,6 +246,7 @@ describe('a config a design-system package declares', () => {
       '**/*.stories.tsx',
     ]);
     expect(config.designSystemExclude).toEqual([
+      ...DEFAULT_EXCLUDE,
       '../../packages/kit/src/index.tsx',
       '**/*.stories.tsx',
     ]);
@@ -488,8 +489,9 @@ describe('a config a design-system package declares', () => {
     const config = await loadConfig({ root: app });
     const own = ['../../packages/kit/src/index.tsx', '../../packages/kit/src/legacy/**'];
     expect(config.exclude).toEqual([...DEFAULT_EXCLUDE, ...own]);
-    // The package's files are found with its own list, as the package finds them.
-    expect(config.designSystemExclude).toEqual(own);
+    // The package's files are found with its own list, which adds to the defaults, as the
+    // package finds them.
+    expect(config.designSystemExclude).toEqual([...DEFAULT_EXCLUDE, ...own]);
     expect((await run(['inspect', '--no-cache'], app)).stdout).toMatch(
       /Components \(3 \+ 0 parts\)\n {2}Button .*\n {2}Card .*\n {2}Input /,
     );

@@ -125,7 +125,8 @@ describe('coveredByGlob', () => {
 });
 
 describe('exclude: the same files left out everywhere', () => {
-  const kept = ['app/legacy-v2/page.tsx', 'app/page.stories.tsx', 'app/page.tsx'];
+  // `exclude` adds to the defaults: the story stays out too.
+  const kept = ['app/legacy-v2/page.tsx', 'app/page.tsx'];
   const patterns = [
     'app/legacy',
     'app/legacy/',
