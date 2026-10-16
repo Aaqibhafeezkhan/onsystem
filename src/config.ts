@@ -137,7 +137,7 @@ const configShape = {
     .array(z.string())
     .optional()
     .describe(
-      'Globs for files to leave out (stories, tests), relative to the root: `check` in folders and globs, the ESLint plugin, the Claude Code hook and check_ui leave them out, and finding components skips them. A folder (`app/legacy`) covers everything in it. Replaces the defaults; node_modules is skipped either way unless a pattern names it.',
+      'Globs for files to leave out, relative to the root: `check` in folders and globs, the ESLint plugin, the Claude Code hook and check_ui leave them out, and finding components skips them. A folder (`app/legacy`) covers everything in it. Adds to the defaults (node_modules, .d.ts files, tests and stories); a pattern that starts with `!` takes out the default it names, such as `!**/*.d.ts`.',
     ),
   tokens: z
     .union([tokenSourceSchema, z.array(tokenSourceSchema)])
@@ -570,10 +570,27 @@ export async function loadConfigWith(
           ...FALLBACK_TOKENS.map((p) => ({ path: p, fallback: true })),
         ];
 
-  const exclude = (config.exclude ?? DEFAULT_EXCLUDE)
-    .map(slashGlob)
-    // `./app/legacy/` is the folder `app/legacy`, also when a root config's pattern is rebased.
-    .map((e) => e.replace(/^(?:\.\/)+/, '').replace(/(.)\/+$/, '$1'))
+  // `exclude` adds to the defaults. A pattern that starts with `!` takes out the default it
+  // names (`!**/*.d.ts`), for a project that checks what the defaults leave out.
+  const tidy = (e: string) =>
+    slashGlob(e)
+      // `./app/legacy/` is the folder `app/legacy`, also when a root config's pattern is rebased.
+      .replace(/^(?:\.\/)+/, '')
+      .replace(/(.)\/+$/, '$1');
+  const listed = config.exclude ?? [];
+  const dropped = new Set(listed.filter((e) => e.startsWith('!')).map((e) => tidy(e.slice(1))));
+  for (const pattern of dropped) {
+    if (DEFAULT_EXCLUDE.includes(pattern)) continue;
+    warnings.push(
+      `"!${pattern}" in "exclude" takes out none of the defaults, which are ${DEFAULT_EXCLUDE.map((d) => `"${d}"`).join(', ')}: a pattern that starts with "!" names one of them.`,
+    );
+  }
+  const exclude = [
+    ...new Set([
+      ...DEFAULT_EXCLUDE.filter((d) => !dropped.has(d)),
+      ...listed.filter((e) => !e.startsWith('!')).map(tidy),
+    ]),
+  ]
     .map(excludeFromBase)
     .filter((e): e is string => e !== undefined);
 
@@ -589,7 +606,8 @@ export async function loadConfigWith(
           : DEFAULT_COMPONENTS
     ).map(slashGlob),
     // An app keeps the default excludes for its own files: a package's own `exclude` is about
-    // the package, and only adds to them. Finding the package's files uses its list as it is.
+    // the package, and only adds to them, whatever defaults it takes out. Finding the package's
+    // files uses its list as it is.
     exclude: declared && config.exclude ? [...new Set([...DEFAULT_EXCLUDE, ...exclude])] : exclude,
     ...(declared && config.exclude ? { designSystemExclude: exclude } : {}),
     tokens: tokenSources.map((t) => ({ ...t, path: slashGlob(t.path) })),

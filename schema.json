@@ -22,7 +22,7 @@
       ]
     },
     "exclude": {
-      "description": "Globs for files to leave out (stories, tests), relative to the root: `check` in folders and globs, the ESLint plugin, the Claude Code hook and check_ui leave them out, and finding components skips them. A folder (`app/legacy`) covers everything in it. Replaces the defaults; node_modules is skipped either way unless a pattern names it.",
+      "description": "Globs for files to leave out, relative to the root: `check` in folders and globs, the ESLint plugin, the Claude Code hook and check_ui leave them out, and finding components skips them. A folder (`app/legacy`) covers everything in it. Adds to the defaults (node_modules, .d.ts files, tests and stories); a pattern that starts with `!` takes out the default it names, such as `!**/*.d.ts`.",
       "type": "array",
       "items": {
         "type": "string"

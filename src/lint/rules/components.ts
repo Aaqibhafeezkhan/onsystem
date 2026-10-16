@@ -4,7 +4,7 @@ import ts from 'typescript';
 
 import type { ComponentInfo, PropInfo, TextEdit } from '../../types.js';
 import { propertyName } from '../../extract/cva.js';
-import { toPosix } from '../../util/paths.js';
+import { matchesGlob, toPosix } from '../../util/paths.js';
 import { closest, editDistance } from '../../util/strings.js';
 import {
   asFunction,
@@ -79,6 +79,11 @@ export const preferDesignSystemComponent: Rule = {
       }
       const component = context.target.elements.get(key);
       if (!component) continue;
+      // Code copied from a shadcn registry is checked against, not suggested: signoff-ui's
+      // internal `Img` is no replacement for an app's <img>. Unless the config maps it.
+      if (fromRegistry(component, context) && context.target.config.elements[key] === undefined) {
+        continue;
+      }
       // An element no one sees or reaches is no UI to replace: the off-screen input that
       // carries a custom select's `required`, an `aria-hidden` proxy.
       if (hiddenFromUser(element)) continue;
@@ -118,6 +123,18 @@ export const preferDesignSystemComponent: Rule = {
     }
   },
 };
+
+/**
+ * Whether `component` is in the folder of a shadcn registry that components.json names
+ * (`components/signoff-ui`): a read-only design system, ranked after the others.
+ */
+function fromRegistry(component: ComponentInfo, context: RuleContext): boolean {
+  const file = component.source.file;
+  return (context.target.config.designSystems ?? []).some(
+    (source) =>
+      source.registry !== undefined && source.components.some((g) => matchesGlob(file, g)),
+  );
+}
 
 const definitionsByFile = new WeakMap<ts.SourceFile, Set<string>>();
 

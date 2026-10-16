@@ -95,10 +95,15 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
   );
   if (config.tailwindConfig) field('tailwind', display(config.root, config.tailwindConfig));
   if (config.designSystems) {
+    // Imports are counted to rank several design systems; a registry's folder always comes last.
+    const ranked = config.designSystems.filter((d) => !d.registry).length > 1;
     field(
       'primary',
       config.designSystems
-        .map((d, i) => `${i ? 'then ' : ''}${d.source} (${d.imports} imports)`)
+        .map(
+          (d, i) =>
+            `${i ? 'then ' : ''}${d.source}${d.registry ? ', read-only' : ranked ? ` (${d.imports} imports)` : ''}`,
+        )
         .join('; '),
     );
   }

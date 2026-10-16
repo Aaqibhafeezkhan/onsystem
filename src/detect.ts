@@ -99,6 +99,13 @@ export interface DesignSystemSource {
   source: string;
   components: string[];
   imports: number;
+  /**
+   * The shadcn registry (`@signoff-ui`) whose code `npx shadcn add` copied into these files, as
+   * the `registries` of components.json name it: a read-only design system, after the others.
+   * Code that imports it is checked against its components, which are never suggested for a
+   * native element, and its own files are skipped like the others' are.
+   */
+  registry?: string | undefined;
 }
 
 interface Found {
@@ -112,6 +119,8 @@ interface Found {
   package?: string | undefined;
   /** Specifiers the app imports them by: a package name, a `components.json` alias. */
   prefixes?: string[] | undefined;
+  /** The shadcn registry the files were copied from (`@signoff-ui`). */
+  registry?: string | undefined;
 }
 
 const COMPONENT_FILE = /\.[jt]sx$/;
@@ -146,6 +155,10 @@ const STYLESHEETS = [
  * (`designSystems`). A candidate whose globs match no file is skipped. Returns undefined
  * when nothing applies, so the shadcn defaults stay in force.
  *
+ * Next to the ui folder `components.json` names, the folders `npx shadcn add` copies other
+ * registries' code into (its `registries`: `@signoff-ui` → `components/signoff-ui`) are
+ * read-only design systems, after all the others ({@link fromRegistries}).
+ *
  * `declared` is the dependency whose config the root takes on ({@link findDesignSystemPackage}):
  * it is read first among the dependencies in step 3, whatever its name, and also when it is
  * installed from a registry rather than a workspace package.
@@ -162,12 +175,14 @@ export function detectProject(
   const found: Found[] = [];
 
   const shadcn = readJson(path.join(root, 'components.json'));
+  const project = shadcn ? readProjectConfig(root, tsconfig) : undefined;
   let why = 'no ui or components alias';
-  const fromShadcn = shadcn
-    ? fromComponentsJson(root, root, shadcn, readProjectConfig(root, tsconfig), packages, (r) => {
-        why = r;
-      })
-    : undefined;
+  const fromShadcn =
+    shadcn && project
+      ? fromComponentsJson(root, root, shadcn, project, packages, (r) => {
+          why = r;
+        })
+      : undefined;
   if (!shadcn) {
     step(
       'components.json',
@@ -271,11 +286,33 @@ export function detectProject(
       );
     }
   }
+  // Other registries' code next to the ui folder: read-only, after every other design system.
+  const registries =
+    shadcn && project && fromShadcn && !withDefaults
+      ? fromRegistries(root, shadcn, fromShadcn, found, project, step)
+      : [];
   if (found.length) {
     step('a flat src/ of components', false, 'not read: a design system was found');
+    // Registry code is named after the rest: `…; from shadcn registries, read-only: …`.
+    const named = (source: string) =>
+      registries.length
+        ? `${source}; from shadcn registries, read-only: ${registries.map((r) => r.source).join(', ')}`
+        : source;
+    // Each registry's folder is a design system of its own, never the primary one.
+    const read = registries.map((f) => ({
+      source: f.source,
+      components: f.components,
+      imports: 0,
+      registry: f.registry,
+    }));
     if (found.length === 1) {
       const [only] = found;
-      return detection(root, found, withDefaults, only?.source ?? '');
+      const source = only?.source ?? '';
+      if (!only || !read.length) return detection(root, found, withDefaults, source);
+      return {
+        ...detection(root, [...found, ...registries], withDefaults, named(source)),
+        designSystems: [{ source, components: only.components, imports: 0 }, ...read],
+      };
     }
     // Several design systems: the most imported first, the rest after it.
     const counts = importCounts(
@@ -291,15 +328,20 @@ export function detectProject(
     return {
       ...detection(
         root,
-        ranked.map((r) => r.f),
+        [...ranked.map((r) => r.f), ...registries],
         withDefaults,
-        `primary: ${primary ? describe(primary) : ''}; also: ${rest.map(describe).join(', ')}`,
+        named(
+          `primary: ${primary ? describe(primary) : ''}; also: ${rest.map(describe).join(', ')}`,
+        ),
       ),
-      designSystems: ranked.map((r) => ({
-        source: r.f.source,
-        components: r.f.components,
-        imports: r.imports,
-      })),
+      designSystems: [
+        ...ranked.map((r) => ({
+          source: r.f.source,
+          components: r.f.components,
+          imports: r.imports,
+        })),
+        ...read,
+      ],
     };
   }
 
@@ -504,6 +546,131 @@ function fromComponentsJson(
     source: `${ui} → ${relativePath(root, uiDir) || '.'}`,
     ...ownerPackage(root, uiDir, ui),
   };
+}
+
+/** How a shadcn registry is named in components.json: `@` and a name, so none leads out of the folder. */
+const REGISTRY_NAMESPACE = /^@[a-z0-9][\w-]*$/i;
+
+/** A folder `npx shadcn add` copies a registry's code into: `components/signoff-ui` for `@signoff-ui`. */
+export interface RegistryFolder {
+  namespace: string;
+  /** Relative to the root, with forward slashes. */
+  dir: string;
+  /** The glob, from the root, for its .tsx and .jsx files. */
+  glob: string;
+}
+
+/**
+ * The registries `components.json` names (`"registries": { "@signoff-ui": … }`), sorted, and
+ * where `npx shadcn add` copies their code: the components alias, through tsconfig `paths`, when
+ * it names a folder in the project. `why` says why there is none.
+ */
+function registryBase(
+  root: string,
+  json: Record<string, unknown>,
+  project: ProjectConfig,
+): { namespaces: string[]; base?: string; alias?: string; why?: string } {
+  const namespaces = Object.keys(asRecord(json.registries))
+    .filter((n) => REGISTRY_NAMESPACE.test(n))
+    .sort();
+  const alias = asRecord(json.aliases).components;
+  if (typeof alias !== 'string') return { namespaces, why: 'no components alias' };
+  const base = namespaces.length ? resolveThroughPaths(alias, project) : undefined;
+  if (!base || !isInside(root, base)) {
+    return {
+      namespaces,
+      why: `the components alias ${alias} names no folder in the project through tsconfig paths`,
+    };
+  }
+  return { namespaces, base, alias };
+}
+
+/** The folder of a registry's code: the namespace without its `@`, under the components folder. */
+function registryFolder(root: string, base: string, namespace: string): RegistryFolder {
+  const dir = relativePath(root, path.join(base, namespace.slice(1)));
+  return { namespace, dir, glob: `${escapePath(dir)}/**/*.{tsx,jsx}` };
+}
+
+/**
+ * The folders `npx shadcn add` copies the code of the registries `components.json` names into,
+ * whether they hold files yet or not, outside the ui folder ({@link fromRegistries}). A config
+ * that lists them in `components` reads them as zero config does: read-only, after the rest.
+ */
+export function registryFolders(root: string, tsconfig?: string): RegistryFolder[] {
+  const json = readJson(path.join(root, 'components.json'));
+  if (!json || !Object.keys(asRecord(json.registries)).length) return [];
+  const project = readProjectConfig(root, tsconfig);
+  const { namespaces, base } = registryBase(root, json, project);
+  if (!base) return [];
+  const ui = asRecord(json.aliases).ui;
+  const uiDir = typeof ui === 'string' ? resolveThroughPaths(ui, project) : undefined;
+  return namespaces
+    .filter((namespace) => !uiDir || !isInside(uiDir, path.join(base, namespace.slice(1))))
+    .map((namespace) => registryFolder(root, base, namespace));
+}
+
+/**
+ * The folders `npx shadcn add` copies the code of the registries `components.json` names into
+ * (`@/components` and `@signoff-ui` → `components/signoff-ui`). Each one that holds a .tsx or
+ * .jsx file is a read-only design system: the app's code is checked against its components, and
+ * its own files are skipped as the ui folder's are. Not when a design system found is imported
+ * through a package's `exports` (`@workspace/ui`): a config that names that package would give
+ * registry code its name too. A folder inside the ui folder is already part of it. Code a
+ * registry copies loose into the components folder (React Bits) is not set apart.
+ */
+function fromRegistries(
+  root: string,
+  json: Record<string, unknown>,
+  ui: Found,
+  others: readonly Found[],
+  project: ProjectConfig,
+  step: (candidate: string, accepted: boolean, reason: string) => void,
+): Found[] {
+  const { namespaces, base, alias, why } = registryBase(root, json, project);
+  if (!namespaces.length) return [];
+  const no = (reason: string) => {
+    for (const namespace of namespaces) step(`registry ${namespace}`, false, reason);
+    return [];
+  };
+  // A config that names one package for the design system would give their files its name.
+  const exported = others.find((f) => f.imports.length);
+  if (exported) {
+    return no(
+      `not read: ${exported.package ?? 'a package'} is imported through its exports, and the registry's code is not`,
+    );
+  }
+  if (!base || alias === undefined) return no(why ?? 'no components alias');
+  const found: Found[] = [];
+  for (const namespace of namespaces) {
+    const candidate = `registry ${namespace}`;
+    const { dir, glob } = registryFolder(root, base, namespace);
+    const absolute = path.join(root, dir);
+    if (ui.dirs.some((d) => isInside(d, absolute))) {
+      step(candidate, false, `${dir} is in the ui folder`);
+      continue;
+    }
+    const files = isDirectory(absolute) ? componentGlob(root, [glob]).length : 0;
+    if (!files) {
+      step(
+        candidate,
+        false,
+        `${dir} ${isDirectory(absolute) ? 'holds no .tsx or .jsx file yet' : 'does not exist yet'}`,
+      );
+      continue;
+    }
+    step(candidate, true, `${dir}, ${plural(files, 'component file')}, read-only`);
+    found.push({
+      components: [glob],
+      tokens: [],
+      imports: [],
+      // Markdown in it is the registry's, not docs for the app's components.
+      dirs: [],
+      source: `${dir} (${namespace}, ${plural(files, 'file')})`,
+      prefixes: [`${alias}/${namespace.slice(1)}`],
+      registry: namespace,
+    });
+  }
+  return found;
 }
 
 /**

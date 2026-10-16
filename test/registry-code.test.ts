@@ -128,7 +128,7 @@ async function tool(root: string, name: string, args: Record<string, unknown>): 
 }
 
 describe('code from shadcn registries (docs/configuration.md)', () => {
-  it('without a config, checks the registry folders as app code', async () => {
+  it('without a config, checks folders that components.json names no registry for as app code', async () => {
     const { reported } = await check(app(), '.');
     expect(reported).toEqual([MESSAGE, DIFF_REVIEW, PRIMITIVES]);
   });
@@ -221,11 +221,13 @@ describe('code from shadcn registries (docs/configuration.md)', () => {
     );
   });
 
-  it('with `exclude`, still checks a file named outright, and starts checking stories', async () => {
+  it('with `exclude`, still checks a file named outright, and keeps stories out', async () => {
     expect(configuration).toContain('`"exclude": ["components/signoff-ui/**"]`');
     const root = app({ exclude: ['components/signoff-ui/**'] });
     const all = await check(root, '.');
-    expect(all.reported).toEqual(['app/page.stories.tsx', MESSAGE]);
+    // `exclude` adds to the defaults, which leave tests and stories out.
+    expect(all.reported).toEqual([MESSAGE]);
+    expect(all.text).toContain('1 test or story left out');
     const named = await check(root, DIFF_REVIEW);
     expect([named.code, named.reported]).toEqual([1, [DIFF_REVIEW]]);
     // check_ui leaves it out, as `check .` and the hook do.
@@ -234,7 +236,7 @@ describe('code from shadcn registries (docs/configuration.md)', () => {
     );
   });
 
-  it('lists the default `exclude` in the field table, which keeps tests and stories out again', async () => {
+  it('lists the default `exclude` in the field table, which a list adds to', async () => {
     const row = configuration.split('\n').find((line) => line.startsWith('| `exclude`'));
     const defaults = [
       ...(row?.split('|')[2]?.split('. A list')[0] ?? '').matchAll(/`([^`]+)`/g),
@@ -242,7 +244,7 @@ describe('code from shadcn registries (docs/configuration.md)', () => {
     expect([...defaults].sort()).toEqual(
       DEFAULT_EXCLUDE.filter((e) => e !== '**/node_modules/**').sort(),
     );
-    expect(row).toContain('A list replaces these');
+    expect(row).toContain('A list adds to these');
     const root = app({ exclude: ['components/signoff-ui/**', ...defaults] });
     const all = await check(root, '.');
     expect(all.reported).toEqual([MESSAGE]);

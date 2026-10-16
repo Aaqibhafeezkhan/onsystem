@@ -8,6 +8,7 @@ import {
   ConfigError,
   configJsonSchema,
   DEFAULT_COMPONENTS,
+  DEFAULT_EXCLUDE,
   loadConfig,
   nodeRunsTypeScript,
   rulesFor,
@@ -298,7 +299,7 @@ describe('loadConfig', () => {
       components: ['components/ui/**/*.tsx'],
       tokens: [{ path: 'app/globals.css' }, { path: 'tokens/*.tokens.json', prefix: 'acme' }],
       docs: ['guides/*.mdx'],
-      exclude: ['**/*.stories.tsx', 'app/\\(marketing\\)/**'],
+      exclude: [...DEFAULT_EXCLUDE, '**/*.stories.tsx', 'app/\\(marketing\\)/**'],
     });
   });
 

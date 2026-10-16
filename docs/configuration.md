@@ -6,7 +6,7 @@ Most projects need no config: onsystem finds the design system the way your app 
 
 Without a config file of its own, a project first takes on the config its design-system package declares in its `package.json`, if one of its dependencies does ([design-system packages](design-system-packages.md)). With a config file of its own, it reads none of the package's config, so copy the package's `components`, `importPath` and `tokens` into it ([what it loses otherwise](design-system-packages.md#in-the-apps)). Without a config file (or with one that leaves `components` unset), the server looks for the design system in this order, and `inspect` prints what it found on its `detected` line:
 
-1. **`components.json`** (shadcn/ui): the `ui` alias, resolved through tsconfig `paths` (`@/registry/new-york-v4/ui`) or a workspace package's `exports` (`@workspace/ui/components` in shadcn's monorepo templates), and `tailwind.css` for tokens.
+1. **`components.json`** (shadcn/ui): the `ui` alias, resolved through tsconfig `paths` (`@/registry/new-york-v4/ui`) or a workspace package's `exports` (`@workspace/ui/components` in shadcn's monorepo templates), and `tailwind.css` for tokens. The folders `npx shadcn add` fills from the other registries it names are read too, as read-only design systems ([code from shadcn registries](#code-from-shadcn-registries)).
 2. **The root is a design-system package** (when it has no `components.json`): its `package.json` `exports` lead to three or more component files (`"./button": "./src/components/button.tsx"` or `"./components/*": "./src/components/*.tsx"`). An export that points at a barrel (`"./components/button": "./components/button/index.ts"`, as `@calcom/ui` has them) stands for the `.tsx` files the barrel re-exports, through `export *`, `export { … } from` and imported bindings exported again. An export built to `dist/` is read from its source: the `entry` of a tsup, tsdown or Vite config (read as text, never run), else the same path under `src/`, and `.` from `src/index.*`, so Dub's `@dub/ui` (`"import": "./dist/index.mjs"`) is read from `src/index.tsx` and what it re-exports. Exported stylesheets that exist are read as tokens, else `src/globals.css` and the like.
 3. **A dependency named like a design system** (`@acme/ui`, `@acme/ui-kit`, `@acme/design-system`, `acme-ui`) that resolves to workspace sources, through a `node_modules` link or the workspace's package globs (pnpm, npm, Yarn and Bun). It is read the same way, or through its own `components.json`, and added to what `components.json` found: Cal.com's app has `@coss/ui` in its `components.json` and imports `@calcom/ui` too, and both are read. Without a `components.json`, the app's own `components/ui` is kept alongside it. A package without `exports` that apps import by path, as Documenso imports `@documenso/ui/primitives/button`, is read from the files the app's code imports, each suggested with the specifier it uses, with a stylesheet imported from it as the theme.
 4. **A flat `src/` of components** that wrap a primitives library, the way React Aria's Tailwind starter ships them (`src/Button.tsx`, `src/Checkbox.tsx`). It takes all of: a dependency on `react-aria-components`, `react-aria`, Radix, Base UI, Headless UI or Ark UI; no app entry (`main.tsx`, `App.tsx`, `index.tsx`) or `app`, `pages` or `routes` folder in `src/`; and at least five PascalCase `.tsx` files at its top level, four in five of which import that library. An app's `src/` of pages and features does not qualify. A stylesheet such as `src/index.css` is read as the theme.
@@ -43,7 +43,7 @@ The root stays one project, as before, when it has a design system of its own (a
 {
   "$schema": "https://unpkg.com/onsystem/schema.json",
   "components": ["src/components/**/*.tsx"],
-  "exclude": ["**/*.stories.tsx", "**/*.test.tsx"],
+  "exclude": ["src/legacy/**"],
   "tokens": ["src/styles/globals.css", { "path": "tokens/*.tokens.json", "prefix": "acme" }],
   "docs": ["docs/components/**/*.mdx"],
   "importPath": "@acme/ui",
@@ -62,7 +62,7 @@ The root stays one project, as before, when it has a design system of its own (a
 | Field                 | Default                                                                                                                                                                                                        |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `components`          | [Detected](#zero-config), else `components/ui/**/*.{tsx,jsx}`, `src/components/ui/**/*.{tsx,jsx}`                                                                                                              |
-| `exclude`             | `**/*.{test,spec,stories}.{ts,tsx,js,jsx}`, `**/__{tests,stories,mocks}__/**`, `**/*.d.ts`. A list replaces these, so repeat the ones to keep; `node_modules` is left out either way unless a pattern names it |
+| `exclude`             | `**/*.{test,spec,stories}.{ts,tsx,js,jsx}`, `**/__{tests,stories,mocks}__/**`, `**/*.d.ts`. A list adds to these, and `!` takes one out (`"!**/*.d.ts"`). `node_modules` is left out unless a pattern names it |
 | `tokens`              | Detected, else `app/globals.css`, `src/app/globals.css`, `styles/globals.css`, `src/styles/globals.css`, `src/index.css`, `app/app.css`, `**/*.tokens.json`; and the stylesheets they import                   |
 | `docs`                | `docs/components/**/*.{md,mdx}` and `.md`/`.mdx` files next to the components                                                                                                                                  |
 | `importPath`          | Inferred from package `exports` (`@acme/ui/button`), then `tsconfig` `paths` (`@/components/ui/button`). `@acme/ui/{path}` suggests each file by its path in its package                                       |
@@ -83,9 +83,20 @@ CLI flags override the file: `--root`, `--config`, `--components`, `--tokens`, `
 
 ## Code from shadcn registries
 
-`npx shadcn add` also installs items from other registries, often into a folder of their own: AI Elements into `components/ai-elements`, signoff-ui into `components/signoff-ui`. Zero config takes only the `ui` folder of `components.json` as the design system, so it checks that code as your own: a native `<button>` or an arbitrary color in it is a finding, in files you would rather update with `shadcn add` than rewrite. Set each registry's folder apart in one of two ways.
+`npx shadcn add` also installs items from other registries, often into a folder of their own: AI Elements into `components/ai-elements`, signoff-ui into `components/signoff-ui`. That code is the registry's: you update it with `shadcn add`, not by hand.
 
-**List it in `components`**, next to `components/ui`. Its files become part of the design system: `check` and the Claude Code hook skip them, as they skip `components/ui`, agents find its components with `search_components` and `get_component`, and your code is checked against their props (`<DiffReview> has no prop "tone"`). A config that sets `components` turns detection off, so it lists `components/ui` too, and the theme's stylesheet in `tokens`. `npx onsystem init` writes that config from what zero config found; add the registry folders to its `components`:
+**Zero config reads those folders as read-only design systems.** For each registry in the `registries` of `components.json` (`"@signoff-ui": "https://signoff-ui.vercel.app/r/{name}.json"`), the folder of that name under the `components` alias (`@/components` and `@signoff-ui` → `components/signoff-ui`) is a design system of its own, after `components/ui`:
+
+- `check`, the Claude Code hook, the ESLint plugin and the GitHub Action skip its files, as they skip `components/ui`, so the next `shadcn add` brings no findings in files nobody edited.
+- Your code is checked against its components (`<DiffReview> has no prop "tone"`, `Message has no member "Header"`).
+- Agents find them with `search_components` and `get_component`, which says which registry a component was installed from and that changes to it belong upstream. The helpers in the folder's `lib/` are left out of `list_components` and `search_components`.
+- None of them is suggested in place of a native element; `components/ui`'s are. signoff-ui's internal `Img` does not replace your `<img>`. To have one suggested, map it in [`elements`](#config-file) (`{ "img": "Img" }`).
+
+`inspect` names the folders on its `detected` line (`components.json (ui: @/components/ui → components/ui); from shadcn registries, read-only: components/ai-elements (@ai-elements, 31 files)`), and `inspect --explain` says why each registry's folder was read or not: one that does not exist yet, or holds no `.tsx` or `.jsx` file, is read once `shadcn add` fills it. `npx onsystem init` writes the folders into `components`, next to `components/ui`, with the ones that do not exist yet, and a config that lists them keeps them read-only. To check that code as your own, take its folder out of `components`, or pass `--include-design-system` for one run.
+
+Zero config does not set apart code a registry copies loose into `components/` (React Bits puts `components/Dock.tsx` there), code in a folder that `components.json` names in no `registries` entry, or registry folders in an app whose components come from a workspace package imported through its `exports` (`@workspace/ui` in shadcn's monorepo templates). Set that code apart in one of two ways.
+
+**List its folder in `components`**, next to `components/ui`. Its files become part of the design system: `check` and the Claude Code hook skip them, as they skip `components/ui`, agents find its components with `search_components` and `get_component`, and your code is checked against their props (`<DiffReview> has no prop "tone"`). A config that sets `components` turns detection off, so it lists `components/ui` too, and the theme's stylesheet in `tokens`. `npx onsystem init` writes that config from what zero config found; add the other folders to its `components`:
 
 ```json title="onsystem.config.json"
 {
@@ -99,7 +110,7 @@ CLI flags override the file: `--root`, `--config`, `--components`, `--tokens`, `
 }
 ```
 
-Every component the folder's files export counts, helpers too: with all of signoff-ui listed, the `Img` in its `lib/primitives.tsx` is suggested in place of a native `<img>` in your code. To leave a folder's helpers out, list its top level only (`components/signoff-ui/*.{tsx,jsx}`) and turn the rules off for the rest of the folder with an `overrides` entry like the one below, with `"files": ["components/signoff-ui/lib/**"]`. Without that entry, `check` reads `lib/` as your code and reports its files.
+A listed folder that `components.json` names in no `registries` entry is no registry's: every component its files export counts, helpers too, and can be suggested for a native element. With all of such a `components/signoff-ui` listed, the `Img` in its `lib/primitives.tsx` is suggested in place of a native `<img>` in your code. To leave a folder's helpers out, list its top level only (`components/signoff-ui/*.{tsx,jsx}`) and turn the rules off for the rest of the folder with an `overrides` entry like the one below, with `"files": ["components/signoff-ui/lib/**"]`. Without that entry, `check` reads `lib/` as your code and reports its files.
 
 **Or turn the rules off for it** in `overrides`. Nothing in its files is reported, by `check`, the hook or `check_ui`, and zero config still finds the design system, but agents do not learn the registry's components:
 
@@ -124,9 +135,6 @@ Every component the folder's files export counts, helpers too: with all of signo
 }
 ```
 
-`exclude` is not enough on its own:
+`exclude` is not enough on its own: a file named outright on the command line is checked whatever `exclude` says (`npx onsystem check components/signoff-ui/diff-review.tsx` with `"exclude": ["components/signoff-ui/**"]`). The Claude Code hook and `check_ui` leave it out, as `check .` does, so an agent that edits a registry file is not told to fix it. `exclude` adds to the default list, so tests and stories stay out ([`exclude`](#config-file)).
 
-- A file named outright on the command line is checked whatever `exclude` says (`npx onsystem check components/signoff-ui/diff-review.tsx`). The Claude Code hook and `check_ui` leave it out, as `check .` does, so an agent that edits a registry file is not told to fix it.
-- In an app's config, `exclude` replaces the default list rather than adding to it: with `"exclude": ["components/signoff-ui/**"]`, `check .` leaves the folder out and reports tests and stories from then on. Repeat the defaults ([`exclude`](#config-file)) to keep them out.
-
-After `npx shadcn add` from a registry you have not set apart yet, add its folder to the config, or `check` reports its files as your code.
+After `npx shadcn add` from a registry that `components.json` does not name, add its folder to the config, or `check` reports its files as your code.
