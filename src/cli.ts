@@ -542,7 +542,7 @@ async function selectInProject(
     excluded: leftOut.filter((file) => !TEST_FILE.test(file)).length,
     gitignored: ignored.size,
   };
-  let files = unique([...named, ...kept.filter((file) => !ignored.has(file))]).sort();
+  let files = oncePerFile([...named, ...kept.filter((file) => !ignored.has(file))]).sort();
   if (!files.length && !all.length) {
     io.stderr(`check: no files match ${patterns.join(' ')}`);
     return 2;
@@ -642,7 +642,7 @@ async function selectInWorkspace(
     excluded: leftOut.filter((file) => !TEST_FILE.test(file)).length,
     gitignored: ignored.size,
   };
-  let files = unique([...named, ...kept.filter((file) => !ignored.has(file))]).sort();
+  let files = oncePerFile([...named, ...kept.filter((file) => !ignored.has(file))]).sort();
   if (!files.length && !all.length) {
     io.stderr(`check: no files match ${patterns.join(' ')}`);
     return 2;
@@ -1113,6 +1113,20 @@ function realPath(file: string): string {
   } catch {
     return file;
   }
+}
+
+/**
+ * One path per file, links resolved: a folder that links back to its parent reaches the same
+ * files again. The shortest path stays.
+ */
+function oncePerFile(files: readonly string[]): string[] {
+  const kept = new Map<string, string>();
+  for (const file of files) {
+    const real = realPath(file);
+    const previous = kept.get(real);
+    if (previous === undefined || file.length < previous.length) kept.set(real, file);
+  }
+  return [...kept.values()];
 }
 
 /** Relative to cwd when the file is below it, absolute otherwise. */

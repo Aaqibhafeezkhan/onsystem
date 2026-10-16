@@ -8,7 +8,7 @@ import { glob } from 'tinyglobby';
 import type ts from 'typescript';
 
 import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } from './config.js';
-import { presetResolver, stylesheetResolver } from './detect.js';
+import { presetResolver, stylesheetResolver, workspaceRootOf } from './detect.js';
 import { extractComponents } from './extract/components.js';
 import { attachDocs, parseDoc, type ParsedDoc } from './extract/docs.js';
 import {
@@ -43,7 +43,7 @@ import type {
   TokenCategory,
 } from './types.js';
 import { silentLogger, type Logger } from './util/log.js';
-import { globBase, isInside, relativePath } from './util/paths.js';
+import { globBase, isHomeOrAbove, isInside, relativePath } from './util/paths.js';
 import { closest, plural, unique } from './util/strings.js';
 import { COLOR_UTILITY, parseUtility } from './lint/tailwind.js';
 import { VERSION } from './version.js';
@@ -217,14 +217,125 @@ interface ResolvedFiles {
   components: string[];
   tokens: { file: string; prefix?: string | undefined }[];
   docs: string[];
+  /** Files found that lead outside the project, which are not read. */
+  outside: string[];
+}
+
+/**
+ * Where the design system's files may really be, links resolved: the project, the workspace
+ * and the git repository it is in, the folder a design-system package's config stays in, and
+ * packages reached through a `node_modules` folder in those, which pnpm can link from a store
+ * elsewhere. A glob follows links, and a config can name `../` and absolute paths, so without
+ * this a cloned repository could have the tools return any file on the machine
+ * (`docs/credentials.md` linked to `~/.aws/credentials`).
+ */
+class Containment {
+  /** The folders, as given. */
+  private readonly dirs: string[];
+  /** The same folders, links resolved. */
+  private readonly roots: Promise<string[]>;
+  private readonly reals = new Map<string, Promise<string | undefined>>();
+  /** Files left out, as they were found. */
+  readonly outside = new Set<string>();
+
+  constructor(config: ResolvedConfig) {
+    const around = [
+      workspaceRootOf(config.root),
+      repositoryOf(config.root),
+      config.base,
+      config.designSystemPackage?.boundary,
+    ]
+      // Never the home folder or above, which a stray package.json or a repository of
+      // dotfiles can make the workspace or repository.
+      .filter((dir): dir is string => dir !== undefined && !isHomeOrAbove(dir));
+    this.dirs = unique([config.root, ...around].map((dir) => path.resolve(dir)));
+    this.roots = Promise.all(this.dirs.map((dir) => this.real(dir))).then((reals) =>
+      reals.filter((real): real is string => real !== undefined),
+    );
+  }
+
+  /** Where `file` really is, links resolved; undefined when it is not there. */
+  real(file: string): Promise<string | undefined> {
+    let real = this.reals.get(file);
+    if (!real) {
+      real = fsp.realpath(file).catch(() => undefined);
+      this.reals.set(file, real);
+    }
+    return real;
+  }
+
+  /**
+   * `files` whose real path is inside, in their order, one path per real file: the shortest,
+   * so a folder that links back to its parent does not add its files again.
+   */
+  async filter(files: readonly string[]): Promise<string[]> {
+    const roots = await this.roots;
+    const reals = await Promise.all(files.map((file) => this.real(file)));
+    const kept = new Map<string, string>();
+    files.forEach((file, i) => {
+      const real = reals[i];
+      if (real === undefined) return;
+      const inside =
+        roots.some((root) => isInside(root, real)) ||
+        (isInstalled(real) && this.inNodeModules(file));
+      if (!inside) {
+        this.outside.add(file);
+        return;
+      }
+      const previous = kept.get(real);
+      if (previous === undefined || file.length < previous.length) kept.set(real, file);
+    });
+    return [...kept.values()];
+  }
+
+  /**
+   * Whether `file`, as found, is in a package in a `node_modules` folder of the project, the
+   * workspace or the repository, as one pnpm links from its store is. A link elsewhere in the
+   * project to another project's `node_modules` is not.
+   */
+  private inNodeModules(file: string): boolean {
+    const found = path.resolve(file);
+    return this.dirs.some((dir) => isInside(dir, found) && isInstalled(path.relative(dir, found)));
+  }
+}
+
+/** Whether a path is a file of a package in `node_modules`, not of `.cache` or `.bin` there. */
+function isInstalled(file: string): boolean {
+  const parts = file.split(/[\\/]/);
+  const at = parts.lastIndexOf('node_modules');
+  return at !== -1 && at < parts.length - 2 && !(parts[at + 1] ?? '.').startsWith('.');
+}
+
+/** The nearest folder at or above `dir` with a `.git`: the repository it is in. */
+function repositoryOf(dir: string): string | undefined {
+  for (let current = path.resolve(dir); ; current = path.dirname(current)) {
+    if (fs.existsSync(path.join(current, '.git'))) return current;
+    if (current === path.dirname(current)) return undefined;
+  }
+}
+
+/** What `inspect` and the server's log say about files that lead outside the project. */
+function outsideWarning(root: string, files: readonly string[]): string {
+  const shown = files.map((file) => relativePath(root, file)).sort();
+  const named =
+    shown.length === 1
+      ? (shown[0] ?? '')
+      : shown.length <= 5
+        ? `${shown.slice(0, -1).join(', ')} and ${shown.at(-1) ?? ''}`
+        : `${shown.slice(0, 5).join(', ')} and ${shown.length - 5} more`;
+  return `Not read: ${named} ${shown.length === 1 ? 'leads' : 'lead'} outside the project. Links resolved, the design system's files must be in the project, the workspace or git repository it is in, a package installed in their node_modules, or a package that declares its config (run onsystem init in it).`;
 }
 
 /**
  * Absolute paths matching `patterns` under the root. `node_modules` is skipped
  * even when `exclude` replaces the defaults, except by patterns that name it
- * (tokens published as a package).
+ * (tokens published as a package). Files that lead outside the project are left out.
  */
-async function find(config: ResolvedConfig, patterns: string[]): Promise<string[]> {
+async function find(
+  config: ResolvedConfig,
+  patterns: string[],
+  contain = new Containment(config),
+): Promise<string[]> {
   const options = { cwd: config.root, absolute: true, dot: false };
   // A design-system package's own excludes, when an app's `exclude` adds the defaults to them.
   const exclude = config.designSystemExclude ?? config.exclude;
@@ -260,7 +371,7 @@ async function find(config: ResolvedConfig, patterns: string[]): Promise<string[
       });
     }),
   ]);
-  return unique(found.flat()).sort();
+  return (await contain.filter(unique(found.flat()))).sort();
 }
 
 /** The design system's own component files, as absolute paths. */
@@ -274,31 +385,35 @@ export async function tokenFiles(config: ResolvedConfig): Promise<string[]> {
 }
 
 async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
-  const components = await find(config, config.components);
-  const docs = await find(config, config.docs);
+  const contain = new Containment(config);
+  const components = await find(config, config.components, contain);
+  const docs = await find(config, config.docs, contain);
   const tokens: ResolvedFiles['tokens'] = [];
+  // By real path: two paths that lead to one stylesheet are one file.
   const seen = new Set<string>();
+  const isNew = async (file: string) => {
+    const real = (await contain.real(file)) ?? path.resolve(file);
+    if (seen.has(real)) return false;
+    seen.add(real);
+    return true;
+  };
   const add = async (sources: TokenSourceConfig[]) => {
     for (const source of sources) {
-      for (const file of await find(config, [source.path])) {
-        if (seen.has(path.resolve(file))) continue;
-        seen.add(path.resolve(file));
-        tokens.push({ file, prefix: source.prefix });
+      for (const file of await find(config, [source.path], contain)) {
+        if (await isNew(file)) tokens.push({ file, prefix: source.prefix });
       }
     }
   };
   await add(config.tokens.filter((t) => !t.fallback));
   if (config.tokensDetected) {
     const found = tokens.map((t) => path.resolve(t.file));
-    for (const file of linkedStylesheets(config, found)) {
-      if (seen.has(file)) continue;
-      seen.add(file);
-      tokens.push({ file });
+    for (const file of await contain.filter(linkedStylesheets(config, found))) {
+      if (await isNew(file)) tokens.push({ file });
     }
   }
   // A DESIGN.md stands in only when no stylesheet or DTCG file was found.
   if (!tokens.length) await add(config.tokens.filter((t) => t.fallback));
-  return { components, tokens, docs };
+  return { components, tokens, docs, outside: [...contain.outside] };
 }
 
 /**
@@ -351,7 +466,7 @@ class FileStats {
 /**
  * Everything that, when changed, invalidates the cached model: the tracked
  * files, `dependencies` (project files the components import and the tsconfig
- * chain, known after extraction), the lockfile and the config.
+ * chain, known after extraction), the lockfile, the config and the files left out.
  */
 async function cacheKey(
   config: ResolvedConfig,
@@ -377,8 +492,17 @@ async function cacheKey(
     ...dependencies,
   ]);
   const { rules: _rules, overrides: _overrides, ...relevant } = config;
+  // The files left out too: the model's warning names them, so adding or removing one rebuilds.
+  const outside = files.outside.map((file) => relativePath(config.root, file)).sort();
   return createHash('sha256')
-    .update(JSON.stringify({ version: VERSION, config: relevant, stats: await stats.of(all) }))
+    .update(
+      JSON.stringify({
+        version: VERSION,
+        config: relevant,
+        outside,
+        stats: await stats.of(all),
+      }),
+    )
     .digest('hex');
 }
 
@@ -454,6 +578,7 @@ export async function buildModel(
   });
   const docs: ParsedDoc[] = [];
   const warnings = [...extracted.warnings];
+  if (files.outside.length) warnings.push(outsideWarning(config.root, files.outside));
   for (const file of files.docs) {
     try {
       docs.push(parseDoc(await fsp.readFile(file, 'utf8'), relativePath(config.root, file)));

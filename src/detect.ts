@@ -5,7 +5,7 @@ import { escapePath, globSync } from 'tinyglobby';
 
 import { readProjectConfig, type ProjectConfig } from './extract/program.js';
 import { buildEntries, exportedFiles, moduleFile, sourceTarget } from './package-source.js';
-import { globBase, isInside, relativePath, toPosix } from './util/paths.js';
+import { globBase, isHomeOrAbove, isInside, relativePath, toPosix } from './util/paths.js';
 import { unique } from './util/strings.js';
 
 /**
@@ -1261,9 +1261,16 @@ export class PackageFinder {
     return this.nodeModules;
   }
 
-  /** The workspace root when `dir` is in it, else `dir` itself. */
+  /**
+   * The workspace root when `dir` is in it, else `dir` itself. Never the home folder or above:
+   * a stray `~/package.json` with `workspaces` would let a package's config name
+   * `../../../.aws/credentials`.
+   */
   private boundaryOf(dir: string): string {
-    if (this.workspace === undefined) this.workspace = workspaceRootOf(this.root) ?? null;
+    if (this.workspace === undefined) {
+      const workspace = workspaceRootOf(this.root);
+      this.workspace = workspace !== undefined && !isHomeOrAbove(workspace) ? workspace : null;
+    }
     return this.workspace !== null && isInside(this.workspace, dir) ? this.workspace : dir;
   }
 }
@@ -1302,7 +1309,7 @@ function pnpmWorkspacePackages(dir: string): string[] {
 }
 
 /** The nearest workspace root at or above `start`. */
-function workspaceRootOf(start: string): string | undefined {
+export function workspaceRootOf(start: string): string | undefined {
   for (let dir = start; ; dir = path.dirname(dir)) {
     if (isWorkspaceRoot(dir)) return dir;
     if (dir === path.dirname(dir)) return undefined;

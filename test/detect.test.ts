@@ -246,6 +246,8 @@ export default () => <><button>Save</button><Button aria-label="Add"><Icons.Add 
 
   it('reads tsconfig paths declared in an extended config, relative to that config', async () => {
     const workspace = fixture({
+      // A repository without a workspace manifest: its files outside apps/web are read as its own.
+      '.git/HEAD': 'ref: refs/heads/main\n',
       'tsconfig.base.json': json({
         compilerOptions: { jsx: 'react-jsx', paths: { '@ui/*': ['./libs/ui/src/*'] } },
       }),
