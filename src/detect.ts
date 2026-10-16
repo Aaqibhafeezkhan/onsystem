@@ -136,7 +136,9 @@ const STYLESHEETS = [
  *    workspace sources, read the same way or through their own `components.json`,
  *    or, for a package without `exports` that apps import by path
  *    (`@acme/ui/primitives/button`), from the files the root's code imports. They
- *    are added to what `components.json` found, not skipped for it.
+ *    are added to what `components.json` found, not skipped for it. One installed
+ *    from a registry is read through its `exports` alone, when they lead to the
+ *    component sources it publishes.
  * 4. A flat folder of components that wrap a primitives library, the way React
  *    Aria's Tailwind starter ships them (`src/Button.tsx`, `src/Checkbox.tsx`).
  *
@@ -228,30 +230,31 @@ export function detectProject(
   for (const name of names) {
     // The package whose config the root takes on is read where it is, installed or not.
     const own = name === declared?.name ? declared : undefined;
-    const kind = own?.installed ? 'installed' : 'workspace';
+    // Else a workspace package, or one installed from a registry.
+    const workspaceDir = own ? undefined : packages.find(name);
+    const installedDir = own || workspaceDir ? undefined : packages.installed(name);
+    const kind = (own?.installed ?? installedDir !== undefined) ? 'installed' : 'workspace';
     const candidate = `${kind} package ${name}`;
     // What components.json already points into.
     if (found.some((f) => f.package === name)) {
       step(candidate, false, 'not added twice: components.json points into it');
       continue;
     }
-    // Only workspace sources: a package installed from the registry is compiled.
-    const dir = own ? own.dir : packages.find(name);
+    const dir = own?.dir ?? workspaceDir ?? installedDir;
     const pkg = dir ? readJson(path.join(dir, 'package.json')) : undefined;
     if (!dir || !pkg) {
-      step(
-        candidate,
-        false,
-        'not a workspace package: an installed package is compiled, and only sources are read',
-      );
+      step(candidate, false, 'not a workspace package, and not installed');
       continue;
     }
     const reasons: string[] = [];
     const note: Note = (r) => reasons.push(r);
-    const result =
-      fromPackage(root, dir, pkg, note) ??
-      fromPackageComponentsJson(root, dir, pkg, packages, note) ??
-      fromImports(root, dir, name, (imported ??= importedSubpaths(root, names)).get(name), note);
+    // An installed package that declares no config is read through its exports alone, when
+    // they lead to the component sources it publishes: its build output is not read.
+    const result = installedDir
+      ? fromPackage(root, dir, pkg, note, true)
+      : (fromPackage(root, dir, pkg, note) ??
+        fromPackageComponentsJson(root, dir, pkg, packages, note) ??
+        fromImports(root, dir, name, (imported ??= importedSubpaths(root, names)).get(name), note));
     if (result && matchesAny(root, result)) {
       found.push({
         ...result,
@@ -559,13 +562,15 @@ function fromPackageComponentsJson(
  * A package whose `exports` point at component source files is a design system. An export
  * that leads to a barrel (`./components/button` → `components/button/index.ts`, or `.` →
  * `src/index.tsx` behind `dist/`) stands for the files the barrel re-exports, each
- * suggested with the export's specifier.
+ * suggested with the export's specifier. In an `installed` package, compiled JavaScript in a
+ * build folder (`dist/index.mjs`) is not followed: it leads to no source.
  */
 function fromPackage(
   root: string,
   dir: string,
   pkg: Record<string, unknown>,
   note: Note = ignore,
+  installed = false,
 ): Found | undefined {
   const imports: ImportMapping[] = [];
   const components: ImportMapping[] = [];
@@ -575,7 +580,12 @@ function fromPackage(
   };
   for (const mapping of exportMappings(root, dir, pkg)) {
     const file = path.resolve(root, mapping.target);
-    if (mapping.target.includes('*') || !SCRIPT_FILE.test(file) || !isFile(file)) {
+    if (
+      mapping.target.includes('*') ||
+      !SCRIPT_FILE.test(file) ||
+      !isFile(file) ||
+      (installed && isBuildOutput(dir, file))
+    ) {
       add(mapping, COMPONENT_FILE.test(mapping.target));
       continue;
     }
@@ -593,14 +603,17 @@ function fromPackage(
     const built = exportMappings(root, dir, pkg).filter((m) =>
       /(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(m.target),
     );
+    const output = built
+      .slice(0, 2)
+      .map((m) => m.target)
+      .join(', ');
     note(
       pkg.exports === undefined && typeof pkg.main !== 'string'
         ? 'no exports'
         : built.length
-          ? `its exports point at build output with no source found (${built
-              .slice(0, 2)
-              .map((m) => m.target)
-              .join(', ')})`
+          ? installed
+            ? `it publishes build output (${output}) and no component source, and only sources are read`
+            : `its exports point at build output with no source found (${output})`
           : `its exports lead to ${plural(files.length, 'component file')}; a design system exports at least 3`,
     );
     return undefined;
@@ -795,6 +808,11 @@ function exportMappings(root: string, dir: string, pkg: Record<string, unknown>)
   return mappings;
 }
 
+/** Compiled JavaScript in a package's build folder: `dist/index.mjs`, `lib/button.cjs`. */
+function isBuildOutput(dir: string, file: string): boolean {
+  return /^(?:dist|build|lib|out|esm|cjs)\/.*\.[cm]?js$/.test(toPosix(path.relative(dir, file)));
+}
+
 /** `./dist/*.mjs` → `src/*.tsx` (or `.ts`) when files match it there; anything else as it is. */
 function sourcePattern(dir: string, target: string): string {
   const relative = target.replace(/^\.\//, '');
@@ -929,32 +947,78 @@ export function presetResolver(
  * Resolves a stylesheet's `@import` to a project file: a path next to the stylesheet
  * (`./theme.css`, or `theme.css` as plain CSS reads it), or a stylesheet of a workspace
  * package (`@acme/theme/colors.css`, or `@acme/theme` through its `exports` or its `style`
- * field). Installed packages (`tailwindcss`) and URLs resolve to nothing.
+ * field). An installed package resolves only when zero config reads it as a design system
+ * ({@link installedDesignSystem}), and a stylesheet in it imports others of that package
+ * alone. Other installed packages (`tailwindcss`) and URLs resolve to nothing.
  */
 export function stylesheetResolver(
   root: string,
 ): (specifier: string, fromFile: string) => string | undefined {
   const packages = new PackageFinder(root);
-  const stylesheet = (file: string) =>
+  const designSystems = new Map<string, string | undefined>();
+  const designSystem = (name: string) => {
+    if (!designSystems.has(name)) {
+      designSystems.set(name, installedDesignSystem(root, name, packages));
+    }
+    return designSystems.get(name);
+  };
+  // On disk, and not in node_modules, unless in the installed package `within` (none below it).
+  const stylesheet = (file: string, within?: string) =>
     [file, `${file}.css`].find(
-      (f) => f.endsWith('.css') && !/[\\/]node_modules[\\/]/.test(f) && isFile(f),
+      (f) =>
+        f.endsWith('.css') &&
+        (within === undefined || isInside(within, f)) &&
+        !/(?:^|[\\/])node_modules[\\/]/.test(within === undefined ? f : path.relative(within, f)) &&
+        isFile(f),
     );
   return (specifier, fromFile) => {
     if (/^(?:[a-z][\w+.-]*:|\/)/i.test(specifier)) return undefined;
-    const relative = stylesheet(path.resolve(path.dirname(fromFile), specifier));
+    const relative = stylesheet(
+      path.resolve(path.dirname(fromFile), specifier),
+      installedPackageOf(fromFile),
+    );
     if (relative || specifier.startsWith('.')) return relative;
     const name = packageName(specifier);
-    const dir = name ? packages.find(name) : undefined;
+    const workspace = name ? packages.find(name) : undefined;
+    const installed = name && !workspace ? designSystem(name) : undefined;
+    const dir = workspace ?? installed;
     if (!name || !dir) return undefined;
     const subpath = specifier.slice(name.length + 1);
     const style = readJson(path.join(dir, 'package.json'))?.style;
     return (
       exportedFile(dir, subpath ? `./${subpath}` : '.', (f) => f.endsWith('.css')) ??
       (subpath
-        ? stylesheet(path.join(dir, subpath))
-        : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css')))
+        ? stylesheet(path.join(dir, subpath), installed)
+        : stylesheet(path.resolve(dir, typeof style === 'string' ? style : 'index.css'), installed))
     );
   };
+}
+
+/**
+ * The folder of `name` installed from a registry, when zero config reads it as a design system:
+ * named like one, with `exports` that lead to the component sources it publishes.
+ */
+function installedDesignSystem(
+  root: string,
+  name: string,
+  packages: PackageFinder,
+): string | undefined {
+  if (!isDesignSystemName(name)) return undefined;
+  const dir = packages.installed(name);
+  const pkg = dir ? readJson(path.join(dir, 'package.json')) : undefined;
+  const found = dir && pkg ? fromPackage(root, dir, pkg, ignore, true) : undefined;
+  return found && matchesAny(root, found) ? dir : undefined;
+}
+
+/** The installed package a file is in: `…/node_modules/@acme/ui` for `…/node_modules/@acme/ui/src/a.css`. */
+function installedPackageOf(file: string): string | undefined {
+  const parts = path.resolve(file).split(path.sep);
+  const at = parts.lastIndexOf('node_modules');
+  const first = parts[at + 1] ?? '.';
+  // Not `.cache` or `.bin`, which hold no package.
+  if (at === -1 || first.startsWith('.')) return undefined;
+  const end = at + (first.startsWith('@') ? 3 : 2);
+  return end < parts.length ? parts.slice(0, end).join(path.sep) : undefined;
 }
 
 /**
@@ -1203,7 +1267,7 @@ export class PackageFinder {
       const candidate = path.join(dir, 'node_modules', name);
       if (fs.existsSync(path.join(candidate, 'package.json'))) {
         const real = fs.realpathSync(candidate);
-        // A package installed from the registry is compiled; only linked workspace sources count.
+        // Only linked workspace sources count: an installed package is found by `installed`.
         if (!/[\\/]node_modules[\\/]/.test(real)) {
           // Express it from the root as given, so paths stay relative when the
           // root itself sits behind a link (`/var` → `/private/var` on macOS).
@@ -1222,11 +1286,8 @@ export class PackageFinder {
    * checkout that is not installed (only then is the workspace scanned). With its package.json.
    */
   locate(name: string): { dir: string; json: Record<string, unknown> } | undefined {
-    for (const nodeModules of this.nodeModulesDirs()) {
-      const dir = path.join(nodeModules, ...name.split('/'));
-      const json = cachedManifest(path.join(dir, 'package.json'));
-      if (json) return { dir, json };
-    }
+    const found = this.inNodeModules(name);
+    if (found) return found;
     // A dependency resolves only to a package the package manager links, never to a folder
     // only Nx knows of, so Nx's projects (a glob of the whole repository) are not looked for.
     this.linkable ??= scanWorkspace(this.root, false);
@@ -1246,6 +1307,31 @@ export class PackageFinder {
     const dir = path.resolve(this.root, real);
     const installed = /(?:^|[\\/])node_modules[\\/]/.test(real);
     return { dir, installed, boundary: installed ? dir : this.boundaryOf(dir) };
+  }
+
+  /**
+   * Where `name` is installed from a registry, rather than linked to a workspace package: its
+   * real folder, where pnpm puts its own dependencies beside it, expressed from the root. When
+   * that is outside the root and its workspace (pnpm's store elsewhere on the machine), the
+   * folder in `node_modules` it was found by, the only way the loader reads it.
+   */
+  installed(name: string): string | undefined {
+    const located = this.inNodeModules(name);
+    if (!located) return undefined;
+    const placed = this.place(located.dir);
+    if (!placed.installed) return undefined;
+    const near = isInside(this.root, placed.dir) || this.boundaryOf(placed.dir) !== placed.dir;
+    return near ? placed.dir : path.resolve(located.dir);
+  }
+
+  /** `name` in the nearest `node_modules` at or above the root that has it, with its package.json. */
+  private inNodeModules(name: string): { dir: string; json: Record<string, unknown> } | undefined {
+    for (const nodeModules of this.nodeModulesDirs()) {
+      const dir = path.join(nodeModules, ...name.split('/'));
+      const json = cachedManifest(path.join(dir, 'package.json'));
+      if (json) return { dir, json };
+    }
+    return undefined;
   }
 
   /** The `node_modules` folders at and above the root, nearest first, looked up once. */

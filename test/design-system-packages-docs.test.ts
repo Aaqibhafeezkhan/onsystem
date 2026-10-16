@@ -23,6 +23,8 @@ const docs = fs.readFileSync(
 );
 const whatAppsGet = section(docs, 'What apps get');
 const inTheApps = section(docs, 'In the apps');
+/** Its `### Without the config` part. */
+const withoutTheConfig = whatAppsGet.slice(whatAppsGet.indexOf('\n### Without the config\n'));
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
@@ -235,12 +237,13 @@ async function tool(root: string, name: string, args: Record<string, unknown>): 
 }
 
 describe('what apps get from a design-system package (docs/design-system-packages.md)', () => {
-  it('has a row for a workspace package and for three ways of publishing one', () => {
+  it('has a row for a workspace package and for four ways of publishing one', () => {
     expect(rows().map(([how]) => how)).toEqual([
       'As a workspace package',
       'From a registry, with the config, the token files and the component sources (`src/`) published',
       'From a registry, with the config, the token files and compiled `dist/` published, but not `src/`',
-      'From a registry, without the config',
+      'From a registry, without the config, named like a design system (`@acme/ui`), with the token files and the component sources published',
+      'From a registry, without the config, compiled or named otherwise (`@acme/kit`)',
     ]);
     expect(RULE_IDS).toHaveLength(8);
   });
@@ -352,7 +355,42 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(stderr).toContain("@acme/ui's onsystem config was skipped");
     // The app itself has no components or tokens: only the accessibility rule, on <button>.
     expect(rules).toEqual(new Set(['icon-button-accessible-name']));
-    expect(rows()[3]?.[1]).toContain('the declaration is skipped with a warning');
+    expect(rows()[4]?.[1]).toContain(
+      'A declaration whose config is not published is skipped with a warning',
+    );
+  });
+
+  it('runs every rule from a package named like a design system published with src/ but no config', async () => {
+    const cell = rows()[3]?.[1] ?? '';
+    expect(cell).toMatch(/^All eight, through zero config/);
+    // As published before init: no config, and no declaration.
+    const app = installedApp(published(PACKAGE));
+    expect((await check(app)).rules).toEqual(rulesIn(cell));
+    const explained = await run(['inspect', '--explain', '--no-cache'], app);
+    const found = 'found  installed package @acme/ui: node_modules/@acme/ui, 3 component files';
+    expect(explained.stdout).toContain(found);
+    expect(withoutTheConfig).toContain(`\`${found}\``);
+    // A declaration whose config is not published: skipped, and the package read the same way.
+    const pkg = await initialised();
+    const unpublished = without(published(pkg), (file) => file === 'onsystem.config.json');
+    const skipped = await check(installedApp(unpublished));
+    expect(skipped.stderr).toContain("@acme/ui's onsystem config was skipped");
+    expect(skipped.rules).toEqual(rulesIn(cell));
+    expect(withoutTheConfig).toContain(
+      'An app reads an installed package that declares no config, or whose declared config is not published, as zero config reads a workspace package',
+    );
+  });
+
+  it('reads no component from a package without the config that publishes only dist/, and says why', async () => {
+    const distOnly = without(published(PACKAGE), (file) => file.startsWith('src/'));
+    const app = installedApp(distOnly);
+    const { rules } = await check(app);
+    expect(rules).toEqual(new Set(['icon-button-accessible-name']));
+    const explained = await run(['inspect', '--explain', '--no-cache'], app);
+    const why =
+      'no     installed package @acme/ui: it publishes build output (node_modules/@acme/ui/dist/index.mjs) and no component source, and only sources are read';
+    expect(explained.stdout).toContain(why);
+    expect(withoutTheConfig).toContain(`\`${why}\``);
   });
 
   it('runs the token rules only for what the published tokens define', async () => {
@@ -374,9 +412,10 @@ describe('what apps get from a design-system package (docs/design-system-package
 describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () => {
   const own = json({ rules: { 'no-hardcoded-color': 'warn' } });
 
-  it("replaces the package's: an installed package's components and tokens are gone", async () => {
+  it("replaces the package's: the components and tokens of a package published without src/ are gone", async () => {
     const pkg = await initialised();
-    const app = installedApp(published(pkg), { 'onsystem.config.json': own });
+    const distOnly = without(published(pkg), (file) => file.startsWith('src/'));
+    const app = installedApp(distOnly, { 'onsystem.config.json': own });
     const { rules, stderr } = await check(app);
     expect(rules).toEqual(new Set(['icon-button-accessible-name']));
     expect(stderr).toContain('No design system found (no components or color tokens)');
@@ -385,12 +424,15 @@ describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () 
     );
   });
 
-  it('still finds a workspace package named like a design system through zero config', async () => {
+  it('still finds a package named like a design system through zero config, in the workspace or installed with src/', async () => {
     const pkg = await initialised();
-    const { rules } = await check(workspaceApp(pkg, { 'onsystem.config.json': own }));
-    expect(rules).toContain('no-unknown-variant');
+    const config = { 'onsystem.config.json': own };
+    expect((await check(workspaceApp(pkg, config))).rules).toContain('no-unknown-variant');
+    expect((await check(installedApp(published(pkg), config))).rules).toContain(
+      'no-unknown-variant',
+    );
     expect(inTheApps).toContain(
-      'it finds a workspace package named like a design system, but never one installed in `node_modules`',
+      'it finds a package named like a design system, as a workspace package or installed in `node_modules` with its component sources ([without the config](#without-the-config)), but not one named otherwise (`@acme/kit`) or one that publishes compiled code alone.',
     );
   });
 

@@ -2,7 +2,10 @@ import fs from 'node:fs';
 
 import postcss, { type Root } from 'postcss';
 
-/** Resolves an `@import` specifier from a stylesheet to a project file, or undefined. */
+/**
+ * Resolves an `@import` specifier from a stylesheet to a project file, or a stylesheet of an
+ * installed design-system package, or undefined.
+ */
 export type StylesheetResolver = (specifier: string, fromFile: string) => string | undefined;
 
 /** Enough stylesheets for a theme split over files, without reading a whole design system. */
