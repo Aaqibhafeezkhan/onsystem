@@ -401,7 +401,24 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(withoutTheConfig).toContain(`\`${why}\``);
     expect(rows()[4]?.[0]).toContain('with `exports` that point at `dist/`');
     const distOnly = without(published(PACKAGE), (file) => file.startsWith('src/'));
-    for (const pkg of [published(PACKAGE), distOnly]) {
+    // A `source` condition for the package's own repository, before the build that apps get.
+    const sourceCondition = {
+      ...published(PACKAGE),
+      'package.json': json({
+        name: '@acme/ui',
+        version: '1.0.0',
+        files: ['dist', 'src', 'theme.css'],
+        exports: {
+          '.': {
+            source: './src/index.tsx',
+            types: './dist/index.d.ts',
+            import: './dist/index.mjs',
+          },
+          './theme.css': './theme.css',
+        },
+      }),
+    };
+    for (const pkg of [published(PACKAGE), distOnly, sourceCondition]) {
       const app = installedApp(pkg);
       const { rules } = await check(app);
       expect(rules).toEqual(new Set(['icon-button-accessible-name']));
@@ -410,6 +427,9 @@ describe('what apps get from a design-system package (docs/design-system-package
     }
     expect(withoutTheConfig).toContain(
       'Unlike in a workspace package, exports that point at `dist/` are not followed back to `src/`',
+    );
+    expect(withoutTheConfig).toContain(
+      "A condition for the package's own repository, such as `source` (react-native-builder-bob) or `expo-source` (`@expo/ui`), is passed over",
     );
   });
 

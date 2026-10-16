@@ -198,6 +198,60 @@ const KIT = {
   'src/styles.css': ':root {\n  --kit-primary-color: rgb(28, 28, 28);\n}\n',
 };
 
+/**
+ * `@acme/ui` with three components in `src/`, behind the barrel `index`, and its build in
+ * `build`: a package whose `exports` point a condition of its own repository at `src/`, before
+ * the build output that apps resolve.
+ */
+function builtWithSource(exports: unknown, index: string, build: string): Record<string, string> {
+  return at('node_modules/@acme/ui', {
+    'package.json': json({
+      name: '@acme/ui',
+      version: '1.0.0',
+      main: `./${build}/index.js`,
+      exports,
+      files: ['src', build],
+    }),
+    [index]: 'export * from "./button";\nexport * from "./card";\nexport * from "./input";\n',
+    'src/button.tsx': BUTTON,
+    'src/card.tsx': CARD,
+    'src/input.tsx': INPUT,
+    [`${build}/index.js`]:
+      'export * from "./button.js";\nexport * from "./card.js";\nexport * from "./input.js";\n',
+    [`${build}/button.js`]: 'export function Button() { return null; }\n',
+    [`${build}/card.js`]: 'export function Card() { return null; }\n',
+    [`${build}/input.js`]: 'export function Input() { return null; }\n',
+  });
+}
+
+/** `@expo/ui`'s layout: `expo-source` before `default`, for types too. */
+const EXPO_SOURCE = builtWithSource(
+  {
+    '.': {
+      types: { 'expo-source': './src/index.ts', default: './build/index.d.ts' },
+      'expo-source': './src/index.ts',
+      default: './build/index.js',
+    },
+    './package.json': './package.json',
+  },
+  'src/index.ts',
+  'build',
+);
+
+/** react-native-builder-bob's layout: `source` before `default`, built to `lib/module`. */
+const BOB_SOURCE = builtWithSource(
+  {
+    '.': {
+      source: './src/index.tsx',
+      types: './lib/typescript/src/index.d.ts',
+      default: './lib/module/index.js',
+    },
+    './package.json': './package.json',
+  },
+  'src/index.tsx',
+  'lib/module',
+);
+
 /** A shadcn/ui app (components.json, components/ui) that also uses the kit. */
 function shadcnApp(extra: Record<string, string> = {}): string {
   return fixture({
@@ -334,6 +388,32 @@ describe('an installed design-system package that publishes its sources', () => 
     expect(button?.props.map((p) => p.name)).not.toContain('render');
   });
 
+  it('is read through the conditions an app resolves, past those of its own repository', async () => {
+    const manifest = JSON.parse(PACKAGE['package.json']) as Record<string, unknown>;
+    const root = npmApp({
+      'node_modules/@acme/design-system/package.json': json({
+        ...manifest,
+        exports: {
+          '.': {
+            source: './src/index.ts',
+            import: { types: './src/index.ts', default: './src/index.ts' },
+            require: './dist/index.cjs',
+          },
+          './components/*': {
+            'expo-source': './src/components/ui/*.tsx',
+            browser: './src/components/ui/*.tsx',
+            default: './dist/components/*.js',
+          },
+          './globals.css': { development: './dist/globals.css', style: './src/styles/globals.css' },
+        },
+      }),
+    });
+    const ds = await load(root);
+    expect(ds.config.detected).toBe('installed package @acme/design-system');
+    expect(ds.components.map((c) => c.name).sort()).toEqual(['Button', 'Card', 'Input']);
+    expect(ds.tokens.map((t) => t.name)).toEqual(expect.arrayContaining(['primary', 'muted']));
+  });
+
   it('is read from the workspace root, where npm hoists it', async () => {
     const workspace = fixture({
       'package.json': json({ name: 'acme', private: true, workspaces: ['apps/*'] }),
@@ -383,6 +463,70 @@ describe('installed packages zero config does not read', () => {
     expect(stdout).not.toContain('is compiled');
   });
 
+  it.each([
+    ['expo-source before default, as @expo/ui has them', EXPO_SOURCE, 'build/index.js'],
+    [
+      'source before default, as react-native-builder-bob writes them',
+      BOB_SOURCE,
+      'lib/module/index.js',
+    ],
+    [
+      'source before import and require, as older react-native-builder-bob versions write them',
+      builtWithSource(
+        {
+          '.': {
+            source: './src/index.tsx',
+            import: { types: './lib/typescript/index.d.ts', default: './lib/module/index.js' },
+            require: { types: './lib/typescript/index.d.ts', default: './lib/commonjs/index.js' },
+          },
+        },
+        'src/index.tsx',
+        'lib/module',
+      ),
+      'lib/module/index.js',
+    ],
+    [
+      'development before default',
+      builtWithSource(
+        { '.': { development: './src/index.ts', default: './dist/index.js' } },
+        'src/index.ts',
+        'dist',
+      ),
+      'dist/index.js',
+    ],
+  ])(
+    'reads no source that only a condition of its own repository leads to: %s',
+    async (_, files, built) => {
+      const root = fixture({
+        'package.json': json({ name: 'web', dependencies: { '@acme/ui': '^1.0.0' } }),
+        'app/page.tsx':
+          'import { Button } from "@acme/ui";\nexport default () => <Button tone="loud" />;\n',
+        ...files,
+      });
+      const ds = await load(root);
+      expect(ds.config.detected).toBeUndefined();
+      expect(ds.components).toEqual([]);
+      const { stdout } = await run(['inspect', '--explain', '--no-cache'], root);
+      expect(stdout).toContain(
+        `no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/${built}), not at component sources, and only sources are read`,
+      );
+    },
+  );
+
+  it('adds nothing to an app with its own design system from a package laid out like @expo/ui', async () => {
+    // Expo's template installs @expo/ui beside the app's own components: no component, prop or
+    // finding of it comes from its src/.
+    const deps = json({ name: 'web', dependencies: { '@acme/ui': '^1.0.0' } });
+    const page = {
+      'app/menu.tsx':
+        'import { Button } from "@acme/ui";\nimport { Card } from "@/components/ui/card";\n\nexport default function Menu() {\n  return <Card><Button tone="loud" /></Card>;\n}\n',
+    };
+    const root = shadcnApp({ 'package.json': deps, ...page, ...EXPO_SOURCE });
+    const bare = shadcnApp({ 'package.json': deps, ...page });
+    expect(await contents(root)).toEqual(await contents(bare));
+    expect(await findings(root, 'app/menu.tsx')).toEqual(await findings(bare, 'app/menu.tsx'));
+  });
+
   it('leaves out a kit named like a design system whose exports point at dist/, with src/ published beside it', async () => {
     // In a shadcn/ui app, the kit adds no component, no token and no finding: the app reads
     // exactly what it reads without the kit installed.
@@ -418,11 +562,21 @@ describe('installed packages zero config does not read', () => {
     const compiled = {
       'node_modules/@acme/design-system/package.json': json({
         ...manifest,
-        exports: { ...manifest.exports, './styles.css': './dist/styles.css' },
+        exports: {
+          ...manifest.exports,
+          './styles.css': './dist/styles.css',
+          // Apps get the compiled stylesheet; only the package's own repository gets src/.
+          './theme.css': {
+            source: './src/styles/compiled-source.css',
+            default: './dist/styles.css',
+          },
+        },
         files: [...manifest.files, 'dist'],
       }),
       'node_modules/@acme/design-system/dist/styles.css':
         ':root {\n  --compiled: oklch(0.6 0.2 30);\n}\n',
+      'node_modules/@acme/design-system/src/styles/compiled-source.css':
+        ':root {\n  --compiled-source: oklch(0.6 0.2 60);\n}\n',
       'node_modules/@acme/design-system/dist/partial.css':
         ':root {\n  --compiled-partial: oklch(0.6 0.2 90);\n}\n',
       // A source stylesheet that imports one from the build folder, by a relative path.
@@ -437,7 +591,7 @@ describe('installed packages zero config does not read', () => {
     const configured = npmApp({
       ...compiled,
       'app/globals.css':
-        '@import "@acme/design-system/globals.css";\n@import "@acme/design-system/styles.css";\n@import "@acme/design-system/dist/partial.css";\n',
+        '@import "@acme/design-system/globals.css";\n@import "@acme/design-system/styles.css";\n@import "@acme/design-system/theme.css";\n@import "@acme/design-system/dist/partial.css";\n',
       'onsystem.config.json': json({
         components: ['node_modules/@acme/design-system/src/components/**/*.tsx'],
         importPath: '@acme/design-system',

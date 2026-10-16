@@ -562,9 +562,10 @@ function fromPackageComponentsJson(
  * A package whose `exports` point at component source files is a design system. An export
  * that leads to a barrel (`./components/button` → `components/button/index.ts`, or `.` →
  * `src/index.tsx` behind `dist/`) stands for the files the barrel re-exports, each
- * suggested with the export's specifier. An `installed` package's exports are read as they
- * are, not from `dist/` back to `src/`: a widget kit publishes `src/` beside `dist/` for its
- * source maps, and it is not the app's design system. Its compiled files ({@link isBuildOutput})
+ * suggested with the export's specifier. An `installed` package's exports are read as an app
+ * resolves them ({@link APP_CONDITIONS}), not from `dist/` back to `src/`: a widget kit
+ * publishes `src/` beside `dist/` for its source maps, or points a `source` condition at it for
+ * its own repository, and it is not the app's design system. Its compiled files ({@link isBuildOutput})
  * are not read at all: no barrel, component or stylesheet in them.
  */
 function fromPackage(
@@ -772,7 +773,8 @@ function importedSubpaths(root: string, names: string[]): Map<string, Set<string
 /**
  * `exports` subpaths with a source target, as specifiers relative to `root`. A target
  * built to `dist/` maps back to its source (`src/`, through the build config's entries),
- * unless `asWritten`; without an `exports` map, `main` stands for `.`.
+ * unless `asWritten`: then each target is the one an app that installs the package resolves
+ * ({@link APP_CONDITIONS}), as it is. Without an `exports` map, `main` stands for `.`.
  */
 function exportMappings(
   root: string,
@@ -798,7 +800,7 @@ function exportMappings(
   let build: ReturnType<typeof buildEntries> | undefined;
   const mappings: ImportMapping[] = [];
   for (const [key, value] of entries) {
-    const target = exportTarget(value);
+    const target = exportTarget(value, asWritten ? APP_CONDITIONS : undefined);
     if (!target) continue;
     const source = asWritten
       ? undefined
@@ -837,20 +839,42 @@ function sourcePattern(dir: string, target: string): string {
   return relative;
 }
 
-/** The source file an export condition map points at: the first string target that is not a declaration file. */
-function exportTarget(value: unknown): string | undefined {
+/**
+ * The `exports` conditions an app resolves an installed package through: Node.js's own
+ * (`import`, `require`, `module-sync`, `node`, `default`), and the `module`, `browser` and
+ * `style` that bundlers and Tailwind CSS add. Others, such as `source`, `expo-source` and
+ * `development`, lead the package's own repository to its sources, and an app that installs it
+ * builds the target after them: `@expo/ui`'s `"default": "./build/universal/index.js"`, not its
+ * `"expo-source": "./src/universal/index.ts"` before it.
+ */
+const APP_CONDITIONS: ReadonlySet<string> = new Set([
+  'import',
+  'require',
+  'module-sync',
+  'node',
+  'module',
+  'browser',
+  'style',
+  'default',
+]);
+
+/**
+ * The source file an export condition map points at: the first string target that is not a
+ * declaration file, through any condition but `types`, or through `conditions` alone.
+ */
+function exportTarget(value: unknown, conditions?: ReadonlySet<string>): string | undefined {
   if (typeof value === 'string') return value.endsWith('.d.ts') ? undefined : value;
   if (Array.isArray(value)) {
     for (const item of value) {
-      const target = exportTarget(item);
+      const target = exportTarget(item, conditions);
       if (target) return target;
     }
     return undefined;
   }
   if (value && typeof value === 'object') {
     for (const [condition, nested] of Object.entries(value)) {
-      if (condition === 'types') continue;
-      const target = exportTarget(nested);
+      if (condition === 'types' || (conditions && !conditions.has(condition))) continue;
+      const target = exportTarget(nested, conditions);
       if (target) return target;
     }
   }
@@ -1003,6 +1027,7 @@ export function stylesheetResolver(
         dir,
         subpath ? `./${subpath}` : '.',
         (f) => f.endsWith('.css') && !(installed && isBuildOutput(installed, f)),
+        installed ? APP_CONDITIONS : undefined,
       ) ??
       (subpath
         ? stylesheet(path.join(dir, subpath), installed)
@@ -1040,13 +1065,14 @@ function installedPackageOf(file: string): string | undefined {
 
 /**
  * The file a package's `exports` map `subpath` (`.`, `./theme`) to, through any condition
- * (`style`, `import`, `default`) and `*` patterns: the first target on disk, inside the
- * package, that `accept` takes.
+ * (`style`, `import`, `default`), or through `conditions` alone, and `*` patterns: the first
+ * target on disk, inside the package, that `accept` takes.
  */
 function exportedFile(
   dir: string,
   subpath: string,
   accept: (file: string) => boolean,
+  conditions?: ReadonlySet<string>,
 ): string | undefined {
   const exports = readJson(path.join(dir, 'package.json'))?.exports;
   const entries: [string, unknown][] =
@@ -1078,7 +1104,7 @@ function exportedFile(
   }
   matches.sort((a, b) => b.rank - a.rank);
   for (const { middle, value } of matches) {
-    for (const target of exportTargets(value)) {
+    for (const target of exportTargets(value, conditions)) {
       const file = path.resolve(dir, target.replaceAll('*', middle));
       if (isInside(dir, file) && accept(file) && isFile(file)) return file;
     }
@@ -1086,13 +1112,15 @@ function exportedFile(
   return undefined;
 }
 
-/** Every target of an export condition map, in order, but its types. */
-function exportTargets(value: unknown): string[] {
+/** Every target of an export condition map, in order, but its types, or those of `conditions` alone. */
+function exportTargets(value: unknown, conditions?: ReadonlySet<string>): string[] {
   if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(exportTargets);
+  if (Array.isArray(value)) return value.flatMap((item) => exportTargets(item, conditions));
   if (value && typeof value === 'object') {
     return Object.entries(value).flatMap(([condition, nested]) =>
-      condition === 'types' ? [] : exportTargets(nested),
+      condition === 'types' || (conditions && !conditions.has(condition))
+        ? []
+        : exportTargets(nested, conditions),
     );
   }
   return [];
