@@ -122,16 +122,19 @@ describe('init writes the folders shadcn add fills from other registries', () =>
       components: [
         'components/ui/**/*.{tsx,jsx}',
         'components/ai-elements/**/*.{tsx,jsx}',
+        'components/react-bits/**/*.{tsx,jsx}',
         'components/signoff-ui/**/*.{tsx,jsx}',
       ],
       tokens: ['app/globals.css'],
     });
     expect(init.stdout).toContain(
-      `Added components/ai-elements (@ai-elements, 1 file) and components/signoff-ui (@signoff-ui, 1 file) to "components": they hold the code \`shadcn add\` copied from those registries in components.json. \`check\` and the hook skip it as design-system code, and your code is checked against its components. To check it as your own code instead, take the folders out of "components" (${LINK}).`,
+      `Added components/ai-elements (@ai-elements, 1 file) and components/signoff-ui (@signoff-ui, 1 file) to "components": they hold the code \`shadcn add\` copied from those registries in components.json. \`check\` and the hook skip it as design-system code, and your code is checked against every component its files export, helpers included, so a native element such as <img> can be told to use one of them. To leave the helpers out, see ${LINK}; to check that code as your own, take the folders out of "components".`,
     );
-    // React Bits puts its files loose in components/, which the config cannot tell apart.
+    // No components/react-bits yet: a registry named before its first `shadcn add` gets its
+    // folder too. React Bits puts its files loose in components/, which the config cannot tell
+    // apart, so the line says that code is checked as the app's.
     expect(init.stdout).toContain(
-      `components.json also names @react-bits, and no .tsx or .jsx file is in components/react-bits: \`check\` reads what \`shadcn add\` copies from it into other folders as your own code (${LINK}).`,
+      `Also added components/react-bits (@react-bits) to "components", though it does not exist yet: \`check\` and the hook skip the code \`shadcn add\` copies there from that registry in components.json. Code a registry copies somewhere else, such as loose into components/, is checked as your own (${LINK}).`,
     );
     // The dry run and the baseline hold the app's findings only, and React Bits' loose file.
     expect(init.stdout).toContain('Baseline: 5 findings in 2 files');
@@ -180,6 +183,7 @@ describe('init writes the folders shadcn add fills from other registries', () =>
     expect(written(root).components).toEqual([
       'src/components/ui/**/*.{tsx,jsx}',
       'src/components/ai-elements/**/*.{tsx,jsx}',
+      'src/components/react-bits/**/*.{tsx,jsx}',
       'src/components/signoff-ui/**/*.{tsx,jsx}',
     ]);
   });
@@ -202,6 +206,9 @@ describe('init writes the folders shadcn add fills from other registries', () =>
     expect(written(root).components).toEqual(['components/ui/**/*.tsx']);
     expect(init.stdout).toContain(
       `components.json names the registries @ai-elements and @signoff-ui, which \`shadcn add\` copies into components/ai-elements and components/signoff-ui: \`check\` reads their code as your own. To set it apart, see ${LINK}.`,
+    );
+    expect(init.stdout).toContain(
+      `components.json also names @react-bits, and components/react-bits does not exist yet: once \`shadcn add\` copies code there, \`check\` reads it as your own. To set it apart then, add "components/react-bits/**/*.{tsx,jsx}" to "components" (${LINK}).`,
     );
   });
 
@@ -257,6 +264,93 @@ describe('init writes the folders shadcn add fills from other registries', () =>
     });
     expect(result.stdout).toContain(
       `components.json names the registries @ai-elements and @signoff-ui, which \`shadcn add\` copies into components/ai-elements and components/signoff-ui: \`check\` reads their code as your own. To set it apart, see ${LINK}.`,
+    );
+    // No glob to add to a config that imports the components by a package name.
+    expect(result.stdout).toContain(
+      `components.json also names @react-bits, and components/react-bits does not exist yet: once \`shadcn add\` copies code there, \`check\` reads it as your own. To set it apart then, see ${LINK}.`,
+    );
+  });
+});
+
+// signoff-ui's getting started, and the shadcn MCP, add the registry to components.json first
+// and run `npx shadcn add @signoff-ui/<item>` after: init may run in between.
+describe('init before the first shadcn add from a registry', () => {
+  /** The app with signoff-ui named in components.json and nothing installed from it yet. */
+  function named() {
+    const installed = [DIFF_REVIEW, MESSAGE, DOCK];
+    return {
+      ...Object.fromEntries(
+        Object.entries(app('', { '@signoff-ui': REGISTRIES['@signoff-ui'] })).filter(
+          ([file]) => !installed.includes(file),
+        ),
+      ),
+      [PAGE]: 'export default function Page() { return <main><button>Go</button></main> }\n',
+    };
+  }
+
+  it('adds the folder that does not exist yet, so the next shadcn add keeps the baseline', async () => {
+    const root = fixture(named());
+    expect(fs.existsSync(path.join(root, 'components/signoff-ui'))).toBe(false);
+    const init = await run(['init', '--yes', '--no-cache'], root);
+    expect(init.code).toBe(0);
+    expect(written(root).components).toEqual([
+      'components/ui/**/*.{tsx,jsx}',
+      'components/signoff-ui/**/*.{tsx,jsx}',
+    ]);
+    expect(init.stdout).toContain(
+      `Added components/signoff-ui (@signoff-ui) to "components", though it does not exist yet: \`check\` and the hook skip the code \`shadcn add\` copies there from that registry in components.json. Code a registry copies somewhere else, such as loose into components/, is checked as your own (${LINK}).`,
+    );
+    expect(init.stdout).not.toContain('into other folders');
+    expect(init.stdout).toContain('Baseline: 1 finding in 1 file');
+    // A components glob that matches no file yet is no problem to inspect or check.
+    const inspect = await run(['inspect', '--no-cache'], root);
+    expect(inspect).toMatchObject({ code: 0, stderr: '' });
+    expect(inspect.stdout).toContain('1 component file');
+    expect(await check(root)).toEqual({ code: 0, reported: [], messages: [] });
+
+    // `npx shadcn add @signoff-ui/diff-review`, with a primitive its <textarea> now has.
+    fs.mkdirSync(path.join(root, 'components/signoff-ui'));
+    fs.writeFileSync(path.join(root, DIFF_REVIEW), app()[DIFF_REVIEW] ?? '');
+    fs.writeFileSync(
+      path.join(root, 'components/ui/textarea.tsx'),
+      'export function Textarea(props: React.ComponentProps<"textarea">) { return <textarea {...props} /> }\n',
+    );
+    expect(await check(root)).toEqual({ code: 0, reported: [], messages: [] });
+    expect(await check(root, DIFF_REVIEW)).toEqual({ code: 0, reported: [], messages: [] });
+    // What it skips: the file has findings when checked as app code.
+    expect((await check(root, DIFF_REVIEW, '--include-design-system')).reported).toEqual([
+      DIFF_REVIEW,
+    ]);
+  });
+
+  it('names the glob to add when --components is given', async () => {
+    const root = fixture(named());
+    const init = await run(
+      ['init', '--yes', '--no-cache', '--components', 'components/ui/**/*.tsx'],
+      root,
+    );
+    expect(init.code).toBe(0);
+    expect(written(root).components).toEqual(['components/ui/**/*.tsx']);
+    expect(init.stdout).toContain(
+      `components.json names @signoff-ui, and components/signoff-ui does not exist yet: once \`shadcn add\` copies code there, \`check\` reads it as your own. To set it apart then, add "components/signoff-ui/**/*.{tsx,jsx}" to "components" (${LINK}).`,
+    );
+  });
+
+  it('adds no folder that exists with no .tsx or .jsx file: that registry puts its components elsewhere', async () => {
+    const root = fixture({
+      ...named(),
+      'components.json': json({
+        tailwind: { css: 'app/globals.css' },
+        aliases: { components: '@/components', ui: '@/components/ui' },
+        registries: { '@acme': 'https://acme.example/r/{name}.json' },
+      }),
+      'components/acme/use-copy.ts': 'export function useCopy() { return () => {} }\n',
+    });
+    const init = await run(['init', '--yes', '--no-cache'], root);
+    expect(init.code).toBe(0);
+    expect(written(root).components).toEqual(['components/ui/**/*.{tsx,jsx}']);
+    expect(init.stdout).toContain(
+      `components.json names @acme, and no .tsx or .jsx file is in components/acme: \`check\` reads what \`shadcn add\` copies from it into other folders as your own code (${LINK}).`,
     );
   });
 });
