@@ -1,6 +1,9 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
-  "changelog": ["@changesets/changelog-github", { "repo": "dgesteves/onsystem" }],
+  "changelog": [
+    "../scripts/changelog.mjs",
+    { "repo": "dgesteves/onsystem", "maintainers": ["dgesteves"] }
+  ],
   "commit": false,
   "fixed": [],
   "linked": [],
