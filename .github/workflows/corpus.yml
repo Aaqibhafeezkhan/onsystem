@@ -3,6 +3,9 @@ name: Corpus
 # Checks the built CLI on public repositories pinned by commit (corpus/repos.json) and compares
 # the findings with corpus/snapshot.json and the labels in corpus/labels.json. Not a required
 # check yet: it reports, and a change of counts needs `pnpm corpus --update` in the pull request.
+# Once a week, and on demand, the installed-types corpus checks the repositories bench/v2
+# installs with their dependencies installed, as users run onsystem, against
+# corpus/snapshot-installed.json (`pnpm corpus --installed --update` records a change).
 on:
   pull_request:
     paths:
@@ -14,18 +17,22 @@ on:
       - '.github/workflows/corpus.yml'
   schedule:
     - cron: '23 3 * * *'
+    # The installed-types corpus (the `installed` job), on Mondays.
+    - cron: '41 4 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # The daily and the weekly schedule are separate groups, so neither cancels the other.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.schedule }}
   cancel-in-progress: true
 
 jobs:
   corpus:
     name: Real-world corpus
+    if: github.event.schedule != '41 4 * * 1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -68,3 +75,37 @@ jobs:
       # The same runs through the ESLint plugin, which must report what check reports.
       - name: Check the corpus through ESLint
         run: pnpm --silent corpus eslint
+
+  installed:
+    name: Installed-types corpus
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 4 * * 1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Outside the checkout: the CLI looks upwards for node_modules and workspace roots.
+      - run: echo "CORPUS_DIR=${{ runner.temp }}/corpus" >> "$GITHUB_ENV"
+      # Fetches the pinned commits, then installs each repository from its own lockfile with
+      # bench/v2's command (bench/v2/config/repos.json): pnpm with --frozen-lockfile and
+      # --ignore-scripts, plus --ignore-pnpmfile. Not cached: the installs take gigabytes.
+      - run: pnpm --silent corpus fetch --installed
+      - name: Check the installed-types corpus
+        shell: bash
+        run: |
+          set +e
+          pnpm --silent corpus --installed > corpus-report.txt 2>&1
+          status=$?
+          cat corpus-report.txt
+          {
+            echo '## Installed-types corpus'
+            echo '```text'
+            cat corpus-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

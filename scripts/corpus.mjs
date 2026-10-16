@@ -7,6 +7,13 @@
 //   node scripts/corpus.mjs sample <run>     print unlabelled findings with their code, to label
 //   node scripts/corpus.mjs eslint           lint the files each run checks through the ESLint
 //                                            plugin, and compare its findings with check's
+//   node scripts/corpus.mjs --installed      the installed-types corpus: the repositories
+//                                            bench/v2 installs, checked with their dependencies
+//                                            and compared with corpus/snapshot-installed.json
+//                                            (also with fetch, sample, --update and --only)
+//   node scripts/corpus.mjs draw --installed --seed <n> --per-rule <k> --out corpus/<folder>
+//                                            draw a holdout to label blind: up to k distinct
+//                                            findings of each rule
 //
 // It fails when the counts differ from the snapshot (pass --update to accept them, as with Jest
 // snapshots), when a finding labelled TP is no longer reported, when one labelled FP comes
@@ -15,7 +22,9 @@
 // still reported: each blind draw's first, with where its false-positive rate is
 // (corpus/<draw>/stats.txt), or that the rate no longer holds once some of its labels are no
 // longer reported; then the older labels' figures, which are not a false-positive rate for all
-// findings.
+// findings. The installed-types corpus also prints what installing changes against the same
+// runs in corpus/snapshot.json, and each holdout's false-positive rate per rule once it is
+// labelled (corpus/<draw>/sample-labelled.json).
 //
 // The repositories are untrusted. They are fetched shallow and sparse (source, styles,
 // manifests and docs only), never installed or built, and nothing in them runs: a run whose
@@ -25,11 +34,18 @@
 // corpus/repos.json pins it (the library, its peers and React's types at exact versions),
 // installed with --ignore-scripts into a cached folder beside the checkouts and linked as the
 // app folder's node_modules; the repository's own package.json and lockfile are not used.
+// The installed-types corpus (--installed) is the other exception: the repositories bench/v2
+// installs (bench/v2/config/repos.json) are checked out again under `.installed` and installed
+// from their own lockfile with bench/v2's command, pnpm with --frozen-lockfile and
+// --ignore-scripts, plus --ignore-pnpmfile, so no install script or pnpmfile runs. Users run
+// onsystem with node_modules installed, and types decide which props and variants a component
+// takes; the other runs never see that node_modules.
 // A run with `init` checks a copy of the checkout in which `onsystem init --yes` has first run
 // in each folder it lists (a design-system package, which init sets up for the apps that use
 // it), so what init writes reaches no other run.
 // Run `pnpm build` first.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,8 +55,11 @@ import { parseArgs } from 'node:util';
 import {
   changeTable,
   compare,
+  distinctFindings,
+  drawHoldout,
   falsePositiveRate,
   findings,
+  installedRepos,
   installs,
   invalidLabels,
   labelKey,
@@ -49,13 +68,16 @@ import {
   random,
   rootDifferences,
   ruleCounts,
+  ruleRates,
+  typeDriven,
+  typeDrivenTable,
 } from './corpus-lib.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const CORPUS = path.join(ROOT, 'corpus');
 const CLI = path.join(ROOT, 'dist', 'cli.js');
-const SNAPSHOT = path.join(CORPUS, 'snapshot.json');
 const LABELS = path.join(CORPUS, 'labels.json');
+const BENCH_REPOS = path.join(ROOT, 'bench', 'v2', 'config', 'repos.json');
 
 /** What the CLI reads: sources, styles, manifests and docs. Images, fonts and binaries stay out. */
 const EXTENSIONS = [
@@ -87,9 +109,11 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     update: { type: 'boolean', default: false },
+    installed: { type: 'boolean', default: false },
     only: { type: 'string', multiple: true },
     dir: { type: 'string' },
-    'per-rule': { type: 'string', default: '2' },
+    out: { type: 'string' },
+    'per-rule': { type: 'string' },
     seed: { type: 'string', default: '1' },
     rule: { type: 'string' },
     file: { type: 'string' },
@@ -103,10 +127,18 @@ const dir = path.resolve(
 );
 
 const corpus = readJson(path.join(CORPUS, 'repos.json'));
-const runs = corpus.repos.flatMap((repo) => repo.runs.map((run) => ({ ...run, repo })));
+const repos = values.installed ? installedRepos(corpus, readJson(BENCH_REPOS)) : corpus.repos;
+const runs = repos.flatMap((repo) => repo.runs.map((run) => ({ ...run, repo })));
 const wanted = values.only?.length
-  ? runs.filter((run) => values.only.includes(run.name) || values.only.includes(run.repo.name))
+  ? runs.filter((run) =>
+      [run.name, run.plain, run.repo.name].some((name) => values.only.includes(name)),
+    )
   : runs;
+const SNAPSHOT = path.join(CORPUS, values.installed ? 'snapshot-installed.json' : 'snapshot.json');
+const UPDATE = `node scripts/corpus.mjs${values.installed ? ' --installed' : ''} --update`;
+// The installed corpus has checkouts of its own: the CLI looks upwards for node_modules, so an
+// install in the other runs' checkouts would change what they report.
+const checkouts = values.installed ? path.join(dir, '.installed') : dir;
 /** Runs with `init` whose copy of the checkout is ready, in this command. */
 const prepared = new Set();
 if (values.only?.length && !wanted.length)
@@ -126,8 +158,12 @@ try {
     if (!run) fail(`sample: pass a run, one of ${runs.map((r) => r.name).join(', ')}.`);
     fetchAll([run]);
     sample(run);
+  } else if (command === 'draw') {
+    if (values.only?.length) fail('draw: a draw takes every run; leave out --only.');
+    fetchAll(runs);
+    draw(runs);
   } else {
-    fail(`Unknown command "${command}": check (default), fetch, eslint or sample <run>.`);
+    fail(`Unknown command "${command}": check (default), fetch, eslint, sample <run> or draw.`);
   }
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
@@ -137,9 +173,9 @@ try {
 
 function fetchAll(selected) {
   assertIsolated(dir);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(checkouts, { recursive: true });
   for (const repo of new Set(selected.map((run) => run.repo))) {
-    const target = path.join(dir, repo.name);
+    const target = path.join(checkouts, repo.name);
     const patterns = sparsePatterns(repo);
     const stamp = path.join(target, '.git', 'onsystem-corpus.json');
     const want = JSON.stringify({ url: repo.url, sha: repo.sha, patterns });
@@ -173,12 +209,52 @@ function fetchAll(selected) {
 }
 
 /**
+ * An installed-types repository's dependencies, from its own lockfile, with bench/v2's command:
+ * pnpm with --frozen-lockfile and --ignore-scripts, so no lifecycle script runs, plus
+ * --ignore-pnpmfile, so no .pnpmfile.cjs does. The install gets no variable that looks like a
+ * secret, and is redone when the commit or the command changes.
+ */
+function installRepo(repo, target) {
+  const [tool, ...toolArgs] = [...repo.command, '--ignore-pnpmfile'];
+  const stamp = path.join(target, '.git', 'onsystem-corpus-install.json');
+  const want = JSON.stringify({ sha: repo.sha, command: [tool, ...toolArgs] });
+  if (
+    fs.existsSync(stamp) &&
+    fs.readFileSync(stamp, 'utf8') === want &&
+    fs.existsSync(path.join(target, 'node_modules'))
+  )
+    return;
+  const started = performance.now();
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) => !/TOKEN|SECRET|PASSWORD|CREDENTIAL|AUTH|_KEY$/i.test(name),
+    ),
+  );
+  const result = spawnSync(process.platform === 'win32' ? `${tool}.cmd` : tool, toolArgs, {
+    cwd: target,
+    encoding: 'utf8',
+    env: { ...env, CI: '1' },
+    maxBuffer: 256 * 1024 * 1024,
+    shell: process.platform === 'win32',
+  });
+  if (result.status !== 0) {
+    const output = (result.stderr || result.stdout || result.error?.message || '').trim();
+    throw new Error(
+      `${tool} ${toolArgs.join(' ')} failed in ${target}:\n${output.split('\n').slice(-20).join('\n')}`,
+    );
+  }
+  fs.writeFileSync(stamp, want);
+  console.error(`installed ${repo.name} (${[tool, ...toolArgs].join(' ')}) in ${seconds(started)}`);
+}
+
+/**
  * The npm packages a repository's `install` pins (a component library's type declarations, its
  * peers and React's types), installed with --ignore-scripts into `.installs` beside the
  * checkouts, reused while the pins stay the same, and linked as the folder's node_modules.
  */
 function installAll(selected) {
   for (const repo of new Set(selected.map((run) => run.repo))) {
+    if (repo.command) installRepo(repo, path.join(checkouts, repo.name));
     for (const install of installs(repo, dir)) {
       const stamp = path.join(install.dir, 'onsystem-install.json');
       const want = JSON.stringify({ manifest: install.manifest, args: install.args });
@@ -308,15 +384,11 @@ function check(selected) {
   }
 
   const result = compare(snapshot, current, found, labels);
+  const snapshotFile = path.relative(ROOT, SNAPSHOT).split(path.sep).join('/');
   const lines = [''];
   if (result.changes.length || result.changedRuns.length) {
     if (result.changes.length)
-      lines.push(
-        'Counts that differ from corpus/snapshot.json:',
-        '',
-        changeTable(result.changes),
-        '',
-      );
+      lines.push(`Counts that differ from ${snapshotFile}:`, '', changeTable(result.changes), '');
     for (const run of result.changedRuns) {
       const before = snapshot.runs[run];
       lines.push(
@@ -327,7 +399,22 @@ function check(selected) {
     }
     if (result.changedRuns.length) lines.push('');
   } else {
-    lines.push('Counts match corpus/snapshot.json.', '');
+    lines.push(`Counts match ${snapshotFile}.`, '');
+  }
+  if (values.installed) {
+    // The same runs without their dependencies, as the plain corpus records them.
+    const plain = readJson(path.join(CORPUS, 'snapshot.json')).runs;
+    const rows = typeDriven(current, plain, (name) => runs.find((r) => r.name === name).plain);
+    lines.push(
+      ...(rows.length
+        ? [
+            'What installing the dependencies changes, against the same runs in corpus/snapshot.json:',
+            '',
+            typeDrivenTable(rows),
+          ]
+        : ['Installing the dependencies changes no count against corpus/snapshot.json.']),
+      '',
+    );
   }
   for (const { label, present } of result.labelChanges) {
     lines.push(
@@ -374,27 +461,36 @@ function check(selected) {
   });
   // The blind draws come first: the README quotes their rate. The older labels' figures cover
   // only their own runs and rules, so they are printed as that, not as a rate for all findings.
-  lines.push(
-    `Labels: ${relevant.length}, ${result.present.size} of them still reported.`,
-    ...draws.map((draw) => {
-      const drawn = relevant.filter((l) => l.sample === 'blind' && l.draw === draw);
-      const kept = drawn.filter((l) => result.present.has(l));
-      const intact =
-        kept.length === drawn.length
-          ? `Its false-positive rate, with its interval, is in corpus/${draw}/stats.txt.`
-          : 'Some of its findings are no longer reported, so its rate no longer holds: draw a fresh sample.';
-      return `  Blind sample ${draw}: ${kept.length} of its ${drawn.length} labels still reported (${tally(verdicts(kept))}). ${intact}`;
-    }),
-    '  Older labels, by a reviewer who could see the finding. Not a false-positive rate for all findings:',
-    `    Random sample still reported: ${tally(rate.sample)}. ${percent(rate.sample.rate)} of these labels are false positives (errors only: ${percent(rate.sampleErrors.rate)}).`,
-    `    Weighted by run and rule, coverage only: ${percent(rate.estimate)} of the findings in the runs and rules these labels cover (${percent(rate.coverage)} of all findings) are false positives (errors only: ${percent(rate.estimateErrors)}).`,
-    `    Audit picks still reported: ${tally(rate.audit)}.`,
-    '    Random sample by rule:',
-    ...rate.byRule.map(
-      ({ rule, precision }) =>
-        `      ${rule.padEnd(32)} ${tally(precision)}: ${percent(precision.rate)}`,
-    ),
-  );
+  if (values.installed) {
+    // A holdout keeps its labels in its own folder (corpus/<draw>/sample-labelled.json).
+    if (relevant.length)
+      lines.push(
+        `Labels in corpus/labels.json for these runs: ${relevant.length}, ${result.present.size} of them still reported.`,
+      );
+    lines.push(...holdoutLines(found, current));
+  } else {
+    lines.push(
+      `Labels: ${relevant.length}, ${result.present.size} of them still reported.`,
+      ...draws.map((draw) => {
+        const drawn = relevant.filter((l) => l.sample === 'blind' && l.draw === draw);
+        const kept = drawn.filter((l) => result.present.has(l));
+        const intact =
+          kept.length === drawn.length
+            ? `Its false-positive rate, with its interval, is in corpus/${draw}/stats.txt.`
+            : 'Some of its findings are no longer reported, so its rate no longer holds: draw a fresh sample.';
+        return `  Blind sample ${draw}: ${kept.length} of its ${drawn.length} labels still reported (${tally(verdicts(kept))}). ${intact}`;
+      }),
+      '  Older labels, by a reviewer who could see the finding. Not a false-positive rate for all findings:',
+      `    Random sample still reported: ${tally(rate.sample)}. ${percent(rate.sample.rate)} of these labels are false positives (errors only: ${percent(rate.sampleErrors.rate)}).`,
+      `    Weighted by run and rule, coverage only: ${percent(rate.estimate)} of the findings in the runs and rules these labels cover (${percent(rate.coverage)} of all findings) are false positives (errors only: ${percent(rate.estimateErrors)}).`,
+      `    Audit picks still reported: ${tally(rate.audit)}.`,
+      '    Random sample by rule:',
+      ...rate.byRule.map(
+        ({ rule, precision }) =>
+          `      ${rule.padEnd(32)} ${tally(precision)}: ${percent(precision.rate)}`,
+      ),
+    );
+  }
   console.log(lines.join('\n'));
 
   if (result.labelFailures.length || rootFailures.length) {
@@ -410,8 +506,9 @@ function check(selected) {
     for (const label of relevant) presence[labelKey(label)] = result.present.has(label);
     // In the order of corpus/repos.json; runs and labels that no longer exist leave the snapshot.
     const next = {
-      $comment:
-        'Written by `node scripts/corpus.mjs --update`. Counts per run and rule; `labels` records which labelled findings were reported.',
+      $comment: values.installed
+        ? "Written by `node scripts/corpus.mjs --installed --update`. Counts per run and rule with the dependencies installed from each repository's lockfile, as bench/v2 installs them; `labels` records which labelled findings were reported."
+        : 'Written by `node scripts/corpus.mjs --update`. Counts per run and rule; `labels` records which labelled findings were reported.',
       version: readJson(path.join(ROOT, 'package.json')).version,
       runs: Object.fromEntries(
         runs.filter((r) => merged[r.name]).map((r) => [r.name, merged[r.name]]),
@@ -421,12 +518,12 @@ function check(selected) {
       ),
     };
     writeJson(SNAPSHOT, next);
-    console.log(`\nWrote ${path.relative(ROOT, SNAPSHOT)}.`);
+    console.log(`\nWrote ${snapshotFile}.`);
     return 0;
   }
   if (changed) {
     console.error(
-      '\n✗ The counts differ from corpus/snapshot.json. If the change is intended, run `node scripts/corpus.mjs --update` and commit the snapshot.',
+      `\n✗ The counts differ from ${snapshotFile}. If the change is intended, run \`${UPDATE}\` and commit the snapshot.`,
     );
     return 1;
   }
@@ -554,7 +651,7 @@ function without(a, b) {
  * made again for each command, where `onsystem init --yes` has run in each folder it lists.
  */
 function runDir(run) {
-  if (!run.init) return path.join(dir, run.repo.name, run.cwd);
+  if (!run.init) return path.join(checkouts, run.repo.name, run.cwd);
   const copy = path.join(dir, '.init', run.name);
   if (!prepared.has(run.name)) {
     fs.rmSync(copy, { recursive: true, force: true });
@@ -700,7 +797,7 @@ function sample(run) {
   let picked = pool;
   if (!values.all && !values.file && !values.line) {
     const next = random(Number(values.seed));
-    const perRule = Number(values['per-rule']);
+    const perRule = Number(values['per-rule'] ?? '2');
     picked = [];
     for (const rule of [...new Set(pool.map((f) => f.rule))].sort()) {
       const of = pool.filter((f) => f.rule === rule);
@@ -734,6 +831,207 @@ function sample(run) {
     console.log(`   ${JSON.stringify({ ...fields, verdict: '?', reason: '', sample: 'random' })}`);
   }
   console.error(`\n${picked.length} of ${pool.length} unlabelled findings in ${run.name}.`);
+}
+
+// ─── Holdouts: seeded draws to label blind, with a rate per rule ──────────────
+
+/** The holdouts drawn from the installed corpus: folders in corpus/ whose allocation.json says so. */
+function holdouts() {
+  return fs
+    .readdirSync(CORPUS, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => {
+      const allocation = path.join(CORPUS, name, 'allocation.json');
+      return fs.existsSync(allocation) && readJson(allocation).corpus === 'installed';
+    })
+    .sort();
+}
+
+/**
+ * Each holdout: how many of its findings are still reported, and once a labeller has written
+ * its sample-labelled.json, each rule's false-positive rate with its interval. The rates hold
+ * only while every finding is still reported: once a fix takes some out, what is left
+ * under-counts the false positives.
+ */
+function holdoutLines(found, current) {
+  const reported = new Set(found.map((f) => f.fingerprint));
+  const lines = [];
+  for (const name of holdouts()) {
+    const drawn = readJson(path.join(CORPUS, name, 'sample-unlabelled.json')).findings.filter(
+      (f) => f.run in current,
+    );
+    const kept = drawn.filter((f) => reported.has(f.fingerprint));
+    lines.push(
+      `Holdout ${name}: ${kept.length} of its ${drawn.length} findings still reported.${kept.length === drawn.length ? '' : ' Its rates no longer hold: draw a fresh holdout with a new seed.'}`,
+    );
+    const labelled = path.join(CORPUS, name, 'sample-labelled.json');
+    if (!fs.existsSync(labelled)) {
+      lines.push(`  Not labelled yet: corpus/${name}/BRIEF.md is the labeller's brief.`);
+      continue;
+    }
+    const rates = ruleRates(readJson(labelled).findings.filter((f) => f.run in current));
+    lines.push(
+      `  False positives per rule, with a 95% Wilson interval (corpus/${name}/LABELLER.md says who labelled them):`,
+      ...rates.map(
+        (r) =>
+          `    ${r.rule.padEnd(32)} ${String(r.n).padStart(3)} labelled: ${r.tp} TP, ${r.d} debatable, ${r.fp} FP: ${percent(r.rate)} (${percent(r.low)}-${percent(r.high)})`,
+      ),
+    );
+  }
+  return lines;
+}
+
+/**
+ * A holdout: up to --per-rule distinct findings of each rule, drawn with --seed from every run
+ * once the counts match the snapshot, and written to --out for a labeller who sees no other
+ * label (its BRIEF.md). It is frozen once written: a fresh draw takes a new seed and folder.
+ */
+function draw(selected) {
+  const seed = Number(values.seed);
+  const perRule = Number(values['per-rule']);
+  if (!values.out || !values['per-rule'] || !Number.isInteger(seed)) {
+    fail('draw: pass --seed <n>, --per-rule <k> and --out corpus/<folder>.');
+  }
+  const out = path.resolve(values.out);
+  if (fs.existsSync(out)) {
+    fail(
+      `${path.relative(ROOT, out)} exists: a holdout is frozen once drawn. Draw a fresh one with a new seed into a new folder.`,
+    );
+  }
+  const git = (gitArgs) => spawnSync('git', gitArgs, { cwd: ROOT, encoding: 'utf8' });
+  const changed = git(['status', '--porcelain', '--', 'src']);
+  if (changed.status !== 0 || changed.stdout.trim()) {
+    fail('draw: src/ differs from the commit; draw from a commit, so the holdout can name it.');
+  }
+  if (check(selected) !== 0) fail('\ndraw: the counts must match the snapshot first.');
+
+  const byRun = {};
+  for (const run of selected) {
+    const results = readJson(path.join(dir, '.results', `${run.name}.json`));
+    const raw = results.flatMap((r) => r.diagnostics);
+    const prefix = run.cwd === '.' ? '' : `${run.cwd.replace(/\/+$/, '')}/`;
+    byRun[run.name] = findings(run.name, results).map((f, i) => ({
+      ...f,
+      repo: run.repo,
+      path: `${prefix}${f.file}`,
+      column: raw[i].column,
+      endLine: raw[i].endLine,
+      endColumn: raw[i].endColumn,
+    }));
+  }
+  const population = distinctFindings(selected, byRun);
+  const id = (f) => `${f.repo.name}:${f.path}:${f.line}:${f.column}:${f.rule}`;
+  const { strata, picks } = drawHoldout(population, { seed, perRule, id });
+
+  const lines = new Map();
+  const excerpt = (f) => {
+    const file = path.join(checkouts, f.repo.name, ...f.path.split('/'));
+    if (!lines.has(file))
+      lines.set(
+        file,
+        fs
+          .readFileSync(file, 'utf8')
+          .split('\n')
+          .map((l) => l.replace(/\r$/, '')),
+      );
+    const all = lines.get(file);
+    const start = Math.max(1, f.line - 7);
+    const end = Math.min(all.length, f.line + 7);
+    const text = [];
+    for (let n = start; n <= end; n++) {
+      let line = all[n - 1] ?? '';
+      const max = n === f.line ? 2000 : 400;
+      if (line.length > max) line = `${line.slice(0, max)} …[line truncated: ${line.length} chars]`;
+      text.push(`${n === f.line ? '>' : ' '} ${String(n).padStart(String(end).length)} | ${line}`);
+    }
+    return { start, end, text: text.join('\n') };
+  };
+  const sampleNo = (i) => `H${String(i + 1).padStart(3, '0')}`;
+  const meta = {
+    corpus: values.installed ? 'installed' : 'plain',
+    seed,
+    perRule,
+    n: picks.length,
+    populationTotal: population.length,
+    generator: 'mulberry32 (scripts/corpus-lib.ts random)',
+  };
+  const sample = picks.map((f, i) => {
+    const ex = excerpt(f);
+    return {
+      sampleNo: sampleNo(i),
+      id: id(f),
+      repo: f.repo.name,
+      repoUrl: f.repo.url,
+      sha: f.repo.sha,
+      permalink: `${f.repo.url}/blob/${f.repo.sha}/${f.path.split('/').map(encodeURIComponent).join('/')}#L${f.line}`,
+      run: f.run,
+      file: f.path,
+      line: f.line,
+      column: f.column,
+      endLine: f.endLine,
+      endColumn: f.endColumn,
+      rule: f.rule,
+      message: f.message,
+      source: f.source,
+      occurrence: f.occurrence,
+      fingerprint: f.fingerprint,
+      excerptStartLine: ex.start,
+      excerptEndLine: ex.end,
+      excerpt: ex.text,
+    };
+  });
+  const stratum = (rule) => strata.find((s) => s.rule === rule);
+  fs.mkdirSync(out, { recursive: true });
+  writeJson(path.join(out, 'sample-unlabelled.json'), {
+    $comment:
+      "The labeller's only input: a seeded draw of distinct findings, up to perRule of each rule, in a shuffled order. Each gives where the finding is (repository, pinned commit, file, line, column), its rule, its message exactly as onsystem printed it, the matched source text, and up to 15 lines of code from the pinned checkout, 7 above and 7 below the reported line, which is marked >. No suggested fix, no severity and no label. run, occurrence and fingerprint are the corpus keys (scripts/corpus-lib.ts).",
+    ...meta,
+    findings: sample,
+  });
+  writeJson(path.join(out, 'sample-key.json'), {
+    $comment:
+      'Not for the labeller: per sampled finding, its severity, whether onsystem offers a fix and the suggestion, and its rule stratum and weight (population / sampled).',
+    ...meta,
+    findings: picks.map((f, i) => ({
+      sampleNo: sampleNo(i),
+      id: id(f),
+      rule: f.rule,
+      severity: f.severity,
+      hasFix: f.fixable,
+      suggestion: f.suggestion,
+      stratumPopulation: stratum(f.rule).population,
+      stratumSampled: stratum(f.rule).sampled,
+      weight: stratum(f.rule).weight,
+    })),
+  });
+  writeJson(path.join(out, 'allocation.json'), {
+    $comment:
+      'How the holdout was drawn. populationSha256 is the sha256 of every distinct finding id (repository:file:line:column:rule), sorted, one per line with a final newline.',
+    ...meta,
+    drawn: new Date().toISOString().slice(0, 10),
+    onsystem: {
+      commit: git(['rev-parse', 'HEAD']).stdout.trim(),
+      version: readJson(path.join(ROOT, 'package.json')).version,
+    },
+    populationSha256: createHash('sha256')
+      .update(`${population.map(id).sort().join('\n')}\n`)
+      .digest('hex'),
+    runs: selected.map((run) => ({
+      run: run.name,
+      repo: run.repo.name,
+      sha: run.repo.sha,
+      distinct: distinctFindings([run], byRun).length,
+    })),
+    allocation: strata,
+  });
+  console.log(`\nDrew ${picks.length} of ${population.length} distinct findings, seed ${seed}:`);
+  for (const s of strata) {
+    console.log(
+      `  ${s.rule.padEnd(32)} ${String(s.population).padStart(6)}  ${String(s.sampled).padStart(3)}`,
+    );
+  }
+  console.log(`Wrote ${path.relative(ROOT, out)}.`);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

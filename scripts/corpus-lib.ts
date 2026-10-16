@@ -397,7 +397,10 @@ export function rootDifferences(
 }
 
 /** Findings outside the given folders (`.` holds them all): what a root run adds to the runs from its projects. */
-export function outside(found: readonly Finding[], folders: readonly string[]): Finding[] {
+export function outside<F extends Pick<Finding, 'file'>>(
+  found: readonly F[],
+  folders: readonly string[],
+): F[] {
   const prefixes = folders.map(folderPrefix);
   return found.filter((f) => !prefixes.some((prefix) => f.file.startsWith(prefix)));
 }
@@ -500,6 +503,263 @@ export function installs(
         '--loglevel=error',
         `--before=${before}`,
       ],
+    };
+  });
+}
+
+// ─── The installed-types corpus ───────────────────────────────────────────────
+
+/** A run of corpus/repos.json, as far as the installed-types corpus reads it. */
+export interface CorpusRun {
+  name: string;
+  cwd: string;
+  check: string[];
+  args?: string[];
+  config?: string;
+  init?: string[];
+  sameAs?: Record<string, string>;
+}
+
+export interface CorpusRepo {
+  name: string;
+  url: string;
+  sha: string;
+  paths?: string[];
+  install?: InstallSpec;
+  runs: CorpusRun[];
+}
+
+/** A repository of bench/v2/config/repos.json: `corpus` names its entry in corpus/repos.json. */
+export interface BenchRepo {
+  name: string;
+  corpus: string;
+  install: string[];
+}
+
+export interface InstalledRun extends CorpusRun {
+  /** The run of corpus/repos.json this one repeats with dependencies installed. */
+  plain: string;
+}
+
+export interface InstalledRepo {
+  name: string;
+  url: string;
+  sha: string;
+  paths?: string[];
+  /** The install bench/v2 runs in the checkout, from the repository's own lockfile. */
+  command: string[];
+  runs: InstalledRun[];
+}
+
+/** The suffix that keeps an installed run's name, fingerprints and labels apart from its plain run. */
+export const INSTALLED = '-installed';
+
+/**
+ * The installed-types corpus: the repositories bench/v2 installs (bench/v2/config/repos.json), at
+ * the commits and folders corpus/repos.json pins, each installed from its own lockfile with
+ * bench/v2's command, and their corpus runs repeated with that install. A run with `init` checks a
+ * copy of the checkout and is left out: the copy would take the whole install with it.
+ */
+export function installedRepos(
+  corpus: { repos: readonly CorpusRepo[] },
+  bench: { repos: readonly BenchRepo[] },
+): InstalledRepo[] {
+  return bench.repos.map((benchRepo) => {
+    const repo = corpus.repos.find((r) => r.name === benchRepo.corpus);
+    if (!repo) {
+      throw new Error(
+        `${benchRepo.name}: corpus/repos.json has no repository named ${benchRepo.corpus}.`,
+      );
+    }
+    const [tool, ...args] = benchRepo.install;
+    // Nothing in the repository runs: no lifecycle script, and no install that changes the lockfile.
+    if (tool !== 'pnpm' || args[0] !== 'install') {
+      throw new Error(`${repo.name}: the installed corpus runs pnpm install, not ${tool ?? ''}.`);
+    }
+    for (const flag of ['--frozen-lockfile', '--ignore-scripts']) {
+      if (!args.includes(flag)) throw new Error(`${repo.name}: the install must pass ${flag}.`);
+    }
+    if (repo.install) {
+      throw new Error(`${repo.name}: has pinned packages of its own (install) and a lockfile.`);
+    }
+    const kept = repo.runs.filter((run) => !run.init);
+    const names = new Set(kept.map((run) => run.name));
+    return {
+      name: repo.name,
+      url: repo.url,
+      sha: repo.sha,
+      ...(repo.paths ? { paths: repo.paths } : {}),
+      command: benchRepo.install,
+      runs: kept.map(({ sameAs, ...run }) => {
+        const same = Object.entries(sameAs ?? {}).filter(([, other]) => names.has(other));
+        return {
+          ...run,
+          name: `${run.name}${INSTALLED}`,
+          plain: run.name,
+          ...(same.length
+            ? {
+                sameAs: Object.fromEntries(
+                  same.map(([folder, other]) => [folder, `${other}${INSTALLED}`]),
+                ),
+              }
+            : {}),
+        };
+      }),
+    };
+  });
+}
+
+/** One rule of one run whose counts differ once the run's dependencies are installed. */
+export interface TypeDriven {
+  run: string;
+  rule: string;
+  without: RuleCounts | undefined;
+  with: RuleCounts | undefined;
+}
+
+/**
+ * What installing the dependencies changes, run by run and rule by rule: each installed run
+ * against its plain run in corpus/snapshot.json. Types decide which props and variants a
+ * component takes and whether a native element's attributes fit a design-system component, so
+ * the API rules and the component rule's fixes differ; colors and spacing do not.
+ */
+export function typeDriven(
+  installed: Record<string, Pick<RunSnapshot, 'rules'>>,
+  plain: Record<string, Pick<RunSnapshot, 'rules'>>,
+  plainName: (run: string) => string,
+): TypeDriven[] {
+  const out: TypeDriven[] = [];
+  for (const [run, now] of Object.entries(installed)) {
+    const before = plain[plainName(run)];
+    if (!before) continue;
+    const rules = new Set([...Object.keys(before.rules), ...Object.keys(now.rules)]);
+    for (const rule of [...rules].sort()) {
+      const a = before.rules[rule];
+      const b = now.rules[rule];
+      if (JSON.stringify(a) !== JSON.stringify(b)) out.push({ run, rule, without: a, with: b });
+    }
+  }
+  return out;
+}
+
+/** A Markdown table of what installing changes, for pull request descriptions and the job summary. */
+export function typeDrivenTable(rows: readonly TypeDriven[]): string {
+  const cell = (c: RuleCounts | undefined) =>
+    c ? `${c.errors + c.warnings} (${c.fixes} fixable)` : '0';
+  const lines = [
+    '| Run | Rule | Without dependencies | With them |',
+    '| --- | --- | ---: | ---: |',
+  ];
+  for (const row of rows) {
+    lines.push(`| ${row.run} | ${row.rule} | ${cell(row.without)} | ${cell(row.with)} |`);
+  }
+  return lines.join('\n');
+}
+
+// ─── A holdout: a seeded draw of distinct findings, labelled blind ────────────
+
+/**
+ * Every distinct finding of a corpus, the population a sample is drawn from: a run with its own
+ * `config` re-checks another run's files and is left out, and a run with `sameAs` counts only
+ * what it adds outside those folders (the snapshot's `added`). The README counts the same way.
+ */
+export function distinctFindings<F extends Pick<Finding, 'file'>>(
+  runs: readonly Pick<CorpusRun, 'name' | 'config' | 'sameAs'>[],
+  byRun: Readonly<Record<string, readonly F[]>>,
+): F[] {
+  return runs.flatMap((run) => {
+    const found = byRun[run.name];
+    if (!found) throw new Error(`${run.name}: no findings to draw from; run it first.`);
+    if (run.config) return [];
+    return run.sameAs ? outside(found, Object.keys(run.sameAs)) : [...found];
+  });
+}
+
+export interface Stratum {
+  rule: string;
+  population: number;
+  sampled: number;
+  /** population / sampled: each sampled finding stands for this many in its rule. */
+  weight: number;
+}
+
+/**
+ * A sample for a rate per rule: up to `perRule` findings of each rule, all of a rule that has
+ * fewer. One mulberry32 generator (`random`) does every draw: rules in id order, each rule's
+ * findings in `id` order, then the corpus `sample` command's step, `floor(next() * remaining)`,
+ * taken out of the list; then the picks are shuffled (Fisher-Yates, same generator) so a
+ * labeller does not see them grouped by rule.
+ */
+export function drawHoldout<F extends { rule: string }>(
+  population: readonly F[],
+  { seed, perRule, id }: { seed: number; perRule: number; id: (f: F) => string },
+): { strata: Stratum[]; picks: F[] } {
+  if (!Number.isInteger(perRule) || perRule < 1) throw new Error('perRule must be 1 or more.');
+  const byCodeUnits = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const ids = new Set(population.map(id));
+  if (ids.size !== population.length) throw new Error('two findings share an id.');
+  const next = random(seed);
+  const strata: Stratum[] = [];
+  const picks: F[] = [];
+  for (const rule of [...new Set(population.map((f) => f.rule))].sort(byCodeUnits)) {
+    const pool = population
+      .filter((f) => f.rule === rule)
+      .sort((a, b) => byCodeUnits(id(a), id(b)));
+    const sampled = Math.min(perRule, pool.length);
+    strata.push({ rule, population: pool.length, sampled, weight: pool.length / sampled });
+    for (let i = 0; i < sampled; i++)
+      picks.push(...pool.splice(Math.floor(next() * pool.length), 1));
+  }
+  for (let i = picks.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1));
+    [picks[i], picks[j]] = [picks[j] as F, picks[i] as F];
+  }
+  return { strata, picks };
+}
+
+/** A 95% Wilson score interval for k of n. */
+export function wilson(k: number, n: number): [number, number] {
+  if (!n) return [0, 1];
+  const z = 1.959964;
+  const p = k / n;
+  const d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d;
+  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+}
+
+/** A labeller's verdict in a draw's sample-labelled.json. */
+export type HoldoutLabel = 'TP' | 'FP' | 'debatable';
+
+export interface RuleRate {
+  rule: string;
+  n: number;
+  tp: number;
+  fp: number;
+  d: number;
+  /** False positives among the labelled findings of the rule, with a 95% Wilson interval. */
+  rate: number;
+  low: number;
+  high: number;
+}
+
+/** The false-positive rate of each rule in a labelled holdout, rules in id order. */
+export function ruleRates(labelled: readonly { rule: string; label: HoldoutLabel }[]): RuleRate[] {
+  const rules = [...new Set(labelled.map((f) => f.rule))].sort();
+  return rules.map((rule) => {
+    const of = labelled.filter((f) => f.rule === rule);
+    const count = (label: HoldoutLabel) => of.filter((f) => f.label === label).length;
+    const fp = count('FP');
+    const [low, high] = wilson(fp, of.length);
+    return {
+      rule,
+      n: of.length,
+      tp: count('TP'),
+      fp,
+      d: count('debatable'),
+      rate: fp / of.length,
+      low,
+      high,
     };
   });
 }

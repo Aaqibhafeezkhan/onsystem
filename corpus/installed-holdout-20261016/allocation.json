@@ -1,0 +1,121 @@
+{
+  "$comment": "How the holdout was drawn. populationSha256 is the sha256 of every distinct finding id (repository:file:line:column:rule), sorted, one per line with a final newline.",
+  "corpus": "installed",
+  "seed": 20261016,
+  "perRule": 30,
+  "n": 109,
+  "populationTotal": 12945,
+  "generator": "mulberry32 (scripts/corpus-lib.ts random)",
+  "drawn": "2026-10-16",
+  "onsystem": {
+    "commit": "7ca0f69b077b53fcfccf15fed534f303b06f6f1f",
+    "version": "0.7.0"
+  },
+  "populationSha256": "451e90f8bd6c252e3db4e28f9de2d204737f58e72d5b736a6b07fec6ef0ea9d3",
+  "runs": [
+    {
+      "run": "saas-starter-installed",
+      "repo": "saas-starter",
+      "sha": "6e33e58b1e553a41fe22e6b941a7229a002de361",
+      "distinct": 111
+    },
+    {
+      "run": "chatbot-installed",
+      "repo": "chatbot",
+      "sha": "c2f8235e1f3ea903ad8b7f61447c4f74164b5c58",
+      "distinct": 73
+    },
+    {
+      "run": "shadcn-website-installed",
+      "repo": "shadcn-ui",
+      "sha": "0132174664c07d41262fb51012d0cc782e458e6c",
+      "distinct": 124
+    },
+    {
+      "run": "openstatus-dashboard-installed",
+      "repo": "openstatus",
+      "sha": "e36446dc7d6980c16959f07d683f6261bc9c37d0",
+      "distinct": 37
+    },
+    {
+      "run": "openstatus-web-installed",
+      "repo": "openstatus",
+      "sha": "e36446dc7d6980c16959f07d683f6261bc9c37d0",
+      "distinct": 45
+    },
+    {
+      "run": "openstatus-ui-installed",
+      "repo": "openstatus",
+      "sha": "e36446dc7d6980c16959f07d683f6261bc9c37d0",
+      "distinct": 19
+    },
+    {
+      "run": "openstatus-root-installed",
+      "repo": "openstatus",
+      "sha": "e36446dc7d6980c16959f07d683f6261bc9c37d0",
+      "distinct": 0
+    },
+    {
+      "run": "dub-web-installed",
+      "repo": "dub",
+      "sha": "70c96f90701451358bc9438f8b7fdf4b3b46a6f4",
+      "distinct": 12211
+    },
+    {
+      "run": "dub-ui-installed",
+      "repo": "dub",
+      "sha": "70c96f90701451358bc9438f8b7fdf4b3b46a6f4",
+      "distinct": 325
+    },
+    {
+      "run": "dub-web-configured-installed",
+      "repo": "dub",
+      "sha": "70c96f90701451358bc9438f8b7fdf4b3b46a6f4",
+      "distinct": 0
+    },
+    {
+      "run": "dub-root-installed",
+      "repo": "dub",
+      "sha": "70c96f90701451358bc9438f8b7fdf4b3b46a6f4",
+      "distinct": 0
+    }
+  ],
+  "allocation": [
+    {
+      "rule": "icon-button-accessible-name",
+      "population": 85,
+      "sampled": 30,
+      "weight": 2.8333333333333335
+    },
+    {
+      "rule": "no-hardcoded-color",
+      "population": 11752,
+      "sampled": 30,
+      "weight": 391.73333333333335
+    },
+    {
+      "rule": "no-hardcoded-radius",
+      "population": 8,
+      "sampled": 8,
+      "weight": 1
+    },
+    {
+      "rule": "no-hardcoded-spacing",
+      "population": 7,
+      "sampled": 7,
+      "weight": 1
+    },
+    {
+      "rule": "no-unknown-prop",
+      "population": 4,
+      "sampled": 4,
+      "weight": 1
+    },
+    {
+      "rule": "prefer-design-system-component",
+      "population": 1089,
+      "sampled": 30,
+      "weight": 36.3
+    }
+  ]
+}
