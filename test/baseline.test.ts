@@ -167,7 +167,8 @@ describe('the hint for baseline findings that no longer occur', () => {
     expect(await run(['check', 'app', '--prune-baseline', '--no-cache'], root)).toEqual({
       code: 2,
       stdout: '',
-      stderr: 'check --prune-baseline: no baseline to prune at onsystem.baseline.json',
+      stderr:
+        'check --prune-baseline: no baseline to prune at onsystem.baseline.json. Pass --baseline <file> to prune another one, or record the current findings with `check app --update-baseline`.',
     });
     await run(['check', 'app', '--update-baseline', '--no-cache'], root);
     for (const other of ['--update-baseline', '--ignore-baseline']) {
@@ -287,6 +288,114 @@ describe('a baseline written before a rule ran', () => {
     expect(checked.stdout.split('\n').at(-1)).toBe(
       '1 error, 0 warnings in 1 of 2 files checked (1 in the baseline)',
     );
+  });
+
+  // A baseline as 0.6.0 writes it: no version, no rules.
+  const legacy = (root: string) => {
+    const { files } = baselineOf(root);
+    fs.writeFileSync(
+      path.join(root, 'onsystem.baseline.json'),
+      JSON.stringify({ version: 1, files }),
+    );
+  };
+
+  // apps/web has color tokens; apps/docs has none, so no-hardcoded-color runs only in apps/web.
+  const workspace = (web: string) =>
+    fixture({
+      'pnpm-workspace.yaml': 'packages:\n  - apps/*\n',
+      'package.json': JSON.stringify({ name: 'acme', private: true }),
+      'apps/web/package.json': JSON.stringify({ name: '@acme/web' }),
+      'apps/web/app/globals.css': ':root { --destructive: #ef4444; }',
+      'apps/web/app/page.tsx': page(web),
+      'apps/docs/package.json': JSON.stringify({ name: '@acme/docs' }),
+      'apps/docs/app/page.tsx': 'export default () => <button><svg /></button>',
+    });
+
+  it('leaves the rules out when an update of part of such a baseline keeps entries it did not check', async () => {
+    const root = workspace('text-slate-500');
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    legacy(root);
+
+    // no-hardcoded-color did not run in apps/docs, but it did when apps/web's entry was recorded.
+    await run(['check', 'apps/docs', '--update-baseline', '--no-cache'], root);
+    const partial = baselineOf(root);
+    expect(Object.keys(partial)).toEqual(['version', 'onsystem', 'files']);
+    expect(partial.files).toEqual({
+      'apps/docs/app/page.tsx': { 'icon-button-accessible-name': { button: 1 } },
+      'apps/web/app/page.tsx': { 'no-hardcoded-color': { 'text-slate-500': 1 } },
+    });
+
+    // A new color in apps/web is a regression, not a rule that started to run.
+    fs.writeFileSync(path.join(root, 'apps/web/app/page.tsx'), page('text-slate-500 text-red-500'));
+    const checked = await run(['check', '.', '--no-cache'], root);
+    expect(checked.code).toBe(1);
+    expect(checked.stdout).toContain('text-red-500');
+    expect(checked.stdout).not.toContain('did not run when the baseline was written');
+    expect(checked.stdout).not.toContain('--update-baseline');
+  });
+
+  it('leaves them out after an update below the root, even where the rest has no entries', async () => {
+    // apps/web is clean, so the update keeps no entries it did not check.
+    const root = workspace('font-bold');
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    legacy(root);
+    await run(['check', 'apps/docs', '--update-baseline', '--no-cache'], root);
+    expect(baselineOf(root).rules).toBeUndefined();
+
+    fs.writeFileSync(path.join(root, 'apps/web/app/page.tsx'), page('text-red-500'));
+    const checked = await run(['check', '.', '--no-cache'], root);
+    expect(checked.code).toBe(1);
+    expect(checked.stdout).toContain('text-red-500');
+    expect(checked.stdout).not.toContain('did not run when the baseline was written');
+
+    // An update from the root records them.
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    expect(baselineOf(root).rules).toContain('no-hardcoded-color');
+  });
+
+  it('does the same when an override turns the rule off for the folder updated', async () => {
+    const root = project({ 'app/docs/page.tsx': page('font-bold') });
+    await run(['check', 'app', '--update-baseline', '--no-cache'], root);
+    legacy(root);
+    fs.writeFileSync(
+      path.join(root, 'onsystem.config.json'),
+      JSON.stringify({
+        tokens: [TOKENS],
+        overrides: [{ files: ['app/docs/**'], rules: { 'no-hardcoded-color': 'off' } }],
+      }),
+    );
+    await run(['check', 'app/docs', '--update-baseline', '--no-cache'], root);
+    expect(baselineOf(root).rules).toBeUndefined();
+
+    fs.writeFileSync(path.join(root, 'app/page.tsx'), page('text-slate-500 text-red-500'));
+    const checked = await run(['check', 'app', '--no-cache'], root);
+    expect(checked.code).toBe(1);
+    expect(checked.stdout).toContain('text-red-500');
+    expect(checked.stdout).not.toContain('did not run when the baseline was written');
+  });
+
+  it('counts a rule with entries in the baseline as run, even when it is off for the update', async () => {
+    const root = project();
+    await run(['check', 'app', '--update-baseline', '--no-cache'], root);
+    legacy(root);
+    // Off everywhere: page.tsx's color entry is kept, and the rule ran when it was recorded.
+    fs.writeFileSync(
+      path.join(root, 'onsystem.config.json'),
+      JSON.stringify({ tokens: [TOKENS], rules: { 'no-hardcoded-color': 'off' } }),
+    );
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    const updated = baselineOf(root);
+    expect(updated.rules).toContain('no-hardcoded-color');
+    expect(updated.files['app/page.tsx']).toEqual({
+      'no-hardcoded-color': { 'text-slate-500': 1 },
+    });
+
+    fs.rmSync(path.join(root, 'onsystem.config.json'));
+    fs.writeFileSync(path.join(root, 'app/page.tsx'), page('text-slate-500 text-red-500'));
+    const checked = await run(['check', 'app', '--no-cache'], root);
+    expect(checked.code).toBe(1);
+    expect(checked.stdout).toContain('text-red-500');
+    expect(checked.stdout).not.toContain('did not run when the baseline was written');
   });
 
   it('keeps the version and the rules as they were when pruning', async () => {

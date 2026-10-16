@@ -188,6 +188,37 @@ export function updateBaseline(
 }
 
 /**
+ * The rules an update records as run: those that `ran` now, those the previous baseline lists,
+ * and those with entries in `next`, since a rule with recorded findings ran when they were
+ * recorded. Undefined, as in a baseline written before onsystem recorded rules, when the
+ * previous baseline does not list them and the update may have left out files it covers: the
+ * run checked only a folder or files below the root (`wholeRoot` false), or `next` keeps
+ * entries of files the run did not check. Whatever ran over those files was not recorded, so a
+ * list built from this run could say a rule did not run where it did.
+ */
+export function rulesRun(
+  previous: BaselineData | undefined,
+  next: Entries,
+  checked: ReadonlyMap<string, unknown>,
+  ran: Iterable<string>,
+  wholeRoot: boolean,
+): string[] | undefined {
+  if (
+    previous &&
+    !previous.rules &&
+    (!wholeRoot || [...next.keys()].some((file) => !checked.has(file)))
+  ) {
+    return undefined;
+  }
+  const known = new Set<string>(RULE_IDS);
+  const rules = new Set([...(previous?.rules ?? []), ...ran]);
+  for (const byRule of next.values()) {
+    for (const rule of byRule.keys()) if (known.has(rule)) rules.add(rule);
+  }
+  return [...rules];
+}
+
+/**
  * The baseline without the entries a run over `checked` (file → its findings) shows no longer
  * occur: a checked file keeps at most as many of each finding as it still has, plus its entries
  * for `disabled` rules, and files the run did not check keep theirs while they still exist under

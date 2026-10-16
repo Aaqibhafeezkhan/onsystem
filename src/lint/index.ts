@@ -9,7 +9,7 @@ import { isSuppressed, readDirectives } from './suppress.js';
 import type { LintTarget } from './target.js';
 
 export { LintTarget } from './target.js';
-export { formatDiagnostics, type OutputFormat } from './format.js';
+export { escapeData, formatDiagnostics, type OutputFormat } from './format.js';
 
 export { RULES };
 

@@ -15,6 +15,7 @@ import {
   LEGACY_BASELINE_FILE,
   pruneBaseline,
   readBaseline,
+  rulesRun,
   unrecordedRules,
   updateBaseline,
   writeBaseline,
@@ -33,8 +34,7 @@ import { componentFiles, loadDesignSystem, type DesignSystem } from './design-sy
 import { explainProject, librariesLeftOut } from './explain.js';
 import { init } from './init.js';
 import { libraryAdapter, type LibrarySource } from './libraries/index.js';
-import { formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
-import { escapeData } from './lint/format.js';
+import { escapeData, formatDiagnostics, uncheckedNotice, type OutputFormat } from './lint/index.js';
 import { serveStdio } from './server/stdio.js';
 import { toDesignMd, toDtcg } from './tokens/export.js';
 import type { CheckResult, DesignSystemModel, Diagnostic } from './types.js';
@@ -380,7 +380,7 @@ async function check(
   }
   if (prune && !baseline) {
     io.stderr(
-      `check --prune-baseline: no baseline to prune at ${displayPath(io.cwd, baselineFile)}`,
+      `check --prune-baseline: no baseline to prune at ${displayPath(io.cwd, baselineFile)}. Pass --baseline <file> to prune another one, or record the current findings with \`${checkCommand(patterns, configOptions, values, '--update-baseline')}\`.`,
     );
     return 2;
   }
@@ -440,11 +440,20 @@ async function check(
       realRoot,
       (key) => disabledByKey.get(key) ?? new Set(),
     );
+    // A pattern that names the root or a folder above it: the run checked every file under the
+    // root that a later run with the same options checks.
+    const wholeRoot = patterns.some((pattern) => {
+      const dir = path.resolve(io.cwd, pattern);
+      return Boolean(
+        fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() &&
+        isInside(realPath(dir), realRoot),
+      );
+    });
     writeBaseline(baselineFile, next, {
       onsystem: VERSION,
       // One list for the whole baseline: in a workspace, a rule that ran in one project counts
       // as run in all of them.
-      rules: [...(baseline?.rules ?? []), ...ran],
+      rules: rulesRun(baseline, next, checked, ran, wholeRoot),
     });
     const counts = countBaseline(next);
     const summary = `Baseline: ${count(counts.findings, 'finding')} in ${count(counts.files, 'file')} → ${displayPath(io.cwd, baselineFile)}`;
