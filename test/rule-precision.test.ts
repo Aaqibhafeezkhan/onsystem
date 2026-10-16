@@ -348,6 +348,159 @@ describe('no-hardcoded-color: a white or black background under white or black t
   });
 });
 
+/**
+ * A theme like Dub's: `bg-default` is white in light mode and pure black in dark mode, and its text
+ * tokens copy Tailwind v3's neutral shades, so `text-neutral-950` is one shade from
+ * `content-emphasis` and keeps no fix.
+ */
+const DUB_LIKE = `@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+@theme inline {
+  --color-bg-default: var(--bg-default);
+  --color-bg-muted: var(--bg-muted);
+  --color-content-emphasis: var(--content-emphasis);
+  --color-content-default: var(--content-default);
+}
+:root {
+  --bg-default: #ffffff;
+  --bg-muted: #fafafa;
+  --content-emphasis: #171717;
+  --content-default: #404040;
+}
+.dark {
+  --bg-default: #000000;
+  --bg-muted: #171717;
+  --content-emphasis: #fafafa;
+  --content-default: #d4d4d4;
+}`;
+
+describe('no-hardcoded-color: a background under dark text that keeps no fix', () => {
+  const rule = 'no-hardcoded-color';
+  let dubLike: DesignSystem;
+  beforeAll(async () => {
+    dubLike = await load(fixture({ 'app/globals.css': DUB_LIKE }));
+  });
+  const checkIn = (system: DesignSystem, code: string) =>
+    system.check(code, 'app/page.tsx').diagnostics.filter((d) => d.ruleId === rule);
+
+  it('is not fixed under a tint of black, a hex or a palette class that stays (the review’s repros)', () => {
+    // `bg-background` is oklch(0.145) in the demo's dark mode: each text would be dark on dark.
+    for (const [code, text, pair] of [
+      [
+        '<div className="bg-white text-black/80">x</div>',
+        '`text-black/80` on it stays black',
+        '`text-foreground/80`',
+      ],
+      [
+        '<div className="bg-white text-[#000]">x</div>',
+        '`text-[#000]` on it stays as it is',
+        '`text-foreground`',
+      ],
+      [
+        '<div className="bg-white text-neutral-900">x</div>',
+        '`text-neutral-900` on it stays as it is',
+        '`text-foreground`',
+      ],
+      [
+        '<div className="bg-white"><p className="text-black/60">x</p></div>',
+        '`text-black/60` on it stays black',
+        '`text-foreground/60`',
+      ],
+    ] as const) {
+      const found = check(code, rule);
+      const bg = found.find((d) => d.source === 'bg-white');
+      expect(bg?.suggestion, code).toBe('bg-background');
+      expect(bg?.fix, code).toBeUndefined();
+      expect(bg?.message, code).toContain(
+        `${text}, which would not stand out from background in dark mode, so this is not applied automatically: change the text with it, to ${pair}.`,
+      );
+      // Nothing the fix applies leaves the text on a token it would not stand out from.
+      expect(applyFixes(code, found), code).not.toContain('bg-background');
+    }
+    // The tint of white or black itself is still not reported.
+    expect(
+      sources('<div className="bg-white"><p className="text-black/60">x</p></div>', rule),
+    ).toEqual(['bg-white']);
+    // A hue's text is not told to become the surface's foreground, a gray: the green may mean paid.
+    const [paid] = check('<span className="bg-white text-green-800">Paid</span>', rule);
+    expect(paid?.fix).toBeUndefined();
+    expect(paid?.message).toMatch(
+      /`text-green-800` on it stays as it is, which would not stand out from background in dark mode, so this is not applied automatically: change the text with it\.$/,
+    );
+  });
+
+  it('is not fixed in a theme whose background is black in dark mode (Dub’s analytics card)', () => {
+    for (const code of [
+      '<div className="bg-white text-neutral-950">x</div>',
+      '<div className="bg-white p-4"><p className="text-neutral-800">x</p></div>',
+      // 0.44 lighter than black, which lightness alone lets pass, but 2.7:1 on it.
+      '<div className="rounded-lg bg-white"><span className="text-neutral-600">y</span></div>',
+    ]) {
+      const [bg] = checkIn(dubLike, code);
+      expect(bg, code).toMatchObject({ source: 'bg-white', suggestion: 'bg-bg-default' });
+      expect(bg?.fix, code).toBeUndefined();
+      expect(bg?.message, code).toMatch(
+        /`text-neutral-\d+` on it stays as it is, which would not stand out from bg-default in dark mode, so this is not applied automatically: change the text with it\.$/,
+      );
+    }
+    // Text that keeps 3:1 on black (neutral-500 has 4.4:1), or that the class list sets for dark
+    // mode, keeps the fix.
+    for (const code of [
+      '<div className="bg-white text-neutral-500">x</div>',
+      '<div className="bg-white text-neutral-950 dark:text-white">x</div>',
+    ]) {
+      expect(checkIn(dubLike, code)[0]?.fix, code).toEqual([
+        expect.objectContaining({ text: 'bg-bg-default' }),
+      ]);
+    }
+  });
+
+  it('is fixed when the text gets its token too, and held when a state class keeps its own', () => {
+    // `text-neutral-950` is exactly `foreground` in the demo, so the pair becomes tokens together.
+    const both = '<div className="bg-white text-neutral-950">x</div>';
+    expect(applyFixes(both, check(both, rule))).toBe(
+      '<div className="bg-background text-foreground">x</div>',
+    );
+    // The hover text gives way to the base one (both would be `text-foreground`) and stays dark.
+    const hover = '<a className="bg-white text-neutral-950 hover:text-[#171717]">x</a>';
+    const bg = check(hover, rule).find((d) => d.source === 'bg-white');
+    expect(bg?.fix).toBeUndefined();
+    expect(bg?.message).toContain('`hover:text-[#171717]` on it stays as it is');
+  });
+
+  it('is not fixed under text it inherits from an element around it', () => {
+    const inherited =
+      '<div className="text-neutral-900"><section><p className="bg-white p-4">x</p></section></div>';
+    const bg = check(inherited, rule).find((d) => d.source === 'bg-white');
+    expect(bg?.fix).toBeUndefined();
+    expect(bg?.message).toContain('`text-neutral-900` on it stays as it is');
+    // A text color in between, or a component that can set its own, ends what is inherited, and
+    // an element with nothing in it (a skeleton) shows no text.
+    for (const code of [
+      '<div className="text-neutral-900">Signed in as <span className="h-5 w-40 bg-white" /></div>',
+      '<div className="text-neutral-900"><p className="bg-white text-foreground">x</p></div>',
+      '<div className="text-neutral-900"><span className="text-foreground"><p className="bg-white">x</p></span></div>',
+      'import { Card } from "@/components/ui/card"\n<div className="text-neutral-900"><Card className="bg-white">x</Card></div>',
+    ]) {
+      const found = check(code, rule).find((d) => d.source === 'bg-white');
+      expect(found?.fix, code).toEqual([expect.objectContaining({ text: 'bg-background' })]);
+    }
+  });
+
+  it('counts an allowed text color as one that stays', async () => {
+    const root = fixture({
+      'app/globals.css': DUB_LIKE,
+      'onsystem.config.json': JSON.stringify({
+        rules: { 'no-hardcoded-color': ['error', { allow: ['text-neutral-900'] }] },
+      }),
+    });
+    const system = await load(root);
+    const found = checkIn(system, '<div className="bg-white text-neutral-900">x</div>');
+    expect(found.map((d) => d.source)).toEqual(['bg-white']);
+    expect(found[0]?.fix).toBeUndefined();
+  });
+});
+
 describe('class strings kept in a variable, a map or a function of the file', () => {
   const rule = 'no-hardcoded-color';
   const PROPS = '{ status }: { status: "New" | "Lost" }';
