@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util';
 
 import type { Transport } from '@modelcontextprotocol/server';
 import { escapePath, glob, type GlobOptions } from 'tinyglobby';
+import ts from 'typescript';
 
 import {
   applyBaseline,
@@ -104,7 +105,8 @@ Options
                           many projects
   --require-design-system
                           check: exit 2 when no components or no color tokens
-                          are found, so CI cannot pass by checking nothing
+                          are found, or when the folders and globs given leave
+                          no file to check, so CI cannot pass by checking nothing
   --explain               inspect: every candidate zero config looked at and why
                           it was taken or not, the resolved config, unresolved
                           tokens, and components whose props did not resolve
@@ -310,6 +312,12 @@ interface Selection {
   /** Design-system files left out, for the hint when nothing is left. */
   skipped: number;
   testsLeftOut: number;
+  /** `.js` files under the folders given that have JSX, which folders leave out. */
+  jsx: string[];
+  /** The globs that name those `.js` files, for the command that checks them. */
+  jsxGlobs: string[];
+  /** Whether a folder or glob was given, rather than only files named outright. */
+  searched: boolean;
 }
 
 async function check(
@@ -352,16 +360,38 @@ async function check(
     : await selectInProject(target.config, patterns, values, format, io);
   if (typeof selection === 'number') return selection;
   const { files, notes } = selection;
+  // The hints repeat the options that decide the findings and the baseline, so the command they
+  // suggest rewrites the same file from the same findings.
+  const command = (flag: string) => checkCommand(patterns, configOptions, values, flag);
+  // What the run could not do or left out, after the findings: on stdout, as a workflow warning
+  // with `--format github`, and on stderr when stdout is JSON or SARIF.
+  const notify = (text: string) => {
+    if (format === 'pretty') io.stdout(text);
+    else if (format === 'github') io.stdout(`::warning title=${NAME}::${text}`);
+    else io.stderr(text);
+  };
+  const jsx = jsxNotice(selection, io.cwd, command);
   if (!files.length) {
+    const hints = [
+      selection.skipped
+        ? `Pass --include-design-system to check ${selection.skipped === 1 ? 'it' : 'them'}.`
+        : '',
+      selection.testsLeftOut ? 'Pass --include-tests to check tests and stories.' : '',
+    ].filter(Boolean);
+    // Folders and globs that leave nothing to check point at the wrong code, or at code `check`
+    // does not read: CI must not pass on them. Files named outright that are not JS or TS (a
+    // pull request that changes only styles) have nothing to check.
+    if (values['require-design-system'] && selection.searched) {
+      io.stderr(
+        `check --require-design-system: nothing was checked${notes.length ? ` (${notes.join('; ')})` : ''}. ${hints.join(' ')}`.trimEnd(),
+      );
+      if (jsx) io.stderr(jsx);
+      return 2;
+    }
     if (format === 'pretty') {
-      const hints = [
-        selection.skipped
-          ? `Pass --include-design-system to check ${selection.skipped === 1 ? 'it' : 'them'}.`
-          : '',
-        selection.testsLeftOut ? 'Pass --include-tests to check tests and stories.' : '',
-      ].filter(Boolean);
       io.stdout(`Nothing to check: ${notes.join('; ')}. ${hints.join(' ')}`.trimEnd());
     } else printNoResults(format, io);
+    if (jsx) notify(jsx);
     return 0;
   }
 
@@ -467,12 +497,10 @@ async function check(
     else io.stderr(summary);
     for (const text of selection.notices) io.stderr(text);
     if (unchecked) io.stderr(unchecked);
+    if (jsx) io.stderr(jsx);
     return 0;
   }
 
-  // The hints repeat the options that decide the findings and the baseline, so the command they
-  // suggest rewrites the same file from the same findings.
-  const command = (flag: string) => checkCommand(patterns, configOptions, values, flag);
   const baselineNotes: string[] = [];
   if (baseline) {
     const fresh = results.flatMap((r) => r.diagnostics);
@@ -525,11 +553,8 @@ async function check(
     else if (format === 'github') io.stdout(`::notice title=${NAME} baseline::${escapeData(text)}`);
     else io.stderr(text);
   }
-  for (const text of [...selection.notices, unchecked]) {
-    if (!text) continue;
-    if (format === 'pretty') io.stdout(text);
-    else if (format === 'github') io.stdout(`::warning title=${NAME}::${text}`);
-    else io.stderr(text);
+  for (const text of [...selection.notices, unchecked, jsx]) {
+    if (text) notify(text);
   }
 
   const errors = results.reduce((n, r) => n + r.errorCount, 0);
@@ -578,12 +603,20 @@ function repositoryPath(cwd: string, env: NonNullable<Io['env']>): (file: string
   };
 }
 
-/** Splits the patterns into files named outright and globs (a folder: every TSX/JSX file under it). */
-function expandPatterns(patterns: string[], cwd: string): { named: string[]; globs: string[] } {
+/**
+ * Splits the patterns into files named outright and globs (a folder: every TSX/JSX file under
+ * it). `scripts` globs the `.js` files under the folders, which are not checked, to say which
+ * of them have JSX.
+ */
+function expandPatterns(
+  patterns: string[],
+  cwd: string,
+): { named: string[]; globs: string[]; scripts: string[] } {
   // An existing path is taken literally, so `app/(marketing)` and `[slug]` are not
   // glob syntax. A directory means every TSX/JSX file under it.
   const named: string[] = [];
   const globs: string[] = [];
+  const scripts: string[] = [];
   for (const pattern of patterns) {
     const stat = fs.statSync(path.resolve(cwd, pattern), { throwIfNoEntry: false });
     if (stat && !stat.isDirectory()) {
@@ -591,9 +624,92 @@ function expandPatterns(patterns: string[], cwd: string): { named: string[]; glo
       continue;
     }
     const literal = stat ? escapePath(toPosix(path.join(pattern, '.'))) : toPosix(pattern);
-    globs.push(!stat ? literal : literal === '.' ? '**/*.{tsx,jsx}' : `${literal}/**/*.{tsx,jsx}`);
+    if (!stat) {
+      globs.push(literal);
+      continue;
+    }
+    const under = literal === '.' ? '**/*' : `${literal}/**/*`;
+    globs.push(`${under}.{tsx,jsx}`);
+    scripts.push(`${under}.js`);
   }
-  return { named, globs };
+  return { named, globs, scripts };
+}
+
+/**
+ * The files `check` and `check_ui` read: JS and TS. CSS, Markdown or JSON parsed as TSX gives
+ * hundreds of syntax errors. Keep it in step with `SCRIPT_FILE` in src/server/index.ts.
+ */
+const SCRIPT_FILE = /\.[cm]?[jt]sx?$/i;
+
+/**
+ * `.js` files the folders hold that have JSX, which are not checked: folders expand to TSX and
+ * JSX files, and a JavaScript app writes its pages as `.js` (Next.js's JavaScript template has
+ * `app/page.js`). Files the run checks anyway (a glob names them), what git ignores and what
+ * `leftOut` says (the config's `exclude`, the design system's own files) are not counted.
+ */
+async function jsxLeftOut(
+  scripts: string[],
+  taken: readonly string[],
+  cwd: string,
+  leftOut: (file: string) => boolean | Promise<boolean>,
+): Promise<string[]> {
+  if (!scripts.length) return [];
+  const checked = new Set(taken.map(realPath));
+  const found = oncePerFile(
+    (
+      await findFiles(scripts, {
+        cwd,
+        absolute: true,
+        expandDirectories: false,
+        ignore: ['**/node_modules/**'],
+      })
+    ).filter((file) => !checked.has(realPath(file))),
+  ).sort();
+  const ignored = gitIgnored(cwd, found);
+  const files: string[] = [];
+  for (const file of found) {
+    if (ignored.has(file) || (await leftOut(file))) continue;
+    if (hasJsx(await fsp.readFile(file, 'utf8'))) files.push(file);
+  }
+  return files;
+}
+
+/** Whether the code has a JSX element or fragment. */
+function hasJsx(code: string): boolean {
+  // Every element ends in `/>` or a closing tag: most `.js` files are not parsed at all.
+  if (!code.includes('/>') && !code.includes('</')) return false;
+  const source = ts.createSourceFile(
+    'file.js',
+    code,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.JSX,
+  );
+  const visit = (node: ts.Node): boolean =>
+    ts.isJsxElement(node) ||
+    ts.isJsxSelfClosingElement(node) ||
+    ts.isJsxFragment(node) ||
+    ts.forEachChild(node, visit) === true;
+  try {
+    return visit(source);
+  } catch {
+    // Nested too deeply to walk: not a page anyone wrote.
+    return false;
+  }
+}
+
+/** Which `.js` files with JSX the folders left out, and the command that checks them. */
+function jsxNotice(
+  selection: Pick<Selection, 'jsx' | 'jsxGlobs'>,
+  cwd: string,
+  command: (flag: string) => string,
+): string | undefined {
+  const files = selection.jsx.map((file) => relativePath(cwd, file));
+  if (!files.length) return undefined;
+  const check = command(selection.jsxGlobs.map(shellQuote).join(' '));
+  return files.length === 1
+    ? `${files[0] ?? ''} has JSX, but folders are checked for .tsx and .jsx files, so it was not checked. Name it to check it: \`${check}\`.`
+    : `${files.length.toLocaleString('en-US')} .js files have JSX (${listOf(files)}), but folders are checked for .tsx and .jsx files, so they were not checked. Name them to check them: \`${check}\`.`;
 }
 
 /** One project: the root's config and design system for every file. */
@@ -606,8 +722,10 @@ async function selectInProject(
 ): Promise<Selection | number> {
   const ds = await loadDesignSystem(config, { cache: values.cache, logger: silentLogger });
   // Folders and globs leave out what the config excludes (tests and stories by default) and
-  // what git ignores. A file named outright is checked, unless --skip-excluded.
-  const { named, globs } = expandPatterns(patterns, io.cwd);
+  // what git ignores. A file named outright is checked, unless --skip-excluded, or unless it is
+  // not JS or TS (`check $(git diff --name-only)` names styles and docs too).
+  const { named: given, globs, scripts } = expandPatterns(patterns, io.cwd);
+  const named = given.filter((file) => SCRIPT_FILE.test(file));
   const options = { cwd: io.cwd, absolute: true, expandDirectories: false };
   const all = globs.length
     ? await findFiles(globs, { ...options, ignore: ['**/node_modules/**'] })
@@ -625,12 +743,13 @@ async function selectInProject(
     tests: leftOut.filter((file) => TEST_FILE.test(file)).length,
     excluded: leftOut.filter((file) => !TEST_FILE.test(file)).length,
     gitignored: ignored.size,
+    notScripts: given.length - named.length,
   };
   let files = oncePerFile([
     ...(skip ? named.filter((file) => !leftOutSet.has(file)) : named),
     ...kept.filter((file) => !ignored.has(file)),
   ]).sort();
-  if (!files.length && !all.length && !leftOut.length) {
+  if (!files.length && !all.length && !leftOut.length && !left.notScripts) {
     io.stderr(`check: no files match ${patterns.join(' ')}`);
     return 2;
   }
@@ -657,12 +776,20 @@ async function selectInProject(
   // The design system's own files implement the scale and the primitives the
   // rules enforce (shadcn/ui's `p-[3px]`), so `check .` leaves them alone.
   let skipped = 0;
-  if (!config.includeDesignSystem) {
-    const own = new Set((await componentFiles(config)).map(realPath));
+  const own = new Set(
+    config.includeDesignSystem ? [] : (await componentFiles(config)).map(realPath),
+  );
+  if (own.size) {
     const rest = files.filter((file) => !own.has(realPath(file)));
     skipped = files.length - rest.length;
     files = rest;
   }
+  const jsx = await jsxLeftOut(
+    scripts,
+    [...named, ...all],
+    io.cwd,
+    (file) => excluded(file) || own.has(realPath(file)),
+  );
   return {
     files,
     designSystemOf: () => ds,
@@ -671,6 +798,9 @@ async function selectInProject(
     notices: [...(notice ? [notice] : []), ...notReadNotices([{ ds }])],
     skipped,
     testsLeftOut: left.tests,
+    jsx,
+    jsxGlobs: scripts,
+    searched: globs.length > 0,
   };
 }
 
@@ -686,7 +816,8 @@ async function selectInWorkspace(
   format: OutputFormat,
   io: Io,
 ): Promise<Selection | number> {
-  const { named, globs } = expandPatterns(patterns, io.cwd);
+  const { named: given, globs, scripts } = expandPatterns(patterns, io.cwd);
+  const named = given.filter((file) => SCRIPT_FILE.test(file));
   const all = globs.length
     ? await findFiles(globs, {
         cwd: io.cwd,
@@ -730,12 +861,13 @@ async function selectInWorkspace(
     tests: leftOut.filter((file) => TEST_FILE.test(file)).length,
     excluded: leftOut.filter((file) => !TEST_FILE.test(file)).length,
     gitignored: ignored.size,
+    notScripts: given.length - named.length,
   };
   let files = oncePerFile([
     ...(skip ? named.filter((file) => !leftOutSet.has(file)) : named),
     ...kept.filter((file) => !ignored.has(file)),
   ]).sort();
-  if (!files.length && !all.length && !leftOut.length) {
+  if (!files.length && !all.length && !leftOut.length && !left.notScripts) {
     io.stderr(`check: no files match ${patterns.join(' ')}`);
     return 2;
   }
@@ -791,6 +923,20 @@ async function selectInWorkspace(
   const skipped = files.length - rest.length;
   files = rest;
 
+  // `.js` files with JSX, each left out as `check` in its own project leaves it out.
+  const jsx = await jsxLeftOut(scripts, [...named, ...all], io.cwd, async (file) => {
+    const p = await workspace.projectFor(file);
+    projectOf.set(file, p);
+    if (excluded(file)) return true;
+    if (p.config.includeDesignSystem) return false;
+    let mine = own.get(p.root);
+    if (!mine) {
+      mine = new Set((await componentFiles(p.config)).map(realPath));
+      own.set(p.root, mine);
+    }
+    return mine.has(realPath(file));
+  });
+
   // What could not run, once per kind of gap, naming the projects.
   const gaps = new Map<string, { ds: DesignSystem; dirs: string[] }>();
   for (const p of unique(files.map(project))) {
@@ -816,6 +962,9 @@ async function selectInWorkspace(
     notices: notices.filter(Boolean),
     skipped,
     testsLeftOut: left.tests,
+    jsx,
+    jsxGlobs: scripts,
+    searched: globs.length > 0,
   };
 }
 
@@ -1138,7 +1287,7 @@ const TEST_FILE = /\.(?:test|spec|stories)\.[cm]?[jt]sx?$|[\\/]__(?:tests|storie
 /** What a run left out, for the summary line: `5 design-system files skipped`. */
 function scopeNotes(
   skipped: number,
-  left: { tests: number; excluded: number; gitignored: number },
+  left: { tests: number; excluded: number; gitignored: number; notScripts: number },
 ): string[] {
   return [
     skipped ? `${plural(skipped, 'design-system file')} skipped` : '',
@@ -1147,6 +1296,9 @@ function scopeNotes(
       : '',
     left.excluded ? `${plural(left.excluded, 'excluded file')} left out` : '',
     left.gitignored ? `${plural(left.gitignored, 'file')} git ignores left out` : '',
+    left.notScripts
+      ? `${plural(left.notScripts, 'file')} that ${left.notScripts === 1 ? 'is' : 'are'} not JS or TS skipped`
+      : '',
   ].filter(Boolean);
 }
 

@@ -54,6 +54,18 @@ const MAX_CODE = 1_000_000;
 /** Diagnostics check_ui returns by default: a 3,000-line file can have thousands, more than a context holds. */
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
+/**
+ * The files check_ui reads: JS and TS. globals.css parsed as TSX gave 209 syntax errors. Keep
+ * it in step with `SCRIPT_FILE` in src/cli.ts.
+ */
+const SCRIPT_FILE = /\.[cm]?[jt]sx?$/i;
+
+/** check_ui's answer for a path or filename that is not JS or TS. */
+function notScript(name: string): CallToolResult {
+  return errorResult(
+    `check_ui checks .tsx, .jsx, .ts and .js files; ${name} is not one, so it was not checked.`,
+  );
+}
 
 /**
  * An integer, without the ±9007199254740991 bounds zod adds to the JSON Schema,
@@ -556,7 +568,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
           .max(MAX_PATH)
           .optional()
           .describe(
-            'Path of a file to check: relative to the project root (the monorepo root, when served from there), or absolute.',
+            'Path of a .tsx, .jsx, .ts or .js file to check: relative to the project root (the monorepo root, when served from there), or absolute.',
           ),
         filename: z
           .string()
@@ -610,6 +622,9 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     },
     async ({ code, path: filePath, filename, limit }): Promise<CallToolResult> => {
       if (code === undefined && !filePath) return errorResult('Pass either `code` or `path`.');
+      if (code !== undefined && filename !== undefined && !SCRIPT_FILE.test(filename)) {
+        return notScript(filename);
+      }
       // At a workspace root, the file's own project checks it.
       const routeBy = code === undefined ? filePath : (filename ?? undefined);
       const set = await getProjects?.(routeBy);
@@ -643,6 +658,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
         const absolute = path.resolve(base, filePath);
         const outside = errorResult(`${filePath} is outside the project root (${base}).`);
         if (!isInside(base, absolute)) return outside;
+        if (!SCRIPT_FILE.test(absolute)) return notScript(filePath);
         try {
           // A symlink inside the root can point anywhere: compare where both really are.
           const [root, real] = await Promise.all([fs.realpath(base), fs.realpath(absolute)]);
