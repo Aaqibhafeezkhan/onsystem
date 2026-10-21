@@ -9,12 +9,15 @@ import { excludedBy } from '../config.js';
 import type { DesignSystem } from '../design-system.js';
 import { uncheckedNotice } from '../lint/index.js';
 import { notReadNotices } from '../not-read.js';
+import { descriptionOf, type SearchHit } from '../search/index.js';
 import { TOKEN_CATEGORIES, type ComponentInfo } from '../types.js';
 import { isInside, relativePath, SCRIPT_FILE } from '../util/paths.js';
 import { NAME, VERSION } from '../version.js';
 import {
   capDiagnostics,
   importStatement,
+  listComponents,
+  type Listing,
   renderAmbiguous,
   renderCatalogList,
   renderCatalogSearch,
@@ -30,7 +33,7 @@ export const INSTRUCTIONS = `This server describes the project's design system: 
 When writing or changing UI in this project:
 1. Find components with search_components (by intent) or list_components.
 2. Read get_component before using a component: use only the props and variant values it lists.
-3. Style with tokens from get_tokens, never with hex/rgb colors, arbitrary px values or Tailwind's default palette.
+3. Style with tokens from get_tokens, never with hex/rgb colors, arbitrary px values or Tailwind's default palette. chart-* and sidebar-* tokens are for charts and the sidebar only: for a status color the theme has no token for (success, warning, info), add a token or keep the Tailwind color as check_ui says, and never use a chart-* or sidebar-* token for it.
 4. Run check_ui on every snippet or file you write and fix all errors before you finish.
 In a monorepo served from its root, pass \`path\` (the file you are editing) to list_components, get_component, search_components and get_tokens, and \`path\` or \`filename\` to check_ui, so each answer comes from that file's own project.`;
 
@@ -173,8 +176,8 @@ const componentSummarySchema = z.object({
   description: z.string().optional(),
   importPath: z.string(),
   element: z.string().optional(),
-  variants: z.record(z.string(), z.array(z.string())),
-  subcomponents: z.array(z.string()),
+  variants: z.record(z.string(), z.array(z.string())).optional().describe('Left out when none.'),
+  subcomponents: z.array(z.string()).optional().describe('Left out when none.'),
   ...originShape,
 });
 
@@ -249,14 +252,71 @@ function origin(entry: CatalogEntry): { package: string; projects: string[] } {
   return { package: entry.package, projects: entry.projects };
 }
 
+/** A component in list_components, without the fields it has nothing in. */
 function summary(c: ComponentInfo) {
+  const description = descriptionOf(c);
   return {
     name: c.name,
-    ...(c.description ? { description: c.description } : {}),
+    ...(description ? { description } : {}),
     importPath: c.importPath,
     ...(c.element ? { element: c.element } : {}),
-    variants: Object.fromEntries(c.variants.map((v) => [v.name, v.values])),
-    subcomponents: c.subcomponents,
+    ...(c.variants.length
+      ? { variants: Object.fromEntries(c.variants.map((v) => [v.name, v.values])) }
+      : {}),
+    ...(c.subcomponents.length ? { subcomponents: c.subcomponents } : {}),
+  };
+}
+
+/** list_components' structured content: what its text lists, as it lists it. */
+function listContent<T>(
+  listed: Listing<T>,
+  component: (item: T) => ComponentInfo,
+  originOf?: (item: T) => { package: string; projects: string[] },
+) {
+  return {
+    components: listed.shown.map((item) => ({
+      ...summary(component(item)),
+      ...originOf?.(item),
+    })),
+    ...(listed.icons.length
+      ? {
+          icons: listed.icons.map(({ from, items }) => ({
+            from,
+            names: items.map((item) => component(item).name),
+            ...(originOf && items[0] ? { package: originOf(items[0]).package } : {}),
+          })),
+        }
+      : {}),
+    ...(listed.omitted ? { omitted: listed.omitted } : {}),
+  };
+}
+
+/**
+ * Said above a component asked for by a name that is not how its design system writes it:
+ * `Card.Header` finds CardHeader, and code written as asked would not compile.
+ */
+function nameNotice(asked: string, component: ComponentInfo): string {
+  if (asked === component.name || component.aliases.includes(asked)) return '';
+  if (!asked.includes('.') && !component.name.includes('.')) return '';
+  return `There is no \`${asked}\` in this design system: write \`<${component.name}>\`.\n\n`;
+}
+
+function resourceDescription(component: ComponentInfo): { description?: string } {
+  const description = descriptionOf(component);
+  return description ? { description } : {};
+}
+
+/** A search_components result. */
+function result(hit: SearchHit) {
+  const description = descriptionOf(hit.component);
+  return {
+    name: hit.component.name,
+    ...(hit.component.parent ? { parent: hit.component.parent } : {}),
+    ...(description ? { description } : {}),
+    importPath: hit.component.importPath,
+    score: hit.score,
+    matched: hit.matched,
+    ...(hit.weak ? { weak: true } : {}),
   };
 }
 
@@ -315,29 +375,67 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     {
       title: 'List design-system components',
       description:
-        'List every component in the project design system with a one-line description, the native element it renders, its variant values, its parts and its import. Call this before writing UI in this project. At a monorepo root, pass `path` for the project of the file you are editing; without it, every project is listed, each component with its package.',
-      inputSchema: z.object({ path: projectPath }),
-      outputSchema: z.object({ components: z.array(componentSummarySchema) }),
+        'List every component in the project design system with a one-line description, the native element it renders, its variant values, its parts and its import. Icons (components that render an <svg>) are named on one line per import. Call this before writing UI in this project. `query`, `kind` and `limit` narrow a long list. At a monorepo root, pass `path` for the project of the file you are editing; without it, every project is listed, each component with its package.',
+      inputSchema: z.object({
+        query: z
+          .string()
+          .max(MAX_QUERY)
+          .optional()
+          .describe(
+            "Only components with this text in their name, their parts' names or their description.",
+          ),
+        kind: z
+          .enum(['component', 'icon'])
+          .optional()
+          .describe(
+            '"icon": only the components that render an <svg>, one by one. "component": all the others.',
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_LIMIT)
+          .optional()
+          .describe('Most components to list one by one.'),
+        path: projectPath,
+      }),
+      outputSchema: z.object({
+        components: z
+          .array(componentSummarySchema)
+          .describe('The components listed one by one, after `query`, `kind` and `limit`.'),
+        icons: z
+          .array(
+            z.object({
+              from: z.string().describe('The module they are imported from.'),
+              names: z.array(z.string()),
+              package: originShape.package,
+            }),
+          )
+          .optional()
+          .describe(
+            'Without `kind`: icons, the components that render an <svg>, by name, per module.',
+          ),
+        omitted: int().optional().describe('Matching components left out by `limit`.'),
+      }),
       annotations: READ_ONLY,
     },
-    async ({ path: target }): Promise<CallToolResult> => {
+    async ({ query, kind, limit, path: target }): Promise<CallToolResult> => {
       const found = await scoped(target);
       if (isResult(found)) return found;
+      const filter = { query, kind, limit };
       if ('catalog' in found) {
         const { catalog } = found;
+        const listed = listComponents(catalog.roots(), (entry) => entry.component, filter);
         return {
-          content: [{ type: 'text', text: renderCatalogList(catalog) }],
-          structuredContent: {
-            components: catalog
-              .roots()
-              .map((entry) => ({ ...summary(entry.component), ...origin(entry) })),
-          },
+          content: [{ type: 'text', text: renderCatalogList(catalog, filter) }],
+          structuredContent: listContent(listed, (entry) => entry.component, origin),
         };
       }
       const { ds } = found;
+      const listed = listComponents(ds.roots(), (c) => c, filter);
       return {
-        content: [{ type: 'text', text: renderComponentList(ds, found.project?.dir) }],
-        structuredContent: { components: ds.roots().map(summary) },
+        content: [{ type: 'text', text: renderComponentList(ds, found.project?.dir, filter) }],
+        structuredContent: listContent(listed, (c) => c),
       };
     },
   );
@@ -376,10 +474,19 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
           );
         }
         if (matches.length > 1) return errorResult(renderAmbiguous(name, matches));
+        const description = descriptionOf(entry.component);
         return {
-          content: [{ type: 'text', text: renderComponent(entry.ds, entry.component, entry) }],
+          content: [
+            {
+              type: 'text',
+              text:
+                nameNotice(name, entry.component) +
+                renderComponent(entry.ds, entry.component, entry),
+            },
+          ],
           structuredContent: {
             ...entry.component,
+            ...(description ? { description } : {}),
             import: importStatement(entry.component),
             tokens: entry.ds.relatedTokens(entry.component).map((t) => t.name),
             ...origin(entry),
@@ -407,10 +514,12 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
         };
       }
       const shown = fromRoot(ds, component, found.root);
+      const description = descriptionOf(component);
       return {
-        content: [{ type: 'text', text: renderComponent(ds, shown) }],
+        content: [{ type: 'text', text: nameNotice(name, component) + renderComponent(ds, shown) }],
         structuredContent: {
           ...shown,
+          ...(description ? { description } : {}),
           import: importStatement(component),
           tokens: ds.relatedTokens(component).map((t) => t.name),
         },
@@ -423,7 +532,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     {
       title: 'Search components by intent',
       description:
-        'Find components by what you want to build, e.g. "confirm a destructive action", "status label", "text field with validation". Ranks names, descriptions, docs, props and variant values with BM25 (local, no API key). Use it when you do not know which component fits.',
+        'Find components by what you want to build, e.g. "confirm a destructive action", "status label", "text field with validation". Ranks names, descriptions, docs, props and variant values with BM25 (local, no API key). When no component clearly matches, it says so and lists the nearest, marked `weak`. Use it when you do not know which component fits.',
       inputSchema: z.object({
         query: z.string().min(1).max(MAX_QUERY).describe('What the UI should do, in plain words.'),
         limit: z.number().int().min(1).max(20).default(5).describe('Maximum results.'),
@@ -438,6 +547,12 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
             importPath: z.string(),
             score: z.number(),
             matched: z.array(z.string()),
+            weak: z
+              .boolean()
+              .optional()
+              .describe(
+                'Set when no component clearly matches the query: each result has only a word or two in common with it.',
+              ),
             ...originShape,
           }),
         ),
@@ -452,15 +567,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
         return {
           content: [{ type: 'text', text: renderCatalogSearch(query, hits) }],
           structuredContent: {
-            results: hits.map((h) => ({
-              name: h.component.name,
-              ...(h.component.parent ? { parent: h.component.parent } : {}),
-              ...(h.component.description ? { description: h.component.description } : {}),
-              importPath: h.component.importPath,
-              score: h.score,
-              matched: h.matched,
-              ...origin(h.entry),
-            })),
+            results: hits.map((h) => ({ ...result(h), ...origin(h.entry) })),
           },
         };
       }
@@ -469,14 +576,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
       return {
         content: [{ type: 'text', text: renderSearch(query, hits) }],
         structuredContent: {
-          results: hits.map((h) => ({
-            name: h.component.name,
-            ...(h.component.parent ? { parent: h.component.parent } : {}),
-            ...(h.component.description ? { description: h.component.description } : {}),
-            importPath: h.component.importPath,
-            score: h.score,
-            matched: h.matched,
-          })),
+          results: hits.map(result),
         },
       };
     },
@@ -487,7 +587,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     {
       title: 'Get design tokens',
       description:
-        'List design tokens with resolved values, dark-mode values and how to use each (Tailwind class or CSS variable). Filter by category (color, spacing, radius, typography, shadow, other) or a substring. Use these instead of hex codes, px values or Tailwind default palette classes.',
+        'List design tokens with resolved values, dark-mode values and how to use each (Tailwind class or CSS variable). Filter by category (color, spacing, radius, typography, shadow, other) or a substring. Use these instead of hex codes, px values or Tailwind default palette classes. Chart and sidebar colors are listed under their own headings: they are for charts and the sidebar, not for status colors.',
       inputSchema: z.object({
         category: z.enum(TOKEN_CATEGORIES).optional().describe('Only tokens of this category.'),
         query: z
@@ -550,7 +650,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     {
       title: 'Check UI code against the design system',
       description:
-        'Lint TSX/JSX against the design system. Reports hardcoded colors, spacing and radius (with the nearest token), native elements that have a design-system component, unknown components, props and variant values, and icon-only buttons without an accessible name. Each diagnostic has line/column, a rule id, a message and a suggested fix. Run it on every snippet or file you write and fix all errors. Pass `code` for unsaved code, or `path` for a file in the project.',
+        'Lint TSX/JSX against the design system. Reports hardcoded colors, spacing and radius (with the nearest token), native elements that have a design-system component, unknown components, props and variant values, and icon-only buttons without an accessible name. Each diagnostic has line/column, a rule id, a message and a suggested fix. Run it on every snippet or file you write and fix all errors. Pass `path` for a file in the project, or `code` for unsaved code, with `path` (or `filename`) naming the file it is for.',
       inputSchema: z.object({
         code: z
           .string()
@@ -562,7 +662,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
           .max(MAX_PATH)
           .optional()
           .describe(
-            'Path of a .tsx, .jsx, .ts or .js file to check: relative to the project root (the monorepo root, when served from there), or absolute.',
+            'Path of a .tsx, .jsx, .ts or .js file, relative to the project root (the monorepo root, when served from there) or absolute: the file to check, or, with `code`, the file the code is for, as `filename`.',
           ),
         filename: z
           .string()
@@ -614,8 +714,11 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
       }),
       annotations: READ_ONLY,
     },
-    async ({ code, path: filePath, filename, limit }): Promise<CallToolResult> => {
+    async ({ code, path: filePath, filename: given, limit }): Promise<CallToolResult> => {
       if (code === undefined && !filePath) return errorResult('Pass either `code` or `path`.');
+      // With `code`, `path` names the file the code is for, as `filename` does: the other tools
+      // take `path` for the file being edited, and agents pass it here the same way.
+      const filename = code === undefined ? given : (given ?? (filePath || undefined));
       if (code !== undefined && filename !== undefined && !SCRIPT_FILE.test(filename)) {
         return notScript(filename);
       }
@@ -723,7 +826,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
               uri: `ds://components/${c.name}${ambiguous ? `?path=${encodeURIComponent(projects[0] ?? '.')}` : ''}`,
               name: c.name,
               title: c.name,
-              ...(c.description ? { description: c.description } : {}),
+              ...resourceDescription(c),
               mimeType: 'text/markdown',
             })),
           };
@@ -733,7 +836,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
             uri: `ds://components/${c.name}`,
             name: c.name,
             title: c.name,
-            ...(c.description ? { description: c.description } : {}),
+            ...resourceDescription(c),
             mimeType: 'text/markdown',
           })),
         };
@@ -856,8 +959,8 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
 
 Work like this:
 1. Find components: search_components for each piece of the UI (for example "confirm a destructive action"), or list_components for an overview.
-2. Read the contract: get_component for every component you use. Use only the props and variant values it lists, and compose parts the way its examples do.
-3. Style with tokens: get_tokens when you need a color, spacing or radius. Never write hex/rgb colors, arbitrary px values or Tailwind default palette classes such as bg-blue-500.
+2. Read the contract: get_component for every component you use. Use only the props and variant values it lists, and compose its parts as its docs and examples show, when it has them.
+3. Style with tokens: get_tokens when you need a color, spacing or radius. Never write hex/rgb colors, arbitrary px values or Tailwind default palette classes such as bg-blue-500. Use chart-* and sidebar-* tokens only in charts and the sidebar, never for a status color.
 4. Use design-system components instead of native elements (<Button>, not <button>).
 5. Verify: run check_ui on the code you wrote, fix every error, and run it again until it reports none.
 

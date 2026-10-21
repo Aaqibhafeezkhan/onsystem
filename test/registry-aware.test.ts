@@ -277,7 +277,7 @@ describe('zero config reads shadcn registry folders as read-only design systems'
     const list = await tool(root, 'list_components', {});
     expect(list).toContain('DiffReview <div> (from @signoff-ui, read-only) — Review an agent');
     expect(list).toContain('Message <div> (from @ai-elements, read-only) — A chat message');
-    expect(list).toContain('Button <button> — No description.');
+    expect(list).toContain('Button <button> — Triggers an action');
     expect(list).not.toMatch(/^(Img|IconCheck)\b/m);
     expect(await tool(root, 'search_components', { query: 'img image check icon' })).not.toMatch(
       /\d\. (Img|IconCheck) /,

@@ -277,7 +277,9 @@ describe('MCP server at a workspace root', () => {
     const result = await client.callTool({ name: 'list_components', arguments: {} });
     expect(text(result)).toContain('4 components from 2 packages, used by 3 projects.');
     expect(text(result)).toContain('## @acme/ui (used by apps/web and packages/ui)');
-    expect(text(result)).toContain('Button <button> (also in @acme/admin) — No description.');
+    expect(text(result)).toContain(
+      'Button <button> (also in @acme/admin) — Triggers an action, such as submitting a form',
+    );
     const { components } = result.structuredContent as {
       components: { name: string; package: string; projects: string[]; importPath: string }[];
     };

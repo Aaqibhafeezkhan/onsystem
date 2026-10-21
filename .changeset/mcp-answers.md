@@ -1,0 +1,12 @@
+---
+'onsystem': minor
+---
+
+The MCP tools answer better where the design system is thin, large, or has no component for what the agent wants.
+
+- `search_components` says when no component clearly matches: "a dropdown menu to pick a country" in a design system with no select used to come back as `CardAction`, best first, because its description mentions a menu. A result now matches clearly when a word of the query is in its name, or when it has more than half of the query's words (itself or through a synonym). When some do, the others are left out; when none does, the answer starts "No component clearly matches", lists the nearest and marks each result `weak: true` in the structured content.
+- A shadcn/ui component without JSDoc (`Badge` in `components/ui/badge.tsx`, as `npx shadcn add` writes it) is described by what shadcn/ui's component of that name is for, in `list_components`, `get_component` and the search index, so "status label" finds Badge first in a stock app. A component with no description is listed without one, not as "No description."
+- `list_components` takes `query`, `kind` (`"component"` or `"icon"`) and `limit`. Icons, the components that render an `<svg>`, are named on one line per import (five or more from one import) instead of one entry each, in the text and in the structured content, which has them under `icons` and leaves out empty `variants` and `subcomponents`. `kind: "icon"` lists them one by one.
+- `get_component` lists the parts before the props, cuts a prop's description longer than 160 characters to its first sentence (the structured content keeps it all), and says so when the name asked for is not how the design system writes it: `Card.Header` answers with CardHeader and "There is no `Card.Header` in this design system: write `<CardHeader>`."
+- `get_tokens` lists chart and sidebar colors (and other families one part of the UI uses) under their own headings, after the other colors: `## chart (5): for charts only, not for status colors`. The server instructions and the `build-with-design-system` prompt say not to use a `chart-*` or `sidebar-*` token for a status color the theme has no token for, and the prompt no longer asks the agent to follow examples a component does not have.
+- `check_ui` with `code` takes `path` as the file the code is for, as `filename`: it was ignored, so the code was checked as `snippet.tsx`, without the `overrides` for that file.
