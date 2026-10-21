@@ -93,7 +93,7 @@ Front matter in the DESIGN.md schema (`version`, `name`, `colors`, `typography`,
 
 ## Status colors
 
-shadcn/ui's themes have `destructive` for errors, and no token for success, warning or info. A green "Active" badge, a yellow "Pending" one or a blue notice then has no token to use, and `no-hardcoded-color` warns that no token has the color's hue rather than name a gray or another hue's token, which would lose what the color says. Add the three to the theme, in the stylesheet that defines the others (`app/globals.css` in a shadcn/ui app):
+shadcn/ui's themes have `destructive` for errors, and no token for success, warning or info. A green "Active" badge, a yellow "Pending" one or a blue notice then has no token to use, and `no-hardcoded-color` warns that no token has the color's hue rather than name a gray or another hue's token, which would lose what the color says. It also warns on a chart token used in its place (`text-chart-2`): a token, but a chart's, which changes with the chart palette and is a teal or a gray in some themes. `onsystem init` says which of the three the theme lacks, with a link here. Add the three to the theme, in the stylesheet that defines the others (`app/globals.css` in a shadcn/ui app):
 
 ```css title="app/globals.css"
 :root {
