@@ -46,6 +46,8 @@ declare const Input: react.ForwardRefExoticComponent<react.InputHTMLAttributes<H
 
 declare function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>): react_jsx_runtime.JSX.Element;
 declare function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>): react_jsx_runtime.JSX.Element;
+declare function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>): react_jsx_runtime.JSX.Element;
+declare function ButtonTooltip({ content, ...props }: ButtonProps & { content: react.ReactNode }): react_jsx_runtime.JSX.Element;
 
 declare function Tab(props: { id: string; children?: react.ReactNode }): react_jsx_runtime.JSX.Element;
 declare function Tabs(props: { children?: react.ReactNode }): react_jsx_runtime.JSX.Element;
@@ -63,6 +65,9 @@ interface TextProps {
 declare const Text: <C = "p">(props: PolymorphicProps<C, TextProps>) => react.ReactElement;
 
 declare function ChevronLeft(props: SVGProps<SVGSVGElement>): react_jsx_runtime.JSX.Element;
+declare function User(props: SVGProps<SVGSVGElement>): react_jsx_runtime.JSX.Element;
+declare function UserCheck(props: SVGProps<SVGSVGElement>): react_jsx_runtime.JSX.Element;
+declare function UserPlus(props: SVGProps<SVGSVGElement>): react_jsx_runtime.JSX.Element;
 
 declare function Format(value: number): string;
 declare class Cookies {
@@ -72,7 +77,7 @@ declare const Theme: {
     primary: string;
 };
 
-export { Button, type ButtonProps, Card, CardHeader, Checkbox, CheckboxGroup, ChevronLeft, Cookies, Format, Input, Tab, Tabs, Text, Theme, buttonVariants };
+export { Button, type ButtonProps, ButtonTooltip, Card, CardContent, CardHeader, Checkbox, CheckboxGroup, ChevronLeft, Cookies, Format, Input, Tab, Tabs, Text, Theme, User, UserCheck, UserPlus, buttonVariants };
 `;
 
 const THEME =
@@ -228,7 +233,7 @@ describe('a design-system package published as dist/ and type declarations alone
 
     const inspect = await run(['inspect', '--no-cache'], root);
     expect(inspect.stdout).toContain(
-      'library  Design-system package (@acme/ui 1.0.0): 10 components from its type declarations',
+      'library  Design-system package (@acme/ui 1.0.0): 15 components from its type declarations',
     );
     // --require-design-system finds the design system (exit code 2 would say it did not).
     const required = await run(['check', '.', '--require-design-system', '--no-cache'], root);
@@ -256,7 +261,7 @@ describe('a design-system package published as dist/ and type declarations alone
       'no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/dist/index.mjs), not at component sources, and only sources are read; its components are read from its type declarations instead',
     );
     expect(explain.stdout).toContain(
-      'found  @acme/ui 1.0.0: a dependency, 10 components from its type declarations in node_modules/@acme/ui',
+      'found  @acme/ui 1.0.0: a dependency, 15 components from its type declarations in node_modules/@acme/ui',
     );
   });
 
@@ -290,6 +295,58 @@ describe('a design-system package published as dist/ and type declarations alone
     const ds = await load(root);
     expect(ds.model.components).toEqual([]);
     expect(ds.config.libraries).toEqual([]);
+  });
+
+  it('is read in an app whose config names it as its importPath, whatever the app is called', async () => {
+    // An unscoped app on a package without its config, as an app on `@dub/ui` from npm:
+    // `inspect --explain` says what would make it read.
+    const unscoped = app(PACKAGE);
+    const explain = await run(['inspect', '--explain', '--no-cache'], unscoped);
+    expect(explain.stdout).toContain(
+      `and only sources are read; its type declarations are read when it declares its onsystem config, when the app is in its npm scope (@acme/…) or when the app's config sets "importPath" to "@acme/ui"`,
+    );
+    const root = app(PACKAGE, {
+      extra: { 'onsystem.config.json': json({ importPath: '@acme/ui' }) },
+    });
+    const { findings, stderr } = await check(root);
+    expect(stderr).not.toContain(NOTICE);
+    expect(ruleAndLine(findings)).toEqual(EVERY_RULE);
+    const inspect = await run(['inspect', '--no-cache'], root);
+    expect(inspect.stdout).toContain(
+      'library  Design-system package (@acme/ui 1.0.0): 15 components from its type declarations',
+    );
+    // Another scope's kit, too, when the config names it.
+    const ds = await load(
+      app(PACKAGE, {
+        name: '@other/web',
+        extra: { 'onsystem.config.json': json({ importPath: '@acme/ui' }) },
+      }),
+    );
+    expect(ds.config.libraries?.map((l) => l.package)).toEqual(['@acme/ui']);
+  });
+
+  it('is read from its declarations when it publishes sources that nothing reads', async () => {
+    // `files: ["src", "dist"]` (for source maps) with `exports` into `dist/`: zero config does
+    // not read the sources, so the declarations are read.
+    const withSources = {
+      ...PACKAGE,
+      'src/button.tsx': 'export function Button() { return <button /> }\n',
+    };
+    const root = app(withSources, { name: '@acme/web' });
+    const { findings, stderr } = await check(root);
+    expect(stderr).not.toContain(NOTICE);
+    expect(ruleAndLine(findings)).toEqual(EVERY_RULE);
+    // Stories and tests next to `dist/` are no component sources, though its config's globs
+    // match them.
+    const stories = await load(
+      app({
+        ...DECLARED,
+        'src/button.stories.tsx': 'export const Primary = () => <button />\n',
+        'src/button.test.tsx': 'export {}\n',
+      }),
+    );
+    expect(stories.config.libraries?.map((l) => l.package)).toEqual(['@acme/ui']);
+    expect(stories.model.components.find((c) => c.name === 'Button')?.library).toBe('@acme/ui');
   });
 
   it('is read from its sources, not its declarations, when it publishes them', async () => {
@@ -336,7 +393,9 @@ describe('a design-system package published as dist/ and type declarations alone
     const byName = new Map(ds.model.components.map((c) => [c.name, c]));
     expect([...byName.keys()].sort()).toEqual([
       'Button',
+      'ButtonTooltip',
       'Card',
+      'CardContent',
       'CardHeader',
       'Checkbox',
       'CheckboxGroup',
@@ -345,14 +404,25 @@ describe('a design-system package published as dist/ and type declarations alone
       'Tab',
       'Tabs',
       'Text',
+      'User',
+      'UserCheck',
+      'UserPlus',
     ]);
     // A function that returns a string, a class without `render` and an object are no
     // components, but they are exports: importing them is not inventing them.
     expect(ds.model.exports).toEqual(expect.arrayContaining(['Cookies', 'Format', 'Theme']));
-    // Parts of a bundle's one file go by name, as for source components.
+    // Parts of a bundle's one file go by name, as for source components: a family of two or
+    // more. A lone name next to a component (`ButtonTooltip`) is a component of its own, and
+    // icons (`UserCheck` next to `User`) have no parts.
+    expect(byName.get('Card')?.subcomponents).toEqual(['CardContent', 'CardHeader']);
     expect(byName.get('CardHeader')?.parent).toBe('Card');
     expect(byName.get('Tabs')?.parent).toBeUndefined();
     expect(byName.get('CheckboxGroup')?.parent).toBeUndefined();
+    expect(byName.get('ButtonTooltip')?.parent).toBeUndefined();
+    expect(byName.get('Button')?.subcomponents).toEqual([]);
+    expect(byName.get('UserCheck')?.parent).toBeUndefined();
+    expect(byName.get('UserPlus')?.parent).toBeUndefined();
+    expect(byName.get('User')?.subcomponents).toEqual([]);
     // Elements from the `ref`, or the DOM attributes a function component takes.
     expect(byName.get('Button')?.element).toBe('button');
     expect(byName.get('Input')?.element).toBe('input');
@@ -369,6 +439,67 @@ describe('a design-system package published as dist/ and type declarations alone
     expect(button?.source.file).toBe('node_modules/@acme/ui/dist/index.d.ts');
     // Props that depend on what a generic `component` renders are not all known.
     expect(byName.get('Text')?.openProps).toBe(true);
+  });
+
+  it('is read from each subpath it exports when it has no entry of its own', async () => {
+    const pkg = {
+      'package.json': json({
+        name: '@acme/ui',
+        version: '1.0.0',
+        files: ['dist'],
+        exports: {
+          './button': { types: './dist/button.d.ts', import: './dist/button.mjs' },
+          './icons/*': { import: { types: './dist/icons/*.d.ts', default: './dist/icons/*.mjs' } },
+          './theme.css': './theme.css',
+        },
+      }),
+      'theme.css': THEME,
+      'dist/button.mjs': 'export function Button() {}\n',
+      'dist/button.d.ts': `import * as react from 'react';
+interface ButtonProps extends react.ButtonHTMLAttributes<HTMLButtonElement> {
+    variant?: "default" | "outline";
+}
+declare const Button: react.ForwardRefExoticComponent<ButtonProps & react.RefAttributes<HTMLButtonElement>>;
+export { Button, type ButtonProps };
+`,
+      'dist/icons/chevron-left.mjs': 'export default function ChevronLeft() {}\n',
+      'dist/icons/chevron-left.d.ts': `import { SVGProps } from 'react';
+import * as react_jsx_runtime from 'react/jsx-runtime';
+declare function ChevronLeft(props: SVGProps<SVGSVGElement>): react_jsx_runtime.JSX.Element;
+export { ChevronLeft as default };
+`,
+    };
+    const page = `import { Button } from "@acme/ui/button";
+import ChevronLeft from "@acme/ui/icons/chevron-left";
+
+export default function Page() {
+  return (
+    <main>
+      <button onClick={() => undefined}>Native</button>
+      <Button tone="quiet">Save</Button>
+      <Button variant="danger">Delete</Button>
+      <Button aria-label="Back"><ChevronLeft /></Button>
+    </main>
+  );
+}
+`;
+    const root = app(pkg, { name: '@acme/web', extra: { 'app/page.tsx': page } });
+    const ds = await load(root);
+    expect(
+      ds.model.components.map((c) => [c.name, c.importPath, c.defaultImport, c.element]),
+    ).toEqual([
+      ['Button', '@acme/ui/button', undefined, 'button'],
+      ['ChevronLeft', '@acme/ui/icons/chevron-left', '@acme/ui/icons/chevron-left', undefined],
+    ]);
+    const { findings } = await check(root);
+    expect(ruleAndLine(findings)).toEqual([
+      ['prefer-design-system-component', 7],
+      ['no-unknown-prop', 8],
+      ['no-unknown-variant', 9],
+    ]);
+    expect(findings.find((d) => d.line === 7)?.message).toContain(
+      'import { Button } from "@acme/ui/button"',
+    );
   });
 
   it('is read from where pnpm installs it, through the link in node_modules', async () => {

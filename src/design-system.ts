@@ -493,7 +493,7 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
  * `@dub/tailwind-config` and its `themes.css`), with what they import. May repeat a file.
  */
 function linkedStylesheets(config: ResolvedConfig, found: string[]): string[] {
-  const resolve = stylesheetResolver(config.root);
+  const resolve = stylesheetResolver(config.root, { importPath: config.importPath });
   const preset = config.tailwindConfig
     ? presetStylesheets(
         readTailwindColors(config.tailwindConfig, presetResolver(config.root)),

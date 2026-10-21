@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { declarationsPackages } from '../detect.js';
+import { declarationsPackages, type DeclarationsOptions } from '../detect.js';
 import type { ComponentInfo, Token } from '../types.js';
 import { mui } from './mui.js';
 
@@ -145,11 +145,15 @@ export function notReadYet(): string {
  *
  * The design-system packages installed without their component sources that the app depends
  * on ({@link declarationsPackages}) come after them, read from their type declarations unless
- * `libraries` is false. A list names libraries, not packages, so it leaves them in.
+ * `libraries` is false. A list names libraries, not packages, so it leaves them in. `options`
+ * is what the config says of them: its `importPath`, which makes the dependency it names one,
+ * and the component globs that read a package from its sources instead. A library onsystem
+ * knows is never read as one, whatever `importPath` says.
  */
 export function detectLibraries(
   root: string,
   ids?: false | readonly LibraryId[],
+  options: DeclarationsOptions = {},
 ): { read: LibrarySource[]; off: LibrarySource[]; unread: LibrarySource[] } {
   const pkg = readJson(path.join(root, 'package.json'));
   if (!pkg) return { read: [], off: [], unread: [] };
@@ -169,12 +173,15 @@ export function detectLibraries(
     source: sourceOf(library.package),
   }));
   const wanted = (id: LibraryId) => ids === undefined || (ids !== false && ids.includes(id));
-  const packages = declarationsPackages(root).map((p): LibrarySource => ({
-    package: p.name,
-    dir: p.dir,
-    version: p.version,
-    designSystem: true,
-  }));
+  const known = new Set([...LIBRARIES, ...UNREAD_LIBRARIES].map((library) => library.package));
+  const packages = declarationsPackages(root, undefined, options)
+    .filter((p) => !known.has(p.name))
+    .map((p): LibrarySource => ({
+      package: p.name,
+      dir: p.dir,
+      version: p.version,
+      designSystem: true,
+    }));
   return {
     read: [
       ...found.filter((f) => wanted(f.id)).map((f) => f.source),
