@@ -79,16 +79,30 @@ const SHADCN_DESCRIPTIONS: Record<string, string> = {
 };
 
 /**
- * The component's own description or, for a shadcn/ui component without one (`Badge`
- * exported from `badge.tsx`, no JSDoc), what the registry's component of that name is for.
+ * What shadcn/ui's component of this name is for, when `component` is laid out as `npx shadcn
+ * add` writes it: exported under the registry's name from the file named for it, in a `ui`
+ * folder (`Badge` from `components/ui/badge.tsx`, components.json's default `ui` alias). A
+ * component of the same name elsewhere (`Sheet` in a design system's `src/sheet.tsx`) is not
+ * shadcn/ui's, and may be something else entirely.
+ */
+function shadcnPurpose(component: ComponentInfo): string | undefined {
+  if (component.library || component.parent) return undefined;
+  if (!Object.hasOwn(SHADCN_DESCRIPTIONS, component.name)) return undefined;
+  const [folder, file = ''] = component.source.file.split(/[\\/]/).slice(-2);
+  if (folder !== 'ui') return undefined;
+  const kebab = splitWords(component.name).join('-').toLowerCase();
+  return file.replace(/\.[jt]sx?$/, '') === kebab ? SHADCN_DESCRIPTIONS[component.name] : undefined;
+}
+
+/**
+ * The component's own description or, for a shadcn/ui component without one (`Badge` in
+ * `components/ui/badge.tsx`, no JSDoc), what shadcn/ui's component of that name is for, said
+ * as shadcn/ui's: `shadcn/ui's Badge: A small label for a status, a count or a category.`
  */
 export function descriptionOf(component: ComponentInfo): string | undefined {
   if (component.description) return component.description;
-  if (component.library || component.parent) return undefined;
-  if (!Object.hasOwn(SHADCN_DESCRIPTIONS, component.name)) return undefined;
-  const file = (component.source.file.split(/[\\/]/).pop() ?? '').replace(/\.[jt]sx?$/, '');
-  const kebab = splitWords(component.name).join('-').toLowerCase();
-  return file === kebab ? SHADCN_DESCRIPTIONS[component.name] : undefined;
+  const purpose = shadcnPurpose(component);
+  return purpose && `shadcn/ui's ${component.name}: ${purpose}`;
 }
 
 export function buildSearchIndex(components: ComponentInfo[]): Bm25Index<ComponentInfo> {
@@ -99,7 +113,7 @@ export function buildSearchIndex(components: ComponentInfo[]): Bm25Index<Compone
         tokenize([component.name, ...component.aliases, component.parent ?? ''].join(' ')),
         WEIGHTS.name,
       ],
-      [tokenize(descriptionOf(component) ?? ''), WEIGHTS.description],
+      [tokenize(component.description ?? shadcnPurpose(component) ?? ''), WEIGHTS.description],
       [
         tokenize(component.variants.flatMap((v) => [v.name, ...v.values]).join(' ')),
         WEIGHTS.variants,

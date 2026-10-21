@@ -44,25 +44,45 @@ function isIcon(component: ComponentInfo): boolean {
   return component.element === 'svg';
 }
 
-/** Icons from one import are listed by name on one line from this many on: a spinner or a logo is listed like the rest. */
+/**
+ * Icons from one import, or from the modules of one folder, are listed by name on one line from
+ * this many on: a spinner or a logo is listed like the rest.
+ */
 const ICON_LINE = 5;
 
-/** The components a list shows: one by one, or by name as the icons of one import. */
+/** Icons named on one line: from one import, or from one folder with a module each. */
+export interface IconGroup<T> {
+  /** The import (`@dub/ui`), or with `folder`, the folder of their modules (`@/components/icons`). */
+  from: string;
+  items: T[];
+  /** The icons are imported from modules in `from`, `@/components/icons/check`, not from it. */
+  folder?: true;
+}
+
+/** The components a list shows: one by one, or by name as the icons of one import or folder. */
 export interface Listing<T> {
   /** Listed one by one, up to the filter's `limit`. */
   shown: T[];
-  /** Without `kind`: icons by name, per import (`@dub/ui`, `@/components/icons`). */
-  icons: { from: string; items: T[] }[];
+  /**
+   * Without `kind`: icons by name, per import (`@dub/ui`, `@/components/icons`), or, for an icon
+   * set with a module per icon, per folder.
+   */
+  icons: IconGroup<T>[];
   /** How many components match the filter. */
   matched: number;
   /** Matching components left out by `limit`. */
   omitted: number;
 }
 
+/**
+ * What list_components shows of `items`, after `filter`. `packageOf`: at a workspace root, the
+ * package an item comes from, so two apps' `@/components/icons` are not taken for one.
+ */
 export function listComponents<T>(
   items: readonly T[],
   component: (item: T) => ComponentInfo,
   filter: ListFilter = {},
+  packageOf: (item: T) => string = () => '',
 ): Listing<T> {
   const query = filter.query?.trim().toLowerCase();
   const matching = items.filter((item) => {
@@ -71,19 +91,36 @@ export function listComponents<T>(
     const texts = [c.name, ...c.aliases, ...c.subcomponents, descriptionOf(c) ?? ''];
     return !query || texts.some((text) => text.toLowerCase().includes(query));
   });
-  const byImport = new Map<string, T[]>();
+  const icons: IconGroup<T>[] = [];
   if (!filter.kind) {
+    const group = (groups: Map<string, IconGroup<T>>, item: T, from: string, folder?: true) => {
+      const key = `${packageOf(item)}\0${from}`;
+      const known = groups.get(key) ?? { from, items: [], ...(folder ? { folder } : {}) };
+      known.items.push(item);
+      groups.set(key, known);
+    };
+    const byImport = new Map<string, IconGroup<T>>();
     for (const item of matching) {
       const c = component(item);
-      if (!isIcon(c)) continue;
-      const from = c.library ?? c.importPath;
-      byImport.set(from, [...(byImport.get(from) ?? []), item]);
+      if (isIcon(c)) group(byImport, item, c.library ?? c.importPath);
     }
+    // The project's own icons from modules too small for a line, such as a module per icon
+    // (`components/icons/check.tsx`), by folder: each is named with its module.
+    const byFolder = new Map<string, IconGroup<T>>();
+    for (const found of byImport.values()) {
+      if (found.items.length >= ICON_LINE) {
+        icons.push(found);
+        continue;
+      }
+      for (const item of found.items) {
+        const c = component(item);
+        const folder = c.importPath.slice(0, Math.max(0, c.importPath.lastIndexOf('/')));
+        if (!c.library && folder) group(byFolder, item, folder, true);
+      }
+    }
+    icons.push(...[...byFolder.values()].filter((found) => found.items.length >= ICON_LINE));
   }
-  const icons = [...byImport]
-    .filter(([, list]) => list.length >= ICON_LINE)
-    .map(([from, list]) => ({ from, items: list }));
-  const inLine = new Set(icons.flatMap((group) => group.items));
+  const inLine = new Set(icons.flatMap((found) => found.items));
   const rest = matching.filter((item) => !inLine.has(item));
   const shown = rest.slice(0, filter.limit ?? rest.length);
   return { shown, icons, matched: matching.length, omitted: rest.length - shown.length };
@@ -106,9 +143,20 @@ function listHead(roots: number, parts: number, listed: Listing<unknown>, filter
   return `${plural(roots, 'component')}${parts ? ` (+${plural(parts, 'part')})` : ''}`;
 }
 
-/** `128 icons from "@dub/ui" (each renders <svg>; import { Name } from "@dub/ui"): Apple, Bolt`. */
-function iconLine(from: string, names: readonly string[]): string {
-  return `${plural(names.length, 'icon')} from "${from}" (each renders <svg>; import { Name } from "${from}"): ${names.join(', ')}`;
+/**
+ * `128 icons from "@dub/ui" (each renders <svg>; import { Name } from "@dub/ui"): Apple, Bolt`,
+ * or for a module per icon, `6 icons in "@/components/icons" (each renders <svg>; import { Name }
+ * from "@/components/icons/<module>"): CheckIcon (check), PlusIcon (plus)`.
+ */
+function iconLine(group: IconGroup<ComponentInfo>): string {
+  const { from, items } = group;
+  const count = plural(items.length, 'icon');
+  if (!group.folder) {
+    const names = items.map((c) => c.name).join(', ');
+    return `${count} from "${from}" (each renders <svg>; import { Name } from "${from}"): ${names}`;
+  }
+  const names = items.map((c) => `${c.name} (${c.importPath.slice(from.length + 1)})`).join(', ');
+  return `${count} in "${from}" (each renders <svg>; import { Name } from "${from}/<module>"): ${names}`;
 }
 
 /** What a list says at its end about the icons it named and the components `limit` left out. */
@@ -154,10 +202,9 @@ export function renderComponentList(
       lines.push(...listItem(component, '', false));
     }
   }
-  for (const { from, items } of listed.icons) {
+  for (const group of listed.icons) {
     if (lines.at(-1) !== '') lines.push('');
-    const names = items.map((c) => c.name);
-    lines.push(iconLine(from, names));
+    lines.push(iconLine(group));
   }
   lines.push(...listTail(listed));
   return lines.join('\n');
@@ -195,7 +242,12 @@ export function renderCatalogList(catalog: Catalog, filter: ListFilter = {}): st
   if (!roots.length) {
     return `No components found in any project of this monorepo (root: ${catalog.root}). Run \`onsystem inspect\` there to see what was looked at.`;
   }
-  const listed = listComponents(roots, (e) => e.component, filter);
+  const listed = listComponents(
+    roots,
+    (e) => e.component,
+    filter,
+    (e) => e.package,
+  );
   if (!listed.matched) {
     return `No components match ${filterText(filter)} in any project (${roots.length} in all). Call list_components without filters to see them.`;
   }
@@ -211,10 +263,10 @@ export function renderCatalogList(catalog: Catalog, filter: ListFilter = {}): st
     return known;
   };
   for (const entry of listed.shown) section(entry.package).entries.push(entry);
-  for (const { from, items } of listed.icons) {
-    const [first] = items;
-    const names = items.map((e) => e.component.name);
-    if (first) section(first.package).icons.push(iconLine(from, names));
+  for (const group of listed.icons) {
+    const [first] = group.items;
+    const items = group.items.map((e) => e.component);
+    if (first) section(first.package).icons.push(iconLine({ ...group, items }));
   }
   for (const [pkg, { entries, icons }] of byPackage) {
     const projects = [

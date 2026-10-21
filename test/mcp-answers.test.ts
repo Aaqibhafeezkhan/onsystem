@@ -344,12 +344,14 @@ describe('a stock shadcn/ui app, whose files have no JSDoc', () => {
     client = await serve(await load(fixture(STOCK_SHADCN, { nodeModules: true })));
   });
 
-  it('lists what each component is for, and never "No description."', async () => {
+  it('lists what each component is for, as shadcn/ui\'s, and never "No description."', async () => {
     const list = text(await client.callTool({ name: 'list_components', arguments: {} }));
     expect(list).not.toContain('No description.');
-    expect(list).toContain('Badge <span> — A small label for a status, a count or a category.');
     expect(list).toContain(
-      'Select — Lets the user pick one value from a list that opens from a button.',
+      "Badge <span> — shadcn/ui's Badge: A small label for a status, a count or a category.",
+    );
+    expect(list).toContain(
+      "Select — shadcn/ui's Select: Lets the user pick one value from a list that opens from a button.",
     );
     const result = await client.callTool({ name: 'list_components', arguments: {} });
     const { components } = result.structuredContent as {
@@ -357,7 +359,7 @@ describe('a stock shadcn/ui app, whose files have no JSDoc', () => {
     };
     expect(components.find((c) => c.name === 'Label')).toEqual({
       name: 'Label',
-      description: 'The text label of a form control.',
+      description: "shadcn/ui's Label: The text label of a form control.",
       importPath: '@/components/ui/label',
     });
   });
@@ -401,7 +403,7 @@ describe('a stock shadcn/ui app, whose files have no JSDoc', () => {
       await client.callTool({ name: 'get_component', arguments: { name: 'Card' } }),
     );
     expect(card).toMatch(
-      /^# Card\nA bordered surface that groups related content, with a header, content and footer\.\n/,
+      /^# Card\nshadcn\/ui's Card: A bordered surface that groups related content, with a header, content and footer\.\n/,
     );
     expect(card.indexOf('## Parts')).toBeGreaterThan(0);
     expect(card.indexOf('## Parts')).toBeLessThan(card.indexOf('## Props'));
@@ -446,10 +448,17 @@ describe('get_tokens: chart and sidebar colors', () => {
     expect(only).toMatch(/^## chart \(1\): for charts only, not for status colors\n- chart-2: /);
   });
 
-  it('tells the agent not to use them for a status color the theme has no token for', () => {
-    expect(INSTRUCTIONS).toContain(
-      'for a status color the theme has no token for (success, warning, info), add a token or keep the Tailwind color as check_ui says, and never use a chart-* or sidebar-* token for it.',
-    );
+  it('tells the agent not to use them for a status color the theme has no token for', async () => {
+    const clause =
+      'for a status color the theme has no token for (success, warning, info), add a token or keep the Tailwind color as check_ui says, and never use a chart-* or sidebar-* token for it.';
+    expect(INSTRUCTIONS).toContain(clause);
+    // The prompt gives the same way out: without it, nothing is left for a green label but gray.
+    const prompt = await client.getPrompt({
+      name: 'build-with-design-system',
+      arguments: { task: 'a plan card with a green Active label' },
+    });
+    const content = prompt.messages[0]?.content;
+    expect(content?.type === 'text' ? content.text : '').toContain(clause);
   });
 });
 
@@ -624,7 +633,7 @@ describe('list_components at a monorepo root with an icon set', () => {
       });
       const result = await client.callTool({ name: 'list_components', arguments: {} });
       expect(text(result)).toMatch(
-        /^8 components from 1 package, used by 2 projects\..*\n\n## @acme\/ui \(used by apps\/web and packages\/ui\)\nButton <button> — /,
+        /^8 components from 1 package, used by 2 projects\..*\n\n## @acme\/ui \(used by apps\/web and packages\/ui\)\nButton <button>\n/,
       );
       expect(text(result)).toContain(
         `  import { Card } from "@acme/ui/card"\n\n6 icons from "@acme/ui/icons" (each renders <svg>; import { Name } from "@acme/ui/icons"): ${ICON_NAMES.join(', ')}`,
@@ -638,8 +647,50 @@ describe('list_components at a monorepo root with an icon set', () => {
   });
 });
 
+describe('list_components on an icon set with a module per icon', () => {
+  it('names the icons on one line per folder, each with its module', async () => {
+    const files: Record<string, string> = {
+      'package.json': JSON.stringify({ name: 'iconic-files' }),
+      'tsconfig.json': TSCONFIG,
+      'onsystem.config.json': JSON.stringify({ components: ['components/**/*.tsx'], tokens: [] }),
+      'components/ui/button.tsx': STOCK_SHADCN['components/ui/button.tsx'],
+      'lib/utils.ts': STOCK_SHADCN['lib/utils.ts'],
+      // One icon elsewhere is listed like any component.
+      'components/logo.tsx':
+        'export function Logo() {\n  return <svg viewBox="0 0 24 24"><path d="M0 0h24v24H0z" /></svg>\n}\n',
+    };
+    const modules = ['check', 'chevron-down', 'close', 'plus', 'search', 'spinner'];
+    modules.forEach((module, i) => {
+      files[`components/icons/${module}.tsx`] = `import * as React from "react"\n\n${
+        Object.values(ICONS)[i] ?? ''
+      }`;
+    });
+    const client = await serve(await load(fixture(files, { nodeModules: true })));
+    const result = await client.callTool({ name: 'list_components', arguments: {} });
+    const named = ICON_NAMES.map((name, i) => `${name} (${modules[i] ?? ''})`).join(', ');
+    expect(text(result)).toContain(
+      `6 icons in "@/components/icons" (each renders <svg>; import { Name } from "@/components/icons/<module>"): ${named}`,
+    );
+    expect(text(result)).toContain('Logo <svg>\n  import { Logo } from "@/components/logo"');
+    expect(text(result)).not.toContain('CheckIcon <svg>');
+    const content = result.structuredContent as {
+      components: { name: string }[];
+      icons?: { from: string; names: string[]; modules?: string[] }[];
+    };
+    expect(content.components.map((c) => c.name).sort()).toEqual(['Button', 'Logo']);
+    expect(content.icons).toEqual([
+      {
+        from: '@/components/icons',
+        names: ICON_NAMES,
+        modules: modules.map((m) => `@/components/icons/${m}`),
+      },
+    ]);
+  });
+});
+
 describe('check_ui with code and path', () => {
-  it('checks the code as the file `path` names, as it does with `filename`', async () => {
+  let client: Client;
+  beforeAll(async () => {
     const root = fixture(
       {
         'package.json': JSON.stringify({ name: 'legacy' }),
@@ -650,13 +701,17 @@ describe('check_ui with code and path', () => {
           overrides: [{ files: 'app/legacy/**', rules: { 'no-hardcoded-color': 'off' } }],
         }),
         'app/globals.css': stockTheme,
+        'app/legacy/old.tsx': 'export const Old = () => <p className="text-[#e11d48]">Old</p>;\n',
         'components/ui/button.tsx': STOCK_SHADCN['components/ui/button.tsx'],
         'lib/utils.ts': STOCK_SHADCN['lib/utils.ts'],
       },
       { nodeModules: true },
     );
-    const client = await serve(await load(root));
-    const code = '<p className="text-[#e11d48]">Overdue</p>';
+    client = await serve(await load(root));
+  });
+  const code = '<p className="text-[#e11d48]">Overdue</p>';
+
+  it('checks the code as the file `path` names, as it does with `filename`', async () => {
     const legacy = await client.callTool({
       name: 'check_ui',
       arguments: { code, path: 'app/legacy/new.tsx' },
@@ -678,10 +733,155 @@ describe('check_ui with code and path', () => {
       arguments: { code, path: 'app/legacy/new.tsx', filename: 'app/other.tsx' },
     });
     expect(named.structuredContent).toMatchObject({ file: 'app/other.tsx', ok: false });
-    const notScript = await client.callTool({
+  });
+
+  it.each(['.', 'app', 'app/legacy', 'app/globals.css'])(
+    'checks the code as snippet.tsx when `path` is %s, which names no .tsx file',
+    async (folder) => {
+      const result = await client.callTool({
+        name: 'check_ui',
+        arguments: { code, path: folder },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(result.structuredContent).toMatchObject({
+        file: 'snippet.tsx',
+        ok: false,
+        errorCount: 1,
+      });
+    },
+  );
+
+  it('says what to pass when `filename` is not a script file', async () => {
+    const css = await client.callTool({
       name: 'check_ui',
-      arguments: { code, path: 'app/globals.css' },
+      arguments: { code, filename: 'app/globals.css' },
     });
-    expect(notScript.isError).toBe(true);
+    expect(css.isError).toBe(true);
+    expect(text(css)).toBe(
+      'check_ui checks .tsx, .jsx, .ts and .js files; app/globals.css is not one, so it was not checked. Pass as `filename` the .tsx path the code is for, or leave `filename` out.',
+    );
+    // Without code, `path` is the file to check, and a stylesheet is still not one.
+    const file = await client.callTool({
+      name: 'check_ui',
+      arguments: { path: 'app/globals.css' },
+    });
+    expect(text(file)).toBe(
+      'check_ui checks .tsx, .jsx, .ts and .js files; app/globals.css is not one, so it was not checked.',
+    );
+  });
+});
+
+describe('check_ui with code and a folder at a monorepo root', () => {
+  it("checks the code with the folder's project, as snippet.tsx", async () => {
+    const json = (value: unknown) => JSON.stringify(value, null, 2);
+    const root = fixture({
+      'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - packages/*\n',
+      'package.json': json({ name: 'acme', private: true }),
+      'packages/ui/package.json': json({
+        name: '@acme/ui',
+        exports: {
+          './button': './src/button.tsx',
+          './card': './src/card.tsx',
+          './input': './src/input.tsx',
+        },
+      }),
+      'packages/ui/src/button.tsx':
+        'export function Button(props: { variant?: "default" | "outline"; children?: unknown }) { return <button /> }\n',
+      'packages/ui/src/card.tsx':
+        'export function Card(props: { children?: unknown }) { return <div /> }\n',
+      'packages/ui/src/input.tsx':
+        'export function Input(props: { value?: string }) { return <input /> }\n',
+      'apps/web/package.json': json({
+        name: '@acme/web',
+        dependencies: { '@acme/ui': 'workspace:*' },
+      }),
+      'apps/web/app/page.tsx':
+        'import { Button } from "@acme/ui/button";\nexport default () => <Button>Go</Button>;\n',
+      'apps/admin/package.json': json({ name: '@acme/admin' }),
+      'apps/admin/components.json': json({ aliases: { ui: '@/components/ui' } }),
+      'apps/admin/tsconfig.json': json({
+        compilerOptions: { jsx: 'react-jsx', paths: { '@/*': ['./*'] } },
+      }),
+      'apps/admin/components/ui/button.tsx':
+        'export function Button(props: { variant?: "default" | "ghost"; children?: unknown }) { return <button /> }\n',
+    });
+    const { workspace } = await loadTarget({ cwd: root });
+    if (!workspace) throw new Error('expected a workspace');
+    const projects = new WorkspaceProjects(workspace, {
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    try {
+      const client = await connect({
+        getDesignSystem: () => Promise.reject(new Error('not used')),
+        getProjects: () => Promise.resolve(projects),
+      });
+      const check = (args: Record<string, unknown>) =>
+        client.callTool({ name: 'check_ui', arguments: args });
+
+      const web = await check({
+        code: 'import { Button } from "@acme/ui/button";\nexport const A = () => <Button variant="danger" />;\n',
+        path: 'apps/web',
+      });
+      expect(web.structuredContent).toMatchObject({ file: 'snippet.tsx', errorCount: 1 });
+      expect(text(web)).toContain('Allowed: default, outline.');
+
+      const admin = await check({
+        code: 'import { Button } from "@/components/ui/button";\nexport const A = () => <Button variant="danger" />;\n',
+        path: 'apps/admin/app',
+      });
+      expect(admin.structuredContent).toMatchObject({ file: 'snippet.tsx', errorCount: 1 });
+      expect(text(admin)).toContain('Allowed: default, ghost.');
+
+      // The root itself picks no project: it asks for the file, as without a path.
+      const atRoot = await check({ code: '<p>x</p>', path: '.' });
+      expect(atRoot.isError).toBe(true);
+      expect(text(atRoot)).toMatch(/^This is a monorepo root with \d projects .*Pass `filename`/);
+    } finally {
+      projects.close();
+    }
+  });
+});
+
+describe('shadcn/ui descriptions in a design system that is not shadcn/ui', () => {
+  let client: Client;
+  beforeAll(async () => {
+    const ds = await load(
+      fixture({
+        'package.json': JSON.stringify({ name: 'grid-kit' }),
+        'tsconfig.json': TSCONFIG,
+        'onsystem.config.json': JSON.stringify({ components: ['src/**/*.tsx'], tokens: [] }),
+        // Same names as shadcn/ui's, different components: a data grid and a code span.
+        'src/sheet.tsx':
+          'export function Sheet(props: { rows: string[][] }) {\n  return <table>{props.rows.map((r) => <tr key={r[0]}>{r.map((c) => <td key={c}>{c}</td>)}</tr>)}</table>\n}\n',
+        'src/command.tsx':
+          'export function Command(props: { children?: React.ReactNode }) {\n  return <code>{props.children}</code>\n}\n',
+      }),
+    );
+    client = await serve(ds);
+  });
+
+  it('borrows no description for a same-named component outside a ui folder', async () => {
+    const result = await client.callTool({ name: 'list_components', arguments: {} });
+    expect(text(result)).toContain('Command <code>\n');
+    expect(text(result)).toContain('Sheet <table>\n');
+    expect(text(result)).not.toContain('shadcn/ui');
+    const { components } = result.structuredContent as {
+      components: { name: string; description?: string }[];
+    };
+    expect(components.every((c) => c.description === undefined)).toBe(true);
+
+    const sheet = text(
+      await client.callTool({ name: 'get_component', arguments: { name: 'Sheet' } }),
+    );
+    expect(sheet).toMatch(/^# Sheet\n\nimport \{ Sheet \}/);
+
+    const search = await client.callTool({
+      name: 'search_components',
+      arguments: { query: 'slide-in panel' },
+    });
+    const { results } = search.structuredContent as Results;
+    expect(results.filter((r) => !r.weak).map((r) => r.name)).not.toContain('Sheet');
   });
 });

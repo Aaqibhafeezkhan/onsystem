@@ -57,10 +57,13 @@ const MAX_CODE = 1_000_000;
 /** Diagnostics check_ui returns by default: a 3,000-line file can have thousands, more than a context holds. */
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 1000;
-/** check_ui's answer for a path or filename that is not JS or TS. */
-function notScript(name: string): CallToolResult {
+/**
+ * check_ui's answer for a path or filename that is not JS or TS. `fix`: what to do instead,
+ * for a `filename` given with code (the code itself may be fine).
+ */
+function notScript(name: string, fix = ''): CallToolResult {
   return errorResult(
-    `check_ui checks .tsx, .jsx, .ts and .js files; ${name} is not one, so it was not checked.`,
+    `check_ui checks .tsx, .jsx, .ts and .js files; ${name} is not one, so it was not checked.${fix}`,
   );
 }
 
@@ -280,9 +283,10 @@ function listContent<T>(
     })),
     ...(listed.icons.length
       ? {
-          icons: listed.icons.map(({ from, items }) => ({
+          icons: listed.icons.map(({ from, items, folder }) => ({
             from,
             names: items.map((item) => component(item).name),
+            ...(folder ? { modules: items.map((item) => component(item).importPath) } : {}),
             ...(originOf && items[0] ? { package: originOf(items[0]).package } : {}),
           })),
         }
@@ -375,7 +379,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     {
       title: 'List design-system components',
       description:
-        'List every component in the project design system with a one-line description, the native element it renders, its variant values, its parts and its import. Icons (components that render an <svg>) are named on one line per import. Call this before writing UI in this project. `query`, `kind` and `limit` narrow a long list. At a monorepo root, pass `path` for the project of the file you are editing; without it, every project is listed, each component with its package.',
+        'List every component in the project design system with a one-line description, the native element it renders, its variant values, its parts and its import. Icons (components that render an <svg>) are named on one line per import, or per folder for icons with a module each, five or more to a line. Call this before writing UI in this project. `query`, `kind` and `limit` narrow a long list. At a monorepo root, pass `path` for the project of the file you are editing; without it, every project is listed, each component with its package.',
       inputSchema: z.object({
         query: z
           .string()
@@ -406,14 +410,24 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
         icons: z
           .array(
             z.object({
-              from: z.string().describe('The module they are imported from.'),
+              from: z
+                .string()
+                .describe(
+                  'The module they are imported from, or, with `modules`, the folder of their modules.',
+                ),
               names: z.array(z.string()),
+              modules: z
+                .array(z.string())
+                .optional()
+                .describe(
+                  "For icons with a module each: each one's module, in the order of `names`.",
+                ),
               package: originShape.package,
             }),
           )
           .optional()
           .describe(
-            'Without `kind`: icons, the components that render an <svg>, by name, per module.',
+            'Without `kind`: icons, the components that render an <svg>, by name, five or more per module, or per folder for icons with a module each.',
           ),
         omitted: int().optional().describe('Matching components left out by `limit`.'),
       }),
@@ -425,7 +439,12 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
       const filter = { query, kind, limit };
       if ('catalog' in found) {
         const { catalog } = found;
-        const listed = listComponents(catalog.roots(), (entry) => entry.component, filter);
+        const listed = listComponents(
+          catalog.roots(),
+          (entry) => entry.component,
+          filter,
+          (entry) => entry.package,
+        );
         return {
           content: [{ type: 'text', text: renderCatalogList(catalog, filter) }],
           structuredContent: listContent(listed, (entry) => entry.component, origin),
@@ -650,7 +669,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     {
       title: 'Check UI code against the design system',
       description:
-        'Lint TSX/JSX against the design system. Reports hardcoded colors, spacing and radius (with the nearest token), native elements that have a design-system component, unknown components, props and variant values, and icon-only buttons without an accessible name. Each diagnostic has line/column, a rule id, a message and a suggested fix. Run it on every snippet or file you write and fix all errors. Pass `path` for a file in the project, or `code` for unsaved code, with `path` (or `filename`) naming the file it is for.',
+        'Lint TSX/JSX against the design system. Reports hardcoded colors, spacing and radius (with the nearest token), native elements that have a design-system component, unknown components, props and variant values, and icon-only buttons without an accessible name. Each diagnostic has line/column, a rule id, a message and a suggested fix. Run it on every snippet or file you write and fix all errors. Pass `path` for a file in the project, or `code` for unsaved code, with `path` (or `filename`) naming the file it is for or its project folder.',
       inputSchema: z.object({
         code: z
           .string()
@@ -662,7 +681,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
           .max(MAX_PATH)
           .optional()
           .describe(
-            'Path of a .tsx, .jsx, .ts or .js file, relative to the project root (the monorepo root, when served from there) or absolute: the file to check, or, with `code`, the file the code is for, as `filename`.',
+            'Path of a .tsx, .jsx, .ts or .js file, relative to the project root (the monorepo root, when served from there) or absolute: the file to check, or, with `code`, the file the code is for, as `filename`. With `code`, a project folder only picks the project.',
           ),
         filename: z
           .string()
@@ -716,15 +735,33 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
     },
     async ({ code, path: filePath, filename: given, limit }): Promise<CallToolResult> => {
       if (code === undefined && !filePath) return errorResult('Pass either `code` or `path`.');
-      // With `code`, `path` names the file the code is for, as `filename` does: the other tools
-      // take `path` for the file being edited, and agents pass it here the same way.
-      const filename = code === undefined ? given : (given ?? (filePath || undefined));
-      if (code !== undefined && filename !== undefined && !SCRIPT_FILE.test(filename)) {
-        return notScript(filename);
+      if (code !== undefined && given !== undefined && !SCRIPT_FILE.test(given)) {
+        return notScript(
+          given,
+          ' Pass as `filename` the .tsx path the code is for, or leave `filename` out.',
+        );
       }
+      // With `code`, a `path` to a .tsx (or other script) file names the file the code is for,
+      // as `filename` does: the other tools take `path` for the file being edited, and agents
+      // pass it here the same way. Any other `path` (a project folder, `.`) only picks the
+      // project, as it does for the other tools, and the code is checked as snippet.tsx.
+      const folder =
+        code !== undefined && filePath && !SCRIPT_FILE.test(filePath) ? filePath : undefined;
+      const filename =
+        code === undefined || folder !== undefined ? given : (given ?? (filePath || undefined));
       // At a workspace root, the file's own project checks it.
-      const routeBy = code === undefined ? filePath : (filename ?? undefined);
+      let routeBy = code === undefined ? filePath : (filename ?? folder);
       const set = await getProjects?.(routeBy);
+      // The workspace root itself, as a folder, picks no project unless it is one.
+      if (
+        set &&
+        folder !== undefined &&
+        routeBy === folder &&
+        path.resolve(set.root, folder) === set.root &&
+        !set.dirs.includes('.')
+      ) {
+        routeBy = undefined;
+      }
       let ds: DesignSystem;
       if (!set) {
         ds = await getDesignSystem(routeBy);
@@ -960,7 +997,7 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
 Work like this:
 1. Find components: search_components for each piece of the UI (for example "confirm a destructive action"), or list_components for an overview.
 2. Read the contract: get_component for every component you use. Use only the props and variant values it lists, and compose its parts as its docs and examples show, when it has them.
-3. Style with tokens: get_tokens when you need a color, spacing or radius. Never write hex/rgb colors, arbitrary px values or Tailwind default palette classes such as bg-blue-500. Use chart-* and sidebar-* tokens only in charts and the sidebar, never for a status color.
+3. Style with tokens: get_tokens when you need a color, spacing or radius. Never write hex/rgb colors, arbitrary px values or Tailwind default palette classes such as bg-blue-500. chart-* and sidebar-* tokens are for charts and the sidebar only: for a status color the theme has no token for (success, warning, info), add a token or keep the Tailwind color as check_ui says, and never use a chart-* or sidebar-* token for it.
 4. Use design-system components instead of native elements (<Button>, not <button>).
 5. Verify: run check_ui on the code you wrote, fix every error, and run it again until it reports none.
 
