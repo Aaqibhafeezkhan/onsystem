@@ -306,6 +306,83 @@ describe('a copy of a moved file whose new path the baseline does not record yet
   }
 });
 
+describe('a move whose findings are all on changed lines, after an earlier move of a file with the same finding', () => {
+  const slate = (...texts: string[]) =>
+    [
+      'export const Legacy = () => (',
+      '  <div>',
+      ...texts.map((text) => `    <p className="text-slate-500">${text}</p>`),
+      '  </div>',
+      ')',
+      '',
+    ].join('\n');
+
+  /**
+   * Main records app/legacy/a.tsx with two `text-slate-500` and app/legacy/b.tsx with one; a
+   * merged pull request renames b.tsx to b2.tsx and leaves the baseline as it was; a `feature`
+   * branch moves a.tsx to a2.tsx and rewrites the text of both lines with the findings.
+   */
+  async function movedTwice() {
+    const root = fixture({
+      'components/ui/button.tsx': BUTTON,
+      'app/globals.css': ':root { --primary: oklch(0.205 0 0); --muted: #f4f4f5; }',
+      'app/legacy/a.tsx': slate('one', 'two'),
+      'app/legacy/b.tsx': slate('bee'),
+    });
+    await check(['check', '.', '--update-baseline', '--no-cache'], root);
+    git(root, 'init', '--quiet');
+    git(root, 'add', '.');
+    git(root, 'commit', '--quiet', '--no-verify', '-m', 'base');
+    git(root, 'mv', 'app/legacy/b.tsx', 'app/legacy/b2.tsx');
+    git(root, 'commit', '--quiet', '--no-verify', '-m', 'rename, without --prune-baseline');
+    const base = git(root, 'rev-parse', 'HEAD');
+    git(root, 'checkout', '--quiet', '-b', 'feature');
+    git(root, 'mv', 'app/legacy/a.tsx', 'app/legacy/a2.tsx');
+    fs.writeFileSync(path.join(root, 'app/legacy/a2.tsx'), slate('first item', 'second item'));
+    git(root, 'commit', '--quiet', '--no-verify', '-am', 'move a.tsx and reword it');
+    return { root, base };
+  }
+
+  // b2.tsx matches the entries of a.tsx as well as those of b.tsx, one finding off the changed
+  // lines either way. The closer match wins, so a2.tsx gets the entries of a.tsx. Before, path
+  // order gave a.tsx to b2.tsx, and a2.tsx failed on one of its two findings.
+  it('passes the pull request in the GitHub Action, and pairs each file with its own entries', async () => {
+    const { root, base } = await movedTwice();
+    const scratch = fixture({});
+    const keep = path.join(scratch, 'changed.json');
+    action(root, { ...pullRequest(base), ONSYSTEM_BIN: BIN, STUB_KEEP: keep });
+    const changed = JSON.parse(fs.readFileSync(keep, 'utf8')) as Record<string, unknown>;
+    expect(Object.keys(changed)).toEqual([
+      fs.realpathSync.native(path.join(root, 'app/legacy/a2.tsx')),
+    ]);
+
+    const checked = await check(['check', '.', '--format', 'json', '--no-cache'], root, {
+      ONSYSTEM_CHANGED_LINES: keep,
+    });
+    expect(checked.code).toBe(0);
+    expect(checked.stderr).toContain(
+      '(app/legacy/a.tsx → app/legacy/a2.tsx and app/legacy/b.tsx → app/legacy/b2.tsx)',
+    );
+    const replay = path.join(scratch, 'results.json');
+    fs.writeFileSync(replay, checked.stdout);
+    const result = action(root, {
+      ...pullRequest(base),
+      ONSYSTEM_BIN: BIN,
+      STUB_REPLAY: replay,
+      STUB_STATUS: String(checked.code),
+    });
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain('::error');
+
+    // check without the changed lines, as with only-changed-lines: false, pairs them the same way.
+    const plain = await check(['check', '.', '--no-cache'], root);
+    expect(plain.code).toBe(0);
+    expect(plain.stdout).toContain(
+      '(app/legacy/a.tsx → app/legacy/a2.tsx and app/legacy/b.tsx → app/legacy/b2.tsx)',
+    );
+  });
+});
+
 /** An onsystem package installed in `dir`, whose CLI is the stand-in. */
 function install(dir: string, version: string, name = 'onsystem') {
   const pkg = path.join(dir, 'node_modules', 'onsystem');

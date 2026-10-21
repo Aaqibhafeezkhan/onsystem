@@ -208,10 +208,10 @@ export function goneFiles(
  * left out, as `applyBaseline` leaves them out. Returns new file → old file.
  *
  * Best match first: the file with most matching findings that are not `fresh`, then the one with
- * most matching findings. With `fresh`, the findings on the lines a pull request changed, a file
- * the pull request did not touch keeps the entries it took over in an earlier move, and a copy
- * the pull request adds is the new one, as `applyBaseline` spends entries on the other lines
- * first.
+ * most matching findings, then the pair with fewest findings and entries the other does not
+ * match. With `fresh`, the findings on the lines a pull request changed, a file the pull request
+ * did not touch keeps the entries it took over in an earlier move, and a copy the pull request
+ * adds is the new one, as `applyBaseline` spends entries on the other lines first.
  * Without it, as in a plain `check`, ties go to a file that kept the old one's name (a folder
  * moved), then to one in the old one's folder (a file renamed), then to path order.
  */
@@ -234,7 +234,8 @@ export function findMoves(
       }
     }
   }
-  const pairs: { to: string; from: string; matched: number; kept: number }[] = [];
+  const pairs: { to: string; from: string; matched: number; kept: number; unmatched: number }[] =
+    [];
   for (const [to, diagnostics] of unrecorded) {
     if (entries.has(to) || !diagnostics.length) continue;
     // Finding id → how many the file has, and how many of those are not fresh.
@@ -262,12 +263,17 @@ export function findMoves(
         if (off.has(rule)) continue;
         for (const count of sources.values()) size += count;
       }
-      if (n * 2 >= diagnostics.length && n * 2 >= size) pairs.push({ to, from, matched: n, kept });
+      // Findings of the file and entries of the old one that the other does not match.
+      const unmatched = diagnostics.length + size - 2 * n;
+      if (n * 2 >= diagnostics.length && n * 2 >= size) {
+        pairs.push({ to, from, matched: n, kept, unmatched });
+      }
     }
   }
   // The best matches first: most matching findings off the changed lines, then most matching
-  // findings; then a file that kept its name (a folder moved), one that kept its folder (a file
-  // renamed), then path order.
+  // findings, then fewest findings and entries left unmatched (the closest match); then a file
+  // that kept its name (a folder moved), one that kept its folder (a file renamed), then path
+  // order.
   const sameName = (pair: { to: string; from: string }) =>
     path.posix.basename(pair.to) === path.posix.basename(pair.from) ? 0 : 1;
   const sameFolder = (pair: { to: string; from: string }) =>
@@ -277,6 +283,7 @@ export function findMoves(
     (a, b) =>
       b.kept - a.kept ||
       b.matched - a.matched ||
+      a.unmatched - b.unmatched ||
       sameName(a) - sameName(b) ||
       sameFolder(a) - sameFolder(b) ||
       order(a.to, b.to) ||
