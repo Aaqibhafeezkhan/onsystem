@@ -20,6 +20,7 @@ Using the GitHub Action? `uses: dgesteves/onsystem@v0` checks the lines a pull r
 **Also works with**
 [![Codex CLI](https://img.shields.io/badge/Codex_CLI-0d0f12?style=flat-square)](https://onsystem.vercel.app/docs/clients#codex-cli)
 [![Gemini CLI](https://img.shields.io/badge/Gemini_CLI-0d0f12?style=flat-square&logo=googlegemini&logoColor=white)](https://onsystem.vercel.app/docs/clients#gemini-cli)
+[![Antigravity](https://img.shields.io/badge/Antigravity-0d0f12?style=flat-square)](https://onsystem.vercel.app/docs/clients#antigravity-cli-and-ide)
 [![Grok Build](https://img.shields.io/badge/Grok_Build-0d0f12?style=flat-square)](https://onsystem.vercel.app/docs/clients#grok-build)
 [![GitHub Copilot CLI](https://img.shields.io/badge/GitHub_Copilot_CLI-0d0f12?style=flat-square&logo=githubcopilot&logoColor=white)](https://onsystem.vercel.app/docs/clients#github-copilot-cli)
 [![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-0d0f12?style=flat-square&logo=claude&logoColor=white)](https://onsystem.vercel.app/docs/clients#claude-desktop)
@@ -91,7 +92,7 @@ After each Write or Edit of a `.tsx` or `.jsx` file, the hook runs `onsystem che
 
 **Other agents.** `npx skills add dgesteves/onsystem` adds the skill to any agent with Agent Skills, and there are [plugins for Codex, GitHub Copilot CLI, VS Code and Cursor](https://onsystem.vercel.app/docs/clients#plugins-for-other-agents).
 
-**Any MCP client.** Run `npx -y onsystem` as a stdio server. There are [configs for Claude Desktop, Codex CLI, GitHub Copilot CLI, Windsurf, JetBrains IDEs, Zed, Gemini CLI and Grok Build](https://onsystem.vercel.app/docs/clients#other-clients).
+**Any MCP client.** Run `npx -y onsystem` as a stdio server. There are [configs for Claude Desktop, Codex CLI, GitHub Copilot CLI, Windsurf, JetBrains IDEs, Zed, Gemini CLI, Antigravity and Grok Build](https://onsystem.vercel.app/docs/clients#other-clients).
 
 **CI.** Install it as a dev dependency, accept the findings the codebase already has once, and fail pull requests only on new ones:
 
@@ -104,7 +105,22 @@ npx onsystem check . --update-baseline   # writes onsystem.baseline.json: commit
 - run: npx onsystem check . --format github --require-design-system
 ```
 
-Findings show up as annotations on the pull request, and `--require-design-system` fails the job when the design system is no longer found. [CI and baselines](https://onsystem.vercel.app/docs/ci) has the whole workflow. The GitHub Action, `uses: dgesteves/onsystem@v0`, annotates only the lines a pull request changed: [make it a required check on agent pull requests](https://onsystem.vercel.app/docs/required-check).
+Findings show up as annotations on the pull request, and `--require-design-system` fails the job when the design system is no longer found. [CI and baselines](https://onsystem.vercel.app/docs/ci) has the whole workflow.
+
+**GitHub Action.** The [action](https://github.com/marketplace/actions/onsystem-design-system-check) runs the same check, honours the baseline and annotates only the lines a pull request changed. It goes after the checkout and the install, so it can read your design system:
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+  - uses: actions/setup-node@v7
+    with:
+      node-version: 24
+      cache: npm
+  - run: npm ci
+  - uses: dgesteves/onsystem@v0
+```
+
+[Make it a required check on agent pull requests](https://onsystem.vercel.app/docs/required-check) has the whole workflow and its inputs.
 
 **ESLint.** The same rules for ESLint 8.57, 9 and 10: add `onsystem.configs.recommended` from `onsystem/eslint` to `eslint.config.mjs` ([ESLint plugin](https://onsystem.vercel.app/docs/eslint), with @shadcn/lint).
 

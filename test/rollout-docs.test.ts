@@ -118,6 +118,9 @@ describe('the team rollout page (docs/rollout.md)', () => {
     expect(agents).toContain('start it at the root');
     // The plugin and a .mcp.json entry register the same tools twice.
     expect(agents).toContain('No `.mcp.json` entry for onsystem');
+    // A .mcp.json committed for the other clients is turned off for Claude Code, as
+    // docs/clients.md says.
+    expect(agents).toContain('`"disabledMcpjsonServers": ["onsystem"]`');
   });
 
   it('commits the Cursor and VS Code configs that docs/clients.md shows', () => {

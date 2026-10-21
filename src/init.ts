@@ -11,7 +11,12 @@ import {
   type LoadConfigOptions,
   type ResolvedConfig,
 } from './config.js';
-import { componentFiles, tokenFiles } from './design-system.js';
+import {
+  componentFiles,
+  loadDesignSystem,
+  tokenFiles,
+  type DesignSystem,
+} from './design-system.js';
 import {
   declaredConfig,
   type DesignSystemPackage,
@@ -19,6 +24,7 @@ import {
   PACKAGE_FIELD,
 } from './detect.js';
 import { readProjectConfig, type ProjectConfig } from './extract/program.js';
+import { statusKinds, type StatusKind } from './tokens/roles.js';
 import { isInside, matchesGlob, relativePath } from './util/paths.js';
 import { NAME } from './version.js';
 import { loadTarget } from './workspace.js';
@@ -271,6 +277,11 @@ export async function init(
       : `Dry run of \`${NAME} check .\`: no problems in ${count(results.length, 'file')}.`,
   );
   for (const line of dry.stderr.split('\n').filter(Boolean)) io.stdout(line);
+  if (!workspace) {
+    const own = (await loadTarget({ ...configOptions, config: undefined })).config;
+    const note = statusNote(await loadDesignSystem(own, { cache: options.cache }));
+    if (note) io.stdout(note);
+  }
 
   // An existing codebase starts with findings: record them, so CI fails only on new ones.
   const hasBaseline = [BASELINE_FILE, LEGACY_BASELINE_FILE].some((name) =>
@@ -319,6 +330,35 @@ export async function init(
 }
 
 const CONFIG_FILE = 'onsystem.config.json';
+
+/** The status colors docs/tokens.md#status-colors adds, and the hue each one is. */
+const RECIPE: [StatusKind, string][] = [
+  ['success', 'green'],
+  ['warning', 'yellow'],
+  ['info', 'blue'],
+];
+
+/**
+ * Says which of success, warning and info the theme has no color for, and where the CSS that adds
+ * them is: without one, an agent asked for a green "Active" label tends to reach for a chart or a
+ * gray token, which loses what the color says. Nothing when the theme has no colors, or all three.
+ */
+function statusNote(ds: DesignSystem): string | undefined {
+  if (!ds.tokens.some((token) => token.category === 'color')) return undefined;
+  const has = statusKinds(ds.tokens);
+  const missing = RECIPE.filter(([kind]) => !has.has(kind));
+  if (!missing.length) return undefined;
+  const kinds = orList(missing.map(([kind]) => kind));
+  const hues = orList(missing.map(([, hue]) => hue));
+  return `The theme has no ${kinds} token, so a ${hues} status color has no token to use, and agents tend to reach for a chart or gray token instead. To add ${missing.length === 1 ? 'it' : 'them'}: https://onsystem.vercel.app/docs/tokens#status-colors.`;
+}
+
+/** `success, warning or info`. */
+function orList(items: string[]): string {
+  return items.length > 1
+    ? `${items.slice(0, -1).join(', ')} or ${items.at(-1) ?? ''}`
+    : (items[0] ?? '');
+}
 
 /** The instruction files agents read, which `init` offers to add onsystem's section to. */
 const AGENT_FILES = ['AGENTS.md', 'CLAUDE.md'];

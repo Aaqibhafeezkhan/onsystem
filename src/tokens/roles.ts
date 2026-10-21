@@ -64,24 +64,17 @@ const CORE_FAMILIES = new Set([
   'link',
 ]);
 
-/** Name segments of status colors: what happened, rather than how it looks. */
-const STATUS_WORDS = new Set([
-  'destructive',
-  'danger',
-  'error',
-  'critical',
-  'negative',
-  'invalid',
-  'warning',
-  'warn',
-  'caution',
-  'success',
-  'positive',
-  'valid',
-  'info',
-  'information',
-  'notice',
-]);
+/** Name segments of status colors, by the status they show: what happened, rather than how it looks. */
+const STATUS_KINDS = {
+  destructive: ['destructive', 'danger', 'error', 'critical', 'negative', 'invalid'],
+  warning: ['warning', 'warn', 'caution'],
+  success: ['success', 'positive', 'valid'],
+  info: ['info', 'information', 'notice'],
+} as const;
+
+export type StatusKind = keyof typeof STATUS_KINDS;
+
+const STATUS_WORDS = new Set<string>(Object.values(STATUS_KINDS).flat());
 
 /** The family a color token belongs to: the first segment of its name (`sidebar`, `sh`, `rainbow`). */
 export function tokenFamily(token: Token): string {
@@ -155,6 +148,22 @@ export function isStatusToken(token: Token): boolean {
   return roleKey(token)
     .split('-')
     .some((segment) => STATUS_WORDS.has(segment));
+}
+
+/**
+ * The statuses a theme has a color for: `success` for `--success`, Dub's `content-success` or a
+ * DTCG `color.feedback.positive`, `destructive` for shadcn/ui's `--destructive` or `error`.
+ */
+export function statusKinds(tokens: readonly Token[]): Set<StatusKind> {
+  const kinds = new Set<StatusKind>();
+  for (const token of tokens) {
+    if (token.category !== 'color') continue;
+    const segments = roleKey(token).split('-');
+    for (const [kind, words] of Object.entries(STATUS_KINDS) as [StatusKind, readonly string[]][]) {
+      if (segments.some((segment) => words.includes(segment))) kinds.add(kind);
+    }
+  }
+  return kinds;
 }
 
 type Kind = 'foreground' | 'surface' | 'line' | 'other';

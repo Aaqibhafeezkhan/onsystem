@@ -20,6 +20,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 
+import ts from 'typescript';
+
 import { exec, runAgent } from './lib/agent.mjs';
 import { minimalEnv, startOnsystemMcp } from './lib/mcp.mjs';
 import { createMockProvider } from './lib/mock.ts';
@@ -45,7 +47,9 @@ import { summarizeShadcnLint } from './lib/score.ts';
 import {
   aggregate,
   aggregateShadcnLint,
+  ARM_ORDER,
   deltas,
+  formatRate,
   isScored,
   labelSample,
   labelSummary,
@@ -57,6 +61,7 @@ import {
   shadcnLintDeltas,
   shuffle,
   toCsv,
+  wilson,
 } from './lib/stats.ts';
 import { FILE_TOOLS } from './lib/tools.ts';
 
@@ -68,6 +73,28 @@ const SKILL_FILE = path.join(ROOT, 'plugins', 'onsystem', 'skills', 'onsystem', 
 /** Where `score --with shadcn-lint` writes each run's @shadcn/lint findings, in <out>. */
 const SHADCN_LINT = 'shadcn-lint.json';
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+/**
+ * What keeps a color a prompt asks for, in the status colors table: a palette shade of its hue
+ * (`bg-emerald-100` for green), or a status token or variant named for what it shows
+ * (`text-success`, `variant="destructive"`, Dub's `text-content-error`).
+ */
+const GREEN = { families: ['green', 'emerald', 'lime'], status: ['success', 'positive'] };
+const YELLOW = { families: ['yellow', 'amber', 'orange'], status: ['warning', 'warn', 'caution'] };
+const HUES = {
+  red: {
+    families: ['red', 'rose'],
+    status: ['destructive', 'danger', 'error', 'critical', 'negative'],
+  },
+  green: GREEN,
+  yellow: YELLOW,
+  amber: YELLOW,
+  orange: YELLOW,
+  blue: { families: ['blue', 'sky', 'indigo'], status: ['info', 'information', 'notice'] },
+};
+const ASKED = new RegExp(`\\b(?:${Object.keys(HUES).join('|')})\\b`, 'g');
+const COLOR_CLASS =
+  /^(?:bg|text|border(?:-[xytrblse])?|ring|outline|fill|stroke|from|via|to|decoration|divide|shadow|accent|caret)-(.+)$/;
+const SHADE = /^(?:50|[1-9]00|950)$/;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -646,6 +673,8 @@ function report(out) {
   if (fs.existsSync(notes)) lines.push(fs.readFileSync(notes, 'utf8').trim(), '');
   // Each section's renderer ends in a newline; trimmed, so one blank line separates the sections.
   lines.push(renderMarkdown(rows, diffs).trimEnd());
+  const status = statusColors(out, results);
+  if (status.length) lines.push('', '## Status colors', '', renderStatusColors(status).trimEnd());
   const labelFile = path.join(out, 'labels', 'labels.csv');
   const keyFile = path.join(out, 'labels', 'key.json');
   if (fs.existsSync(labelFile) && fs.existsSync(keyFile)) {
@@ -661,6 +690,8 @@ function report(out) {
       ? 'Who labelled, and what they could see: [labels/LABELLER.md](labels/LABELLER.md).'
       : 'Who labelled is not recorded: add labels/LABELLER.md.';
     lines.push('', '## Blind labels', '', labeller, '', renderLabelSummary(summary).trimEnd());
+    const roles = labelRoles(parseCsv(fs.readFileSync(labelFile, 'utf8')), readJson(keyFile));
+    if (roles) lines.push('', roles);
   }
   // The independent scorer, once `score --with shadcn-lint` has run.
   let shadcnLint;
@@ -687,7 +718,17 @@ function report(out) {
   fs.writeFileSync(path.join(out, 'results.md'), `${lines.join('\n').trimEnd()}\n`);
   fs.writeFileSync(
     path.join(out, 'results.json'),
-    JSON.stringify({ info, rows, deltas: diffs, ...(shadcnLint && { shadcnLint }) }, null, 2),
+    JSON.stringify(
+      {
+        info,
+        rows,
+        deltas: diffs,
+        ...(status.length && { statusColors: status }),
+        ...(shadcnLint && { shadcnLint }),
+      },
+      null,
+      2,
+    ),
   );
   fs.writeFileSync(
     path.join(out, 'runs.csv'),
@@ -755,6 +796,8 @@ function labels(out) {
       hardcoded_values: '',
       native_elements: '',
       unnamed_controls: '',
+      token_role_misuse: '',
+      task_meaning_kept: '',
       would_merge: '',
       notes: '',
     });
@@ -784,6 +827,156 @@ function labels(out) {
   console.log(
     `Wrote ${sample.length} files to label in ${dir}: fill labels.csv first, then findings.csv, following bench/v2/LABELLING.md. key.json maps each sample to its model and arm; keep it closed until both sheets are done.`,
   );
+}
+
+// ─── status colors ────────────────────────────────────────────────────────────
+
+/**
+ * For each arm, the colors the prompts ask for by name ("a small green 'Active' status label",
+ * "'New' in green, 'Updated' in blue and 'Deprecated' in amber") and what the file each run wrote
+ * did with them: kept the hue, used a `chart-*` or `sidebar-*` token instead, or neither (a gray,
+ * or no color). A scripted check, independent of onsystem: it reads the classes and the variant
+ * values in the file, not the rendered page, so it cannot tell which element a color is on.
+ */
+function statusColors(out, results) {
+  const asked = new Map(
+    config.tasks.map((t) => [`${t.repo}/${t.id}`, [...new Set(t.prompt.match(ASKED) ?? [])]]),
+  );
+  const arms = new Map();
+  for (const r of results) {
+    const colors = asked.get(`${r.repo}/${r.task}`) ?? [];
+    if (!colors.length || !isScored(r) || !r.created) continue;
+    const file = path.join(out, 'runs', r.id, 'files', r.file);
+    if (!fs.existsSync(file)) continue;
+    const used = colorsIn(fs.readFileSync(file, 'utf8'), r.file);
+    const row = arms.get(r.arm) ?? { arm: r.arm, runs: 0, asked: 0, kept: 0, scoped: 0 };
+    row.runs++;
+    for (const color of colors) {
+      row.asked++;
+      if (used.hues.has(color)) row.kept++;
+      else if (used.scoped) row.scoped++;
+    }
+    arms.set(r.arm, row);
+  }
+  const order = (arm) => (ARM_ORDER.includes(arm) ? ARM_ORDER.indexOf(arm) : ARM_ORDER.length);
+  return [...arms.values()]
+    .sort((a, b) => order(a.arm) - order(b.arm))
+    .map((row) => ({ ...row, keptRate: wilson(row.kept, row.asked) }));
+}
+
+/** The hues a file's classes and variant values use, and whether it uses a chart or sidebar token. */
+function colorsIn(text, fileName) {
+  const source = ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const hues = new Set();
+  let scoped = false;
+  const read = (literal) => {
+    const words = literal.split(/\s+/).filter(Boolean);
+    for (const word of words) {
+      const base = (word.split(':').at(-1) ?? '').replace(/^!|!$/g, '').replace(/\/[\w.[\]]+$/, '');
+      const key = COLOR_CLASS.exec(base)?.[1];
+      // A class names its color; a word on its own may be a variant (`variant="success"`).
+      const name = key ?? (words.length === 1 ? base : undefined);
+      if (!name) continue;
+      if (key && /^(?:chart|sidebar)(?:-|$)/.test(key)) scoped = true;
+      const [first = '', second = ''] = name.split('-');
+      for (const [hue, { families, status }] of Object.entries(HUES)) {
+        // `bg-emerald-100`, or a variant named for the hue (Dub's `<Badge variant="green">`).
+        const shade =
+          key === undefined
+            ? families.includes(name)
+            : families.includes(first) && SHADE.test(second);
+        if (shade || name.split('-').some((segment) => status.includes(segment))) hues.add(hue);
+      }
+    }
+  };
+  const visit = (node) => {
+    if (
+      (ts.isStringLiteralLike(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddle(node) ||
+        ts.isTemplateTail(node)) &&
+      !isStateValue(node)
+    ) {
+      read(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return { hues, scoped };
+}
+
+/**
+ * A string that names a state rather than a color: compared (`status === "error"`), a case, a
+ * type (`"up" | "down"`), a key (`{ "error": … }`, `styles["error"]`) or a module.
+ */
+function isStateValue(node) {
+  const parent = node.parent;
+  if (!parent) return false;
+  if (ts.isBinaryExpression(parent)) {
+    return [
+      ts.SyntaxKind.EqualsEqualsEqualsToken,
+      ts.SyntaxKind.ExclamationEqualsEqualsToken,
+      ts.SyntaxKind.EqualsEqualsToken,
+      ts.SyntaxKind.ExclamationEqualsToken,
+    ].includes(parent.operatorToken.kind);
+  }
+  return (
+    ts.isCaseClause(parent) ||
+    ts.isLiteralTypeNode(parent) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    (ts.isElementAccessExpression(parent) && parent.argumentExpression === node) ||
+    ts.isImportDeclaration(parent) ||
+    ts.isExportDeclaration(parent)
+  );
+}
+
+function renderStatusColors(rows) {
+  const lines = [
+    'Colors the prompts ask for by name, and what the file each run wrote did with them: kept the hue (a palette shade of it, or a status token or variant named for it, such as `text-success` or `variant="destructive"`), used a `chart-*` or `sidebar-*` token instead, or neither (a gray, or no color). Scripted from the files\' classes and variant values, not from onsystem; it cannot tell which element a color is on, so a file that keeps the hue anywhere counts as keeping it. A task that asks for three colors counts three times per run.',
+    '',
+    '| Arm | Runs | Colors asked for | Kept | `chart-*` or `sidebar-*` instead | Neither |',
+    '| --- | --: | --: | --: | --: | --: |',
+    ...rows.map(
+      (r) =>
+        `| ${r.arm} | ${r.runs} | ${r.asked} | ${formatRate(r.keptRate)} | ${r.scoped} | ${r.asked - r.kept - r.scoped} |`,
+    ),
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * The labelling guide's role columns, once a labeller has filled them: per arm, the files with a
+ * token used for another role (a `chart-*` token on a status label) and whether each file kept
+ * what the task asked for. Undefined for sheets drawn before the columns existed.
+ */
+function labelRoles(labels, key) {
+  const filled = labels.filter(
+    (l) => /^(yes|no)$/i.test((l.would_merge ?? '').trim()) && 'token_role_misuse' in l,
+  );
+  if (!filled.length) return undefined;
+  const arms = [...new Set(filled.map((l) => key[l.sample_id]?.arm).filter(Boolean))].sort(
+    (a, b) => ARM_ORDER.indexOf(a) - ARM_ORDER.indexOf(b),
+  );
+  const lines = [
+    '| Arm | Files | Token used for another role | Task kept: yes / partly / no |',
+    '| --- | --: | --: | --: |',
+  ];
+  for (const arm of arms) {
+    const rows = filled.filter((l) => key[l.sample_id]?.arm === arm);
+    const misuse = rows.filter((l) => (Number.parseInt(l.token_role_misuse ?? '', 10) || 0) > 0);
+    const kept = (value) =>
+      rows.filter((l) => (l.task_meaning_kept ?? '').trim().toLowerCase() === value).length;
+    lines.push(
+      `| ${arm} | ${rows.length} | ${formatRate(wilson(misuse.length, rows.length))} | ${kept('yes')} / ${kept('partly')} / ${kept('no')} |`,
+    );
+  }
+  return lines.join('\n');
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
