@@ -1,6 +1,6 @@
 import type { Catalog, CatalogEntry, CatalogToken } from '../catalog.js';
 import type { DesignSystem } from '../design-system.js';
-import type { SearchHit } from '../search/index.js';
+import { descriptionOf, type SearchHit } from '../search/index.js';
 import { formatPx } from '../tokens/units.js';
 import type { CheckResult, ComponentInfo, Diagnostic, PropInfo, Token } from '../types.js';
 import { plural, truncate } from '../util/strings.js';
@@ -29,27 +29,184 @@ function variantSummary(component: ComponentInfo): string[] {
   );
 }
 
+/** What list_components narrows the list to. */
+export interface ListFilter {
+  /** Text in a component's name, its parts' names or its description, in any case. */
+  query?: string | undefined;
+  /** `icon`: the components that render an <svg>; `component`: the rest. */
+  kind?: 'component' | 'icon' | undefined;
+  /** Most components to list one by one. */
+  limit?: number | undefined;
+}
+
+/** An icon: a component that renders an <svg>. */
+function isIcon(component: ComponentInfo): boolean {
+  return component.element === 'svg';
+}
+
+/**
+ * Icons from one import, or from the modules of one folder, are listed by name on one line from
+ * this many on: a spinner or a logo is listed like the rest.
+ */
+const ICON_LINE = 5;
+
+/** Icons named on one line: from one import, or from one folder with a module each. */
+export interface IconGroup<T> {
+  /** The import (`@dub/ui`), or with `folder`, the folder of their modules (`@/components/icons`). */
+  from: string;
+  items: T[];
+  /** The icons are imported from modules in `from`, `@/components/icons/check`, not from it. */
+  folder?: true;
+}
+
+/** The components a list shows: one by one, or by name as the icons of one import or folder. */
+export interface Listing<T> {
+  /** Listed one by one, up to the filter's `limit`. */
+  shown: T[];
+  /**
+   * Without `kind`: icons by name, per import (`@dub/ui`, `@/components/icons`), or, for an icon
+   * set with a module per icon, per folder.
+   */
+  icons: IconGroup<T>[];
+  /** How many components match the filter. */
+  matched: number;
+  /** Matching components left out by `limit`. */
+  omitted: number;
+}
+
+/**
+ * What list_components shows of `items`, after `filter`. `packageOf`: at a workspace root, the
+ * package an item comes from, so two apps' `@/components/icons` are not taken for one.
+ */
+export function listComponents<T>(
+  items: readonly T[],
+  component: (item: T) => ComponentInfo,
+  filter: ListFilter = {},
+  packageOf: (item: T) => string = () => '',
+): Listing<T> {
+  const query = filter.query?.trim().toLowerCase();
+  const matching = items.filter((item) => {
+    const c = component(item);
+    if (filter.kind && (filter.kind === 'icon') !== isIcon(c)) return false;
+    const texts = [c.name, ...c.aliases, ...c.subcomponents, descriptionOf(c) ?? ''];
+    return !query || texts.some((text) => text.toLowerCase().includes(query));
+  });
+  const icons: IconGroup<T>[] = [];
+  if (!filter.kind) {
+    const group = (groups: Map<string, IconGroup<T>>, item: T, from: string, folder?: true) => {
+      const key = `${packageOf(item)}\0${from}`;
+      const known = groups.get(key) ?? { from, items: [], ...(folder ? { folder } : {}) };
+      known.items.push(item);
+      groups.set(key, known);
+    };
+    const byImport = new Map<string, IconGroup<T>>();
+    for (const item of matching) {
+      const c = component(item);
+      if (isIcon(c)) group(byImport, item, c.library ?? c.importPath);
+    }
+    // The project's own icons from modules too small for a line, such as a module per icon
+    // (`components/icons/check.tsx`), by folder: each is named with its module.
+    const byFolder = new Map<string, IconGroup<T>>();
+    for (const found of byImport.values()) {
+      if (found.items.length >= ICON_LINE) {
+        icons.push(found);
+        continue;
+      }
+      for (const item of found.items) {
+        const c = component(item);
+        const folder = c.importPath.slice(0, Math.max(0, c.importPath.lastIndexOf('/')));
+        if (!c.library && folder) group(byFolder, item, folder, true);
+      }
+    }
+    icons.push(...[...byFolder.values()].filter((found) => found.items.length >= ICON_LINE));
+  }
+  const inLine = new Set(icons.flatMap((found) => found.items));
+  const rest = matching.filter((item) => !inLine.has(item));
+  const shown = rest.slice(0, filter.limit ?? rest.length);
+  return { shown, icons, matched: matching.length, omitted: rest.length - shown.length };
+}
+
+/** `query "chart" and kind "icon"`, or '' without filters. */
+function filterText(filter: ListFilter): string {
+  return [
+    filter.query?.trim() ? `query "${filter.query.trim()}"` : '',
+    filter.kind ? `kind "${filter.kind}"` : '',
+  ]
+    .filter(Boolean)
+    .join(' and ');
+}
+
+/** The first line of a list: how many components there are, or how many match the filter. */
+function listHead(roots: number, parts: number, listed: Listing<unknown>, filter: ListFilter) {
+  const filtered = filterText(filter);
+  if (filtered) return `${listed.matched} of ${plural(roots, 'component')} match ${filtered}`;
+  return `${plural(roots, 'component')}${parts ? ` (+${plural(parts, 'part')})` : ''}`;
+}
+
+/**
+ * `128 icons from "@dub/ui" (each renders <svg>; import { Name } from "@dub/ui"): Apple, Bolt`,
+ * or for a module per icon, `6 icons in "@/components/icons" (each renders <svg>; import { Name }
+ * from "@/components/icons/<module>"): CheckIcon (check), PlusIcon (plus)`.
+ */
+function iconLine(group: IconGroup<ComponentInfo>): string {
+  const { from, items } = group;
+  const count = plural(items.length, 'icon');
+  if (!group.folder) {
+    const names = items.map((c) => c.name).join(', ');
+    return `${count} from "${from}" (each renders <svg>; import { Name } from "${from}"): ${names}`;
+  }
+  const names = items.map((c) => `${c.name} (${c.importPath.slice(from.length + 1)})`).join(', ');
+  return `${count} in "${from}" (each renders <svg>; import { Name } from "${from}/<module>"): ${names}`;
+}
+
+/** What a list says at its end about the icons it named and the components `limit` left out. */
+function listTail(listed: Listing<unknown>): string[] {
+  const lines: string[] = [];
+  if (listed.icons.length) lines.push('', 'Pass kind "icon" to list the icons one by one.');
+  if (listed.omitted) {
+    lines.push(
+      '',
+      `${listed.omitted.toLocaleString('en-US')} more not shown: pass a higher \`limit\`, or a \`query\`.`,
+    );
+  }
+  return lines;
+}
+
 /** `project`: the folder of a workspace root's project the list is for. */
-export function renderComponentList(ds: DesignSystem, project?: string): string {
+export function renderComponentList(
+  ds: DesignSystem,
+  project?: string,
+  filter: ListFilter = {},
+): string {
   const roots = ds.roots();
+  const where = project ? ` in ${project}` : '';
   if (!roots.length) {
-    return `No components found${project ? ` in ${project}` : ''}. Check the "components" globs in the config (root: ${ds.root}).`;
+    return `No components found${where}. Check the "components" globs in the config (root: ${ds.root}).`;
+  }
+  const listed = listComponents(roots, (c) => c, filter);
+  if (!listed.matched) {
+    return `No components match ${filterText(filter)}${where} (${roots.length} in all). Call list_components without filters to see them.`;
   }
   const parts = ds.components.length - roots.length;
   const lines = [
-    `${plural(roots.length, 'component')}${parts ? ` (+${plural(parts, 'part')})` : ''}${project ? ` in ${project}` : ''}. Call get_component before using one.`,
+    `${listHead(roots.length, parts, listed, filter)}${where}. Call get_component before using one.`,
     '',
   ];
-  const own = roots.filter((c) => !c.library);
+  const own = listed.shown.filter((c) => !c.library);
   for (const component of own) lines.push(...listItem(component, registryNote(ds, component)));
   // A library's components, imported alike: the import is said once.
-  for (const library of new Set(roots.flatMap((c) => (c.library ? [c.library] : [])))) {
+  for (const library of new Set(listed.shown.flatMap((c) => (c.library ? [c.library] : [])))) {
     if (own.length) lines.push('');
     lines.push(`From ${library} (import { Name } from "${library}"):`, '');
-    for (const component of roots.filter((c) => c.library === library)) {
+    for (const component of listed.shown.filter((c) => c.library === library)) {
       lines.push(...listItem(component, '', false));
     }
   }
+  for (const group of listed.icons) {
+    if (lines.at(-1) !== '') lines.push('');
+    lines.push(iconLine(group));
+  }
+  lines.push(...listTail(listed));
   return lines.join('\n');
 }
 
@@ -61,9 +218,8 @@ function registryNote(ds: DesignSystem, component: ComponentInfo): string {
 
 function listItem(component: ComponentInfo, note = '', withImport = true): string[] {
   const element = component.element ? ` <${component.element}>` : '';
-  const lines = [
-    `${component.name}${element}${note} — ${firstSentence(component.description) || 'No description.'}`,
-  ];
+  const description = firstSentence(descriptionOf(component));
+  const lines = [`${component.name}${element}${note}${description ? ` — ${description}` : ''}`];
   for (const variant of variantSummary(component)) lines.push(`  ${variant}`);
   if (component.subcomponents.length) lines.push(`  parts: ${component.subcomponents.join(', ')}`);
   if (withImport) lines.push(`  ${importStatement(component)}`);
@@ -81,31 +237,55 @@ const PICK_PROJECT =
   'This is a monorepo root: pass `path`, the file you are editing, to get_component, get_tokens and check_ui so they answer for its project.';
 
 /** Every project's components at a workspace root, grouped by the package they come from. */
-export function renderCatalogList(catalog: Catalog): string {
+export function renderCatalogList(catalog: Catalog, filter: ListFilter = {}): string {
   const roots = catalog.roots();
   if (!roots.length) {
     return `No components found in any project of this monorepo (root: ${catalog.root}). Run \`onsystem inspect\` there to see what was looked at.`;
   }
-  const byPackage = new Map<string, CatalogEntry[]>();
-  for (const entry of roots)
-    byPackage.set(entry.package, [...(byPackage.get(entry.package) ?? []), entry]);
+  const listed = listComponents(
+    roots,
+    (e) => e.component,
+    filter,
+    (e) => e.package,
+  );
+  if (!listed.matched) {
+    return `No components match ${filterText(filter)} in any project (${roots.length} in all). Call list_components without filters to see them.`;
+  }
+  const packages = new Set(roots.map((e) => e.package));
   const parts = catalog.entries.length - roots.length;
   const lines = [
-    `${plural(roots.length, 'component')}${parts ? ` (+${plural(parts, 'part')})` : ''} from ${plural(byPackage.size, 'package')}, used by ${plural(catalog.projects.length, 'project')}. ${PICK_PROJECT}`,
+    `${listHead(roots.length, parts, listed, filter)} from ${plural(packages.size, 'package')}, used by ${plural(catalog.projects.length, 'project')}. ${PICK_PROJECT}`,
   ];
-  for (const [pkg, entries] of byPackage) {
-    const projects = [...new Set(entries.flatMap((e) => e.projects))];
+  const byPackage = new Map<string, { entries: CatalogEntry[]; icons: string[] }>();
+  const section = (pkg: string) => {
+    const known = byPackage.get(pkg) ?? { entries: [], icons: [] };
+    byPackage.set(pkg, known);
+    return known;
+  };
+  for (const entry of listed.shown) section(entry.package).entries.push(entry);
+  for (const group of listed.icons) {
+    const [first] = group.items;
+    const items = group.items.map((e) => e.component);
+    if (first) section(first.package).icons.push(iconLine({ ...group, items }));
+  }
+  for (const [pkg, { entries, icons }] of byPackage) {
+    const projects = [
+      ...new Set(roots.filter((e) => e.package === pkg).flatMap((e) => e.projects)),
+    ];
     lines.push('', `## ${pkg} (used by ${listOf(projects)})`);
     for (const entry of entries) {
       const others = entry.ambiguous
-        ? catalog.roots().filter((e) => e !== entry && e.component.name === entry.component.name)
+        ? roots.filter((e) => e !== entry && e.component.name === entry.component.name)
         : [];
       const note = others.length
         ? ` (also in ${[...new Set(others.map((e) => e.package))].join(', ')})`
         : '';
       lines.push(...listItem(entry.component, note));
     }
+    if (entries.length && icons.length) lines.push('');
+    lines.push(...icons);
   }
+  lines.push(...listTail(listed));
   return lines.join('\n');
 }
 
@@ -162,13 +342,21 @@ const REACT_ARIA_NOTABLE = [
   'autoFocus',
 ];
 
+/**
+ * A prop's description longer than this is cut to its first sentence: a primitive library's
+ * JSDoc (Base UI's, Radix's) runs to paragraphs per prop, and the structured content has it all.
+ */
+const PROP_LINE = 160;
+
 function renderProp(prop: PropInfo): string {
   const optional = prop.required ? '' : '?';
   const fallback = prop.default !== undefined ? ` = ${prop.default}` : '';
   const deprecated = prop.deprecated
     ? ` DEPRECATED${prop.deprecated === true ? '' : `: ${prop.deprecated}`}.`
     : '';
-  const description = prop.description ? ` — ${prop.description.replace(/\s*\n\s*/g, ' ')}` : '';
+  const text = prop.description?.replace(/\s*\n\s*/g, ' ').trim();
+  const line = text && text.length > PROP_LINE ? firstSentence(text, PROP_LINE) : text;
+  const description = line ? ` — ${line}` : '';
   return `- ${prop.name}${optional}: ${prop.type}${fallback}${description}${deprecated}`;
 }
 
@@ -182,7 +370,8 @@ export function renderComponent(
   if (component.deprecated) {
     lines.push(`DEPRECATED${component.deprecated === true ? '' : `: ${component.deprecated}`}`);
   }
-  if (component.description) lines.push(component.description);
+  const description = descriptionOf(component);
+  if (description) lines.push(description);
   lines.push('', importStatement(component));
   const facts = [
     component.element ? `Renders <${component.element}>` : undefined,
@@ -198,6 +387,15 @@ export function renderComponent(
     lines.push(
       `Installed from the shadcn registry ${registry.registry} into ${registry.folder}: use it as it is. Its code is the registry's, so change it upstream, not here; \`npx shadcn add --overwrite\` replaces the file.`,
     );
+  }
+
+  // The parts first: how to compose it matters before the props of each piece.
+  if (component.subcomponents.length) {
+    lines.push('', '## Parts');
+    for (const name of component.subcomponents) {
+      const part = ds.getComponent(name);
+      lines.push(`- ${name}${part?.description ? ` — ${firstSentence(part.description)}` : ''}`);
+    }
   }
 
   lines.push('', '## Props');
@@ -243,14 +441,6 @@ export function renderComponent(
     }
   }
 
-  if (component.subcomponents.length) {
-    lines.push('', '## Parts');
-    for (const name of component.subcomponents) {
-      const part = ds.getComponent(name);
-      lines.push(`- ${name}${part?.description ? ` — ${firstSentence(part.description)}` : ''}`);
-    }
-  }
-
   const tokens = ds.relatedTokens(component);
   if (tokens.length) {
     lines.push('', '## Design tokens used');
@@ -276,22 +466,40 @@ export function renderComponent(
   return lines.join('\n');
 }
 
+/** The first line of search results: best first, or, when none clearly matches, that none does. */
+function searchHead(query: string, hits: readonly SearchHit[], where = ''): string {
+  return hits.every((hit) => hit.weak)
+    ? `No component clearly matches "${query}"${where}. The nearest have only a word or two in common with it:`
+    : `Components for "${query}"${where}, best first:`;
+}
+
+/** The last line of search results. */
+function searchTail(hits: readonly SearchHit[]): string {
+  return hits.every((hit) => hit.weak)
+    ? 'If none of them fits, the design system may have no component for this: ask, or build it from the components it has (list_components). Call get_component before using one.'
+    : 'Call get_component for props, variants and examples.';
+}
+
+/** `1. CardHeader (part of Card) — Top section of a card.` */
+function searchItem(index: number, component: ComponentInfo, from = ''): string {
+  const parent = component.parent ? ` (part of ${component.parent})` : '';
+  const description = firstSentence(descriptionOf(component));
+  return `${index + 1}. ${component.name}${parent}${from}${description ? ` — ${description}` : ''}`;
+}
+
 export function renderSearch(query: string, hits: SearchHit[]): string {
   if (!hits.length) {
     return `No components match "${query}". Try other words, or list_components to browse.`;
   }
-  const lines = [`Components for "${query}", best first:`, ''];
+  const lines = [searchHead(query, hits), ''];
   hits.forEach((hit, i) => {
     const c = hit.component;
-    const parent = c.parent ? ` (part of ${c.parent})` : '';
-    lines.push(
-      `${i + 1}. ${c.name}${parent} — ${firstSentence(c.description) || 'No description.'}`,
-    );
+    lines.push(searchItem(i, c));
     lines.push(
       `   score ${hit.score} · matched: ${hit.matched.join(', ')} · ${importStatement(c)}`,
     );
   });
-  lines.push('', 'Call get_component for props, variants and examples.');
+  lines.push('', searchTail(hits));
   return lines.join('\n');
 }
 
@@ -303,19 +511,40 @@ export function renderCatalogSearch(
   if (!hits.length) {
     return `No components match "${query}" in any project. Try other words, or list_components to browse.`;
   }
-  const lines = [`Components for "${query}" across the monorepo's projects, best first:`, ''];
+  const lines = [searchHead(query, hits, " across the monorepo's projects"), ''];
   hits.forEach((hit, i) => {
     const c = hit.component;
-    const parent = c.parent ? ` (part of ${c.parent})` : '';
-    lines.push(
-      `${i + 1}. ${c.name}${parent} from ${hit.entry.package} — ${firstSentence(c.description) || 'No description.'}`,
-    );
+    lines.push(searchItem(i, c, ` from ${hit.entry.package}`));
     lines.push(
       `   score ${hit.score} · matched: ${hit.matched.join(', ')} · used by ${listOf(hit.entry.projects)} · ${importStatement(c)}`,
     );
   });
-  lines.push('', `Call get_component for props, variants and examples. ${PICK_PROJECT}`);
+  lines.push('', `${searchTail(hits)} ${PICK_PROJECT}`);
   return lines.join('\n');
+}
+
+/**
+ * Where a token is listed in get_tokens: under its category, or, for a color of a scoped
+ * family (`chart-*`, `sidebar-*`, the syntax colors one file uses), under that family, with
+ * what it is for. An agent looking for a green with no `--success` in the theme otherwise finds
+ * `chart-2` among the colors, takes its dark value, and check_ui has nothing against it.
+ */
+function tokenGroup(ds: DesignSystem, token: Token): string {
+  const family = ds.tokenIndex.scopedFamilyOf(token);
+  return family === undefined ? token.category : `${SCOPED}${family}`;
+}
+
+/** Marks a scoped family's group: no category starts with it. */
+const SCOPED = '\0';
+
+function groupHeading(ds: DesignSystem, group: string, count: number): string {
+  if (!group.startsWith(SCOPED)) return `## ${group} (${count})`;
+  const family = group.slice(SCOPED.length);
+  if (family === 'chart') return `## chart (${count}): for charts only, not for status colors`;
+  if (family === 'sidebar')
+    return `## sidebar (${count}): for the sidebar only, not for status colors`;
+  const [file] = ds.tokenIndex.familyFiles.get(family) ?? [];
+  return `## ${family} (${count}): for one part of the UI only${file ? ` (${file} uses them)` : ''}, not for status colors`;
 }
 
 /** Tokens at a workspace root, grouped by category, each with the package that defines it. */
@@ -331,12 +560,16 @@ export function renderCatalogTokens(
     const what = [filter.category, filter.query && `"${filter.query}"`].filter(Boolean).join(' ');
     return `No tokens match${what ? ` ${what}` : ''} in any project; call get_tokens without filters to see them.`;
   }
-  const groups = new Map<string, CatalogToken[]>();
-  for (const t of tokens)
-    groups.set(t.token.category, [...(groups.get(t.token.category) ?? []), t]);
+  const groups = new Map<string, { ds: DesignSystem; list: CatalogToken[] }>();
+  for (const t of tokens) {
+    const key = tokenGroup(t.ds, t.token);
+    const group = groups.get(key) ?? { ds: t.ds, list: [] };
+    group.list.push(t);
+    groups.set(key, group);
+  }
   const lines: string[] = [PICK_PROJECT, ''];
-  for (const [category, list] of groups) {
-    lines.push(`## ${category} (${list.length})`);
+  for (const [key, { ds, list }] of groups) {
+    lines.push(groupHeading(ds, key, list.length));
     for (const { token, package: pkg } of list) {
       const usage = token.usage.length ? ` → ${token.usage.join(', ')}` : '';
       lines.push(`- ${token.name}: ${token.value}${usage} (${pkg})`);
@@ -363,11 +596,13 @@ export function renderTokens(
     return `No tokens match${what ? ` ${what}` : ''}. The design system has ${categories}; call get_tokens without filters to see them.`;
   }
   const groups = new Map<string, Token[]>();
-  for (const token of tokens)
-    groups.set(token.category, [...(groups.get(token.category) ?? []), token]);
+  for (const token of tokens) {
+    const group = tokenGroup(ds, token);
+    groups.set(group, [...(groups.get(group) ?? []), token]);
+  }
   const lines: string[] = [];
-  for (const [category, list] of groups) {
-    lines.push(`## ${category} (${list.length})`);
+  for (const [group, list] of groups) {
+    lines.push(groupHeading(ds, group, list.length));
     for (const token of list) {
       const px =
         token.category === 'spacing' || token.category === 'radius'
