@@ -1135,6 +1135,38 @@ function labelledByParent(context: RuleContext, element: JsxNode): boolean {
 }
 
 /**
+ * What an `id` or `htmlFor` holds, to compare the two: a string as itself (`"dark-mode"`, `{"x"}`),
+ * an expression as written (`{id}`, `` {`${id}-switch`} ``) together with the function it is in,
+ * since two components in one file can each have their own `id`. Undefined when it holds nothing.
+ */
+function idValue(context: RuleContext, attribute: ts.JsxAttribute | undefined): string | undefined {
+  const init = attribute?.initializer;
+  if (!init) return undefined;
+  const value = ts.isJsxExpression(init) ? init.expression : init;
+  if (!value) return undefined;
+  if (ts.isStringLiteralLike(value)) return value.text.trim() ? `"${value.text}"` : undefined;
+  const scope = ts.findAncestor(value, ts.isFunctionLike);
+  return `${String(scope?.pos ?? -1)}:${value.getText(context.sourceFile)}`;
+}
+
+/**
+ * Whether a label with content names the button through its `id`: `<label htmlFor={id}>Dark
+ * mode</label>` next to `<button id={id} role="switch">`, or the design system's `<Label>`. A
+ * button is a labelable element, so the label's text is its accessible name.
+ */
+function labelledByFor(context: RuleContext, element: JsxNode): boolean {
+  const id = idValue(context, findAttribute(element, 'id'));
+  if (id === undefined) return false;
+  return context.analysis.elements.some((label) => {
+    if (label === element) return false;
+    const target = findAttribute(label, 'htmlFor') ?? findAttribute(label, 'for');
+    if (idValue(context, target) !== id) return false;
+    const content = classify(label.children, context, []);
+    return content === 'text' || content === 'unknown';
+  });
+}
+
+/**
  * The element whose `render` prop this one is, as in Base UI's
  * `<Dialog.Close render={<Button size="icon" />}><XIcon /></Dialog.Close>`:
  * the rendered button takes the host's children and attributes. Also through
@@ -1275,6 +1307,7 @@ export const iconButtonAccessibleName: Rule = {
       if (host && (isButton(context, host) || host.hasSpread)) continue;
       if (hasLabel(element.attributes) || (host && hasLabel(host.attributes))) continue;
       if (labelledByParent(context, element)) continue;
+      if (labelledByFor(context, element) || (host && labelledByFor(context, host))) continue;
       const icons: string[] = [];
       const children = host ? [...host.children, ...element.children] : element.children;
       // A host with no children shows what its props say (`<Chip label=… render={<button />}>`).
