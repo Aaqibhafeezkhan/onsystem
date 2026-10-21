@@ -1,10 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 
 import { Line } from '@/components/code-line';
 import { FindingMessage } from '@/components/finding-message';
-import { ArrowRightIcon, ArrowUpRightIcon, CheckIcon, ReplayIcon } from '@/components/icons';
+import {
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  CheckIcon,
+  CopyIcon,
+  ReplayIcon,
+} from '@/components/icons';
 import type { CheckError, CheckResponse } from '@/lib/check-service';
 import { highlightLines } from '@/lib/highlight';
 import type { Mark } from '@/lib/segments';
@@ -109,6 +115,84 @@ function kb(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
+/*
+ * A link to what is in the editor lives in the address's fragment, which never reaches the
+ * server: nothing for the first draft, `#draft=<id>` for another draft, and `#code=` and the code
+ * (UTF-8, deflated, base64url) for anything else.
+ */
+const DRAFT_LINK = '#draft=';
+const CODE_LINK = '#code=';
+
+function toBase64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(text: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+/** The fragment of a link to `code`. */
+export async function linkHash(code: string, presets: Preset[]): Promise<string> {
+  const draft = presets.find((p) => p.code === code);
+  if (draft) return draft === presets[0] ? '' : `${DRAFT_LINK}${draft.id}`;
+  const deflated = new Blob([code]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return `${CODE_LINK}${toBase64Url(new Uint8Array(await new Response(deflated).arrayBuffer()))}`;
+}
+
+/**
+ * What a link's fragment opens: a draft, or code of at most `limit` bytes. Anything else, such as
+ * `#findings`, a draft that is gone or a damaged link, opens nothing.
+ */
+export async function readLinkHash(
+  hash: string,
+  presets: Preset[],
+  limit: number,
+): Promise<{ preset: Preset } | { code: string } | undefined> {
+  try {
+    if (hash.startsWith(DRAFT_LINK)) {
+      const id = decodeURIComponent(hash.slice(DRAFT_LINK.length));
+      const preset = presets.find((p) => p.id === id);
+      return preset && { preset };
+    }
+    if (!hash.startsWith(CODE_LINK)) return undefined;
+    const reader = new Blob([fromBase64Url(hash.slice(CODE_LINK.length))])
+      .stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'))
+      .getReader();
+    const chunks: Uint8Array<ArrayBuffer>[] = [];
+    let size = 0;
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+      size += chunk.value.byteLength;
+      if (size > limit) {
+        await reader.cancel();
+        return undefined;
+      }
+      chunks.push(chunk.value);
+    }
+    const code = new TextDecoder('utf-8', { fatal: true }).decode(
+      await new Blob(chunks).arrayBuffer(),
+    );
+    const preset = presets.find((p) => p.code === code);
+    return preset ? { preset } : { code };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Puts a link's fragment in the address without a new history entry or a scroll. */
+function showInAddress(hash: string) {
+  const { pathname, search, hash: shown } = window.location;
+  if (hash === shown) return;
+  try {
+    window.history.replaceState(window.history.state, '', `${pathname}${search}${hash}`);
+  } catch {
+    // Safari limits how often a page may change its address; the next change tries again.
+  }
+}
+
 export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes: number }) {
   const first = presets[0];
   const [presetId, setPresetId] = useState(first?.id ?? '');
@@ -121,11 +205,18 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   const [selected, setSelected] = useState<number | undefined>(undefined);
   const [applied, setApplied] = useState<Applied | undefined>(undefined);
   const [focusSummary, setFocusSummary] = useState(0);
+  /** The link's fragment for `code`, worked out as the code changes. */
+  const [link, setLink] = useState<{ code: string; hash: string } | undefined>(undefined);
+  /** Whether the address has been read: until then, it is not written. */
+  const [linked, setLinked] = useState(false);
+  const [copied, setCopied] = useState(false);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const summaryBox = useRef<HTMLDivElement>(null);
+  const findingsBox = useRef<HTMLElement>(null);
   const editor = useRef<HTMLDivElement>(null);
   const request = useRef<AbortController | undefined>(undefined);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const ids = useId();
 
   const preset = presets.find((p) => p.id === presetId);
@@ -185,6 +276,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   useEffect(
     () => () => {
       clearTimeout(timer.current);
+      clearTimeout(copiedTimer.current);
       request.current?.abort();
     },
     [],
@@ -234,6 +326,71 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
     setProblem(undefined);
     setSelected(undefined);
     setApplied(undefined);
+  };
+
+  // A link opens the draft or the code in its fragment, on load and when the fragment changes.
+  // Code past the check's limit still opens, up to four times that, and says it is too large.
+  const openLink = useEffectEvent(async (hash: string) => {
+    const opened = await readLinkHash(hash, presets, 4 * maxBytes);
+    if (opened && 'preset' in opened) {
+      choose(opened.preset);
+    } else if (opened) {
+      setApplied(undefined);
+      edit(opened.code, { now: true });
+    }
+    setLinked(true);
+  });
+  useEffect(() => {
+    const open = () => {
+      void openLink(window.location.hash);
+    };
+    open();
+    window.addEventListener('hashchange', open);
+    return () => {
+      window.removeEventListener('hashchange', open);
+    };
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    void linkHash(code, presets).then((hash) => {
+      if (live) setLink({ code, hash });
+    });
+    return () => {
+      live = false;
+    };
+  }, [code, presets]);
+
+  // The address follows the editor once typing pauses, so a reload or a copied address keeps the
+  // code. It is replaced, not pushed: Back still leaves the page.
+  useEffect(() => {
+    if (!linked || link?.code !== code) return;
+    const pause = setTimeout(() => {
+      showInAddress(link.hash);
+    }, DEBOUNCE_MS);
+    return () => {
+      clearTimeout(pause);
+    };
+  }, [code, link, linked]);
+
+  const copyLink = () => {
+    const copy = (hash: string) => {
+      showInAddress(hash);
+      const { origin, pathname, search } = window.location;
+      navigator.clipboard.writeText(`${origin}${pathname}${search}${hash}`).then(
+        () => {
+          setCopied(true);
+          clearTimeout(copiedTimer.current);
+          copiedTimer.current = setTimeout(() => {
+            setCopied(false);
+          }, 1600);
+        },
+        () => undefined,
+      );
+    };
+    // The fragment is ready unless the code changed a moment ago.
+    if (link?.code === code) copy(link.hash);
+    else void linkHash(code, presets).then(copy);
   };
 
   // The list keeps the last result while the edited code is checked again; its offsets only
@@ -330,11 +487,22 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
         </div>
         <button
           type="button"
+          onClick={copyLink}
+          className="tap ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg"
+        >
+          {copied ? <CheckIcon className="size-4 text-cyan" /> : <CopyIcon className="size-4" />}
+          Copy link
+        </button>
+        <span className="sr-only" role="status">
+          {copied ? 'Link copied to the clipboard' : ''}
+        </span>
+        <button
+          type="button"
           disabled={!preset || code === preset.code}
           onClick={() => {
             if (preset) choose(preset);
           }}
-          className="tap ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg disabled:cursor-default disabled:opacity-50 disabled:hover:text-muted"
+          className="tap inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg disabled:cursor-default disabled:opacity-50 disabled:hover:text-muted"
         >
           <ReplayIcon className="size-4" />
           Reset
@@ -357,6 +525,12 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
             {found > 0 && (
               <a
                 href="#findings"
+                onClick={(event) => {
+                  // Scrolls there without the fragment, which holds the link to the code.
+                  event.preventDefault();
+                  findingsBox.current?.scrollIntoView();
+                  findingsBox.current?.focus({ preventScroll: true });
+                }}
                 className={`tap inline-flex shrink-0 items-center gap-1 text-[11px] underline decoration-line-strong underline-offset-2 transition-colors hover:decoration-current lg:hidden ${current?.result.errorCount ? 'text-error' : 'text-warn'}`}
               >
                 {`Jump to ${plural(found, 'finding')}`}
@@ -427,7 +601,9 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
 
         {/* Findings */}
         <section
+          ref={findingsBox}
           id="findings"
+          tabIndex={-1}
           aria-labelledby={`${ids}-findings`}
           className="min-w-0 rounded-xl border border-line bg-raised lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto"
         >

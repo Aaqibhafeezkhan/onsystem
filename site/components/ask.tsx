@@ -151,7 +151,10 @@ function useShortcutLabel(): string {
   );
 }
 
-/** The header's Ask button: "Ask ⌘K", and only the icon on phones. Nothing while Ask is off. */
+/**
+ * The header's Ask button: "Ask ⌘K", and only the icon on phones, where `tap` gives its 36 px a
+ * 44 px target, as the menu button has. Nothing while Ask is off.
+ */
 export function AskButton({ className = '' }: { className?: string }) {
   const enabled = useAskEnabled();
   const shortcut = useShortcutLabel();
@@ -162,7 +165,7 @@ export function AskButton({ className = '' }: { className?: string }) {
       onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
       aria-keyshortcuts="Meta+K Control+K"
       aria-label="Ask the docs"
-      className={`inline-flex size-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line text-[13px] text-muted transition-colors hover:border-line-strong hover:text-fg md:h-8 md:w-auto md:px-2.5 ${className}`}
+      className={`tap inline-flex size-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line text-[13px] text-muted transition-colors hover:border-line-strong hover:text-fg md:h-8 md:w-auto md:px-2.5 ${className}`}
     >
       <SparkIcon className="size-4 text-cyan" />
       <span className="hidden md:inline" aria-hidden="true">
