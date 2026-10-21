@@ -104,7 +104,22 @@ npx onsystem check . --update-baseline   # writes onsystem.baseline.json: commit
 - run: npx onsystem check . --format github --require-design-system
 ```
 
-Findings show up as annotations on the pull request, and `--require-design-system` fails the job when the design system is no longer found. [CI and baselines](https://onsystem.vercel.app/docs/ci) has the whole workflow. The GitHub Action, `uses: dgesteves/onsystem@v0`, annotates only the lines a pull request changed: [make it a required check on agent pull requests](https://onsystem.vercel.app/docs/required-check).
+Findings show up as annotations on the pull request, and `--require-design-system` fails the job when the design system is no longer found. [CI and baselines](https://onsystem.vercel.app/docs/ci) has the whole workflow.
+
+**GitHub Action.** The [action](https://github.com/marketplace/actions/onsystem-design-system-check) runs the same check, honours the baseline and annotates only the lines a pull request changed. It goes after the checkout and the install, so it can read your design system:
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+  - uses: actions/setup-node@v7
+    with:
+      node-version: 24
+      cache: npm
+  - run: npm ci
+  - uses: dgesteves/onsystem@v0
+```
+
+[Make it a required check on agent pull requests](https://onsystem.vercel.app/docs/required-check) has the whole workflow and its inputs.
 
 **ESLint.** The same rules for ESLint 8.57, 9 and 10: add `onsystem.configs.recommended` from `onsystem/eslint` to `eslint.config.mjs` ([ESLint plugin](https://onsystem.vercel.app/docs/eslint), with @shadcn/lint).
 
