@@ -64,7 +64,7 @@ Commit these at the repository root.
 }
 ```
 
-Claude Code adds the marketplace once each teammate accepts its trust dialog for the folder, and ignores it without a message until then. The plugin then loads from the marketplace, with no `/plugin install`. Claude Code reads this file from the folder it starts in, so start it at the root. Cloud sessions (Claude Code on the web) do not load plugins from a repository's settings; the pull request check still covers what they push. No `.mcp.json` entry for onsystem goes next to it: the plugin and that entry register the same tools ([plugin](plugin.md)).
+Claude Code adds the marketplace once each teammate accepts its trust dialog for the folder, and ignores it without a message until then. The plugin then loads from the marketplace, with no `/plugin install`. Claude Code reads this file from the folder it starts in, so start it at the root. Cloud sessions (Claude Code on the web) do not load plugins from a repository's settings; the pull request check still covers what they push. No `.mcp.json` entry for onsystem goes next to it: the plugin and that entry register the same tools ([plugin](plugin.md)). If the repository commits [one `.mcp.json`](clients.md) for the other clients, add `"disabledMcpjsonServers": ["onsystem"]` to this file, so Claude Code skips that entry.
 
 **Cursor** and **VS Code** get the MCP server, started in the workspace folder, which at a monorepo root serves every project ([set up your agent](clients.md#cursor-and-vs-code)):
 
