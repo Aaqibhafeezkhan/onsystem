@@ -6,10 +6,10 @@ import { expect, it } from 'vitest';
 
 // The websites moved from *-demo.vercel.app to onsystem.vercel.app, ondocs.vercel.app and
 // signoff-ui.vercel.app. The old addresses redirect, but links, metadata and messages use the
-// new ones. Changelogs and the record of the one-off rename commands keep what was published.
+// new ones. Changelogs keep what was published.
 const root = path.resolve(import.meta.dirname, '..');
 const OLD = /(?:design-system-mcp|ask-my-site|agent-ui-kit)-demo\.vercel\.app/;
-const KEEP = [/(?:^|\/)CHANGELOG\.md$/, /^CONTRIBUTING\.md$/];
+const KEEP = [/(?:^|\/)CHANGELOG\.md$/];
 const BINARY = /\.(?:png|jpe?g|webp|gif|ico|svg|mp4|webm|woff2?|ttf|pdf)$/i;
 
 it('links to the websites at their current addresses', () => {
