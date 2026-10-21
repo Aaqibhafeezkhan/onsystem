@@ -57,8 +57,12 @@ describe('docs/clients.md', () => {
     expect(json(box)).toEqual({
       mcpServers: { onsystem: { command: 'npx', args: ['-y', 'onsystem'] } },
     });
-    // The Claude Code plugin registers the same tools: one or the other, not both.
-    expect(box).toMatch(/instead of the plugin/);
+    // Claude Code reads the file too, but keeps the plugin, which adds the hook, and turns this
+    // entry off so it does not register the same tools twice.
+    expect(box).not.toMatch(/instead of the plugin/);
+    expect(box).toContain('`"disabledMcpjsonServers": ["onsystem"]`');
+    expect(box).toContain('rollout.md#give-every-agent-the-design-system');
+    expect(intro).toContain('so there use the plugin instead');
   });
 
   it('installs the Copilot CLI plugin from the marketplace, not by the deprecated direct install', () => {

@@ -5,7 +5,7 @@ Pick your client below and add the server. Run it from the project, or pass `--r
 Every client gets the same five tools, including `check_ui`, which the agent runs on its own output. Claude Code and Codex CLI also run the [plugin](plugin.md)'s hook, which checks each edit as it happens, so there use the plugin instead; with other agents, add the [CI check](ci.md) so what the agent skips still gets caught.
 
 > [!TIP]
-> **One `.mcp.json` for the team.** Commit this file at the repository root, and Claude Code, VS Code, GitHub Copilot CLI and Grok Build start the server from it once each person trusts the folder or approves the server:
+> **One `.mcp.json` for the team.** Commit this file at the repository root, and VS Code, GitHub Copilot CLI and Grok Build start the server from it once each person trusts the folder or approves the server:
 >
 > ```json
 > {
@@ -18,7 +18,9 @@ Every client gets the same five tools, including `check_ui`, which the agent run
 > }
 > ```
 >
-> It needs no `--root`: the server finds the project from the folder it starts in, the roots the client reports, or the files the tools are given. In Claude Code it registers the same tools as the plugin, so use it there instead of the plugin, not next to it; [Roll out to a team](rollout.md#give-every-agent-the-design-system) commits the plugin, hook included. Cursor and the other clients read their own files, below.
+> It needs no `--root`: the server finds the project from the folder it starts in, the roots the client reports, or the files the tools are given. Cursor and the other clients read their own files, below.
+>
+> Claude Code reads this file too, but there the plugin gives the same tools plus the hook. A team on Claude Code commits the plugin ([Roll out to a team](rollout.md#give-every-agent-the-design-system)) and adds `"disabledMcpjsonServers": ["onsystem"]` to the same `.claude/settings.json`, so Claude Code does not register the tools twice.
 
 ## Plugins for other agents
 
