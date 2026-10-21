@@ -1,10 +1,12 @@
 // The GitHub Action (action.yml at the repository root): runs `onsystem check`, reports the
 // findings on the lines a pull request changed as annotations and in the job summary, and fails
-// the step on them. The baseline is applied by `check` itself. Plain Node.js with no
-// dependencies, since an action runs from a checkout of this repository, not from the package.
+// the step on them. The baseline is applied by `check` itself, told which lines changed so that
+// it accepts findings on the other lines first. Plain Node.js with no dependencies, since an
+// action runs from a checkout of this repository, not from the package.
 // @ts-check
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 /**
@@ -229,22 +231,86 @@ function realPath(file) {
 }
 
 /**
- * The command that runs the CLI: the version this action is released with, or ONSYSTEM_BIN.
+ * The command that runs the CLI: ONSYSTEM_BIN; else the project's own install, found from
+ * `project.cwd` up to `project.top`, the repository root, so the version the lockfile pins runs;
+ * else the version this action is released with, through npx.
  *
  * @param {Io['env']} env
  * @param {string} actionPath
- * @returns {{ command: string, args: string[], shell: boolean }}
+ * @param {{ cwd: string, top: string }} [project]
+ * @returns {{ command: string, args: string[], shell: boolean, installed?: Installed }}
  */
-export function cli(env, actionPath) {
+export function cli(env, actionPath, project) {
   if (env.ONSYSTEM_BIN)
     return { command: process.execPath, args: [env.ONSYSTEM_BIN], shell: false };
-  const { version } = JSON.parse(fs.readFileSync(path.join(actionPath, 'package.json'), 'utf8'));
+  const installed = project && installedCli(project.cwd, project.top);
+  if (installed) {
+    return { command: process.execPath, args: [installed.script], shell: false, installed };
+  }
   // npx is a .cmd script on Windows, which Node only starts through a shell.
   return {
     command: 'npx',
-    args: ['--yes', `onsystem@${version}`],
+    args: ['--yes', `onsystem@${actionVersion(actionPath)}`],
     shell: process.platform === 'win32',
   };
+}
+
+/** @param {string} actionPath */
+function actionVersion(actionPath) {
+  return String(JSON.parse(fs.readFileSync(path.join(actionPath, 'package.json'), 'utf8')).version);
+}
+
+/**
+ * @typedef {{ script: string, version: string, dir: string }} Installed
+ */
+
+/**
+ * The project's own onsystem: `node_modules/onsystem` in `cwd` or the nearest folder above it
+ * that has one, up to `top`. Not above it: an install outside the repository is not the
+ * project's.
+ *
+ * @param {string} cwd
+ * @param {string} top
+ * @returns {Installed | undefined}
+ */
+export function installedCli(cwd, top) {
+  for (let dir = realPath(cwd); ;) {
+    const found = installedIn(path.join(dir, 'node_modules', 'onsystem'));
+    if (found) return found;
+    const parent = path.dirname(dir);
+    const rel = path.relative(top, parent);
+    if (parent === dir || rel.startsWith('..') || path.isAbsolute(rel)) return undefined;
+    dir = parent;
+  }
+}
+
+/** @param {string} dir */
+function installedIn(dir) {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+    const bin = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.onsystem;
+    if (manifest.name !== 'onsystem' || typeof bin !== 'string') return undefined;
+    const script = path.resolve(dir, bin);
+    if (!fs.existsSync(script)) return undefined;
+    return { script, version: String(manifest.version), dir };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The changed lines as `check` reads them from ONSYSTEM_CHANGED_LINES: by the real path of each
+ * file, which `changed` names relative to `top`.
+ *
+ * @param {ChangedLines} changed
+ * @param {string} top
+ * @returns {Record<string, [number, number][]>}
+ */
+export function changedLinesByPath(changed, top) {
+  /** @type {Record<string, [number, number][]>} */
+  const byPath = {};
+  for (const [file, ranges] of changed) byPath[realPath(path.join(top, file))] = ranges;
+  return byPath;
 }
 
 /** @param {string} arg */
@@ -290,19 +356,37 @@ export function run(io) {
     }
   }
 
-  const {
-    command,
-    args: prefix,
-    shell,
-  } = cli(env, env.ONSYSTEM_ACTION_PATH ?? path.join(import.meta.dirname, '..'));
+  const actionPath = env.ONSYSTEM_ACTION_PATH ?? path.join(import.meta.dirname, '..');
+  const { command, args: prefix, shell, installed } = cli(env, actionPath, { cwd, top });
+  const release = installed && actionVersion(actionPath);
+  if (installed && installed.version !== release) {
+    const where = path.relative(top, installed.dir).split(path.sep).join('/') || installed.dir;
+    io.stdout(
+      `::notice title=onsystem::Running onsystem ${installed.version}, the project's install in ${data(where)}, rather than ${release}, the version of this action.`,
+    );
+  }
+  // `check` reads the changed lines from a file: a large pull request's would not fit in a
+  // variable. An older CLI, such as a project's own install, ignores it.
+  let linesDir;
+  let linesFile = '';
+  if (changed) {
+    linesDir = fs.mkdtempSync(path.join(env.RUNNER_TEMP || os.tmpdir(), 'onsystem-'));
+    linesFile = path.join(linesDir, 'changed-lines.json');
+    fs.writeFileSync(linesFile, JSON.stringify(changedLinesByPath(changed, top)));
+  }
   const all = [...prefix, ...args];
-  const checked = spawnSync(command, shell ? all.map(shellQuote) : all, {
-    cwd,
-    encoding: 'utf8',
-    shell,
-    maxBuffer: 1024 * 1024 * 1024,
-    env: { ...process.env, ...env },
-  });
+  let checked;
+  try {
+    checked = spawnSync(command, shell ? all.map(shellQuote) : all, {
+      cwd,
+      encoding: 'utf8',
+      shell,
+      maxBuffer: 1024 * 1024 * 1024,
+      env: { ...process.env, ...env, ONSYSTEM_CHANGED_LINES: linesFile },
+    });
+  } finally {
+    if (linesDir) fs.rmSync(linesDir, { recursive: true, force: true });
+  }
   if (checked.stderr) io.stderr(checked.stderr.trimEnd());
   /** @type {CheckResult[] | undefined} */
   let results;

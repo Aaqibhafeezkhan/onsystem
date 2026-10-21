@@ -110,35 +110,45 @@ export interface BaselineMatch {
   fixed: number;
 }
 
+/** Line ranges, 1-based and inclusive, such as the lines a pull request changed in a file. */
+export type LineRanges = readonly (readonly [number, number])[];
+
 /**
  * Removes the findings the baseline accepts for `file`. Within a file and
  * rule, each entry accepts that many findings with the same source text, in
- * order; any beyond the count are new. Entries of `disabled` rules are not
- * counted as fixed: the rule is off, not satisfied.
+ * order; any beyond the count are new. With `changed`, the lines a pull request
+ * changed, findings on other lines are accepted first: a copy of a baselined
+ * line inserted above it is the new one, not the line that was there. Entries
+ * of `disabled` rules are not counted as fixed: the rule is off, not satisfied.
  */
 export function applyBaseline(
   baseline: Entries,
   file: string,
   result: CheckResult,
   disabled: ReadonlySet<string> = new Set(),
+  changed?: LineRanges,
 ): BaselineMatch {
   const remaining = new Map<string, number>();
   for (const [rule, sources] of baseline.get(file) ?? []) {
     if (disabled.has(rule)) continue;
     for (const [source, count] of sources) remaining.set(`${rule}\0${source}`, count);
   }
-  const diagnostics: Diagnostic[] = [];
-  let baselined = 0;
-  for (const diagnostic of result.diagnostics) {
-    const id = `${diagnostic.ruleId}\0${findingKey(diagnostic)}`;
-    const left = remaining.get(id) ?? 0;
-    if (left > 0) {
-      remaining.set(id, left - 1);
-      baselined++;
-    } else {
-      diagnostics.push(diagnostic);
+  const onChanged = (d: Diagnostic) =>
+    changed?.some(([start, end]) => start <= d.endLine && end >= d.line) ?? false;
+  const accepted = new Set<Diagnostic>();
+  for (const later of [false, true]) {
+    for (const diagnostic of result.diagnostics) {
+      if (onChanged(diagnostic) !== later) continue;
+      const id = `${diagnostic.ruleId}\0${findingKey(diagnostic)}`;
+      const left = remaining.get(id) ?? 0;
+      if (left > 0) {
+        remaining.set(id, left - 1);
+        accepted.add(diagnostic);
+      }
     }
   }
+  const diagnostics = result.diagnostics.filter((d) => !accepted.has(d));
+  const baselined = accepted.size;
   let fixed = 0;
   for (const count of remaining.values()) fixed += count;
   return {
@@ -151,6 +161,92 @@ export function applyBaseline(
     baselined,
     fixed,
   };
+}
+
+/**
+ * The files with baseline entries that no longer exist under `root`, deleted or renamed, among
+ * those `include` takes. `checked` are files a run read, which exist.
+ */
+export function goneFiles(
+  entries: Entries,
+  root: string,
+  checked: ReadonlySet<string>,
+  include: (file: string) => boolean = () => true,
+): string[] {
+  return [...entries.keys()].filter(
+    (file) => !checked.has(file) && include(file) && !fs.existsSync(path.resolve(root, file)),
+  );
+}
+
+/**
+ * Renamed and moved files (`git mv`, a folder reorganised): each file of `unrecorded` (file → its
+ * findings), which has no entries of its own, paired with a file of `gone` whose entries match at
+ * least half of its findings and half of those entries match its findings, as git counts a
+ * rename from 50% similarity. Each file of `gone` pairs with one file at most, best match first,
+ * so a copy of a file is new however many copies there are. Entries of rules `disabled` for the
+ * new file are left out, as `applyBaseline` leaves them out. Returns new file → old file.
+ */
+export function findMoves(
+  entries: Entries,
+  unrecorded: ReadonlyMap<string, readonly Diagnostic[]>,
+  gone: readonly string[],
+  disabled: (file: string) => ReadonlySet<string> = () => new Set(),
+): Map<string, string> {
+  // Finding id → the gone files with entries for it, and how many.
+  const recorded = new Map<string, { file: string; count: number }[]>();
+  for (const file of gone) {
+    for (const [rule, sources] of entries.get(file) ?? []) {
+      for (const [source, count] of sources) {
+        const id = `${rule}\0${source}`;
+        const list = recorded.get(id) ?? [];
+        list.push({ file, count });
+        recorded.set(id, list);
+      }
+    }
+  }
+  const pairs: { to: string; from: string; matched: number }[] = [];
+  for (const [to, diagnostics] of unrecorded) {
+    if (entries.has(to) || !diagnostics.length) continue;
+    const found = new Map<string, number>();
+    for (const diagnostic of diagnostics) {
+      const id = `${diagnostic.ruleId}\0${findingKey(diagnostic)}`;
+      found.set(id, (found.get(id) ?? 0) + 1);
+    }
+    const matched = new Map<string, number>();
+    for (const [id, n] of found) {
+      for (const { file, count } of recorded.get(id) ?? []) {
+        matched.set(file, (matched.get(file) ?? 0) + Math.min(n, count));
+      }
+    }
+    const off = disabled(to);
+    for (const [from, n] of matched) {
+      let size = 0;
+      for (const [rule, sources] of entries.get(from) ?? []) {
+        if (off.has(rule)) continue;
+        for (const count of sources.values()) size += count;
+      }
+      if (n * 2 >= diagnostics.length && n * 2 >= size) pairs.push({ to, from, matched: n });
+    }
+  }
+  // The best matches first; then a file that kept its name (a folder moved), then path order.
+  const sameName = (pair: { to: string; from: string }) =>
+    path.posix.basename(pair.to) === path.posix.basename(pair.from) ? 0 : 1;
+  const order = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  pairs.sort(
+    (a, b) =>
+      b.matched - a.matched ||
+      sameName(a) - sameName(b) ||
+      order(a.to, b.to) ||
+      order(a.from, b.from),
+  );
+  const moves = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const { to, from } of pairs) {
+    if (moves.has(to) || taken.has(from)) continue;
+    moves.set(to, from);
+    taken.add(from);
+  }
+  return moves;
 }
 
 /**
@@ -222,16 +318,23 @@ export function rulesRun(
  * The baseline without the entries a run over `checked` (file → its findings) shows no longer
  * occur: a checked file keeps at most as many of each finding as it still has, plus its entries
  * for `disabled` rules, and files the run did not check keep theirs while they still exist under
- * `root`. Nothing is added, so a new finding stays new, unlike with `updateBaseline`.
+ * `root`. Nothing is added, so a new finding stays new, unlike with `updateBaseline`. A file of
+ * `moves` (new file → old file, from `findMoves`) takes the old file's entries as its own.
  */
 export function pruneBaseline(
   previous: Entries,
   checked: ReadonlyMap<string, Diagnostic[]>,
   root: string,
   disabled: (file: string) => ReadonlySet<string>,
+  moves: ReadonlyMap<string, string> = new Map(),
 ): Entries {
+  const files = new Map(previous);
+  for (const [to, from] of moves) {
+    const rules = previous.get(from);
+    if (rules && !previous.has(to)) files.set(to, rules);
+  }
   const next: Entries = new Map();
-  for (const [file, rules] of previous) {
+  for (const [file, rules] of files) {
     const diagnostics = checked.get(file);
     if (!diagnostics) {
       if (fs.existsSync(path.resolve(root, file))) next.set(file, rules);

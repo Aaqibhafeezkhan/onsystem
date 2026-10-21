@@ -13,6 +13,8 @@ import {
   applyBaseline,
   BASELINE_FILE,
   countBaseline,
+  findMoves,
+  goneFiles,
   LEGACY_BASELINE_FILE,
   pruneBaseline,
   readBaseline,
@@ -20,6 +22,7 @@ import {
   unrecordedRules,
   updateBaseline,
   writeBaseline,
+  type LineRanges,
 } from './baseline.js';
 import {
   ConfigError,
@@ -459,8 +462,16 @@ async function check(
   // Keys are relative to the real root, with the on-disk spelling of each path and
   // NFC names, so `APP/`, a linked root or a decomposed `café.tsx` find the same entry.
   const realRoot = fs.realpathSync.native(selection.root);
-  const baselineKey = (file: string) =>
-    relativePath(realRoot, fs.realpathSync.native(file)).normalize('NFC');
+  // The folders given, which a run covers whole: those that name the root or a folder above it
+  // check every file under the root that a later run with the same options checks.
+  const folders = patterns
+    .map((pattern) => path.resolve(io.cwd, pattern))
+    .filter((dir) => fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory())
+    .map(realPath);
+  // The lines a pull request changed, from the GitHub Action: the baseline accepts findings on
+  // the other lines first.
+  const changedLines =
+    baseline && !update ? readChangedLines(io.env ?? process.env, io.cwd) : undefined;
 
   const results: CheckResult[] = [];
   const checked = new Map<string, Diagnostic[]>();
@@ -468,11 +479,20 @@ async function check(
   const ran = new Set<RuleId>();
   let baselined = 0;
   let fixed = 0;
+  // Files without entries of their own, which may have moved: matched once every file is checked.
+  const unrecorded: {
+    index: number;
+    key: string;
+    result: CheckResult;
+    disabled: ReadonlySet<string>;
+    changed: LineRanges | undefined;
+  }[] = [];
   for (const file of files) {
     const code = await fsp.readFile(file, 'utf8');
     const ds = selection.designSystemOf(file);
     let result = ds.check(code, relativePath(ds.root, file));
-    const key = baselineKey(file);
+    const real = fs.realpathSync.native(file);
+    const key = relativePath(realRoot, real).normalize('NFC');
     const disabled = disabledFor(file);
     disabledByKey.set(key, disabled);
     if (update || prune) checked.set(key, result.diagnostics);
@@ -480,12 +500,52 @@ async function check(
       for (const rule of RULE_IDS) if (!disabled.has(rule) && canRun(ds, rule)) ran.add(rule);
     }
     if (baseline && !update) {
-      const match = applyBaseline(baseline.entries, key, result, disabled);
-      result = { ...match.result, baselined: match.baselined };
+      const changed = changedLines?.get(real);
+      if (baseline.entries.has(key)) {
+        const match = applyBaseline(baseline.entries, key, result, disabled, changed);
+        result = { ...match.result, baselined: match.baselined };
+        baselined += match.baselined;
+        fixed += match.fixed;
+      } else {
+        unrecorded.push({ index: results.length, key, result, disabled, changed });
+      }
+    }
+    results.push({ ...result, file: relativePath(io.cwd, file) });
+  }
+  // A file renamed or moved has the findings of an entry whose file no longer exists: the
+  // entry accepts them where the file is now. What is left of such entries in the folders the
+  // run covers no longer occurs.
+  let moves = new Map<string, string>();
+  if (baseline && !update) {
+    const covered = (key: string) => folders.some((dir) => isInside(dir, path.join(realRoot, key)));
+    const matching = unrecorded.some((u) => u.result.diagnostics.length);
+    const gone = goneFiles(
+      baseline.entries,
+      realRoot,
+      new Set(disabledByKey.keys()),
+      (key) => matching || covered(key),
+    );
+    moves = findMoves(
+      baseline.entries,
+      new Map(unrecorded.map((u) => [u.key, u.result.diagnostics])),
+      gone,
+      (key) => disabledByKey.get(key) ?? new Set(),
+    );
+    for (const { index, key, result, disabled, changed } of unrecorded) {
+      const from = moves.get(key) ?? key;
+      const match = applyBaseline(baseline.entries, from, result, disabled, changed);
+      const file = results[index]?.file ?? result.file;
+      results[index] = { ...match.result, baselined: match.baselined, file };
       baselined += match.baselined;
       fixed += match.fixed;
     }
-    results.push({ ...result, file: relativePath(io.cwd, file) });
+    const moved = new Set(moves.values());
+    for (const key of gone) {
+      const rules = baseline.entries.get(key);
+      if (rules && !moved.has(key) && covered(key)) {
+        fixed += countBaseline(new Map([[key, rules]])).findings;
+      }
+    }
   }
   const elsewhere = results.filter((r) => r.skipped).length;
   if (elsewhere) {
@@ -502,15 +562,7 @@ async function check(
       realRoot,
       (key) => disabledByKey.get(key) ?? new Set(),
     );
-    // A pattern that names the root or a folder above it: the run checked every file under the
-    // root that a later run with the same options checks.
-    const wholeRoot = patterns.some((pattern) => {
-      const dir = path.resolve(io.cwd, pattern);
-      return Boolean(
-        fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() &&
-        isInside(realPath(dir), realRoot),
-      );
-    });
+    const wholeRoot = folders.some((dir) => isInside(dir, realRoot));
     writeBaseline(baselineFile, next, {
       onsystem: VERSION,
       // One list for the whole baseline: in a workspace, a rule that ran in one project counts
@@ -539,21 +591,33 @@ async function check(
     }
   }
   if (prune && baseline) {
-    // Only drops entries: a new finding is still reported, and still fails the check.
+    // Only drops entries, and moves those of a moved file: a new finding is still reported, and
+    // still fails the check.
     const next = pruneBaseline(
       baseline.entries,
       checked,
       realRoot,
       (key) => disabledByKey.get(key) ?? new Set(),
+      moves,
     );
     const left = countBaseline(next);
     const dropped = countBaseline(baseline.entries).findings - left.findings;
-    if (dropped) {
+    if (dropped || moves.size) {
       writeBaseline(baselineFile, next, { onsystem: baseline.onsystem, rules: baseline.rules });
     }
+    const done = [
+      moves.size
+        ? `moved the findings of ${count(moves.size, 'file')} to ${moves.size === 1 ? 'its new path' : 'their new paths'}`
+        : '',
+      dropped
+        ? `dropped ${count(dropped, 'finding')} that no longer ${dropped === 1 ? 'occurs' : 'occur'}`
+        : '',
+    ].filter(Boolean);
     baselineNotes.push(
-      `Baseline: ${dropped ? `dropped ${count(dropped, 'finding')} that no longer ${dropped === 1 ? 'occurs' : 'occur'}` : 'nothing to drop'}; ${count(left.findings, 'finding')} in ${count(left.files, 'file')} → ${displayPath(io.cwd, baselineFile)}`,
+      `Baseline: ${done.join('; ') || 'nothing to drop'}; ${count(left.findings, 'finding')} in ${count(left.files, 'file')} → ${displayPath(io.cwd, baselineFile)}`,
     );
+  } else if (moves.size) {
+    baselineNotes.push(movedNote(moves, command('--prune-baseline')));
   }
 
   const output = formatDiagnostics(
@@ -1455,6 +1519,54 @@ function canRun(ds: DesignSystem, rule: RuleId): boolean {
     default:
       return ds.model.components.length > 0;
   }
+}
+
+/** Says which files the baseline takes for moved, and how to record their new paths. */
+function movedNote(moves: ReadonlyMap<string, string>, prune: string): string {
+  const pairs = [...moves].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const [first] = pairs;
+  if (pairs.length === 1 && first) {
+    return `Baseline: ${first[0]} has the findings recorded for ${first[1]}, which no longer exists, so they are accepted as moved. Run \`${prune}\` to record the new path.`;
+  }
+  const list = listOf(pairs.map(([to, from]) => `${from} → ${to}`));
+  return `Baseline: ${pairs.length} files have the findings recorded for files that no longer exist, so they are accepted as moved (${list}). Run \`${prune}\` to record the new paths.`;
+}
+
+/** The variable the GitHub Action names the pull request's changed lines in. */
+const CHANGED_LINES = 'ONSYSTEM_CHANGED_LINES';
+
+/**
+ * The lines a pull request changed, by the real path of each file: the JSON file that
+ * ONSYSTEM_CHANGED_LINES names maps paths to 1-based ranges, `{ "/repo/app/page.tsx": [[4, 4]] }`.
+ * The GitHub Action writes it. Undefined when the variable is not set.
+ */
+function readChangedLines(
+  env: Record<string, string | undefined>,
+  cwd: string,
+): Map<string, LineRanges> | undefined {
+  const file = env[CHANGED_LINES]?.trim();
+  if (!file) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(path.resolve(cwd, file), 'utf8'));
+  } catch (error) {
+    throw new ConfigError(`${CHANGED_LINES}: could not read ${file}: ${(error as Error).message}`);
+  }
+  const range = (value: unknown): value is [number, number] =>
+    Array.isArray(value) && value.length === 2 && value.every((n) => Number.isInteger(n));
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new ConfigError(`${CHANGED_LINES}: ${file} must map files to line ranges`);
+  }
+  const lines = new Map<string, LineRanges>();
+  for (const [name, ranges] of Object.entries(parsed)) {
+    if (!Array.isArray(ranges) || !ranges.every(range)) {
+      throw new ConfigError(
+        `${CHANGED_LINES}: ${file} › "${name}" must be a list of [start, end] lines`,
+      );
+    }
+    lines.set(realPath(path.resolve(cwd, name)), ranges);
+  }
+  return lines;
 }
 
 /** Why findings of rules that did not run when the baseline was recorded are new to it. */
