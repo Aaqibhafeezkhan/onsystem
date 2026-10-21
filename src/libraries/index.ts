@@ -1,18 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { declarationsPackages, type DeclarationsOptions } from '../detect.js';
 import type { ComponentInfo, Token } from '../types.js';
 import { mui } from './mui.js';
 
 /**
- * A published component library that onsystem reads from its type declarations rather than
- * from source: what an app gets from `npm install`, with no components folder of its own. Each
- * library is an adapter: its package, how to read its declarations and its theme. MUI is the
- * first; Chakra UI, Mantine, HeroUI and Radix Themes fit the same shape.
+ * How to read a package's components from its type declarations: its package, how to read its
+ * declarations and the theme an app gives it. A design-system package published without its
+ * sources has one of its own ({@link packageAdapter}); a published library has a
+ * {@link LibraryAdapter}.
  */
-export interface LibraryAdapter {
-  /** Its id in the config's `libraries` list: `mui`. */
-  id: LibraryId;
+export interface DeclarationsAdapter {
   /** The package apps depend on and import components from: `@mui/material`. */
   package: string;
   /** Its name, for `inspect` and messages: `MUI`. */
@@ -29,6 +28,17 @@ export interface LibraryAdapter {
   annotate?(component: ComponentInfo): void;
   /** The theme the app creates for the library, read from its source: tokens and added values. */
   theme?: ThemeReader;
+}
+
+/**
+ * A published component library that onsystem reads from its type declarations rather than
+ * from source: what an app gets from `npm install`, with no components folder of its own. Each
+ * library is an adapter. MUI is the first; Chakra UI, Mantine, HeroUI and Radix Themes fit the
+ * same shape.
+ */
+export interface LibraryAdapter extends DeclarationsAdapter {
+  /** Its id in the config's `libraries` list: `mui`. */
+  id: LibraryId;
 }
 
 /** Reads the app's theme from the source files that `matches` selects. */
@@ -87,15 +97,38 @@ export interface LibrarySource {
   dir?: string | undefined;
   /** The installed version. */
   version?: string | undefined;
+  /**
+   * A design-system package installed without its component sources, read from its type
+   * declarations ({@link declarationsPackages}) rather than as a library onsystem knows.
+   */
+  designSystem?: true | undefined;
 }
 
 export function libraryAdapter(name: string): LibraryAdapter | undefined {
   return LIBRARIES.find((library) => library.package === name);
 }
 
-/** A library's name for messages, read or not: `MUI`, `Chakra UI`. */
+/** What a design-system package read from its type declarations is called in messages. */
+const PACKAGE_TITLE = 'Design-system package';
+
+/** A library's name for messages, read or not: `MUI`, `Chakra UI`, `Design-system package`. */
 export function libraryTitle(name: string): string {
-  return [...LIBRARIES, ...UNREAD_LIBRARIES].find((l) => l.package === name)?.title ?? name;
+  return (
+    [...LIBRARIES, ...UNREAD_LIBRARIES].find((l) => l.package === name)?.title ?? PACKAGE_TITLE
+  );
+}
+
+/**
+ * The adapter for a design-system package read from its type declarations (`@acme/ui`): its
+ * components and their props, with no theme to read, and the app's augmentations of its modules.
+ */
+export function packageAdapter(name: string): DeclarationsAdapter {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return {
+    package: name,
+    title: PACKAGE_TITLE,
+    augments: new RegExp(`declare\\s+module\\s+['"]${escaped}(?:/[\\w./-]*)?['"]`),
+  };
 }
 
 /** Why a library in `UNREAD_LIBRARIES` is not read: `a dependency onsystem does not read yet (…)`. */
@@ -109,10 +142,18 @@ export function notReadYet(): string {
  * folder above it, as a monorepo hoists it. Nothing in the package is run. `ids` is the config's
  * `libraries`: undefined reads every library onsystem supports, false none, a list those named;
  * the dependencies it leaves out are `off`. Those in `UNREAD_LIBRARIES` are `unread`.
+ *
+ * The design-system packages installed without their component sources that the app depends
+ * on ({@link declarationsPackages}) come after them, read from their type declarations unless
+ * `libraries` is false. A list names libraries, not packages, so it leaves them in. `options`
+ * is what the config says of them: its `importPath`, which makes the dependency it names one,
+ * and the component globs that read a package from its sources instead. A library onsystem
+ * knows is never read as one, whatever `importPath` says.
  */
 export function detectLibraries(
   root: string,
   ids?: false | readonly LibraryId[],
+  options: DeclarationsOptions = {},
 ): { read: LibrarySource[]; off: LibrarySource[]; unread: LibrarySource[] } {
   const pkg = readJson(path.join(root, 'package.json'));
   if (!pkg) return { read: [], off: [], unread: [] };
@@ -132,9 +173,24 @@ export function detectLibraries(
     source: sourceOf(library.package),
   }));
   const wanted = (id: LibraryId) => ids === undefined || (ids !== false && ids.includes(id));
+  const known = new Set([...LIBRARIES, ...UNREAD_LIBRARIES].map((library) => library.package));
+  const packages = declarationsPackages(root, undefined, options)
+    .filter((p) => !known.has(p.name))
+    .map((p): LibrarySource => ({
+      package: p.name,
+      dir: p.dir,
+      version: p.version,
+      designSystem: true,
+    }));
   return {
-    read: found.filter((f) => wanted(f.id)).map((f) => f.source),
-    off: found.filter((f) => !wanted(f.id)).map((f) => f.source),
+    read: [
+      ...found.filter((f) => wanted(f.id)).map((f) => f.source),
+      ...(ids === false ? [] : packages),
+    ],
+    off: [
+      ...found.filter((f) => !wanted(f.id)).map((f) => f.source),
+      ...(ids === false ? packages : []),
+    ],
     unread: UNREAD_LIBRARIES.filter((library) => dependencies.has(library.package)).map((library) =>
       sourceOf(library.package),
     ),

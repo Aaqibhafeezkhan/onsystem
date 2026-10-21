@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { escapePath, globSync } from 'tinyglobby';
 import ts from 'typescript';
 
 import {
@@ -13,11 +14,11 @@ import { projectFiles, type ProjectConfig } from '../extract/program.js';
 import type { ComponentInfo, InheritedProps, PropInfo, VariantInfo } from '../types.js';
 import { isInside, relativePath } from '../util/paths.js';
 import { truncate, unique } from '../util/strings.js';
-import type { LibraryAdapter } from './index.js';
+import type { DeclarationsAdapter } from './index.js';
 
 export interface ExtractLibraryOptions {
   root: string;
-  adapter: LibraryAdapter;
+  adapter: DeclarationsAdapter;
   /** The installed package's folder, as found (it may be a link, as pnpm installs it). */
   dir: string;
   project: ProjectConfig;
@@ -40,9 +41,9 @@ const MAX_LISTED_INHERITED = 40;
 
 /**
  * Reads a published library's components from its type declarations with the TypeScript
- * checker: every value its entry exports under a capitalised name whose type takes props
- * (function and class components, `forwardRef` and MUI's `OverridableComponent`), with the
- * props of each call signature, their string-literal values (custom ones the app declares by
+ * checker: every value its entry exports under a capitalised name whose type takes props and
+ * renders (function and class components, `forwardRef` and MUI's `OverridableComponent`), with
+ * the props of each call signature, their string-literal values (custom ones the app declares by
  * module augmentation included), JSDoc, the element it renders, and the module that
  * default-exports it. A signature generic over the element to render (MUI's `component`) marks
  * that prop as polymorphic instead of adding its props.
@@ -74,18 +75,28 @@ export function extractLibrary(options: ExtractLibraryOptions): LibraryExtractio
       options.project.options,
       ts.sys,
     ).resolvedModule?.resolvedFileName;
-  const entry = resolve(adapter.package) ?? path.join(real, typesEntry(real));
-  if (!fs.existsSync(entry) || !/\.d\.[cm]?ts$/.test(entry)) {
-    return empty(`${adapter.package}: no type declarations at ${relativePath(root, entry)}`);
+  // The package's entry; without one (`exports` with only `./button` and `./card`), each subpath's.
+  const main = resolve(adapter.package) ?? path.join(real, typesEntry(real));
+  const entries = isDeclarations(main)
+    ? [{ specifier: adapter.package, file: main }]
+    : subpathEntries(real, adapter.package, resolve);
+  if (!entries.length) {
+    return empty(`${adapter.package}: no type declarations at ${relativePath(root, main)}`);
   }
   const program = ts.createProgram({
-    rootNames: [entry, ...options.augmentations],
+    rootNames: [...entries.map((e) => e.file), ...options.augmentations],
     options: options.project.options,
+    host: declarationsHost(options.project.options),
   });
   const checker = program.getTypeChecker();
-  const entryFile = program.getSourceFile(entry);
-  const moduleSymbol = entryFile ? checker.getSymbolAtLocation(entryFile) : undefined;
-  if (!moduleSymbol) return empty(`${adapter.package}: ${entry} has no exports`);
+  const modules = entries.flatMap((e) => {
+    const file = program.getSourceFile(e.file);
+    const symbol = file ? checker.getSymbolAtLocation(file) : undefined;
+    return symbol ? [{ ...e, symbol }] : [];
+  });
+  if (!modules.length) {
+    return empty(`${adapter.package}: ${entries[0]?.file ?? main} has no exports`);
+  }
 
   // Where a file is, as the app sees the package (`node_modules/@mui/material/…`).
   const shown = (file: string) => {
@@ -102,36 +113,50 @@ export function extractLibrary(options: ExtractLibraryOptions): LibraryExtractio
     scope: adapter.package.startsWith('@')
       ? `${adapter.package.split('/')[0] ?? ''}/`
       : adapter.package,
+    icons: new Set(),
   };
 
   const exportNames = new Set<string>();
   const bySymbol = new Map<ts.Symbol, ComponentInfo>();
   const components: ComponentInfo[] = [];
-  for (const exported of checker.getExportsOfModule(moduleSymbol)) {
-    const name = exported.getName();
-    const symbol =
-      exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
-    if (!(symbol.flags & ts.SymbolFlags.Value)) continue;
-    exportNames.add(name);
-    if (!/^[A-Z]/.test(name)) continue;
-    const known = bySymbol.get(symbol);
-    if (known) {
-      known.aliases.push(name);
-      continue;
+  for (const module of modules) {
+    const subpath = module.specifier !== adapter.package;
+    for (const exported of checker.getExportsOfModule(module.symbol)) {
+      const symbol =
+        exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
+      if (!(symbol.flags & ts.SymbolFlags.Value)) continue;
+      const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
+      // A subpath's default export goes by the name it is declared with: `Button` for
+      // `export default Button` in `@acme/ui/button`. Unnamed, it is no component to offer.
+      const isDefault = exported.getName() === 'default';
+      const name =
+        isDefault && subpath && declaration
+          ? (ts.getNameOfDeclaration(declaration)?.getText() ?? 'default')
+          : exported.getName();
+      if (isDefault && !/^[A-Z]/.test(name)) continue;
+      exportNames.add(name);
+      if (!/^[A-Z]/.test(name)) continue;
+      const known = bySymbol.get(symbol);
+      if (known) {
+        if (known.name !== name && !known.aliases.includes(name)) known.aliases.push(name);
+        continue;
+      }
+      if (!declaration) continue;
+      const component = buildComponent(context, name, symbol);
+      if (!component) continue;
+      const file = declaration.getSourceFile();
+      const line = file.getLineAndCharacterOfPosition(declaration.getStart(file)).line + 1;
+      component.source = { file: shown(file.fileName), line };
+      if (subpath) component.importPath = module.specifier;
+      const defaultImport = isDefault
+        ? module.specifier
+        : defaultModule(program, checker, resolve, adapter.package, file, symbol);
+      if (defaultImport) component.defaultImport = defaultImport;
+      bySymbol.set(symbol, component);
+      components.push(component);
     }
-    const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
-    if (!declaration) continue;
-    const component = buildComponent(context, name, symbol);
-    if (!component) continue;
-    const file = declaration.getSourceFile();
-    const line = file.getLineAndCharacterOfPosition(declaration.getStart(file)).line + 1;
-    component.source = { file: shown(file.fileName), line };
-    const defaultImport = defaultModule(program, checker, resolve, adapter.package, file, symbol);
-    if (defaultImport) component.defaultImport = defaultImport;
-    bySymbol.set(symbol, component);
-    components.push(component);
   }
-  linkSlots(components);
+  linkSlots(components, context.icons);
 
   return {
     components,
@@ -144,10 +169,58 @@ export function extractLibrary(options: ExtractLibraryOptions): LibraryExtractio
 
 interface Context {
   checker: ts.TypeChecker;
-  adapter: LibraryAdapter;
+  adapter: DeclarationsAdapter;
   propSets: Map<string, string[]>;
   /** Props declared by these packages are the component's own: `@mui/`. */
   scope: string;
+  /** The components that render an SVG element: icons, which are no part of another component. */
+  icons: Set<ComponentInfo>;
+}
+
+/**
+ * A compiler host that resolves what the app's own resolution leaves unresolved in a package's
+ * declarations by path, as Node.js's old resolution does. A bundler emits declarations that
+ * import a dependency's file by its path (`class-variance-authority/dist/types`, for the
+ * `ClassProp` behind every `cva()` variant), which that dependency's `exports` do not name: with
+ * `"moduleResolution": "bundler"` the import is `any`, and a component's variants and props go
+ * with it. The app's own files resolve as they do for tsc.
+ */
+function declarationsHost(options: ts.CompilerOptions): ts.CompilerHost {
+  const host = ts.createCompilerHost(options);
+  const cache = ts.createModuleResolutionCache(
+    host.getCurrentDirectory(),
+    (file) => host.getCanonicalFileName(file),
+    options,
+  );
+  const byPath: ts.CompilerOptions = {
+    ...options,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the resolution by path that such an import needs; TypeScript 6 still has it.
+    moduleResolution: ts.ModuleResolutionKind.Node10,
+  };
+  host.resolveModuleNameLiterals = (literals, containingFile, redirected, compilerOptions, file) =>
+    literals.map((literal) => {
+      const resolved = ts.resolveModuleName(
+        literal.text,
+        containingFile,
+        compilerOptions,
+        host,
+        cache,
+        redirected,
+        ts.getModeForUsageLocation(file, literal, compilerOptions),
+      );
+      if (
+        resolved.resolvedModule ||
+        !/[\\/]node_modules[\\/].*\.d\.[cm]?ts$/.test(containingFile)
+      ) {
+        return resolved;
+      }
+      const fallback = ts.resolveModuleName(literal.text, containingFile, byPath, host);
+      return fallback.resolvedModule &&
+        /\.d\.[cm]?ts$/.test(fallback.resolvedModule.resolvedFileName)
+        ? fallback
+        : resolved;
+    });
+  return host;
 }
 
 /** The declaration entry of an installed package: its `types`, else `index.d.ts`. */
@@ -165,12 +238,147 @@ function typesEntry(dir: string): string {
   return 'index.d.ts';
 }
 
-/** Call and construct signatures that take props, across a union (`React.ComponentType`). */
-function propSignatures(type: ts.Type): ts.Signature[] {
+/** A type declarations file on disk: `.d.ts`, `.d.mts` or `.d.cts`. */
+function isDeclarations(file: string): boolean {
+  return /\.d\.[cm]?ts$/.test(file) && fs.existsSync(file);
+}
+
+/** Packages exporting more subpaths than this are read from the first ones, sorted. */
+const MAX_SUBPATHS = 500;
+
+/**
+ * The declarations of each subpath a package without an entry of its own exports (`./button`,
+ * `./card`, or the files a `./*` pattern maps), with the specifier apps import it by
+ * (`@acme/ui/button`): as the app's own imports resolve it, else through the `types` condition
+ * its `exports` give it. Subpaths that name no declarations (`./theme.css`) are left out.
+ */
+function subpathEntries(
+  dir: string,
+  name: string,
+  resolve: (specifier: string) => string | undefined,
+): { specifier: string; file: string }[] {
+  let exports: unknown;
+  try {
+    exports = (
+      JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as {
+        exports?: unknown;
+      }
+    ).exports;
+  } catch {
+    return [];
+  }
+  if (!exports || typeof exports !== 'object' || Array.isArray(exports)) return [];
+  const found = new Map<string, string>();
+  const add = (subpath: string, target: string | undefined) => {
+    const specifier = `${name}/${subpath}`;
+    const file = resolve(specifier) ?? (target ? path.resolve(dir, target) : undefined);
+    if (file && isInside(dir, path.resolve(file)) && isDeclarations(file)) {
+      found.set(specifier, file);
+    }
+  };
+  for (const [key, value] of Object.entries(exports as Record<string, unknown>)) {
+    if (!key.startsWith('./') || key === './package.json') continue;
+    const target = typesTarget(value);
+    const star = key.indexOf('*');
+    if (star === -1) {
+      add(key.slice(2), target);
+      continue;
+    }
+    // A pattern: each declarations file its `types` target matches, by what `*` stands for.
+    const at = target?.indexOf('*') ?? -1;
+    if (!target || at === -1) continue;
+    const prefix = path.posix.normalize(target.slice(0, at)).replace(/^\.\//, '');
+    const suffix = target.slice(at + 1);
+    // `*` stands for any path, folders included: every file below the folder the prefix is in.
+    const folder = prefix.slice(0, prefix.lastIndexOf('/') + 1);
+    const files = globSync(`${escapePath(folder)}**/*${escapePath(suffix)}`, {
+      cwd: dir,
+      ignore: ['**/node_modules/**'],
+      expandDirectories: false,
+    });
+    for (const file of files.sort()) {
+      if (!file.startsWith(prefix) || !file.endsWith(suffix)) continue;
+      const middle = file.slice(prefix.length, file.length - suffix.length);
+      add(`${key.slice(2, star)}${middle}${key.slice(star + 1)}`, path.join(dir, file));
+    }
+  }
+  return [...found]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, MAX_SUBPATHS)
+    .map(([specifier, file]) => ({ specifier, file }));
+}
+
+/** The first `types` target an `exports` value gives, through nested conditions. */
+function typesTarget(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = typesTarget(item);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (!value || typeof value !== 'object') return undefined;
+  for (const [condition, nested] of Object.entries(value)) {
+    if (condition === 'types' && typeof nested === 'string') return nested;
+    const found = typesTarget(nested);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * Call and construct signatures that take props and render, across a union
+ * (`React.ComponentType`): a call that returns an element, and a class whose instances have
+ * `render`. A capitalised function that returns anything else (`Format(value): string`) is no
+ * component.
+ */
+function propSignatures(checker: ts.TypeChecker, type: ts.Type): ts.Signature[] {
   const members = type.isUnion() ? type.types : [type];
   return members
-    .flatMap((member) => [...member.getCallSignatures(), ...member.getConstructSignatures()])
+    .flatMap((member) => [
+      ...member
+        .getCallSignatures()
+        .filter((s) => rendersElement(checker, checker.getReturnTypeOfSignature(s))),
+      ...member
+        .getConstructSignatures()
+        .filter(
+          (s) =>
+            checker.getPropertyOfType(checker.getReturnTypeOfSignature(s), 'render') !== undefined,
+        ),
+    ])
     .filter((signature) => signature.getParameters().length >= 1);
+}
+
+/**
+ * Whether a call's return type is what a component returns: a React element (`JSX.Element`,
+ * `ReactElement`), a `ReactNode` that can be one, a promise of one (a server component), or
+ * nothing (`null`). `any`, where React's types do not resolve, counts.
+ */
+function rendersElement(checker: ts.TypeChecker, type: ts.Type): boolean {
+  if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Null)) return true;
+  const members = (type.isUnion() ? type.types : [type]).filter(
+    (member) => !(member.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined)),
+  );
+  if (!members.length) return true;
+  return members.some((member) => {
+    if (member.flags & ts.TypeFlags.Any) return true;
+    if (
+      checker.getPropertyOfType(member, 'props') !== undefined &&
+      checker.getPropertyOfType(member, 'type') !== undefined
+    ) {
+      return true;
+    }
+    const awaited = checker.getPropertyOfType(member, 'then')
+      ? checker.getAwaitedType(member)
+      : undefined;
+    return awaited !== undefined && awaited !== member && rendersElement(checker, awaited);
+  });
+}
+
+/** A conditional type the checker cannot resolve yet, or a union or intersection with one. */
+function hasConditional(type: ts.Type): boolean {
+  if (type.flags & ts.TypeFlags.Conditional) return true;
+  return type.isUnionOrIntersection() && type.types.some((member) => hasConditional(member));
 }
 
 /** A React context (`ButtonGroupContext`): callable in React 19's types, but not a component to offer. */
@@ -222,7 +430,7 @@ function buildComponent(
   const { checker, adapter } = context;
   const type = checker.getTypeOfSymbol(symbol);
   if (isContext(checker, type)) return undefined;
-  const signatures = propSignatures(type);
+  const signatures = propSignatures(checker, type);
   if (!signatures.length) return undefined;
 
   let polymorphic: { name: string; symbol: ts.Symbol } | undefined;
@@ -246,6 +454,10 @@ function buildComponent(
       openProps = true;
       continue;
     }
+    // Props that depend on a type parameter through a conditional type (Mantine's
+    // `PolymorphicComponentProps<C, ButtonProps>`, `C = 'button'`) are only known once it is
+    // inferred: the props listed here are some of them, so the others are not invented.
+    if (signature.getTypeParameters()?.length && hasConditional(propsType)) openProps = true;
     for (const part of propsType.isUnion() ? propsType.types : [propsType]) {
       members++;
       if (checker.getIndexInfosOfType(part).length) openProps = true;
@@ -285,7 +497,8 @@ function buildComponent(
       .map(([origin]) => origin),
   );
 
-  const element = renderedElement(checker, used.at(-1));
+  const rendered = elementText(checker, used.at(-1));
+  const element = renderedElement(rendered);
   const props: PropInfo[] = [];
   const variants: VariantInfo[] = [];
   for (const [propName, entry] of entries) {
@@ -351,6 +564,8 @@ function buildComponent(
   };
   if (polymorphic) info.polymorphic = polymorphic.name;
   if (element) info.element = element;
+  // An icon: its props are an SVG element's (`SVGProps<SVGSVGElement>`, Lucide's `ref`).
+  if (rendered && /\bSVG\w*Element\b/.test(rendered)) context.icons.add(info);
   const jsdoc = ts.displayPartsToString(symbol.getDocumentationComment(checker)).trim();
   const description = jsdoc ? (adapter.describe?.(jsdoc, name) ?? jsdoc) : undefined;
   if (description) info.description = description;
@@ -496,18 +711,28 @@ function literalValues(checker: ts.TypeChecker, type: ts.Type, depth = 0): strin
   return values.length ? unique(values) : undefined;
 }
 
-/** The native element behind a signature, from the type of the `ref` its props take. */
-function renderedElement(
+/** The native element an {@link elementText} names: `button` for `Ref<HTMLButtonElement>`. */
+function renderedElement(text: string | undefined): string | undefined {
+  const element = text ? /\bHTML(\w+?)Element\b/.exec(text)?.[1] : undefined;
+  return element ? ELEMENT_INTERFACES[element] : undefined;
+}
+
+/**
+ * What names the native element behind a signature, as text: the type of the `ref` its props
+ * take, or without one, of the DOM event handler they take (`HTMLAttributes<HTMLSpanElement>`
+ * gives `onFocus: FocusEventHandler<HTMLSpanElement>`), as a function component's props declare
+ * it. An icon's names an SVG element (`FocusEventHandler<SVGSVGElement>`).
+ */
+function elementText(
   checker: ts.TypeChecker,
   signature: ts.Signature | undefined,
 ): string | undefined {
   const param = signature?.getParameters()[0];
   if (!param) return undefined;
-  const ref = checker.getPropertyOfType(checker.getTypeOfSymbol(param), 'ref');
-  if (!ref) return undefined;
-  const text = checker.typeToString(checker.getTypeOfSymbol(ref));
-  const element = /\bHTML(\w+?)Element\b/.exec(text)?.[1];
-  return element ? ELEMENT_INTERFACES[element] : undefined;
+  const props = checker.getTypeOfSymbol(param);
+  const typed =
+    checker.getPropertyOfType(props, 'ref') ?? checker.getPropertyOfType(props, 'onFocus');
+  return typed ? checker.typeToString(checker.getTypeOfSymbol(typed)) : undefined;
 }
 
 /**
@@ -539,26 +764,45 @@ function defaultModule(
 
 /**
  * Styled slots a library exports next to the component they belong to (`SliderThumb` in
- * `Slider.d.ts`) become its parts, so lists show the component and its parts under it.
+ * `Slider.d.ts`, `CardHeader` and `CardContent` next to `Card` in a bundle's one `index.d.ts`)
+ * become its parts, so lists show the component and its parts under it. A name that only goes
+ * on in lower case (`Tabs` next to `Tab`) is another component, and so is a lone container
+ * (`CheckboxGroup` next to `Checkbox`), as for source components. Icons are no parts and have
+ * none (`UserCheck` next to `User`). In a file that declares several components of their own,
+ * as a bundle does, a component with one such name next to it is no family
+ * (`ButtonTooltip` next to `Button`): only two or more are its parts.
  */
-function linkSlots(components: ComponentInfo[]): void {
+function linkSlots(components: ComponentInfo[], icons: ReadonlySet<ComponentInfo>): void {
   const byFile = new Map<string, ComponentInfo[]>();
   for (const component of components) {
+    if (icons.has(component)) continue;
     byFile.set(component.source.file, [...(byFile.get(component.source.file) ?? []), component]);
   }
   for (const group of byFile.values()) {
+    const parts = new Map<ComponentInfo, ComponentInfo[]>();
     for (const component of group) {
       const owner = group
         .filter(
           (other) =>
             other !== component &&
             component.name.length > other.name.length &&
-            component.name.startsWith(other.name),
+            component.name.startsWith(other.name) &&
+            /^[A-Z]/.test(component.name.charAt(other.name.length)),
         )
         .sort((a, b) => b.name.length - a.name.length)[0];
-      if (!owner) continue;
-      component.parent = owner.name;
-      owner.subcomponents.push(component.name);
+      if (owner) parts.set(owner, [...(parts.get(owner) ?? []), component]);
+    }
+    const owned = new Set([...parts.values()].flat());
+    const bundle = group.filter((component) => !owned.has(component)).length > 1;
+    for (const [owner, family] of parts) {
+      if (family.every((part) => /^(?:Group|List)$/.test(part.name.slice(owner.name.length)))) {
+        continue;
+      }
+      if (bundle && family.length < 2) continue;
+      for (const part of family) {
+        part.parent = owner.name;
+        owner.subcomponents.push(part.name);
+      }
     }
   }
 }

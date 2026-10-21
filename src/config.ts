@@ -553,7 +553,21 @@ export async function loadConfigWith(
     }
   }
 
-  const libraries = detectLibraries(root, config.libraries);
+  const components = (
+    options.components?.length
+      ? options.components
+      : configComponents !== undefined
+        ? configComponents.map(fromBase)
+        : detection
+          ? [...(detection.withDefaults ? DEFAULT_COMPONENTS : []), ...detection.components]
+          : DEFAULT_COMPONENTS
+  ).map(slashGlob);
+
+  // A design-system package whose sources these globs do not read is read from its declarations.
+  const libraries = detectLibraries(root, config.libraries, {
+    importPath: config.importPath,
+    components,
+  });
 
   const tokenSources = options.tokens?.length
     ? options.tokens.map((p) => ({ path: p }))
@@ -597,14 +611,7 @@ export async function loadConfigWith(
   return {
     root,
     configFile,
-    components: (options.components?.length
-      ? options.components
-      : configComponents !== undefined
-        ? configComponents.map(fromBase)
-        : detection
-          ? [...(detection.withDefaults ? DEFAULT_COMPONENTS : []), ...detection.components]
-          : DEFAULT_COMPONENTS
-    ).map(slashGlob),
+    components,
     // An app keeps the default excludes for its own files: a package's own `exclude` is about
     // the package, and only adds to them, whatever defaults it takes out. Finding the package's
     // files uses its list as it is.

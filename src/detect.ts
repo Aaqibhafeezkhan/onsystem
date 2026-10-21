@@ -242,6 +242,18 @@ export function detectProject(
     );
   }
   let imported: Map<string, Set<string>> | undefined;
+  // Packages published without their sources whose type declarations are read instead.
+  let declarations: Set<string> | undefined;
+  /** What the trace adds for an installed package whose sources are not read. */
+  const declarationsNote = (name: string, dir: string, pkg: Record<string, unknown>) => {
+    declarations ??= new Set(declarationsPackages(root, packages).map((p) => p.name));
+    if (declarations.has(name)) {
+      return '; its components are read from its type declarations instead';
+    }
+    if (!declaresTypes(dir, pkg)) return '';
+    const scope = scopeOf(name);
+    return `; its type declarations are read when it declares its onsystem config${scope ? `, when the app is in its npm scope (${scope}/…)` : ''} or when the app's config sets "importPath" to "${name}"`;
+  };
   for (const name of names) {
     // The package whose config the root takes on is read where it is, installed or not.
     const own = name === declared?.name ? declared : undefined;
@@ -279,10 +291,13 @@ export function detectProject(
       });
       step(candidate, true, `${relativePath(root, dir)}, ${countFiles(root, result)}`);
     } else {
+      const reason = result
+        ? 'its components match no file'
+        : unique(reasons).join('; ') || 'nothing to read';
       step(
         candidate,
         false,
-        result ? 'its components match no file' : unique(reasons).join('; ') || 'nothing to read',
+        kind === 'installed' ? `${reason}${declarationsNote(name, dir, pkg)}` : reason,
       );
     }
   }
@@ -1164,18 +1179,30 @@ export function presetResolver(
  * (`./theme.css`, or `theme.css` as plain CSS reads it), or a stylesheet of a workspace
  * package (`@acme/theme/colors.css`, or `@acme/theme` through its `exports` or its `style`
  * field). An installed package resolves only when zero config reads it as a design system
- * ({@link installedDesignSystem}), and a stylesheet in it imports others of that package alone.
- * In an installed package, a stylesheet in a build folder (`dist/index.css`) is compiled, and
- * resolves to nothing. Other installed packages (`tailwindcss`) and URLs resolve to nothing.
+ * ({@link installedDesignSystem}) or reads its type declarations ({@link declarationsPackages}:
+ * by its config, its scope or the config's `importPath`), and a stylesheet in it imports others
+ * of that package alone. In an installed package, a stylesheet in a build folder
+ * (`dist/index.css`) is compiled, and resolves to nothing. Other installed packages
+ * (`tailwindcss`) and URLs resolve to nothing.
  */
 export function stylesheetResolver(
   root: string,
+  { importPath }: Pick<DeclarationsOptions, 'importPath'> = {},
 ): (specifier: string, fromFile: string) => string | undefined {
   const packages = new PackageFinder(root);
   const designSystems = new Map<string, string | undefined>();
+  // Packages read from their type declarations are the app's design system too.
+  let declarations: Set<string> | undefined;
   const designSystem = (name: string) => {
     if (!designSystems.has(name)) {
-      designSystems.set(name, installedDesignSystem(root, name, packages));
+      declarations ??= new Set(
+        declarationsPackages(root, packages, { importPath }).map((p) => p.name),
+      );
+      designSystems.set(
+        name,
+        installedDesignSystem(root, name, packages) ??
+          (declarations.has(name) ? packages.installed(name) : undefined),
+      );
     }
     return designSystems.get(name);
   };
@@ -1460,6 +1487,133 @@ export function findDesignSystemPackage(
 export function packageImports(root: string, dir: string): ImportMapping[] {
   const pkg = readJson(path.join(dir, 'package.json'));
   return pkg ? (fromPackage(root, dir, pkg)?.imports ?? []) : [];
+}
+
+/** A design-system package an app reads from its type declarations ({@link declarationsPackages}). */
+export interface DeclarationsPackage {
+  name: string;
+  /** Where the app finds it, in the nearest `node_modules` that has it (a link, with pnpm). */
+  dir: string;
+  version?: string | undefined;
+  /**
+   * Why it is the app's design system: it declares its onsystem config (`config`), it is named
+   * like one in the root's own npm scope (`scope`), or the root's config names it as its
+   * `importPath` (`importPath`).
+   */
+  by: 'config' | 'scope' | 'importPath';
+}
+
+/** What {@link declarationsPackages} knows of the root's config. */
+export interface DeclarationsOptions {
+  /** The config's `importPath`: a dependency it names exactly (`@dub/ui`) is the app's design system. */
+  importPath?: string | undefined;
+  /**
+   * The component globs the root reads, relative to it: a package with component files they
+   * match (`node_modules/@acme/ui/src/**\/*.tsx`) is read from those sources, not from its
+   * declarations. Without them, none is read from its sources.
+   */
+  components?: readonly string[] | undefined;
+}
+
+/**
+ * The dependencies of `root` (in `dependencies` or `devDependencies`) whose components are read
+ * from their type declarations: design-system packages installed from a registry that name
+ * `.d.ts` files, and whose component sources the root does not read (`options.components`
+ * matches no file in them), as when they publish only compiled code. A design-system package
+ * is one that declares its onsystem config (set up with `init`); one named like a design system
+ * in the root's own npm scope (`@acme/ui` for `@acme/web`); or the dependency the root's config
+ * names as its `importPath`, whatever its name or scope (`@dub/ui` in an unscoped app). A kit
+ * from another scope named like one (`@sanity/ui`, `@react-email/components`) is not the app's
+ * design system unless the config says so, and is not read. Workspace packages are read from
+ * their sources. None at a workspace root, whose projects each find their own.
+ */
+export function declarationsPackages(
+  root: string,
+  packages: PackageFinder = new PackageFinder(root),
+  options: DeclarationsOptions = {},
+): DeclarationsPackage[] {
+  const own = readJson(path.join(root, 'package.json'));
+  if (!own || isWorkspaceRoot(root)) return [];
+  const scope = scopeOf(own.name);
+  const found: DeclarationsPackage[] = [];
+  let sources: string[] | undefined;
+  for (const name of Object.keys({
+    ...asRecord(own.dependencies),
+    ...asRecord(own.devDependencies),
+  })) {
+    const located = packages.locate(name);
+    if (!located) continue;
+    const declaration =
+      located.json[PACKAGE_FIELD] === undefined
+        ? undefined
+        : declaredConfig(packages.place(located.dir).dir, located.json);
+    const by =
+      declaration !== undefined && 'file' in declaration
+        ? 'config'
+        : scope !== undefined && scopeOf(name) === scope && isDesignSystemName(name)
+          ? 'scope'
+          : name === options.importPath
+            ? 'importPath'
+            : undefined;
+    if (!by) continue;
+    const installed = packages.installed(name);
+    const pkg = installed ? cachedManifest(path.join(installed, 'package.json')) : undefined;
+    if (!installed || !pkg || !declaresTypes(installed, pkg)) continue;
+    sources ??= componentSources(root, options.components ?? []);
+    if (sources.some((file) => isInside(realPath(installed), file))) continue;
+    const version = typeof pkg.version === 'string' ? pkg.version : undefined;
+    found.push({ name, dir: path.resolve(located.dir), version, by });
+  }
+  return found;
+}
+
+/** `@acme` for `@acme/web`; undefined for an unscoped name. */
+function scopeOf(name: unknown): string | undefined {
+  return typeof name === 'string' && /^@[^/]+\/./.test(name) ? name.split('/')[0] : undefined;
+}
+
+/** Whether a package names type declarations: `types`, a `types` export condition, or `index.d.ts`. */
+function declaresTypes(dir: string, pkg: Record<string, unknown>): boolean {
+  if (typeof pkg.types === 'string' || typeof pkg.typings === 'string') return true;
+  const hasTypes = (value: unknown): boolean =>
+    Array.isArray(value)
+      ? value.some(hasTypes)
+      : value !== null &&
+        typeof value === 'object' &&
+        Object.entries(value).some(([key, nested]) => key === 'types' || hasTypes(nested));
+  return hasTypes(pkg.exports) || isFile(path.join(dir, 'index.d.ts'));
+}
+
+/** Files that hold no component to read: declarations, tests and stories, as `exclude` has them. */
+const NOT_COMPONENT_SOURCES = [
+  '**/*.d.ts',
+  '**/*.{test,spec,stories}.{ts,tsx,js,jsx}',
+  '**/__{tests,stories,mocks}__/**',
+];
+
+/**
+ * The real paths of the component files in `node_modules` that `patterns` (relative to `root`)
+ * match: the sources of an installed package that the root reads, through a design-system
+ * package's config or zero config. Tests and stories are not components.
+ */
+function componentSources(root: string, patterns: readonly string[]): string[] {
+  const named = patterns.filter((p) => p.includes('node_modules'));
+  if (!named.length) return [];
+  return globSync(named, {
+    cwd: root,
+    absolute: true,
+    expandDirectories: false,
+    ignore: NOT_COMPONENT_SOURCES,
+  }).map(realPath);
+}
+
+/** A path with its links resolved, or as it is when it cannot be. */
+function realPath(file: string): string {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return path.resolve(file);
+  }
 }
 
 /**
