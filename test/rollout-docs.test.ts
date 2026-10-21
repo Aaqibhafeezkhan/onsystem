@@ -290,13 +290,24 @@ describe('the team rollout page (docs/rollout.md)', () => {
     for (const app of apps) expect(perApp).toContain(`\`onsystem (${app})\``);
   });
 
-  it('pins the action to the release the dev dependency is on', () => {
+  it('upgrades through the dev dependency, which the action runs, and pins the action for the rest', () => {
     const upgrade = section(rollout, 'Upgrade');
+    expect(upgrade).toContain('To upgrade, bump the dev dependency in a pull request of its own.');
     expect(upgrade).toContain(
       'git ls-remote https://github.com/dgesteves/onsystem refs/tags/onsystem@<version>',
     );
     expect(upgrade).toContain('uses: dgesteves/onsystem@<commit> # onsystem <version>');
-    // The action runs the CLI of its own release; the hook runs the project's install.
+    // The action runs the project's install, as the hook does; without one, the CLI of its own
+    // release.
+    const app = fixture({
+      'node_modules/onsystem/package.json': JSON.stringify({
+        name: 'onsystem',
+        version: '0.0.1',
+        bin: { onsystem: 'dist/cli.js' },
+      }),
+      'node_modules/onsystem/dist/cli.js': '',
+    });
+    expect(cli({}, root, { cwd: app, top: app }).installed?.version).toBe('0.0.1');
     const { version } = JSON.parse(read('package.json')) as { version: string };
     expect(cli({}, root).args).toEqual(['--yes', `onsystem@${version}`]);
   });

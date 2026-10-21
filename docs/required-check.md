@@ -46,7 +46,7 @@ The finding is counted in the summary with the findings on other lines. To fail 
 
 Install the dependencies first, as above: without them the props of components that wrap a library (Radix, React Aria) are unknown, and `no-unknown-prop` skips those components. The default checkout is enough: the action fetches the history it needs to find where the pull request branched off. `merge_group` makes it run in a merge queue too, which a required check needs if the branch uses one.
 
-`@v0` follows the latest 0.x release, and each release of the action runs the CLI of the same version (`npx onsystem@<version>`). To stay on one release, pin a commit SHA.
+`@v0` follows the latest 0.x release. The action runs the onsystem your project installed: `node_modules/onsystem` in `working-directory` or the nearest folder above it, up to the repository root. So the version your lockfile pins checks the pull request, as it does in the plugin's hook and in `npx onsystem`, and the step's log has a notice when that version is not the action's own. Without an install, each release of the action runs the CLI of the same version (`npx onsystem@<version>`). To stay on one release of the action, and of the CLI it runs without an install, pin a commit SHA ([Upgrade](rollout.md#upgrade)).
 
 | Input                   | Default | What it does                                                                                                                                                            |
 | ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

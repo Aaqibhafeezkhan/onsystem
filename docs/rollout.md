@@ -12,7 +12,7 @@ Add it as a dev dependency, at the root in a monorepo (with pnpm, `pnpm add -D -
 npm install --save-dev onsystem
 ```
 
-`npx onsystem` and the Claude Code plugin's hook run this install, so everyone runs the version in `package.json`. The GitHub Action runs the version of its own release: [pin it](#upgrade) to the same one.
+`npx onsystem`, the Claude Code plugin's hook and the GitHub Action run this install, so everyone and CI run the version your lockfile pins ([Upgrade](#upgrade)).
 
 ## Set up the design system
 
@@ -189,7 +189,9 @@ It reports first and is required later, as above, with `npx onsystem check .` ru
 
 ## Upgrade
 
-`@v0` follows the latest 0.x release, while the dev dependency stays on the version you installed. To run one version everywhere, pin the action to the commit of that release:
+With onsystem as a dev dependency, the lockfile decides the version that checks your code everywhere: `npx onsystem`, the plugin's hook, and the GitHub Action, which runs the install in `working-directory` or the nearest folder above it, up to the repository root. To upgrade, bump the dev dependency in a pull request of its own. A new release can find more, so run `npx onsystem check .` and fix what is new, or record it with `npx onsystem check . --update-baseline`, which the baseline's code owners then review. When the new findings come from a rule that the baseline says did not run, `check` says so. The Claude Code plugin updates from its marketplace (`/plugin marketplace update dgesteves`), and its hook runs the project's install whatever the plugin's version, so edits are checked with the pinned version.
+
+`@v0` follows the latest 0.x release of the action. Pinning the action's commit pins only the action's own code, which reads the lines a pull request changed and reports the findings, and the CLI it runs through `npx onsystem@<version>` when the project has no install. When the action's version is not the one installed, the step's log has a notice. To stay on one release, pin the commit of that release:
 
 ```sh
 git ls-remote https://github.com/dgesteves/onsystem refs/tags/onsystem@<version>
@@ -198,5 +200,3 @@ git ls-remote https://github.com/dgesteves/onsystem refs/tags/onsystem@<version>
 ```yaml
 - uses: dgesteves/onsystem@<commit> # onsystem <version>
 ```
-
-To upgrade, change both in one pull request: the dev dependency and the action's commit. A new release can find more, so run `npx onsystem check .` and fix what is new, or record it with `npx onsystem check . --update-baseline`, which the baseline's code owners then review. When the new findings come from a rule that the baseline says did not run, `check` says so. The Claude Code plugin updates from its marketplace (`/plugin marketplace update dgesteves`), and its hook runs the project's install whatever the plugin's version, so edits are checked with the pinned version.

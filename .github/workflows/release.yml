@@ -159,9 +159,10 @@ jobs:
       # With no pending changesets, onsystem@<version on main> gets what it lacks, if npm has it:
       # its tag and GitHub release, the tag vX.Y.Z and its GitHub release (the one the Marketplace
       # lists), and v0 on its commit while npm's latest is this version. `uses: dgesteves/onsystem@v0`
-      # runs the action at the commit v0 names, and the action runs the CLI version in its
-      # package.json, so v0 follows each release. This covers a publish whose tags or releases
-      # failed, on a re-run (which publishes nothing new) or on the next push.
+      # runs the action at the commit v0 names, and the action runs the project's install of
+      # onsystem, or without one the CLI version in its package.json, so v0 follows each release.
+      # This covers a publish whose tags or releases failed, on a re-run (which publishes nothing
+      # new) or on the next push.
       - name: Create the tags and GitHub releases, and move v0, if they are missing
         if: ${{ !cancelled() && steps.changesets.outputs.has-changesets == 'false' }}
         run: node scripts/check-published.mjs release

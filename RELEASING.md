@@ -22,7 +22,7 @@ The changelog entries come from `scripts/changelog.mjs`, which wraps `@changeset
 
 ## The GitHub Action's tags
 
-`uses: dgesteves/onsystem@v0` runs the action at the commit `v0` names, and the action runs the CLI version in its `package.json`, so `v0` follows each release. `vX.Y.Z` never moves, for whoever pins a version. The changesets tag can't serve as either: a `uses:` ref is split on `@` into two parts, so the Marketplace's "Use latest version" on the release `onsystem@0.6.0` gave `uses: dgesteves/onsystem@onsystem@0.6.0`, which doesn't run.
+`uses: dgesteves/onsystem@v0` runs the action at the commit `v0` names, and the action runs the project's install of onsystem, or without one the CLI version in its `package.json`, so `v0` follows each release. `vX.Y.Z` never moves, for whoever pins a version. The changesets tag can't serve as either: a `uses:` ref is split on `@` into two parts, so the Marketplace's "Use latest version" on the release `onsystem@0.6.0` gave `uses: dgesteves/onsystem@onsystem@0.6.0`, which doesn't run.
 
 The release `vX.Y.Z` is the one for the Marketplace. Its notes say how to pin it, and link the `onsystem@X.Y.Z` release. Publishing a release to the Marketplace is a box on the release's page, which the workflow can't tick: after each release, edit the `vX.Y.Z` release, tick "Publish this Action to the GitHub Marketplace" (GitHub may ask for 2FA), leave "Set as the latest release" as it is, and update it.
 
