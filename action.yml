@@ -39,7 +39,10 @@ outputs:
 runs:
   using: composite
   steps:
-    # Runs the CLI version in this action's package.json, so `@v0` at a release runs that release.
+    # Runs the project's install of onsystem (node_modules/onsystem in working-directory or the
+    # nearest folder above it, up to the repository root), with a notice when its version is not
+    # this action's. Without an install, runs the CLI version in this action's package.json
+    # through npx, so `@v0` at a release runs that release.
     - id: check
       shell: bash
       working-directory: ${{ inputs.working-directory }}

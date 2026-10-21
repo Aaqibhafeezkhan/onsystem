@@ -1546,23 +1546,26 @@ function readChangedLines(
 ): Map<string, LineRanges> | undefined {
   const file = env[CHANGED_LINES]?.trim();
   if (!file) return undefined;
+  // Outside the Action, the variable is most likely left over from a shell or another step.
+  const fail = (why: string) =>
+    new ConfigError(
+      `${CHANGED_LINES}: ${why}. The GitHub Action sets this variable to a file of the lines a pull request changed; unset it when you run check yourself.`,
+    );
   let parsed: unknown;
   try {
     parsed = JSON.parse(fs.readFileSync(path.resolve(cwd, file), 'utf8'));
   } catch (error) {
-    throw new ConfigError(`${CHANGED_LINES}: could not read ${file}: ${(error as Error).message}`);
+    throw fail(`could not read ${file}: ${(error as Error).message}`);
   }
   const range = (value: unknown): value is [number, number] =>
     Array.isArray(value) && value.length === 2 && value.every((n) => Number.isInteger(n));
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new ConfigError(`${CHANGED_LINES}: ${file} must map files to line ranges`);
+    throw fail(`${file} must map files to line ranges`);
   }
   const lines = new Map<string, LineRanges>();
   for (const [name, ranges] of Object.entries(parsed)) {
     if (!Array.isArray(ranges) || !ranges.every(range)) {
-      throw new ConfigError(
-        `${CHANGED_LINES}: ${file} › "${name}" must be a list of [start, end] lines`,
-      );
+      throw fail(`${file} › "${name}" must be a list of [start, end] lines`);
     }
     lines.set(realPath(path.resolve(cwd, name)), ranges);
   }

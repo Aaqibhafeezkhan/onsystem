@@ -167,6 +167,42 @@ describe('a baseline after a file is renamed or moved', () => {
     );
   });
 
+  it('follows a rename that changes only the case of a name, where the old spelling still opens the file', async () => {
+    const root = project();
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    const entries = baselineOf(root).files['app/legacy/old-billing.tsx'];
+    // On macOS and Windows, app/legacy/old-billing.tsx still opens the renamed file.
+    move(root, 'app/legacy/old-billing.tsx', 'app/legacy/Old-Billing.tsx');
+
+    const checked = await run(['check', '.', '--no-cache'], root);
+    expect(checked.code).toBe(0);
+    expect(checked.stdout.split('\n')).toEqual([
+      'No new problems in 2 files (4 in the baseline; 1 design-system file skipped).',
+      'Baseline: app/legacy/Old-Billing.tsx has the findings recorded for app/legacy/old-billing.tsx, which no longer exists, so they are accepted as moved. Run `check . --prune-baseline` to record the new path.',
+    ]);
+    await run(['check', '.', '--prune-baseline', '--no-cache'], root);
+    expect(baselineOf(root).files).toEqual({ 'app/legacy/Old-Billing.tsx': entries });
+
+    // An update drops the old spelling too, rather than keeping it next to the new one.
+    move(root, 'app/legacy/Old-Billing.tsx', 'app/legacy/OLD-BILLING.tsx');
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    expect(baselineOf(root).files).toEqual({ 'app/legacy/OLD-BILLING.tsx': entries });
+  });
+
+  it('pairs a file that was there before, when the code of a deleted file is pasted into it', async () => {
+    const root = project();
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    fs.rmSync(path.join(root, 'app/legacy/old-billing.tsx'));
+    fs.appendFileSync(path.join(root, 'app/page.tsx'), `\n${BILLING}`);
+
+    const checked = await run(['check', '.', '--no-cache'], root);
+    expect(checked.code).toBe(0);
+    expect(checked.stdout.split('\n')).toEqual([
+      'No new problems in 1 file (4 in the baseline; 1 design-system file skipped).',
+      'Baseline: app/page.tsx has the findings recorded for app/legacy/old-billing.tsx, which no longer exists, so they are accepted as moved. Run `check . --prune-baseline` to record the new path.',
+    ]);
+  });
+
   it('names several moves at once', async () => {
     const root = project({
       'app/legacy/invoices.tsx': 'export const I = () => <p className="bg-[#eeeeee]">x</p>',

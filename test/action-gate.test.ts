@@ -233,6 +233,10 @@ describe('a finding copied above baselined ones', () => {
       });
       expect(result.code).toBe(2);
       expect(result.stderr).toContain(message);
+      // Outside the Action, the variable is left over: say what sets it and what to do.
+      expect(result.stderr).toContain(
+        'The GitHub Action sets this variable to a file of the lines a pull request changed; unset it when you run check yourself.',
+      );
     }
   });
 });

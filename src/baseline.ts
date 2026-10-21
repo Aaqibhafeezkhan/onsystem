@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { ConfigError, RULE_IDS } from './config.js';
 import type { CheckResult, Diagnostic } from './types.js';
+import { relativePath } from './util/paths.js';
 
 export const BASELINE_FILE = 'onsystem.baseline.json';
 /** The baseline's name from before the rename to onsystem: still read when the new one is absent. */
@@ -164,6 +165,21 @@ export function applyBaseline(
 }
 
 /**
+ * Whether the key `file`, relative to the real `root`, still names a file by that spelling. On a
+ * disk that ignores case (macOS, Windows), `Billing.tsx` still opens after a rename to
+ * `billing.tsx`, but `check` keys the file by its new spelling, so the old key is gone, as on
+ * Linux.
+ */
+function existsAs(root: string, file: string): boolean {
+  try {
+    const real = fs.realpathSync.native(path.resolve(root, file));
+    return relativePath(root, real).normalize('NFC') === file;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The files with baseline entries that no longer exist under `root`, deleted or renamed, among
  * those `include` takes. `checked` are files a run read, which exist.
  */
@@ -174,7 +190,7 @@ export function goneFiles(
   include: (file: string) => boolean = () => true,
 ): string[] {
   return [...entries.keys()].filter(
-    (file) => !checked.has(file) && include(file) && !fs.existsSync(path.resolve(root, file)),
+    (file) => !checked.has(file) && include(file) && !existsAs(root, file),
   );
 }
 
@@ -253,7 +269,7 @@ export function findMoves(
  * The baseline after a run over `checked` (file → its findings): those files
  * get exactly their current findings, plus their previous entries for
  * `disabled` rules; other files keep their entries while they still exist
- * under `root`.
+ * under `root` by the same spelling.
  */
 export function updateBaseline(
   previous: Entries | undefined,
@@ -264,7 +280,7 @@ export function updateBaseline(
   const disabledIn = typeof disabled === 'function' ? disabled : () => disabled;
   const next: Entries = new Map();
   for (const [file, rules] of previous ?? []) {
-    if (!checked.has(file) && fs.existsSync(path.resolve(root, file))) next.set(file, rules);
+    if (!checked.has(file) && existsAs(root, file)) next.set(file, rules);
   }
   for (const [file, diagnostics] of checked) {
     const rules = new Map<string, Map<string, number>>();
@@ -318,8 +334,9 @@ export function rulesRun(
  * The baseline without the entries a run over `checked` (file → its findings) shows no longer
  * occur: a checked file keeps at most as many of each finding as it still has, plus its entries
  * for `disabled` rules, and files the run did not check keep theirs while they still exist under
- * `root`. Nothing is added, so a new finding stays new, unlike with `updateBaseline`. A file of
- * `moves` (new file → old file, from `findMoves`) takes the old file's entries as its own.
+ * `root` by the same spelling. Nothing is added, so a new finding stays new, unlike with
+ * `updateBaseline`. A file of `moves` (new file → old file, from `findMoves`) takes the old
+ * file's entries as its own.
  */
 export function pruneBaseline(
   previous: Entries,
@@ -337,7 +354,7 @@ export function pruneBaseline(
   for (const [file, rules] of files) {
     const diagnostics = checked.get(file);
     if (!diagnostics) {
-      if (fs.existsSync(path.resolve(root, file))) next.set(file, rules);
+      if (existsAs(root, file)) next.set(file, rules);
       continue;
     }
     const found = new Map<string, number>();
