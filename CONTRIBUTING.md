@@ -66,20 +66,7 @@ On merge to `main`, the release workflow opens a "chore: release" pull request: 
 
 The skill has one source, `plugins/onsystem/skills/onsystem/SKILL.md`. After editing it, run `pnpm sync-plugins` to copy it into the other packages; a test fails when a copy differs.
 
-### Retiring the old names (one-off, after onsystem 0.4.0 is on npm)
-
-The package was `@dgesteves/design-system-mcp` and its MCP Registry entry `io.github.dgesteves/design-system-mcp` until 0.4.0. Once `onsystem@0.4.0` is published, the maintainer points both at the new name, from a machine logged in to npm and with [`mcp-publisher`](https://github.com/modelcontextprotocol/registry/releases) installed:
-
-```sh
-npm deprecate @dgesteves/design-system-mcp "Renamed to onsystem: npm install onsystem. See https://design-system-mcp-demo.vercel.app/docs/migrating"
-
-mcp-publisher login github
-mcp-publisher status --status deprecated --all-versions --yes \
-  --message "Renamed to io.github.dgesteves/onsystem (npm: onsystem). See https://design-system-mcp-demo.vercel.app/docs/migrating" \
-  io.github.dgesteves/design-system-mcp
-```
-
-The registry has no field that points one server at another, so the status message carries the new name. Neither command is in a workflow: each runs once.
+The package took the name onsystem in 0.4.0. The old npm package and its MCP Registry entry are deprecated and point to [docs/migrating.md](docs/migrating.md); the code that still reads the old config, baseline and environment variable names is there on purpose.
 
 ## Pull requests
 
