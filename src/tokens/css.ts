@@ -9,7 +9,7 @@ import postcss, {
 
 import { TAILWIND_PALETTE } from '../lint/tailwind-palette.js';
 import type { Token, TokenCategory } from '../types.js';
-import { parseColor } from './color.js';
+import { isBareHsl, isBareRgb, parseColor } from './color.js';
 import { usageFor } from './usage.js';
 
 interface RawVar {
@@ -200,7 +200,7 @@ export function cssSheetTokens(sheets: readonly CssSheet[]): {
     const tailwindKey = isSpacingBase ? '' : variable.name.slice(namespace?.[0].length ?? 0);
     const tailwindNamespace = isSpacingBase ? '--spacing' : (namespace?.[0].slice(0, -1) ?? '');
 
-    const alias = /^var\(\s*(--[\w-]+)\s*\)$/.exec(variable.value)?.[1];
+    const alias = themeAlias(variable.value, base, lookup);
     const target = alias ? base.get(alias) : undefined;
     if (alias && target) {
       consumed.add(alias);
@@ -225,7 +225,8 @@ export function cssSheetTokens(sheets: readonly CssSheet[]): {
       finalize({
         name: variable.name.slice(2),
         category,
-        value: variable.value,
+        // `--color-brand: var(--color-blue-600)` has the value of Tailwind's blue-600.
+        value: resolveValue(variable.value, lookup),
         modes: modeValues(variable.name, modes, lookup),
         // Inline theme variables are compiled into utilities and never emitted as custom properties.
         cssVar: variable.inline ? undefined : variable.name,
@@ -379,6 +380,29 @@ function categorize(name: string, value: string): TokenCategory {
 /** `--x` for a value that is exactly `var(--x)`. */
 function varAlias(value: string): string | undefined {
   return /^var\(\s*(--[\w-]+)\s*\)$/.exec(value.trim())?.[1];
+}
+
+/**
+ * The base variable an `@theme` variable stands for: `--x` for `var(--x)`, and for
+ * `hsl(var(--x))` or `rgb(var(--x))` when `--x` holds bare HSL or RGB channels, as
+ * shadcn/ui's Tailwind v4 codemod leaves a v3 theme (`--color-primary: hsl(var(--primary))`).
+ * The token is then `--x`, whose usage already wraps the channels (`hsl(var(--primary))`).
+ */
+function themeAlias(
+  value: string,
+  base: ReadonlyMap<string, RawVar>,
+  lookup: (name: string) => string | undefined,
+): string | undefined {
+  const plain = varAlias(value);
+  if (plain) return plain;
+  const match = /^(hsl|rgb)a?\(\s*var\(\s*(--[\w-]+)\s*\)\s*(?:\/\s*<alpha-value>\s*)?\)$/.exec(
+    value.trim(),
+  );
+  const name = match?.[2];
+  const target = name ? base.get(name) : undefined;
+  if (!match || !name || !target) return undefined;
+  const channels = resolveValue(target.value, lookup);
+  return (match[1] === 'hsl' ? isBareHsl(channels) : isBareRgb(channels)) ? name : undefined;
 }
 
 /** Follows plain `var(--x)` aliases so the token shows its concrete value. */

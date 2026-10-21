@@ -99,9 +99,32 @@ function collect(
   }
 }
 
+/**
+ * Tailwind v3's default `borderRadius` scale, which `theme.extend.borderRadius` adds to and
+ * `theme.borderRadius` replaces. `none` (0) is left out, as the rule skips zero, and `full`
+ * is the token index's own `rounded-full`.
+ */
+const TAILWIND_V3_RADIUS: Readonly<Record<string, string>> = {
+  sm: '0.125rem',
+  DEFAULT: '0.25rem',
+  md: '0.375rem',
+  lg: '0.5rem',
+  xl: '0.75rem',
+  '2xl': '1rem',
+  '3xl': '1.5rem',
+};
+
+/** borderRadius entries by key, and which of them are Tailwind's default scale rather than the config's. */
+export class RadiusEntries extends Map<string, string> {
+  readonly defaults = new Set<string>();
+}
+
 export interface TailwindRadii {
-  /** borderRadius key → raw value: `sm` → `calc(var(--radius) - 4px)`. */
-  radii: Map<string, string>;
+  /**
+   * borderRadius key → raw value: `sm` → `calc(var(--radius) - 4px)`, then the steps of
+   * Tailwind's default scale the config keeps and does not set (`defaults`).
+   */
+  radii: RadiusEntries;
   /** The files read: the config and the project modules it imports. */
   files: string[];
 }
@@ -109,11 +132,16 @@ export interface TailwindRadii {
 /**
  * Reads `borderRadius` entries from a Tailwind v3 config without running it:
  * every `borderRadius` object in the file, then in the project modules it
- * imports, such as a shared preset. The config's own entries win.
+ * imports, such as a shared preset. The config's own entries win. Tailwind's
+ * default scale follows, for the keys none of them sets, unless the first
+ * `theme.borderRadius` outside `extend` replaces it without spreading it back
+ * in (`...defaultTheme.borderRadius`).
  */
 export function readTailwindRadii(file: string, resolve: ModuleResolver): TailwindRadii {
-  const radii = new Map<string, string>();
+  const radii = new RadiusEntries();
   const files: string[] = [];
+  // Whether the scale `theme.borderRadius` sets keeps Tailwind's; undefined while none does.
+  let keepsDefaults: boolean | undefined;
   const queue = [file];
   while (queue.length && files.length < MAX_FILES) {
     const current = queue.shift() ?? '';
@@ -138,7 +166,11 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
         propertyName(node.name) === 'borderRadius' &&
         ts.isObjectLiteralExpression(node.initializer)
       ) {
-        collectRadius(node.initializer, radii);
+        const spreads = collectRadius(node.initializer, radii);
+        const holder = node.parent.parent;
+        if (ts.isPropertyAssignment(holder) && propertyName(holder.name) === 'theme') {
+          keepsDefaults ??= spreads;
+        }
         return;
       }
       const specifier = importedSpecifier(node);
@@ -148,12 +180,29 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
     };
     visit(source);
   }
+  if (keepsDefaults !== false) {
+    for (const [key, value] of Object.entries(TAILWIND_V3_RADIUS)) {
+      if (radii.has(key)) continue;
+      radii.set(key, value);
+      radii.defaults.add(key);
+    }
+  }
   return { radii, files };
 }
 
-/** `sm: "calc(var(--radius) - 4px)"` → `sm` → raw string; first seen wins. */
-function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, string>): void {
+/**
+ * `sm: "calc(var(--radius) - 4px)"` → `sm` → raw string; first seen wins. True when the
+ * object spreads Tailwind's scale into it (`...defaultTheme.borderRadius`).
+ */
+function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, string>): boolean {
+  let spreads = false;
   for (const property of object.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      spreads ||=
+        ts.isPropertyAccessExpression(property.expression) &&
+        property.expression.name.text === 'borderRadius';
+      continue;
+    }
     if (!ts.isPropertyAssignment(property)) continue;
     const key = propertyName(property.name);
     if (key === undefined) continue;
@@ -164,11 +213,10 @@ function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, st
     } else if (ts.isNumericLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) {
       raw = value.text;
     }
-    // SpreadElement (`...defaultTheme.borderRadius`) cannot be resolved
-    // statically; those steps are skipped (documented limitation).
     if (raw === undefined || radii.has(key)) continue;
     radii.set(key, raw);
   }
+  return spreads;
 }
 
 /**
@@ -179,6 +227,13 @@ function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, st
  * token add a synthetic one, so the scale step exists as a candidate
  * (mirrors the spacing-steps synthesis); without it the literal would keep
  * matching the nearest unrelated token. Config entries win over presets.
+ *
+ * The steps of Tailwind's default scale ({@link RadiusEntries.defaults}) only add
+ * a token for a size that has none, named after nothing the project names:
+ * `rounded-xl` is 12px in a shadcn/ui v3 project, whose config extends the scale
+ * with `lg`, `md` and `sm`. They add none when a config step has no size (its
+ * `var(--radius)` is in no stylesheet read), as they would make a scale with
+ * holes, nor when a stylesheet imports Tailwind v4, whose own scale is read from it.
  */
 export function applyTailwindRadii(
   tokens: Token[],
@@ -190,10 +245,14 @@ export function applyTailwindRadii(
     if (token.category === 'radius' && token.cssVar) byVar.set(token.cssVar, token.value);
   }
   const resolve = (name: string): string | undefined => byVar.get(name);
+  const defaults = radii instanceof RadiusEntries ? radii.defaults : new Set<string>();
   const byPx = new Map<number, string>();
+  let unsized = false;
   for (const [key, raw] of radii) {
+    if (defaults.has(key)) continue;
     const px = evaluateLength(raw, resolve);
-    if (px !== undefined && !byPx.has(px)) byPx.set(px, key);
+    if (px === undefined) unsized = true;
+    else if (!byPx.has(px)) byPx.set(px, key);
   }
   const havePx = new Set<number>();
   for (const token of tokens) {
@@ -214,6 +273,28 @@ export function applyTailwindRadii(
       value: `${px}px`,
       tailwind: key,
       usage: usageFor({ category: 'radius', tailwind: key } as Token, '--radius'),
+      source: { file: configFile, line: 1 },
+    };
+    tokens.push(token);
+    havePx.add(px);
+  }
+  // Around a step of unknown size, Tailwind's steps would make a scale with a hole. Tailwind v4
+  // brings its own defaults, as tokens, which v3's would contradict (`sm` is 4px there).
+  if (unsized || tokens.some((t) => t.origin === 'tailwind-default')) return;
+  const names = new Set(tokens.map((t) => t.name));
+  for (const key of defaults) {
+    const value = radii.get(key) ?? '';
+    const px = evaluateLength(value, resolve);
+    const name = `radius-${key}`;
+    if (px === undefined || havePx.has(px) || names.has(name)) continue;
+    const token: Token = {
+      name,
+      category: 'radius',
+      value,
+      tailwind: key,
+      usage: usageFor({ category: 'radius', tailwind: key } as Token, '--radius'),
+      description: "Tailwind's default radius scale.",
+      origin: 'tailwind-default',
       source: { file: configFile, line: 1 },
     };
     tokens.push(token);
