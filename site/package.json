@@ -19,7 +19,7 @@
     "ai": "^7.0.137",
     "cmdk": "^1.1.1",
     "geist": "^1.7.2",
-    "next": "^16.4.0",
+    "next": "^16.4.2",
     "ondocs": "^0.10.0",
     "onsystem": "workspace:*",
     "react": "^19.3.0",
@@ -29,7 +29,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "@next/eslint-plugin-next": "^16.4.0",
+    "@next/eslint-plugin-next": "^16.4.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
@@ -40,7 +40,7 @@
     "globals": "^17.13.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.71.1",
-    "vitest": "^5.0.3"
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
   }
 }
