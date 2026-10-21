@@ -372,8 +372,74 @@ export const noHardcodedColor: Rule = {
         }
       }
     }
+
+    reportChartTokens(context, allow);
   },
 };
+
+/** Packages that draw charts: Recharts, Chart.js, Nivo, visx, Victory, Tremor, MUI X Charts, D3. */
+const CHART_LIBRARY = /chart|^@nivo\/|^@visx\/|^victory|^@tremor\/|^d3(?:-|$)/i;
+
+/** Roles of an element that is a drawing: a chart drawn by hand is an image. */
+const DRAWING_ROLE = /^(?:img|figure|graphics-[a-z]+)$/;
+
+const CHART_TOKEN =
+  'is a chart color, and this is not a chart: it changes with the chart palette, and it does not say what a status or brand color says. For a status color, add a token for it to the theme, such as `--success`; otherwise use the semantic token that fits.';
+
+/**
+ * Warns on a chart token outside a chart: `text-chart-2` on a green "Active" label in a theme
+ * with no success color. The class is a token, so the color rule would call it clean, but it
+ * says nothing a status or brand color says, and it changes with the chart palette (a gray or a
+ * blue in some shadcn/ui themes). A file that draws a chart is in scope throughout, legend dots
+ * and all: one that imports a chart library, renders a tag such as `<ChartContainer>` or
+ * `<BarChart>`, declares a name such as `chartData`, or is named for charts. So is an element
+ * in a drawing (`<svg>`, `role="img"`), as a chart drawn by hand is. When the design system's
+ * own components use chart tokens outside a chart, they are a palette it shares: nothing is
+ * reported.
+ */
+function reportChartTokens(context: RuleContext, allow: ReadonlySet<string>): void {
+  const { tokens } = context.target;
+  if (!tokens.scopedFamilies.has('chart')) return;
+  const chart = new Set<ScopedFamily>(['chart']);
+  const shared = [...(tokens.familyFiles.get('chart') ?? [])];
+  if (shared.some((file) => !scopesIn(chart, file).size)) return;
+  const { elements, imports, declared } = context.analysis;
+  const names = [context.file, ...elements.map((e) => e.tag), ...declared];
+  if (scopesIn(chart, ...names).size) return;
+  if ([...imports.values()].some((binding) => CHART_LIBRARY.test(binding.source))) return;
+  for (const classString of context.analysis.classStrings) {
+    const { element } = classString;
+    if (element && inDrawing(element)) continue;
+    for (const cls of splitClasses(classString.text, classString.start)) {
+      const key = COLOR_UTILITY.exec(parseUtility(cls.value).base)?.[1];
+      if (!key?.startsWith('chart-') || !tokens.colorKeys.has(key)) continue;
+      if (allow.has(cls.value.toLowerCase())) continue;
+      context.report({
+        start: cls.start,
+        end: cls.end,
+        message: `\`${cls.value}\` ${CHART_TOKEN}`,
+        severity: 'warning',
+      });
+    }
+  }
+}
+
+/** Whether the element is, or is in, a drawing: an `<svg>`, a `<figure>` or a `role="img"`. */
+function inDrawing(element: JsxNode): boolean {
+  const drawing = ts.findAncestor(element.node, (node) => {
+    if (!ts.isJsxElement(node) && !ts.isJsxSelfClosingElement(node)) return false;
+    const opening = ts.isJsxElement(node) ? node.openingElement : node;
+    const tag = opening.tagName.getText(element.node.getSourceFile());
+    if (tag === 'svg' || tag === 'figure') return true;
+    return opening.attributes.properties.some(
+      (attribute) =>
+        ts.isJsxAttribute(attribute) &&
+        attributeName(attribute) === 'role' &&
+        literalValues(attribute).some((value) => DRAWING_ROLE.test(value.text)),
+    );
+  });
+  return drawing !== undefined;
+}
 
 function reportLiteralColors(
   context: RuleContext,
