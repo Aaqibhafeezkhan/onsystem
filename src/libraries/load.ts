@@ -7,7 +7,7 @@ import { readProjectConfig, type ProjectConfig } from '../extract/program.js';
 import type { ComponentInfo, Token } from '../types.js';
 import { unique } from '../util/strings.js';
 import { extractLibrary } from './declarations.js';
-import { libraryAdapter, type AddedValue } from './index.js';
+import { libraryAdapter, packageAdapter, type AddedValue } from './index.js';
 
 export interface LoadedLibraries {
   components: ComponentInfo[];
@@ -36,7 +36,8 @@ const NOT_SOURCES = [
 /**
  * The components and tokens of the libraries `config` found (`config.libraries`): each one's
  * components from its type declarations, read together with the app's files that augment them,
- * and the tokens of the theme the app creates for it.
+ * and the tokens of the theme the app creates for it. A design-system package installed without
+ * its sources is read the same way, with no theme.
  */
 export async function loadLibraries(config: ResolvedConfig): Promise<LoadedLibraries> {
   const loaded: LoadedLibraries = {
@@ -48,7 +49,9 @@ export async function loadLibraries(config: ResolvedConfig): Promise<LoadedLibra
     dependencies: [],
   };
   const libraries = (config.libraries ?? []).flatMap((source) => {
-    const adapter = libraryAdapter(source.package);
+    const adapter =
+      libraryAdapter(source.package) ??
+      (source.designSystem ? packageAdapter(source.package) : undefined);
     return adapter ? [{ source, adapter }] : [];
   });
   if (!libraries.length) return loaded;

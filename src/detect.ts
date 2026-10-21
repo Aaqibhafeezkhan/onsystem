@@ -242,6 +242,10 @@ export function detectProject(
     );
   }
   let imported: Map<string, Set<string>> | undefined;
+  // Packages published without their sources whose type declarations are read instead.
+  let declarations: Set<string> | undefined;
+  const fromDeclarations = (name: string) =>
+    (declarations ??= new Set(declarationsPackages(root, packages).map((p) => p.name))).has(name);
   for (const name of names) {
     // The package whose config the root takes on is read where it is, installed or not.
     const own = name === declared?.name ? declared : undefined;
@@ -279,10 +283,15 @@ export function detectProject(
       });
       step(candidate, true, `${relativePath(root, dir)}, ${countFiles(root, result)}`);
     } else {
+      const reason = result
+        ? 'its components match no file'
+        : unique(reasons).join('; ') || 'nothing to read';
       step(
         candidate,
         false,
-        result ? 'its components match no file' : unique(reasons).join('; ') || 'nothing to read',
+        fromDeclarations(name)
+          ? `${reason}; its components are read from its type declarations instead`
+          : reason,
       );
     }
   }
@@ -1173,9 +1182,16 @@ export function stylesheetResolver(
 ): (specifier: string, fromFile: string) => string | undefined {
   const packages = new PackageFinder(root);
   const designSystems = new Map<string, string | undefined>();
+  // Packages read from their type declarations are the app's design system too.
+  let declarations: Set<string> | undefined;
   const designSystem = (name: string) => {
     if (!designSystems.has(name)) {
-      designSystems.set(name, installedDesignSystem(root, name, packages));
+      declarations ??= new Set(declarationsPackages(root, packages).map((p) => p.name));
+      designSystems.set(
+        name,
+        installedDesignSystem(root, name, packages) ??
+          (declarations.has(name) ? packages.installed(name) : undefined),
+      );
     }
     return designSystems.get(name);
   };
@@ -1460,6 +1476,91 @@ export function findDesignSystemPackage(
 export function packageImports(root: string, dir: string): ImportMapping[] {
   const pkg = readJson(path.join(dir, 'package.json'));
   return pkg ? (fromPackage(root, dir, pkg)?.imports ?? []) : [];
+}
+
+/** A design-system package an app reads from its type declarations ({@link declarationsPackages}). */
+export interface DeclarationsPackage {
+  name: string;
+  /** Where the app finds it, in the nearest `node_modules` that has it (a link, with pnpm). */
+  dir: string;
+  version?: string | undefined;
+  /** It declares its onsystem config, rather than being named like a design system in the root's scope. */
+  declared: boolean;
+}
+
+/**
+ * The dependencies of `root` (in `dependencies` or `devDependencies`) whose components are read
+ * from their type declarations: design-system packages installed from a registry that publish
+ * compiled code and `.d.ts` files but no component sources (no `.tsx` or `.jsx` file), so that
+ * neither zero config nor a config's globs read their components. A design-system package is one
+ * that declares its onsystem config (set up with `init`), or, without one, one named like a
+ * design system in the root's own npm scope: `@acme/ui` for `@acme/web`. A kit from another scope
+ * named like one (`@sanity/ui`, `@react-email/components`) is not the app's design system, and is
+ * not read. Workspace packages are read from their sources. None at a workspace root, whose
+ * projects each find their own.
+ */
+export function declarationsPackages(
+  root: string,
+  packages: PackageFinder = new PackageFinder(root),
+): DeclarationsPackage[] {
+  const own = readJson(path.join(root, 'package.json'));
+  if (!own || isWorkspaceRoot(root)) return [];
+  const scope = scopeOf(own.name);
+  const found: DeclarationsPackage[] = [];
+  for (const name of Object.keys({
+    ...asRecord(own.dependencies),
+    ...asRecord(own.devDependencies),
+  })) {
+    const located = packages.locate(name);
+    if (!located) continue;
+    const declaration =
+      located.json[PACKAGE_FIELD] === undefined
+        ? undefined
+        : declaredConfig(packages.place(located.dir).dir, located.json);
+    const declared = declaration !== undefined && 'file' in declaration;
+    if (
+      !declared &&
+      !(scope !== undefined && scopeOf(name) === scope && isDesignSystemName(name))
+    ) {
+      continue;
+    }
+    const installed = packages.installed(name);
+    const pkg = installed ? cachedManifest(path.join(installed, 'package.json')) : undefined;
+    if (!installed || !pkg || !declaresTypes(installed, pkg)) continue;
+    if (publishesComponentSources(installed)) continue;
+    const version = typeof pkg.version === 'string' ? pkg.version : undefined;
+    found.push({ name, dir: path.resolve(located.dir), version, declared });
+  }
+  return found;
+}
+
+/** `@acme` for `@acme/web`; undefined for an unscoped name. */
+function scopeOf(name: unknown): string | undefined {
+  return typeof name === 'string' && /^@[^/]+\/./.test(name) ? name.split('/')[0] : undefined;
+}
+
+/** Whether a package names type declarations: `types`, a `types` export condition, or `index.d.ts`. */
+function declaresTypes(dir: string, pkg: Record<string, unknown>): boolean {
+  if (typeof pkg.types === 'string' || typeof pkg.typings === 'string') return true;
+  const hasTypes = (value: unknown): boolean =>
+    Array.isArray(value)
+      ? value.some(hasTypes)
+      : value !== null &&
+        typeof value === 'object' &&
+        Object.entries(value).some(([key, nested]) => key === 'types' || hasTypes(nested));
+  return hasTypes(pkg.exports) || isFile(path.join(dir, 'index.d.ts'));
+}
+
+/**
+ * Whether an installed package ships component sources: `.tsx` or `.jsx` files outside its own
+ * `node_modules` and outside its build output (`dist/button.jsx` is compiled).
+ */
+function publishesComponentSources(dir: string): boolean {
+  return globSync('**/*.{tsx,jsx}', {
+    cwd: dir,
+    ignore: ['**/node_modules/**'],
+    expandDirectories: false,
+  }).some((file) => !isBuildOutput(dir, path.join(dir, file)));
 }
 
 /**
