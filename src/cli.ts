@@ -16,6 +16,7 @@ import {
   findMoves,
   goneFiles,
   LEGACY_BASELINE_FILE,
+  onLines,
   pruneBaseline,
   readBaseline,
   rulesRun,
@@ -525,11 +526,15 @@ async function check(
       new Set(disabledByKey.keys()),
       (key) => matching || covered(key),
     );
+    // With the lines a pull request changed, a file it did not touch keeps the entries it took
+    // over in an earlier move, rather than a copy the pull request adds taking them.
+    const changedIn = new Map(unrecorded.map((u) => [u.key, u.changed]));
     moves = findMoves(
       baseline.entries,
       new Map(unrecorded.map((u) => [u.key, u.result.diagnostics])),
       gone,
       (key) => disabledByKey.get(key) ?? new Set(),
+      (key, diagnostic) => onLines(changedIn.get(key), diagnostic),
     );
     for (const { index, key, result, disabled, changed } of unrecorded) {
       const from = moves.get(key) ?? key;

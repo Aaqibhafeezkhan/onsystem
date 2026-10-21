@@ -167,6 +167,23 @@ describe('a baseline after a file is renamed or moved', () => {
     );
   });
 
+  it('pairs a file renamed in its folder before a copy elsewhere that matches as well', async () => {
+    const root = project();
+    await run(['check', '.', '--update-baseline', '--no-cache'], root);
+    // Renamed, and the baseline not pruned; later a copy, first in path order.
+    move(root, 'app/legacy/old-billing.tsx', 'app/legacy/billing-v1.tsx');
+    fs.writeFileSync(path.join(root, 'app/billing.tsx'), BILLING);
+
+    // Without the lines a pull request changed, the folder is all that tells them apart.
+    const checked = await run(['check', '.', '--no-cache'], root);
+    expect(checked.code).toBe(1);
+    expect(checked.stdout).toMatch(/^app\/billing\.tsx$/m);
+    expect(checked.stdout).not.toMatch(/^app\/legacy\/billing-v1\.tsx$/m);
+    expect(checked.stdout).toContain(
+      'Baseline: app/legacy/billing-v1.tsx has the findings recorded for app/legacy/old-billing.tsx',
+    );
+  });
+
   it('follows a rename that changes only the case of a name, where the old spelling still opens the file', async () => {
     const root = project();
     await run(['check', '.', '--update-baseline', '--no-cache'], root);

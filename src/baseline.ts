@@ -114,6 +114,13 @@ export interface BaselineMatch {
 /** Line ranges, 1-based and inclusive, such as the lines a pull request changed in a file. */
 export type LineRanges = readonly (readonly [number, number])[];
 
+/** Whether `diagnostic` is on one of the `lines`, such as those a pull request changed. */
+export function onLines(lines: LineRanges | undefined, diagnostic: Diagnostic): boolean {
+  return (
+    lines?.some(([start, end]) => start <= diagnostic.endLine && end >= diagnostic.line) ?? false
+  );
+}
+
 /**
  * Removes the findings the baseline accepts for `file`. Within a file and
  * rule, each entry accepts that many findings with the same source text, in
@@ -134,12 +141,10 @@ export function applyBaseline(
     if (disabled.has(rule)) continue;
     for (const [source, count] of sources) remaining.set(`${rule}\0${source}`, count);
   }
-  const onChanged = (d: Diagnostic) =>
-    changed?.some(([start, end]) => start <= d.endLine && end >= d.line) ?? false;
   const accepted = new Set<Diagnostic>();
   for (const later of [false, true]) {
     for (const diagnostic of result.diagnostics) {
-      if (onChanged(diagnostic) !== later) continue;
+      if (onLines(changed, diagnostic) !== later) continue;
       const id = `${diagnostic.ruleId}\0${findingKey(diagnostic)}`;
       const left = remaining.get(id) ?? 0;
       if (left > 0) {
@@ -198,15 +203,24 @@ export function goneFiles(
  * Renamed and moved files (`git mv`, a folder reorganised): each file of `unrecorded` (file → its
  * findings), which has no entries of its own, paired with a file of `gone` whose entries match at
  * least half of its findings and half of those entries match its findings, as git counts a
- * rename from 50% similarity. Each file of `gone` pairs with one file at most, best match first,
- * so a copy of a file is new however many copies there are. Entries of rules `disabled` for the
- * new file are left out, as `applyBaseline` leaves them out. Returns new file → old file.
+ * rename from 50% similarity. Each file of `gone` pairs with one file at most, so a copy of a
+ * file is new however many copies there are. Entries of rules `disabled` for the new file are
+ * left out, as `applyBaseline` leaves them out. Returns new file → old file.
+ *
+ * Best match first: the file with most matching findings that are not `fresh`, then the one with
+ * most matching findings. With `fresh`, the findings on the lines a pull request changed, a file
+ * the pull request did not touch keeps the entries it took over in an earlier move, and a copy
+ * the pull request adds is the new one, as `applyBaseline` spends entries on the other lines
+ * first.
+ * Without it, as in a plain `check`, ties go to a file that kept the old one's name (a folder
+ * moved), then to one in the old one's folder (a file renamed), then to path order.
  */
 export function findMoves(
   entries: Entries,
   unrecorded: ReadonlyMap<string, readonly Diagnostic[]>,
   gone: readonly string[],
   disabled: (file: string) => ReadonlySet<string> = () => new Set(),
+  fresh: (file: string, diagnostic: Diagnostic) => boolean = () => false,
 ): Map<string, string> {
   // Finding id → the gone files with entries for it, and how many.
   const recorded = new Map<string, { file: string; count: number }[]>();
@@ -220,38 +234,51 @@ export function findMoves(
       }
     }
   }
-  const pairs: { to: string; from: string; matched: number }[] = [];
+  const pairs: { to: string; from: string; matched: number; kept: number }[] = [];
   for (const [to, diagnostics] of unrecorded) {
     if (entries.has(to) || !diagnostics.length) continue;
-    const found = new Map<string, number>();
+    // Finding id → how many the file has, and how many of those are not fresh.
+    const found = new Map<string, { all: number; old: number }>();
     for (const diagnostic of diagnostics) {
       const id = `${diagnostic.ruleId}\0${findingKey(diagnostic)}`;
-      found.set(id, (found.get(id) ?? 0) + 1);
+      const n = found.get(id) ?? { all: 0, old: 0 };
+      n.all += 1;
+      if (!fresh(to, diagnostic)) n.old += 1;
+      found.set(id, n);
     }
-    const matched = new Map<string, number>();
-    for (const [id, n] of found) {
+    const matched = new Map<string, { matched: number; kept: number }>();
+    for (const [id, { all, old }] of found) {
       for (const { file, count } of recorded.get(id) ?? []) {
-        matched.set(file, (matched.get(file) ?? 0) + Math.min(n, count));
+        const m = matched.get(file) ?? { matched: 0, kept: 0 };
+        m.matched += Math.min(all, count);
+        m.kept += Math.min(old, count);
+        matched.set(file, m);
       }
     }
     const off = disabled(to);
-    for (const [from, n] of matched) {
+    for (const [from, { matched: n, kept }] of matched) {
       let size = 0;
       for (const [rule, sources] of entries.get(from) ?? []) {
         if (off.has(rule)) continue;
         for (const count of sources.values()) size += count;
       }
-      if (n * 2 >= diagnostics.length && n * 2 >= size) pairs.push({ to, from, matched: n });
+      if (n * 2 >= diagnostics.length && n * 2 >= size) pairs.push({ to, from, matched: n, kept });
     }
   }
-  // The best matches first; then a file that kept its name (a folder moved), then path order.
+  // The best matches first: most matching findings off the changed lines, then most matching
+  // findings; then a file that kept its name (a folder moved), one that kept its folder (a file
+  // renamed), then path order.
   const sameName = (pair: { to: string; from: string }) =>
     path.posix.basename(pair.to) === path.posix.basename(pair.from) ? 0 : 1;
+  const sameFolder = (pair: { to: string; from: string }) =>
+    path.posix.dirname(pair.to) === path.posix.dirname(pair.from) ? 0 : 1;
   const order = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   pairs.sort(
     (a, b) =>
+      b.kept - a.kept ||
       b.matched - a.matched ||
       sameName(a) - sameName(b) ||
+      sameFolder(a) - sameFolder(b) ||
       order(a.to, b.to) ||
       order(a.from, b.from),
   );

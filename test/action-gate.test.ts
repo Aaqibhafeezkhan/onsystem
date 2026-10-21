@@ -241,6 +241,71 @@ describe('a finding copied above baselined ones', () => {
   });
 });
 
+describe('a copy of a moved file whose new path the baseline does not record yet', () => {
+  const legacy = (text: string) =>
+    ['export const Old = () => (', '  <div>', section(text), '  </div>', ')', ''].join('\n');
+
+  /**
+   * Three commits: main records app/legacy/old.tsx in the baseline; a merged pull request renames
+   * it to app/legacy/zzz.tsx and leaves the baseline as it was; a `feature` branch adds `added`,
+   * with another copy of its finding on line 3.
+   */
+  async function renamedThenCopied(added: string) {
+    const root = fixture({
+      'components/ui/button.tsx': BUTTON,
+      'app/globals.css': ':root { --primary: oklch(0.205 0 0); --muted: #f4f4f5; }',
+      'app/legacy/old.tsx': legacy('old'),
+    });
+    await check(['check', '.', '--update-baseline', '--no-cache'], root);
+    git(root, 'init', '--quiet');
+    git(root, 'add', '.');
+    git(root, 'commit', '--quiet', '--no-verify', '-m', 'base');
+    git(root, 'mv', 'app/legacy/old.tsx', 'app/legacy/zzz.tsx');
+    git(root, 'commit', '--quiet', '--no-verify', '-m', 'rename, without --prune-baseline');
+    const base = git(root, 'rev-parse', 'HEAD');
+    git(root, 'checkout', '--quiet', '-b', 'feature');
+    fs.writeFileSync(path.join(root, added), legacy('new'));
+    git(root, 'add', '.');
+    git(root, 'commit', '--quiet', '--no-verify', '-m', 'copy the page');
+    return { root, base };
+  }
+
+  // The renamed file keeps the entries: its finding is on a line the pull request did not
+  // change. Before, the copy took them, by path order or by the old file's name.
+  for (const added of ['app/aaa.tsx', 'app/old.tsx']) {
+    it(`fails the pull request in the GitHub Action, on the copy (${added})`, async () => {
+      const { root, base } = await renamedThenCopied(added);
+      const scratch = fixture({});
+      const keep = path.join(scratch, 'changed.json');
+      action(root, { ...pullRequest(base), ONSYSTEM_BIN: BIN, STUB_KEEP: keep });
+      expect(JSON.parse(fs.readFileSync(keep, 'utf8'))).toEqual({
+        [fs.realpathSync.native(path.join(root, added))]: [[1, 5]],
+      });
+
+      const checked = await check(['check', '.', '--format', 'json', '--no-cache'], root, {
+        ONSYSTEM_CHANGED_LINES: keep,
+      });
+      expect(checked.stderr).toContain(
+        'Baseline: app/legacy/zzz.tsx has the findings recorded for app/legacy/old.tsx, which no longer exists, so they are accepted as moved.',
+      );
+      const replay = path.join(scratch, 'results.json');
+      fs.writeFileSync(replay, checked.stdout);
+      const result = action(root, {
+        ...pullRequest(base),
+        ONSYSTEM_BIN: BIN,
+        STUB_REPLAY: replay,
+        STUB_STATUS: String(checked.code),
+      });
+      expect(result.code).toBe(1);
+      expect(result.stdout).toContain(`::error file=${added},line=3,`);
+      expect(result.stdout).not.toContain('file=app/legacy/zzz.tsx');
+      expect(result.stdout).toContain(
+        'onsystem: 1 error and 0 warnings on lines this pull request changed in 2 files checked.',
+      );
+    });
+  }
+});
+
 /** An onsystem package installed in `dir`, whose CLI is the stand-in. */
 function install(dir: string, version: string, name = 'onsystem') {
   const pkg = path.join(dir, 'node_modules', 'onsystem');
