@@ -29,6 +29,9 @@ const MAX_FILES = 12;
 /** A config or preset module, which is read for its theme. */
 const SCRIPT_FILE = /\.[cm]?[jt]s$/;
 
+/** Tailwind's own modules, such as `tailwindcss/defaultTheme`, which hold its defaults. */
+const TAILWIND_MODULE = /^tailwindcss(?:\/|$)/;
+
 /**
  * Reads which custom property backs which color class from a Tailwind v3
  * config, without running it: every `colors` object in the file
@@ -138,8 +141,9 @@ export interface TailwindRadii {
  * imports, such as a shared preset. The config's own entries win. Tailwind's
  * default scale follows, for the keys none of them sets, unless the first
  * `theme.borderRadius` outside `extend` replaces it without spreading it back
- * in (`...defaultTheme.borderRadius`), a `theme` is a whole module
- * (`theme: require("./theme")`), `presets: []` drops Tailwind's default config
+ * in (`...defaultTheme.borderRadius`), a `theme` is a whole module or spreads
+ * one (`theme: require("./theme")`, `theme: { ...require("./theme") }`), other
+ * than Tailwind's own, `presets: []` drops Tailwind's default config
  * and no `theme.borderRadius` spreads the scale back in, or the scale comes from
  * somewhere this cannot read. That is a module that is no project file (one
  * installed from npm, other than Tailwind's own) that the config takes as a
@@ -181,16 +185,16 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
     // A value taken from a module that is no project file, such as `require("@acme/preset")` or a
     // name imported from it: none of it is read. Tailwind's own modules are its defaults.
     const external = (specifier: string | undefined): boolean => {
-      if (specifier === undefined || /^tailwindcss(?:\/|$)/.test(specifier)) return false;
+      if (specifier === undefined || TAILWIND_MODULE.test(specifier)) return false;
       const target = resolve(specifier, current);
       return !(target && SCRIPT_FILE.test(target));
     };
     const fromPackage = (value: ts.Expression): boolean => external(moduleOf(value, bindings));
-    // `...defaultTheme.borderRadius`, or `...borderRadius` required from `tailwindcss/defaultTheme`.
-    const defaultScale = (value: ts.Expression): boolean =>
-      !fromPackage(value) &&
-      ((ts.isPropertyAccessExpression(value) && value.name.text === 'borderRadius') ||
-        /^tailwindcss(?:\/|$)/.test(moduleOf(value, bindings) ?? ''));
+    // `defaultTheme.borderRadius`, or `borderRadius` required from `tailwindcss/defaultTheme`: only
+    // Tailwind's own modules hold its scale. A project module's or a local object's
+    // `borderRadius` is a scale of its own.
+    const fromTailwind = (value: ts.Expression): boolean =>
+      TAILWIND_MODULE.test(moduleOf(value, bindings) ?? '');
     const visit = (node: ts.Node): void => {
       if (
         (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
@@ -203,8 +207,9 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
           let spreads = false;
           for (const property of value.properties) {
             if (!ts.isSpreadAssignment(property)) continue;
-            // `...defaultTheme.borderRadius` is Tailwind's scale; `...acmeRadius` sets steps not read.
-            if (defaultScale(property.expression)) spreads = true;
+            // `...defaultTheme.borderRadius` is Tailwind's scale; `...acmeRadius` or
+            // `...shared.borderRadius` is a scale of its own, with steps that may not be read.
+            if (fromTailwind(property.expression)) spreads = true;
             else unread = true;
           }
           if (holder === 'theme') keepsDefaults ??= spreads;
@@ -246,12 +251,24 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
         }
       }
       // `{ ...require("@acme/tailwind-config"), content }`, or a theme or `extend` spread from one.
+      // A variable's object that only serves as a theme value is none of them:
+      // `const brand = { ...blue, ...blueDark }` with `colors: brand`.
       if (
         ts.isSpreadAssignment(node) &&
-        (!ts.isPropertyAssignment(node.parent.parent) || themeSection(node.parent) !== undefined) &&
-        fromPackage(node.expression)
+        fromPackage(node.expression) &&
+        (themeSection(node.parent) !== undefined ||
+          (!ts.isPropertyAssignment(node.parent.parent) && !themeValueOnly(node.parent, source)))
       ) {
         unread = true;
+      }
+      // `theme: { ...require("./theme") }`: a whole theme, whose `borderRadius` replaces the scale,
+      // as with `theme: require("./theme")`. `...defaultTheme` is Tailwind's own.
+      if (
+        ts.isSpreadAssignment(node) &&
+        themeSection(node.parent) === 'theme' &&
+        !fromTailwind(node.expression)
+      ) {
+        keepsDefaults ??= false;
       }
       // `module.exports = require("@acme/tailwind-config")`, `export default base` or
       // `export { default } from "@acme/tailwind-config"`.
@@ -405,6 +422,71 @@ export function applyTailwindRadii(
     };
     tokens.push(token);
     havePx.add(px);
+  }
+}
+
+/**
+ * Whether an object is the value of a variable that its file uses only as a theme value of a
+ * key other than `extend` and `borderRadius`, such as `const brand = { ...blue, ...blueDark }`
+ * with `theme: { extend: { colors: brand } }`. What it spreads is then no config, theme or
+ * radius scale. A variable that is exported, or used in any other way, may be one.
+ */
+function themeValueOnly(object: ts.ObjectLiteralExpression, source: ts.SourceFile): boolean {
+  let value: ts.Node = object;
+  while (
+    ts.isParenthesizedExpression(value.parent) ||
+    ts.isAsExpression(value.parent) ||
+    ts.isSatisfiesExpression(value.parent)
+  ) {
+    value = value.parent;
+  }
+  const declaration = value.parent;
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    declaration.initializer !== value ||
+    !ts.isIdentifier(declaration.name) ||
+    !ts.isVariableStatement(declaration.parent.parent) ||
+    declaration.parent.parent.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+  ) {
+    return false;
+  }
+  const name = declaration.name;
+  let only = true;
+  const visit = (node: ts.Node): void => {
+    if (!only) return;
+    const parent = node.parent as ts.Node | undefined;
+    const key =
+      parent !== undefined &&
+      (ts.isPropertyAssignment(parent) || ts.isPropertyAccessExpression(parent)) &&
+      parent.name === node;
+    if (ts.isIdentifier(node) && node !== name && node.text === name.text && !key) {
+      only = isThemeValue(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return only;
+}
+
+/**
+ * Whether a name is a theme value, under a key other than `extend` and `borderRadius`:
+ * `colors: brand`, or `colors: { brand }`.
+ */
+function isThemeValue(reference: ts.Identifier): boolean {
+  const parent = reference.parent;
+  let property: ts.PropertyAssignment | ts.ShorthandPropertyAssignment;
+  if (ts.isPropertyAssignment(parent) && parent.initializer === reference) property = parent;
+  else if (ts.isShorthandPropertyAssignment(parent)) property = parent;
+  else return false;
+  for (;;) {
+    const key = propertyName(property.name);
+    const object = property.parent;
+    if (themeSection(object) !== undefined) {
+      return key !== undefined && key !== 'extend' && key !== 'borderRadius';
+    }
+    const holder = object.parent;
+    if (!ts.isPropertyAssignment(holder) || holder.initializer !== object) return false;
+    property = holder;
   }
 }
 

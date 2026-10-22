@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -297,6 +298,20 @@ module.exports = { theme: { borderRadius: { ...defaultTheme.borderRadius, card: 
       },
     ],
     [
+      'a shared config spread into a variable exported as the config',
+      {
+        'tailwind.config.ts': `import base from "@acme/tailwind-config";\nimport type { Config } from "tailwindcss";\nconst config = { ...base, content: ["./app/**/*.tsx"] } satisfies Config;\nexport default config;`,
+        ...installed('@acme/tailwind-config', SHARED_CONFIG),
+      },
+    ],
+    [
+      'a theme extension spread from a package into a variable',
+      {
+        'tailwind.config.js': `const extend = { ...require("@acme/theme") };\nmodule.exports = { theme: { extend } };`,
+        ...installed('@acme/theme', THEME),
+      },
+    ],
+    [
       'a shared config imported as the config',
       {
         'tailwind.config.ts': `import base from "@acme/tailwind-config";\nexport default base;`,
@@ -391,6 +406,59 @@ module.exports = { theme: { borderRadius: { ...defaultTheme.borderRadius, card: 
     expect(texts).toEqual(['rounded-lg', 'rounded', 'rounded-lg']);
   });
 
+  // A theme spread from the project replaces the scale as `theme: require("./theme")` does.
+  it.each([
+    ['spread inline', `module.exports = { theme: { ...require("./theme"), extend: {} } }`],
+    ['spread from a name', `const t = require("./theme");\nmodule.exports = { theme: { ...t } };`],
+  ])('reads a theme in the project, %s, as the whole scale', async (_, config) => {
+    const root = fixture({
+      'app/globals.css': V3_PLAIN,
+      'tailwind.config.js': config,
+      'theme.js': THEME,
+    });
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-lg', 'rounded', 'rounded-lg']);
+  });
+
+  // Only Tailwind's own modules hold its scale: a `borderRadius` spread from anywhere else is a
+  // scale of the project's, and its steps are the ones read.
+  it('reads a borderRadius spread from a project module as its own scale', async () => {
+    const root = fixture({
+      'app/globals.css': V3_PLAIN,
+      'tailwind.config.js': `const shared = require("./shared-theme");\nmodule.exports = { theme: { borderRadius: { ...shared.borderRadius, card: "10px" } } };`,
+      'shared-theme.js': THEME,
+    });
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-card', 'rounded', 'rounded-card']);
+  });
+
+  it('reads a borderRadius spread from a local object as its own scale', async () => {
+    const root = fixture({
+      'app/globals.css': V3_PLAIN,
+      'tailwind.config.js': `const shared = { borderRadius: { sm: "2px", DEFAULT: "6px", lg: "10px" } };\nmodule.exports = { theme: { borderRadius: { ...shared.borderRadius } } };`,
+    });
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-lg', 'rounded', 'rounded-lg']);
+  });
+
+  it('reads a borderRadius spread from a workspace package as its own scale', async () => {
+    // A monorepo's shared config, linked into node_modules from packages/ as pnpm links it.
+    const root = fixture({
+      'app/globals.css': V3_PLAIN,
+      'tailwind.config.js': `const shared = require("@acme/tailwind-config/theme");\nmodule.exports = { theme: { borderRadius: { ...shared.borderRadius } } };`,
+      'packages/tailwind-config/package.json': JSON.stringify({ name: '@acme/tailwind-config' }),
+      'packages/tailwind-config/theme.js': THEME,
+    });
+    fs.mkdirSync(path.join(root, 'node_modules/@acme'), { recursive: true });
+    fs.symlinkSync(
+      path.join(root, 'packages/tailwind-config'),
+      path.join(root, 'node_modules/@acme/tailwind-config'),
+      'junction',
+    );
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-lg', 'rounded', 'rounded-lg']);
+  });
+
   it("adds none when `presets: []` leaves out Tailwind's default config", async () => {
     const root = fixture({
       'app/globals.css': V3_PLAIN,
@@ -421,6 +489,13 @@ module.exports = { theme: { borderRadius: { ...defaultTheme.borderRadius, card: 
         'tailwind.config.js': `const { cn } = require("./lib/utils");\nmodule.exports = { content: [] };`,
         'lib/utils.js': `export { cn } from "@acme/utils";\nexport * from "@acme/utils";`,
         ...installed('@acme/utils', 'module.exports = { cn: () => "" }'),
+      },
+    ],
+    [
+      'colors spread from a package into a variable the theme uses',
+      {
+        'tailwind.config.js': `const { blue, blueDark } = require("@radix-ui/colors");\nconst brand = { ...blue, ...blueDark };\nmodule.exports = { content: [], theme: { extend: { colors: { brand } } } };`,
+        ...installed('@radix-ui/colors', 'module.exports = { blue: {}, blueDark: {} }'),
       },
     ],
   ];
