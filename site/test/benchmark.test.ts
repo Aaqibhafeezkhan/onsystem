@@ -553,6 +553,14 @@ describe('/benchmark', () => {
     );
     expect(text(html)).toContain('node bench/v2/run.mjs run --matrix standard');
   });
+
+  it('shows no figure from the earlier, smaller benchmark it replaced', () => {
+    expect(html).not.toContain('id="v1"');
+    expect(html).not.toContain('bench/agents');
+    expect(text(html)).not.toMatch(
+      /earlier benchmark|\d ?\/ ?10\b|[−-]11 ?%|\b40 runs|ai-chatbot/i,
+    );
+  });
 });
 
 describe('the rest of the site', () => {
