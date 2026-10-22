@@ -241,18 +241,94 @@ module.exports = { theme: { borderRadius: { ...defaultTheme.borderRadius, card: 
   // A scale the config replaces from somewhere it cannot be read: Tailwind's steps would name
   // classes the project does not have, so no step is added and the rule stays silent.
   const PRESET = `module.exports = { theme: { borderRadius: { sm: "2px", DEFAULT: "6px", lg: "10px" } } }`;
+  const SHARED_CONFIG = `module.exports = { content: [], theme: { borderRadius: { sm: "2px", DEFAULT: "6px", lg: "10px" } } }`;
+  const THEME = `module.exports = { borderRadius: { sm: "2px", DEFAULT: "6px", lg: "10px" } }`;
   const UNREAD = `<div className="rounded-[12px] rounded-[6px] rounded-[16px]" />`;
   const V3_PLAIN = `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n`;
+  /** An npm package in node_modules, which is no project file. */
+  const installed = (name: string, index: string): Record<string, string> => ({
+    [`node_modules/${name}/package.json`]: JSON.stringify({ name, main: 'index.js' }),
+    [`node_modules/${name}/index.js`]: index,
+  });
   const unread: [string, Record<string, string>][] = [
     [
       'a preset installed from npm',
       {
         'tailwind.config.js': `module.exports = { presets: [require("@acme/preset")] }`,
-        'node_modules/@acme/preset/package.json': JSON.stringify({
-          name: '@acme/preset',
-          main: 'index.js',
-        }),
-        'node_modules/@acme/preset/index.js': PRESET,
+        ...installed('@acme/preset', PRESET),
+      },
+    ],
+    [
+      'presets set from a variable',
+      {
+        'tailwind.config.js': `const presets = [require("@acme/preset")];\nmodule.exports = { presets };`,
+        ...installed('@acme/preset', PRESET),
+      },
+    ],
+    [
+      'presets spread from a package',
+      {
+        'tailwind.config.js': `module.exports = { presets: [...require("@acme/presets")] }`,
+        ...installed(
+          '@acme/presets',
+          `module.exports = [${PRESET.replace('module.exports = ', '')}]`,
+        ),
+      },
+    ],
+    [
+      'a shared config spread into the config',
+      {
+        'tailwind.config.js': `module.exports = { ...require("@acme/tailwind-config"), content: ["./app/**/*.tsx"] }`,
+        ...installed('@acme/tailwind-config', SHARED_CONFIG),
+      },
+    ],
+    [
+      'a shared config as the config',
+      {
+        'tailwind.config.js': `module.exports = require("@acme/tailwind-config")`,
+        ...installed('@acme/tailwind-config', SHARED_CONFIG),
+      },
+    ],
+    [
+      'a shared config imported and spread into a TypeScript config',
+      {
+        'tailwind.config.ts': `import base from "@acme/tailwind-config";\nimport type { Config } from "tailwindcss";\nexport default { ...base, content: ["./app/**/*.tsx"] } satisfies Config;`,
+        ...installed('@acme/tailwind-config', SHARED_CONFIG),
+      },
+    ],
+    [
+      'a shared config imported as the config',
+      {
+        'tailwind.config.ts': `import base from "@acme/tailwind-config";\nexport default base;`,
+        ...installed('@acme/tailwind-config', SHARED_CONFIG),
+      },
+    ],
+    [
+      'a shared config re-exported',
+      {
+        'tailwind.config.ts': `export { default } from "@acme/tailwind-config";`,
+        ...installed('@acme/tailwind-config', SHARED_CONFIG),
+      },
+    ],
+    [
+      'a theme installed from npm',
+      {
+        'tailwind.config.js': `module.exports = { theme: require("@acme/theme") }`,
+        ...installed('@acme/theme', THEME),
+      },
+    ],
+    [
+      'a theme spread from a package',
+      {
+        'tailwind.config.js': `const theme = require("@acme/theme");\nmodule.exports = { theme: { ...theme, extend: {} } };`,
+        ...installed('@acme/theme', THEME),
+      },
+    ],
+    [
+      'theme.extend.borderRadius spread from a package',
+      {
+        'tailwind.config.js': `const { borderRadius } = require("@acme/theme");\nmodule.exports = { theme: { extend: { borderRadius: { ...borderRadius } } } };`,
+        ...installed('@acme/theme', THEME),
       },
     ],
     [
@@ -302,6 +378,56 @@ module.exports = { theme: { borderRadius: { ...defaultTheme.borderRadius, card: 
     });
     const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
     expect(texts).toEqual(['rounded-lg', 'rounded', 'rounded-lg']);
+  });
+
+  it('reads a theme in the project as the whole scale', async () => {
+    // The module is the theme, so its `borderRadius` replaces Tailwind's scale.
+    const root = fixture({
+      'app/globals.css': V3_PLAIN,
+      'tailwind.config.js': `module.exports = { theme: require("./theme") }`,
+      'theme.js': THEME,
+    });
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-lg', 'rounded', 'rounded-lg']);
+  });
+
+  it("adds none when `presets: []` leaves out Tailwind's default config", async () => {
+    const root = fixture({
+      'app/globals.css': V3_PLAIN,
+      'tailwind.config.js': `module.exports = { presets: [], theme: { extend: { borderRadius: { card: "10px" } } } }`,
+    });
+    const system = await load(root);
+    expect(system.getTokens({ category: 'radius' }).filter((t) => t.origin)).toEqual([]);
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-card', 'rounded-card', 'rounded-card']);
+  });
+
+  const keeps: [string, Record<string, string>][] = [
+    [
+      '`presets: []` with a scale that spreads them back in',
+      {
+        'tailwind.config.js': `const defaultTheme = require("tailwindcss/defaultTheme");\nmodule.exports = { presets: [], theme: { borderRadius: { ...defaultTheme.borderRadius, card: "10px" } } };`,
+      },
+    ],
+    [
+      "Tailwind's default config as a preset",
+      {
+        'tailwind.config.js': `module.exports = { presets: [require("tailwindcss/defaultConfig")] }`,
+      },
+    ],
+    [
+      'a project module that re-exports a helper from a package',
+      {
+        'tailwind.config.js': `const { cn } = require("./lib/utils");\nmodule.exports = { content: [] };`,
+        'lib/utils.js': `export { cn } from "@acme/utils";\nexport * from "@acme/utils";`,
+        ...installed('@acme/utils', 'module.exports = { cn: () => "" }'),
+      },
+    ],
+  ];
+  it.each(keeps)("keeps Tailwind's steps for %s", async (_, files) => {
+    const root = fixture({ 'app/globals.css': V3_PLAIN, ...files });
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-xl', 'rounded-md', 'rounded-2xl']);
   });
 
   it("leaves a Tailwind v4 stylesheet with Tailwind v4's scale", async () => {

@@ -138,18 +138,27 @@ export interface TailwindRadii {
  * imports, such as a shared preset. The config's own entries win. Tailwind's
  * default scale follows, for the keys none of them sets, unless the first
  * `theme.borderRadius` outside `extend` replaces it without spreading it back
- * in (`...defaultTheme.borderRadius`), or the scale comes from somewhere this
- * cannot read: a preset that is no project file (one installed from npm), or a
- * `theme.borderRadius` or `theme.extend.borderRadius` that is no object
- * (`borderRadius: radius`, `borderRadius: ({ theme }) => …`).
+ * in (`...defaultTheme.borderRadius`), a `theme` is a whole module
+ * (`theme: require("./theme")`), `presets: []` drops Tailwind's default config
+ * and no `theme.borderRadius` spreads the scale back in, or the scale comes from
+ * somewhere this cannot read. That is a module that is no project file (one
+ * installed from npm, other than Tailwind's own) that the config takes as a
+ * preset, a theme, or the config itself (`module.exports = require("x")`,
+ * `{ ...require("x"), content }`), or spreads into a theme, its `extend` or a
+ * `borderRadius`; a `presets` that is no array; or a `theme.borderRadius` or
+ * `theme.extend.borderRadius` that is no object (`borderRadius: radius`,
+ * `borderRadius: ({ theme }) => …`) or spreads anything but Tailwind's scale.
  */
 export function readTailwindRadii(file: string, resolve: ModuleResolver): TailwindRadii {
   const radii = new RadiusEntries();
   const files: string[] = [];
   // Whether the scale `theme.borderRadius` sets keeps Tailwind's; undefined while none does.
   let keepsDefaults: boolean | undefined;
-  // Whether a preset or an extension sets steps that cannot be read, of unknown keys and sizes.
+  // Whether the scale can have steps that are not read, of unknown keys and sizes: from a
+  // package, a variable or a function.
   let unread = false as boolean;
+  // Whether a config sets `presets: []`, which leaves out Tailwind's default config.
+  let noDefaultConfig = false as boolean;
   const queue = [file];
   while (queue.length && files.length < MAX_FILES) {
     const current = queue.shift() ?? '';
@@ -169,6 +178,19 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
       scriptKind(current),
     );
     const bindings = importBindings(source);
+    // A value taken from a module that is no project file, such as `require("@acme/preset")` or a
+    // name imported from it: none of it is read. Tailwind's own modules are its defaults.
+    const external = (specifier: string | undefined): boolean => {
+      if (specifier === undefined || /^tailwindcss(?:\/|$)/.test(specifier)) return false;
+      const target = resolve(specifier, current);
+      return !(target && SCRIPT_FILE.test(target));
+    };
+    const fromPackage = (value: ts.Expression): boolean => external(moduleOf(value, bindings));
+    // `...defaultTheme.borderRadius`, or `...borderRadius` required from `tailwindcss/defaultTheme`.
+    const defaultScale = (value: ts.Expression): boolean =>
+      !fromPackage(value) &&
+      ((ts.isPropertyAccessExpression(value) && value.name.text === 'borderRadius') ||
+        /^tailwindcss(?:\/|$)/.test(moduleOf(value, bindings) ?? ''));
     const visit = (node: ts.Node): void => {
       if (
         (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
@@ -177,7 +199,14 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
         const value = ts.isPropertyAssignment(node) ? node.initializer : undefined;
         const holder = themeSection(node.parent);
         if (value && ts.isObjectLiteralExpression(value)) {
-          const spreads = collectRadius(value, radii);
+          collectRadius(value, radii);
+          let spreads = false;
+          for (const property of value.properties) {
+            if (!ts.isSpreadAssignment(property)) continue;
+            // `...defaultTheme.borderRadius` is Tailwind's scale; `...acmeRadius` sets steps not read.
+            if (defaultScale(property.expression)) spreads = true;
+            else unread = true;
+          }
           if (holder === 'theme') keepsDefaults ??= spreads;
           return;
         }
@@ -186,16 +215,62 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
         else if (holder === 'extend') unread = true;
       }
       if (
-        ts.isPropertyAssignment(node) &&
-        propertyName(node.name) === 'presets' &&
-        ts.isArrayLiteralExpression(node.initializer)
+        (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
+        propertyName(node.name) === 'presets'
       ) {
-        for (const element of node.initializer.elements) {
-          const specifier = moduleOf(element, bindings);
-          const target = specifier === undefined ? undefined : resolve(specifier, current);
-          // `require("@acme/preset")`: a preset that is no project file, so none of it is read.
-          if (specifier !== undefined && !(target && SCRIPT_FILE.test(target))) unread = true;
+        const value = ts.isPropertyAssignment(node) ? node.initializer : undefined;
+        if (value && ts.isArrayLiteralExpression(value)) {
+          // `presets: []`: no preset, and not Tailwind's default config either.
+          if (!value.elements.length) noDefaultConfig = true;
+          for (const element of value.elements) {
+            // `require("@acme/preset")` or `...require("@acme/presets")`.
+            if (fromPackage(ts.isSpreadElement(element) ? element.expression : element)) {
+              unread = true;
+            }
+          }
+        } else {
+          // `presets` or `presets: shared.presets`: presets that are not read.
+          unread = true;
         }
+      }
+      if (
+        (ts.isShorthandPropertyAssignment(node) ||
+          (ts.isPropertyAssignment(node) && !ts.isObjectLiteralExpression(node.initializer))) &&
+        propertyName(node.name) === 'theme' &&
+        !ts.isPropertyAssignment(node.parent.parent)
+      ) {
+        // `theme: require("./theme")`: a whole theme, whose `borderRadius` replaces the scale.
+        keepsDefaults ??= false;
+        if (fromPackage(ts.isPropertyAssignment(node) ? node.initializer : node.name)) {
+          unread = true;
+        }
+      }
+      // `{ ...require("@acme/tailwind-config"), content }`, or a theme or `extend` spread from one.
+      if (
+        ts.isSpreadAssignment(node) &&
+        (!ts.isPropertyAssignment(node.parent.parent) || themeSection(node.parent) !== undefined) &&
+        fromPackage(node.expression)
+      ) {
+        unread = true;
+      }
+      // `module.exports = require("@acme/tailwind-config")`, `export default base` or
+      // `export { default } from "@acme/tailwind-config"`.
+      if (
+        (ts.isBinaryExpression(node) &&
+          node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          isModuleExports(node.left) &&
+          fromPackage(node.right)) ||
+        (ts.isExportAssignment(node) && fromPackage(node.expression)) ||
+        (ts.isExportDeclaration(node) &&
+          !node.isTypeOnly &&
+          node.exportClause !== undefined &&
+          ts.isNamedExports(node.exportClause) &&
+          node.exportClause.elements.some((element) => element.name.text === 'default') &&
+          node.moduleSpecifier &&
+          ts.isStringLiteral(node.moduleSpecifier) &&
+          external(node.moduleSpecifier.text))
+      ) {
+        unread = true;
       }
       const specifier = importedSpecifier(node);
       const target = specifier === undefined ? undefined : resolve(specifier, current);
@@ -204,7 +279,9 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
     };
     visit(source);
   }
-  if (keepsDefaults !== false && !unread) {
+  // With `presets: []`, Tailwind's scale is there only when a `theme.borderRadius` spreads it in.
+  const keeps = noDefaultConfig ? keepsDefaults === true : keepsDefaults !== false;
+  if (keeps && !unread) {
     for (const [key, value] of Object.entries(TAILWIND_V3_RADIUS)) {
       if (radii.has(key)) continue;
       radii.set(key, value);
@@ -214,19 +291,9 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
   return { radii, files };
 }
 
-/**
- * `sm: "calc(var(--radius) - 4px)"` → `sm` → raw string; first seen wins. True when the
- * object spreads Tailwind's scale into it (`...defaultTheme.borderRadius`).
- */
-function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, string>): boolean {
-  let spreads = false;
+/** `sm: "calc(var(--radius) - 4px)"` → `sm` → raw string; first seen wins. */
+function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, string>): void {
   for (const property of object.properties) {
-    if (ts.isSpreadAssignment(property)) {
-      spreads ||=
-        ts.isPropertyAccessExpression(property.expression) &&
-        property.expression.name.text === 'borderRadius';
-      continue;
-    }
     if (!ts.isPropertyAssignment(property)) continue;
     const key = propertyName(property.name);
     if (key === undefined) continue;
@@ -240,7 +307,16 @@ function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, st
     if (raw === undefined || radii.has(key)) continue;
     radii.set(key, raw);
   }
-  return spreads;
+}
+
+/** `module.exports`, as in `module.exports = require("@acme/tailwind-config")`. */
+function isModuleExports(node: ts.Expression): boolean {
+  return (
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'module' &&
+    node.name.text === 'exports'
+  );
 }
 
 /**
