@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
-import { Benchmark as EarlierBenchmark } from '@/components/benchmark';
 import { Headline, HeadlineStats } from '@/components/benchmark-summary';
 import { MarkdownBlocks } from '@/components/markdown-blocks';
 import { Eyebrow, InlineCode, TextLink } from '@/components/section';
@@ -30,7 +29,6 @@ import {
   words,
 } from '@/lib/benchmark';
 import {
-  bench,
   benchmark,
   type BenchDelta,
   type BenchRate,
@@ -528,7 +526,6 @@ const SECTIONS = [
   ['method', 'Method'],
   ['threats', 'Threats to validity'],
   ['reproduce', 'Reproduce it'],
-  ['v1', 'The earlier benchmark'],
 ] as const;
 
 /** A task's prompt, with the file it names and the component it exports set as code. */
@@ -558,9 +555,6 @@ export default function BenchmarkPage() {
   const wrong = labels.precision.n - labels.precision.successes;
   const tiers = [...new Set(benchmark.models.map((m) => m.tier))];
   const atLimit = Object.entries(benchmark.statuses).filter(([status]) => status !== 'done');
-  const v1Calls = bench.models.map((m) => m.plugin.toolCalls).sort((a, b) => a - b);
-  const [v1Small] = bench.models;
-  const v1Runs = bench.models.reduce((n, m) => n + m.base.runs + m.plugin.runs, 0);
 
   return (
     <main id="main" className="relative">
@@ -977,40 +971,6 @@ export default function BenchmarkPage() {
                 the files each run wrote, its scores and the labels are in{' '}
                 <TextLink href={repoLink(RESULTS, 'tree')}>{RESULTS}</TextLink>. The full method is
                 in <TextLink href={repoLink('bench/v2/README.md')}>bench/v2/README.md</TextLink>.
-              </p>
-            </div>
-          </Block>
-
-          <Block id="v1" title="The earlier benchmark">
-            <div className="max-w-3xl">
-              <MarkdownBlocks markdown={benchmark.method.v1} />
-            </div>
-            <div className="mt-8">
-              <EarlierBenchmark bench={bench} />
-            </div>
-            <div className="mt-8 grid gap-6 text-[15px] leading-relaxed text-muted md:grid-cols-2 md:gap-10">
-              <p>
-                Claude Code built {words(bench.tasks.length)} components for{' '}
-                <TextLink href="https://github.com/vercel/ai-chatbot">vercel/ai-chatbot</TextLink>,
-                once as it ships and once with the plugin, and{' '}
-                <InlineCode>onsystem check</InlineCode> scored every file. Without the plugin, the
-                misses were raw colors for things the prompt described, a native{' '}
-                <InlineCode>&lt;label&gt;</InlineCode> where the project has{' '}
-                <InlineCode>Label</InlineCode>, and an icon button nobody could name with a screen
-                reader. With it, the agent looked components and tokens up before writing (
-                {v1Calls.join(' to ')} design-system tool calls per task).
-              </p>
-              <p>
-                It is one project and {count(v1Runs)} runs, one per task, model and condition, so
-                read it as a direction rather than a rate
-                {v1Small && v1Small.costDelta < 0
-                  ? `; ${v1Small.name} cost less with the plugin than without`
-                  : ''}
-                .{' '}
-                <TextLink href={repoLink('bench/agents', 'tree')}>
-                  The method, per-run results and every generated file
-                </TextLink>{' '}
-                are in the repository.
               </p>
             </div>
           </Block>
