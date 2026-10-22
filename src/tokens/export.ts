@@ -43,7 +43,7 @@ export function toDtcg(tokens: readonly Token[]): Exported {
   const paths = assignPaths(tokens, warnings);
   const lookup = varLookup(tokens);
   const byName = new Map(tokens.map((t) => [t.name, t]));
-  const tree: JsonObject = {};
+  const tree: JsonObject = Object.create(null) as JsonObject;
   let count = 0;
   for (const category of TOKEN_CATEGORIES) {
     for (const token of tokens) {
@@ -149,7 +149,7 @@ function insert(tree: JsonObject, path: string[], node: JsonObject): void {
     if (isObject(next)) {
       group = next;
     } else {
-      const created: JsonObject = {};
+      const created: JsonObject = Object.create(null) as JsonObject;
       group[key] = created;
       group = created;
     }
@@ -285,7 +285,7 @@ function colorObject(css: string): JsonObject | undefined {
   return out;
 }
 
-const PLAIN_LENGTH = /^(-?(?:\d+\.?\d*|\.\d+))(px|rem)$/;
+const PLAIN_LENGTH = /^(-?(?:\d+(?:\.\d*)?|\.\d+))(px|rem)$/;
 
 /** `0.5rem` → `{ value: 0.5, unit: "rem" }`; a `calc()` of tokens → its px value. */
 function dimensionValue(value: string, lookup: Lookup): Typed | undefined {
@@ -306,8 +306,8 @@ function plainDimension(value: string): JsonObject | undefined {
 type TypographyKind =
   'fontFamily' | 'fontWeight' | 'fontSize' | 'lineHeight' | 'letterSpacing' | 'composite';
 
-const COMPOSITE = /^[\w-]+\s*:\s*[^;]+(?:;\s*[\w-]+\s*:\s*[^;]+)*;?$/;
-const NUMBER = /^-?(?:\d+\.?\d*|\.\d+)$/;
+const COMPOSITE = /^[\w-]+\s*:[^;]+(?:;\s*[\w-]+\s*:[^;]+)*;?$/;
+const NUMBER = /^-?(?:\d+(?:\.\d*)?|\.\d+)$/;
 
 /** What a typography token sets, from its name and Tailwind class (`font-sans`, `text-sm`). */
 function typographyKind(token: Token): TypographyKind | undefined {
@@ -573,7 +573,7 @@ function frontMatterValue(
 }
 
 /** A DESIGN.md dimension: px, em or rem. */
-const DESIGN_DIMENSION = /^-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em)$/;
+const DESIGN_DIMENSION = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:px|rem|em)$/;
 
 /**
  * A typography token as a DESIGN.md typography level: `{ fontFamily: "Inter" }` for

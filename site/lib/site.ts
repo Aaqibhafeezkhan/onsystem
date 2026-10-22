@@ -133,7 +133,9 @@ export function docsHref(section: string): string {
  * GitHub, and an anchor to the section on this page.
  */
 export function resolveDocHref(href: string): string {
-  if (href.startsWith(SITE_URL)) return href.slice(SITE_URL.length) || '/';
+  if (href === SITE_URL || href.startsWith(`${SITE_URL}/`)) {
+    return href.slice(SITE_URL.length) || '/';
+  }
   if (/^https?:\/\//.test(href) || href.startsWith('/') || href.startsWith('#')) return href;
   const doc = /^(?:\.\/)?([\w-]+\.md)(#[\w-]*)?$/.exec(href);
   const page = doc?.[1] ? DOCS_FILES[doc[1]] : undefined;

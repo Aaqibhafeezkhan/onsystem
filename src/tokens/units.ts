@@ -1,7 +1,7 @@
 /** Root font size used to convert rem/em to px for comparisons. */
 export const ROOT_FONT_SIZE = 16;
 
-const LENGTH = /^(-?(?:\d+\.?\d*|\.\d+))(px|rem|em)?$/i;
+const LENGTH = /^(-?(?:\d+(?:\.\d*)?|\.\d+))(px|rem|em)?$/i;
 
 /** `"0.5rem"` → 8, `"12px"` → 12, `"4"` → 4. Returns undefined for anything else. */
 export function lengthToPx(value: string | number): number | undefined {
@@ -36,7 +36,7 @@ export function evaluateLength(value: string, resolve: Resolve, depth = 0): numb
 function expandVars(value: string, resolve: Resolve, depth: number): string | undefined {
   let out = '';
   let last = 0;
-  for (const match of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)/g)) {
+  for (const match of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,([^)]+))?\)/g)) {
     const [whole, name = '', fallback] = match;
     const resolved = resolve(name) ?? fallback;
     const px = resolved === undefined ? undefined : evaluateLength(resolved, resolve, depth + 1);

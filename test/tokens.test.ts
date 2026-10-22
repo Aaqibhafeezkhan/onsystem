@@ -3,7 +3,14 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { colorDistance, findColorLiterals, isTinted, parseColor } from '../src/tokens/color.js';
+import {
+  colorDistance,
+  findColorLiterals,
+  isBareHsl,
+  isBareRgb,
+  isTinted,
+  parseColor,
+} from '../src/tokens/color.js';
 import {
   loadTokens,
   mergeTokens,
@@ -471,6 +478,59 @@ describe('units and colors', () => {
     // Bare RGB channels are ambiguous; in code, channels are not a color at all.
     expect(hsl('112 205 159')).toBeUndefined();
     expect(parseColor('214.3 31.8% 91.4%')).toBeUndefined();
+  });
+
+  it('reads the lengths and channels it read before', () => {
+    for (const [value, px] of [
+      ['1.', 1],
+      ['.5rem', 8],
+      ['-2px', -2],
+      ['1.5EM', 24],
+      ['10', 10],
+    ] as const) {
+      expect([value, lengthToPx(value)]).toEqual([value, px]);
+    }
+    for (const value of ['.', '1.2.3', '1 px', '-', 'px']) {
+      expect([value, lengthToPx(value)]).toEqual([value, undefined]);
+    }
+    const resolve = (name: string) => (name === '--gap' ? '0.5rem' : undefined);
+    expect(evaluateLength('var(--missing, 4px)', resolve)).toBe(4);
+    expect(evaluateLength('var( --missing ,  0.5rem )', resolve)).toBe(8);
+    expect(evaluateLength('calc(var(--gap) + var(--missing,2px))', resolve)).toBe(10);
+    expect(evaluateLength('var(--missing, )', resolve)).toBeUndefined();
+
+    expect(isBareHsl('214.3 31.8% 91.4%')).toBe(true);
+    expect(isBareHsl('-30deg, 50%, .5% / .5')).toBe(true);
+    expect(isBareHsl('0 0% 100% / 50%')).toBe(true);
+    expect(isBareHsl('1. 2% 3%')).toBe(false);
+    expect(isBareHsl('1 2 3')).toBe(false);
+    expect(isBareRgb('22 163 74')).toBe(true);
+    expect(isBareRgb('22,163,74 / 0.5')).toBe(true);
+    expect(isBareRgb('255 255 255 / 50%')).toBe(true);
+    expect(isBareRgb('22 163 74 / 1.')).toBe(false);
+    expect(isBareRgb('256 0 0')).toBe(false);
+    expect(parseColor('22 163 74 / .5', { bareRgb: true })).toMatchObject({ alpha: 0.5 });
+  });
+
+  it('reads a long length, var() or color channels in time that grows with its length', () => {
+    const fast = <T>(read: () => T): T => {
+      const started = performance.now();
+      const value = read();
+      expect(performance.now() - started).toBeLessThan(100);
+      return value;
+    };
+    const digits = '9'.repeat(100_000);
+    const spaces = ' '.repeat(100_000);
+    // Each took 14 to 25 s before: the regex tried every way to split the run of digits or
+    // spaces between two of its parts.
+    expect(fast(() => lengthToPx(`9${digits}x`))).toBeUndefined();
+    expect(fast(() => evaluateLength(`var(---,${spaces}x`, () => undefined))).toBeUndefined();
+    expect(fast(() => isBareHsl(digits))).toBe(false);
+    expect(fast(() => isBareHsl(`9 9% 9%/${digits}!`))).toBe(false);
+    expect(fast(() => isBareRgb(`9 9 9/${digits}!`))).toBe(false);
+    const bare = { bareHsl: true, bareRgb: true };
+    expect(fast(() => parseColor(digits, bare))).toBeUndefined();
+    expect(fast(() => parseColor(`9 9 9/${digits}!`, bare))).toBeUndefined();
   });
 
   it('finds color literals inside CSS values', () => {
