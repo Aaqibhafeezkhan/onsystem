@@ -2,12 +2,15 @@
 
 onsystem is built in the open, and this page lists what is in review, what comes next, what waits for your feedback and what is not planned. To weigh in, add a reaction or a comment on the linked issue: what people ask for there moves up.
 
+## Merged, in the next release
+
+- Token readers: `hsl(var(--x))` theme colors, stylesheet import order, Tailwind v3's default radius scale, and an app's own stylesheet next to a shared one ([#201](https://github.com/dgesteves/onsystem/pull/201))
+
 ## In review
 
 Open pull requests. Each one ships in the next release once it is reviewed and merged.
 
 - Security hardening: a per-user cache folder, repository text quoted as text in MCP answers, a color rule that stays fast on long class strings, and exit code 2 for crashes ([#199](https://github.com/dgesteves/onsystem/pull/199))
-- Token readers: `hsl(var(--x))` theme colors, stylesheet import order, Tailwind v3's default radius scale, and an app's own stylesheet next to a shared one ([#201](https://github.com/dgesteves/onsystem/pull/201))
 - Layered configs: an app's config builds on its design-system package's, and a monorepo root's rules apply over both ([#202](https://github.com/dgesteves/onsystem/pull/202))
 - Website: shareable playground links, no layout shift when the fonts load, and a larger Ask button on phones ([#200](https://github.com/dgesteves/onsystem/pull/200))
 - A compatibility section in the README: Node.js, operating systems, ESLint, TypeScript, React, Tailwind, shadcn/ui bases and MCP clients ([#203](https://github.com/dgesteves/onsystem/pull/203))
