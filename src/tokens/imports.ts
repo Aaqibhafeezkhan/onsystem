@@ -33,8 +33,12 @@ export function cssImports(css: string): string[] {
 }
 
 /**
- * The stylesheets `files` import, and the ones those import in turn, each once and in the
- * order they are imported. The files themselves are not repeated.
+ * The stylesheets `files` import, and the ones those import in turn, each once, in the order
+ * the cascade ranks them, for a reader that keeps the first declaration of a variable. CSS
+ * puts an imported stylesheet where its `@import` is, so a later import overrides an earlier
+ * one, and the importing stylesheet's own rules override both: `@import "./base.css";
+ * @import "./brand.css";` lists brand.css, then what brand.css imports, then base.css. The
+ * files themselves are not repeated, and come before all of these.
  */
 export function importedStylesheets(
   files: readonly string[],
@@ -49,7 +53,9 @@ export function importedStylesheets(
     } catch {
       return;
     }
-    for (const specifier of cssImports(text)) {
+    // The last import first: it applies over the ones before it. A stylesheet imported twice
+    // counts where it is imported last, which is where it applies.
+    for (const specifier of cssImports(text).reverse()) {
       const target = resolve(specifier, file);
       if (!target || seen.has(target) || out.length >= MAX_IMPORTED) continue;
       seen.add(target);
