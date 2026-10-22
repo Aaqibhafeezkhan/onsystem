@@ -30,6 +30,8 @@ Using the GitHub Action? `uses: dgesteves/onsystem@v0` checks the lines a pull r
 
 **Website and docs:** [onsystem.vercel.app](https://onsystem.vercel.app), with a [playground](https://onsystem.vercel.app/playground) that checks your own code.
 
+**Feedback wanted:** say where it breaks in the [launch feedback thread](https://github.com/dgesteves/onsystem/discussions/227), see what's next in the [roadmap](https://github.com/dgesteves/onsystem/blob/main/ROADMAP.md), or pick up a [good first issue](https://github.com/dgesteves/onsystem/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22). If onsystem is useful to you, a star helps other people find it.
+
 <!-- npm-readme:video -->
 
 https://github.com/user-attachments/assets/900cc1fa-387c-4e76-a524-a818521dd1a0
