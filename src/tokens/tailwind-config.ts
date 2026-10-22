@@ -26,6 +26,9 @@ export interface TailwindColors {
 /** A preset chain is a few files deep; anything beyond is not a Tailwind config. */
 const MAX_FILES = 12;
 
+/** A config or preset module, which is read for its theme. */
+const SCRIPT_FILE = /\.[cm]?[jt]s$/;
+
 /**
  * Reads which custom property backs which color class from a Tailwind v3
  * config, without running it: every `colors` object in the file
@@ -65,7 +68,7 @@ export function readTailwindColors(file: string, resolve: ModuleResolver): Tailw
       }
       const specifier = importedSpecifier(node);
       const target = specifier === undefined ? undefined : resolve(specifier, current);
-      if (target && /\.[cm]?[jt]s$/.test(target)) queue.push(target);
+      if (target && SCRIPT_FILE.test(target)) queue.push(target);
       ts.forEachChild(node, visit);
     };
     visit(source);
@@ -135,13 +138,18 @@ export interface TailwindRadii {
  * imports, such as a shared preset. The config's own entries win. Tailwind's
  * default scale follows, for the keys none of them sets, unless the first
  * `theme.borderRadius` outside `extend` replaces it without spreading it back
- * in (`...defaultTheme.borderRadius`).
+ * in (`...defaultTheme.borderRadius`), or the scale comes from somewhere this
+ * cannot read: a preset that is no project file (one installed from npm), or a
+ * `theme.borderRadius` or `theme.extend.borderRadius` that is no object
+ * (`borderRadius: radius`, `borderRadius: ({ theme }) => …`).
  */
 export function readTailwindRadii(file: string, resolve: ModuleResolver): TailwindRadii {
   const radii = new RadiusEntries();
   const files: string[] = [];
   // Whether the scale `theme.borderRadius` sets keeps Tailwind's; undefined while none does.
   let keepsDefaults: boolean | undefined;
+  // Whether a preset or an extension sets steps that cannot be read, of unknown keys and sizes.
+  let unread = false as boolean;
   const queue = [file];
   while (queue.length && files.length < MAX_FILES) {
     const current = queue.shift() ?? '';
@@ -160,27 +168,43 @@ export function readTailwindRadii(file: string, resolve: ModuleResolver): Tailwi
       true,
       scriptKind(current),
     );
+    const bindings = importBindings(source);
     const visit = (node: ts.Node): void => {
       if (
-        ts.isPropertyAssignment(node) &&
-        propertyName(node.name) === 'borderRadius' &&
-        ts.isObjectLiteralExpression(node.initializer)
+        (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
+        propertyName(node.name) === 'borderRadius'
       ) {
-        const spreads = collectRadius(node.initializer, radii);
-        const holder = node.parent.parent;
-        if (ts.isPropertyAssignment(holder) && propertyName(holder.name) === 'theme') {
-          keepsDefaults ??= spreads;
+        const value = ts.isPropertyAssignment(node) ? node.initializer : undefined;
+        const holder = themeSection(node.parent);
+        if (value && ts.isObjectLiteralExpression(value)) {
+          const spreads = collectRadius(value, radii);
+          if (holder === 'theme') keepsDefaults ??= spreads;
+          return;
         }
-        return;
+        // `borderRadius: radius` or `borderRadius: ({ theme }) => ({…})` under the theme.
+        if (holder === 'theme') keepsDefaults ??= false;
+        else if (holder === 'extend') unread = true;
+      }
+      if (
+        ts.isPropertyAssignment(node) &&
+        propertyName(node.name) === 'presets' &&
+        ts.isArrayLiteralExpression(node.initializer)
+      ) {
+        for (const element of node.initializer.elements) {
+          const specifier = moduleOf(element, bindings);
+          const target = specifier === undefined ? undefined : resolve(specifier, current);
+          // `require("@acme/preset")`: a preset that is no project file, so none of it is read.
+          if (specifier !== undefined && !(target && SCRIPT_FILE.test(target))) unread = true;
+        }
       }
       const specifier = importedSpecifier(node);
       const target = specifier === undefined ? undefined : resolve(specifier, current);
-      if (target && /\.[cm]?[jt]s$/.test(target)) queue.push(target);
+      if (target && SCRIPT_FILE.test(target)) queue.push(target);
       ts.forEachChild(node, visit);
     };
     visit(source);
   }
-  if (keepsDefaults !== false) {
+  if (keepsDefaults !== false && !unread) {
     for (const [key, value] of Object.entries(TAILWIND_V3_RADIUS)) {
       if (radii.has(key)) continue;
       radii.set(key, value);
@@ -233,7 +257,9 @@ function collectRadius(object: ts.ObjectLiteralExpression, radii: Map<string, st
  * `rounded-xl` is 12px in a shadcn/ui v3 project, whose config extends the scale
  * with `lg`, `md` and `sm`. They add none when a config step has no size (its
  * `var(--radius)` is in no stylesheet read), as they would make a scale with
- * holes, nor when a stylesheet imports Tailwind v4, whose own scale is read from it.
+ * holes, nor when the tokens are a Tailwind v4 theme, whose own scale is read from
+ * its stylesheet: Tailwind v4's defaults, or a token of an `@theme` variable outside
+ * the colors (only v4 reads `@theme`; a v3 config names colors too).
  */
 export function applyTailwindRadii(
   tokens: Token[],
@@ -246,6 +272,10 @@ export function applyTailwindRadii(
   }
   const resolve = (name: string): string | undefined => byVar.get(name);
   const defaults = radii instanceof RadiusEntries ? radii.defaults : new Set<string>();
+  // Before the config's keys are set below: `--radius-card` in `@theme`, `--spacing`, or v4's own steps.
+  const v4 = tokens.some(
+    (t) => t.origin === 'tailwind-default' || (t.category !== 'color' && t.tailwind !== undefined),
+  );
   const byPx = new Map<number, string>();
   let unsized = false;
   for (const [key, raw] of radii) {
@@ -279,8 +309,8 @@ export function applyTailwindRadii(
     havePx.add(px);
   }
   // Around a step of unknown size, Tailwind's steps would make a scale with a hole. Tailwind v4
-  // brings its own defaults, as tokens, which v3's would contradict (`sm` is 4px there).
-  if (unsized || tokens.some((t) => t.origin === 'tailwind-default')) return;
+  // brings its own defaults, which v3's would contradict (`sm` is 4px there).
+  if (unsized || v4) return;
   const names = new Set(tokens.map((t) => t.name));
   for (const key of defaults) {
     const value = radii.get(key) ?? '';
@@ -299,6 +329,76 @@ export function applyTailwindRadii(
     };
     tokens.push(token);
     havePx.add(px);
+  }
+}
+
+/** `theme` or `extend` for a property of `theme: {…}` or of `theme.extend: {…}`; else undefined. */
+function themeSection(object: ts.Node): 'theme' | 'extend' | undefined {
+  const holder = object.parent;
+  if (!ts.isObjectLiteralExpression(object) || !ts.isPropertyAssignment(holder)) return undefined;
+  const key = propertyName(holder.name);
+  if (key === 'theme') return 'theme';
+  return key === 'extend' && themeSection(holder.parent) === 'theme' ? 'extend' : undefined;
+}
+
+/**
+ * The names a module binds to what it imports or requires, by specifier: `acme` for
+ * `import acme from "x"`, `import { acme } from "x"`, `const acme = require("x")` or
+ * `const { default: acme } = require("x")`.
+ */
+function importBindings(source: ts.SourceFile): Map<string, string> {
+  const bindings = new Map<string, string>();
+  const bind = (name: ts.BindingName, specifier: string): void => {
+    if (ts.isIdentifier(name)) {
+      bindings.set(name.text, specifier);
+      return;
+    }
+    for (const element of name.elements) {
+      if (!ts.isOmittedExpression(element)) bind(element.name, specifier);
+    }
+  };
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const specifier = statement.moduleSpecifier.text;
+      const clause = statement.importClause;
+      if (clause?.name) bind(clause.name, specifier);
+      const named = clause?.namedBindings;
+      if (named && ts.isNamespaceImport(named)) bind(named.name, specifier);
+      else if (named) for (const element of named.elements) bind(element.name, specifier);
+    } else if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        const specifier = declaration.initializer && moduleOf(declaration.initializer, bindings);
+        if (specifier !== undefined) bind(declaration.name, specifier);
+      }
+    }
+  }
+  return bindings;
+}
+
+/**
+ * The module an expression takes its value from: `"x"` for `require("x")`, `import("x")`, a
+ * name bound to either ({@link importBindings}), a call of any of these
+ * (`createPreset({…})`, `require("x")()`) or a property of one (`require("x").default`).
+ */
+function moduleOf(node: ts.Expression, bindings: ReadonlyMap<string, string>): string | undefined {
+  let current = node;
+  for (;;) {
+    if (
+      ts.isParenthesizedExpression(current) ||
+      ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isNonNullExpression(current) ||
+      ts.isAwaitExpression(current) ||
+      ts.isPropertyAccessExpression(current)
+    ) {
+      current = current.expression;
+    } else if (ts.isCallExpression(current)) {
+      const specifier = importedSpecifier(current);
+      if (specifier !== undefined) return specifier;
+      current = current.expression;
+    } else {
+      return ts.isIdentifier(current) ? bindings.get(current.text) : undefined;
+    }
   }
 }
 

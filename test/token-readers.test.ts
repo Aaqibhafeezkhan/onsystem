@@ -79,13 +79,15 @@ describe('@theme values that wrap or reference a variable', () => {
 
   it('fixes palette colors to the classes, not to arbitrary hsl(var()) values', async () => {
     const root = fixture({ 'tsconfig.json': TSCONFIG, 'app/globals.css': CODEMOD });
-    const code = `<p className="text-red-500 bg-[#ef4444] text-slate-500 bg-blue-600" />`;
+    const code = `<p className="text-red-500 bg-[#ef4444] text-slate-500 bg-blue-600 text-green-600" />`;
     const { texts, fixed } = await fixes(root, code, 'no-hardcoded-color');
     expect(texts).toEqual([
       'text-destructive',
       'bg-destructive',
       'text-muted-foreground',
       'bg-brand',
+      // `rgb(var(--success) / <alpha-value>)` over `22 163 74`, Tailwind v3's green-600.
+      'text-success',
     ]);
     expect(fixed).not.toContain('hsl(var(');
   });
@@ -236,6 +238,72 @@ module.exports = { theme: { borderRadius: { ...defaultTheme.borderRadius, card: 
     expect(fixed).toBe(`<div className="rounded-xl rounded-card" />`);
   });
 
+  // A scale the config replaces from somewhere it cannot be read: Tailwind's steps would name
+  // classes the project does not have, so no step is added and the rule stays silent.
+  const PRESET = `module.exports = { theme: { borderRadius: { sm: "2px", DEFAULT: "6px", lg: "10px" } } }`;
+  const UNREAD = `<div className="rounded-[12px] rounded-[6px] rounded-[16px]" />`;
+  const V3_PLAIN = `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n`;
+  const unread: [string, Record<string, string>][] = [
+    [
+      'a preset installed from npm',
+      {
+        'tailwind.config.js': `module.exports = { presets: [require("@acme/preset")] }`,
+        'node_modules/@acme/preset/package.json': JSON.stringify({
+          name: '@acme/preset',
+          main: 'index.js',
+        }),
+        'node_modules/@acme/preset/index.js': PRESET,
+      },
+    ],
+    [
+      'an imported preset, called',
+      {
+        'tailwind.config.mjs': `import { createPreset } from "@acme/preset";\nexport default { presets: [createPreset({ radius: "lg" })] };`,
+      },
+    ],
+    [
+      'a required preset, bound to a name',
+      {
+        'tailwind.config.js': `const { default: acme } = require("@acme/preset");\nmodule.exports = { presets: [acme] };`,
+      },
+    ],
+    [
+      'theme.borderRadius set from a variable',
+      {
+        'tailwind.config.js': `const radius = require("./radius.json");\nmodule.exports = { theme: { borderRadius: radius } };`,
+      },
+    ],
+    [
+      'theme.borderRadius set by a function',
+      {
+        'tailwind.config.js': `module.exports = { theme: { borderRadius: ({ theme }) => ({ DEFAULT: theme("spacing.1") }) } };`,
+      },
+    ],
+    [
+      'theme.extend.borderRadius set from a variable',
+      {
+        'tailwind.config.js': `const { borderRadius } = require("./tokens.json");\nmodule.exports = { theme: { extend: { borderRadius } } };`,
+      },
+    ],
+  ];
+  it.each(unread)('adds none for %s', async (_, files) => {
+    const root = fixture({ 'app/globals.css': V3_PLAIN, ...files });
+    const system = await load(root);
+    expect(system.getTokens({ category: 'radius' }).filter((t) => t.origin)).toEqual([]);
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual([]);
+  });
+
+  it('reads a preset in the project, with its own scale', async () => {
+    const root = fixture({
+      'app/globals.css': V3_PLAIN,
+      'tailwind.config.js': `module.exports = { presets: [require("./preset")] }`,
+      'preset.js': PRESET,
+    });
+    const { texts } = await fixes(root, UNREAD, 'no-hardcoded-radius');
+    expect(texts).toEqual(['rounded-lg', 'rounded', 'rounded-lg']);
+  });
+
   it("leaves a Tailwind v4 stylesheet with Tailwind v4's scale", async () => {
     const root = fixture({
       'components.json': COMPONENTS_JSON,
@@ -246,6 +314,23 @@ module.exports = { theme: { borderRadius: { ...defaultTheme.borderRadius, card: 
     const sm = system.getTokens({ category: 'radius' }).filter((t) => t.tailwind === 'sm');
     expect(sm.map((t) => [t.value, t.origin])).not.toContainEqual(['2px', 'tailwind-default']);
     expect(system.getTokens({ category: 'radius' }).some((t) => t.tailwind === '4xl')).toBe(true);
+  });
+
+  // A Tailwind v4 theme that clears the default radius steps, or every default, leaves no
+  // default token behind; its `@theme` variables still say it is Tailwind v4.
+  it.each([
+    ['clears the radius steps', '@theme {\n  --radius-*: initial;\n  --spacing: 4px;\n}'],
+    ['clears every default', '@theme {\n  --*: initial;\n  --radius-card: 20px;\n}'],
+  ])("adds none of v3's steps when a Tailwind v4 theme %s", async (_, theme) => {
+    const root = fixture({
+      'components.json': COMPONENTS_JSON,
+      'tailwind.config.js': EXTEND,
+      'app/globals.css': `@import "tailwindcss";\n@config "../tailwind.config.js";\n${theme}\n:root { --radius: 0.5rem; }\n`,
+    });
+    const system = await load(root);
+    expect(
+      system.getTokens({ category: 'radius' }).filter((t) => t.origin === 'tailwind-default'),
+    ).toEqual([]);
   });
 });
 
