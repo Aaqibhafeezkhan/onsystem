@@ -17,6 +17,7 @@ import {
   capDiagnostics,
   importStatement,
   listComponents,
+  noComponentsMessage,
   type Listing,
   renderAmbiguous,
   renderCatalogList,
@@ -484,6 +485,9 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
         const matches = catalog.find(name);
         const [entry] = matches;
         if (!entry) {
+          if (!catalog.roots().length) {
+            return errorResult(noComponentsMessage(catalog.root, undefined, true));
+          }
           const guess = catalog.suggest(name);
           const names = [...new Set(catalog.roots().map((e) => e.component.name))];
           return errorResult(
@@ -515,6 +519,12 @@ export function createServer({ getDesignSystem, getProjects }: CreateServerOptio
       const { ds } = found;
       const component = ds.getComponent(name);
       if (!component) {
+        if (!ds.roots().length) {
+          return {
+            isError: true,
+            content: [{ type: 'text', text: noComponentsMessage(ds.root, found.project?.dir) }],
+          };
+        }
         const guess = ds.suggestComponent(name);
         return {
           isError: true,

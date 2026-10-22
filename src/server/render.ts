@@ -172,6 +172,15 @@ function listTail(listed: Listing<unknown>): string[] {
   return lines;
 }
 
+/** The shared explanation when a project has no design-system components to show. */
+export function noComponentsMessage(root: string, project?: string, monorepo = false): string {
+  if (monorepo) {
+    return `No design-system components found in any project of this monorepo (root: ${root}). Check the "components" globs in the config. Run \`onsystem inspect\` there to see what was looked at.`;
+  }
+  const where = project ? ` in ${project}` : '';
+  return `No design-system components found${where}. Check the "components" globs in the config (root: ${root}).`;
+}
+
 /** `project`: the folder of a workspace root's project the list is for. */
 export function renderComponentList(
   ds: DesignSystem,
@@ -181,7 +190,7 @@ export function renderComponentList(
   const roots = ds.roots();
   const where = project ? ` in ${project}` : '';
   if (!roots.length) {
-    return `No components found${where}. Check the "components" globs in the config (root: ${ds.root}).`;
+    return noComponentsMessage(ds.root, project);
   }
   const listed = listComponents(roots, (c) => c, filter);
   if (!listed.matched) {
@@ -240,7 +249,7 @@ const PICK_PROJECT =
 export function renderCatalogList(catalog: Catalog, filter: ListFilter = {}): string {
   const roots = catalog.roots();
   if (!roots.length) {
-    return `No components found in any project of this monorepo (root: ${catalog.root}). Run \`onsystem inspect\` there to see what was looked at.`;
+    return noComponentsMessage(catalog.root, undefined, true);
   }
   const listed = listComponents(
     roots,
