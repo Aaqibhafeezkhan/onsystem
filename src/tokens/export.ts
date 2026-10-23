@@ -622,7 +622,16 @@ function table(tokens: readonly Token[], keys: Map<Token, string>): string[] {
     use(token),
     ...(described ? [token.description ?? ''] : []),
   ]);
-  const line = (cells: string[]) => `| ${cells.map((c) => c.replace(/\|/g, '\\|')).join(' | ')} |`;
+  // A cell stays on its row's line: a comment or a value the stylesheet wraps over lines is joined
+  // with spaces. Split and trim, not `/\s*\n\s*/`, which is quadratic on a long run of spaces.
+  const oneLine = (text: string) =>
+    text
+      .split(/\r\n?|\n/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(' ');
+  const line = (cells: string[]) =>
+    `| ${cells.map((c) => oneLine(c).replace(/\|/g, '\\|')).join(' | ')} |`;
   return [line(header), line(header.map(() => '---')), ...rows.map(line)];
 }
 
