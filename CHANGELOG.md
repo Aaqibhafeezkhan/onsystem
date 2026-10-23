@@ -1,5 +1,23 @@
 # onsystem (formerly @dgesteves/design-system-mcp)
 
+## 0.10.0
+
+### Minor Changes
+
+- [#202](https://github.com/dgesteves/onsystem/pull/202) [`3798fb7`](https://github.com/dgesteves/onsystem/commit/3798fb7268410ca455aee0333867ef2f67a39373) - An app's own config builds on the config its design-system package declares, instead of replacing it. What the app's config leaves out comes from the package's, unless it sets `components` of its own: `components`, with the package's `importPath`, `docs`, `elements`, `tokens` and `libraries`. A config that sets `components` reads its tokens as before: without `tokens`, from the app's own stylesheet (`app/globals.css`) and the ones it imports. Its `rules` apply over the package's, rule by rule, either way, and, with the package's components, its `elements` element by element; the package's `exclude` patterns are added to the app's; its `overrides`, `tsconfig` and `includeDesignSystem` are its own. Before, an app config that only turned one rule to `"warn"` lost the package's components and color tokens: in an app that installs the package, `check` said `No design system found` and passed. `inspect` names both configs (`config   onsystem.config.json, over node_modules/@acme/ui/onsystem.config.json (declared by @acme/ui)`). `"extends": false` in the app's config reads it alone, as before. This can change what `check` reports in an app with a config of its own whose dependency declares one: it now gets the package's rules where its config leaves them out, and the package's components and tokens when it sets no `components` of its own. A workspace package whose `"onsystem"` field cannot be read is a warning in such an app, which then reads its own config alone, and still an error in an app without one.
+  
+  A monorepo root's config builds on a project's design-system package config the same way in `check` and `inspect` from the root, so its `rules` and `overrides` apply to every project without a config of its own. Before, the config a project's design-system package declared took their place, without a word. From the project's folder, the root's config is still not read.
+  
+  `init --force` in an app on such a package, without a config or with one whose `components` match no file outside the package, writes a config with only `$schema`, for the app's own rules and overrides, and keeps the package's components, `importPath`, tokens and rules. Before, it wrote the package's paths into the app's config, or a config that lost the package's components. In an app whose config names components of its own, it writes them again, as before.
+  
+  `init` in an app whose design system zero config reads from an installed package leaves `components` and `tokens` to zero config. It wrote paths into the package's folder, which pnpm names by version (`node_modules/.pnpm/@acme+ui@1.0.0_react@19.0.0/node_modules/@acme/ui/…`), so after an upgrade `check` failed with `Token file not found`, and the component files it listed matched nothing.
+  
+  In a design-system package whose `files` leave out its component sources, `init` says that apps installing it read its components from the type declarations it publishes, when its `package.json` names some. It said they get no component checks, which holds only without type declarations.
+
+### Patch Changes
+
+- [#237](https://github.com/dgesteves/onsystem/pull/237) [`5a10990`](https://github.com/dgesteves/onsystem/commit/5a10990f76aa04c5a94576be042751b7b4156571) - `onsystem export --format design-md` keeps each table row on one line. A token whose comment or value the stylesheet wraps over several lines, such as a two-part `--shadow-lg`, broke its row: GitHub showed the rest of it as a code block and every later row in that table as a paragraph. The lines are now joined with spaces.
+
 ## 0.9.1
 
 ### Patch Changes
