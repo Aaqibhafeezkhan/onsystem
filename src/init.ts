@@ -889,7 +889,7 @@ function consumerGuide(name: string): string {
     `npx -y ${NAME} inspect`,
     '```',
     '',
-    `An app with an ${CONFIG_FILE} of its own reads it over ${name}'s config: what it leaves out, such as the components, \`importPath\` and tokens, comes from ${name}'s, and the rules and overrides it sets apply over ${name}'s rules. \`"extends": false\` in it reads it alone.`,
+    `An app with an ${CONFIG_FILE} of its own reads it over ${name}'s config: the rules and overrides it sets apply over ${name}'s rules, and, unless it sets components of its own, what it leaves out, such as the components, \`importPath\` and tokens, comes from ${name}'s. \`"extends": false\` in it reads it alone.`,
     '',
     '## Coding agents',
     '',

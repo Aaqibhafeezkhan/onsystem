@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
-import { DEFAULT_DOCS, loadConfig } from '../src/config.js';
+import { DEFAULT_DOCS, DEFAULT_TOKENS, FALLBACK_TOKENS, loadConfig } from '../src/config.js';
 import { loadTarget } from '../src/workspace.js';
 import { fixture, TSCONFIG } from './helpers.js';
 
@@ -175,7 +175,7 @@ describe("an app's own config, on a design-system package that declares one", ()
     expect(rules).not.toContain('no-unknown-variant');
   });
 
-  it("takes none of the package's importPath, docs or elements with components of its own, but keeps its tokens", async () => {
+  it("takes none of the package's importPath, docs, elements, tokens or libraries with components of its own", async () => {
     const pkg = acmeUi({
       ...INIT_CONFIG,
       docs: ['docs/**/*.md'],
@@ -193,16 +193,83 @@ describe("an app's own config, on a design-system package that declares one", ()
     expect(own.imports).toEqual([]);
     expect(own.elements).toEqual({});
     expect(own.docs).toEqual(DEFAULT_DOCS);
-    expect(own.tokens.map((t) => t.path)).toEqual(['node_modules/@acme/ui/theme.css']);
-    expect(own.libraryIds).toBe(false);
+    // Zero config's stylesheets, as in an app whose dependency declares no config.
+    expect(own.tokens.map((t) => t.path)).toEqual([...DEFAULT_TOKENS, ...FALLBACK_TOKENS]);
+    expect(own.tokensDetected).toBe(true);
+    expect(own.libraryIds).toBeUndefined();
 
-    // Without components of its own, the app adds to the package's elements.
+    // Without components of its own, the app adds to the package's elements, and takes the
+    // rest of what goes with the package's components.
     const added = await loadConfig({
       root: installedApp(pkg, { 'onsystem.config.json': json({ elements: { img: 'Image' } }) }),
     });
     expect(added.elements).toEqual({ a: 'Link', img: 'Image' });
     expect(added.docs).toEqual(['node_modules/@acme/ui/docs/**/*.md']);
     expect(added.importPath).toBe('@acme/ui');
+    expect(added.tokens.map((t) => t.path)).toEqual(['node_modules/@acme/ui/theme.css']);
+    expect(added.libraryIds).toBe(false);
+  });
+
+  it("reads its own stylesheet's tokens with components of its own, as it did before", async () => {
+    // The app's stylesheet imports the package's theme and adds tokens of its own; its
+    // config names its own shadcn components and leaves tokens to zero config.
+    const app = installedApp(acmeUi(INIT_CONFIG), {
+      'onsystem.config.json': json({ components: ['components/ui/**/*.tsx'] }),
+      'tsconfig.json': TSCONFIG,
+      'components/ui/button.tsx': BUTTON,
+      'app/globals.css':
+        '@import "tailwindcss";\n@import "@acme/ui/theme.css";\n@theme {\n  --color-brand: #1a7f37;\n  --radius-card: 0.875rem;\n}\n',
+      'app/page.tsx':
+        'import { Button } from "@/components/ui/button";\nexport default () => <div className="rounded-[14px] bg-[#1a7f37] p-[13px]"><Button>Go</Button></div>;\n',
+    });
+    const config = await loadConfig({ root: app });
+    expect(config.designSystemPackage?.name).toBe('@acme/ui');
+    expect(config.tokens.map((t) => t.path)).toContain('app/globals.css');
+    const { code, stdout } = await run(['check', '.', '--format', 'json', '--no-cache'], app);
+    const messages = (JSON.parse(stdout) as Results).flatMap((r) =>
+      r.diagnostics.map((d) => `${d.ruleId} ${d.severity}: ${d.message}`),
+    );
+    // --color-brand and --radius-card are the app's own tokens.
+    expect(messages).toContain(
+      'no-hardcoded-color error: Hardcoded color `bg-[#1a7f37]`. Matches token color-brand (exact match) → `bg-brand`.',
+    );
+    expect(messages).toContain(
+      'no-hardcoded-radius warning: `rounded-[14px]` is 14px, which is on the radius scale: use `rounded-card`.',
+    );
+    // --spacing comes from the package's theme, which the stylesheet imports.
+    expect(
+      messages.some((m) => m.startsWith('no-hardcoded-spacing ') && m.includes('p-[13px]')),
+    ).toBe(true);
+    expect(code).toBe(1);
+  });
+
+  it('keeps the published libraries on when the package turns them off, with components of its own', async () => {
+    // The app depends on MUI (not installed here: the setting is what is tested).
+    const pkg = acmeUi({ ...INIT_CONFIG, libraries: false });
+    const files = (config: Record<string, unknown>) => ({
+      'package.json': json({
+        name: 'web',
+        dependencies: { '@acme/ui': '1.0.0', '@mui/material': '^9.4.0' },
+      }),
+      'onsystem.config.json': json(config),
+      'components/ui/button.tsx': BUTTON,
+    });
+    const names = (libraries: { package: string }[] | undefined) =>
+      (libraries ?? []).map((l) => l.package);
+    const own = await loadConfig({
+      root: installedApp(pkg, files({ components: ['components/ui/**/*.tsx'] })),
+    });
+    expect(own.libraryIds).toBeUndefined();
+    expect(names(own.libraries)).toContain('@mui/material');
+    expect(names(own.librariesOff)).toEqual([]);
+    // With the package's components, its `libraries` applies, unless the app's config sets one.
+    const inherited = await loadConfig({ root: installedApp(pkg, files({})) });
+    expect(inherited.libraryIds).toBe(false);
+    expect(names(inherited.libraries)).toEqual([]);
+    expect(names(inherited.librariesOff)).toEqual(['@mui/material']);
+    const set = await loadConfig({ root: installedApp(pkg, files({ libraries: ['mui'] })) });
+    expect(set.libraryIds).toEqual(['mui']);
+    expect(names(set.libraries)).toEqual(['@mui/material']);
   });
 
   it('is read alone with "extends": false, as an app config was before', async () => {
@@ -218,6 +285,19 @@ describe("an app's own config, on a design-system package that declares one", ()
     expect(code).toBe(0);
     expect((await run(['inspect', '--no-cache'], app)).stdout).toContain(
       'config   onsystem.config.json\n',
+    );
+    // --explain names the package it leaves out, and why.
+    expect((await run(['inspect', '--explain', '--no-cache'], app)).stdout).toContain(
+      `no     a design-system package's config: @acme/ui (installed) declares node_modules/@acme/ui/onsystem.config.json, not read: "extends": false in onsystem.config.json reads it alone`,
+    );
+  });
+
+  it('says what "extends" takes when it names a package', async () => {
+    const app = installedApp(acmeUi(INIT_CONFIG), {
+      'onsystem.config.json': json({ extends: '@acme/ui' }),
+    });
+    await expect(loadConfig({ root: app })).rejects.toThrow(
+      '"extends" is true or false, not "@acme/ui": the design-system package is found from the dependencies, the one whose package.json declares its config ("onsystem"). Leave "extends" out to build on it, or set it to false to read this config alone.',
     );
   });
 

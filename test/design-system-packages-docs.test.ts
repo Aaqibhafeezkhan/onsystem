@@ -622,7 +622,7 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
 
   it("adds the package's exclude patterns to its own, and, with the package's components, its elements over the package's", async () => {
     expect(inTheApps).toContain(
-      "Its `rules` apply over the package's, rule by rule, and, with the package's components, its `elements` apply over the package's, element by element. The package's `exclude` patterns are added to the app's, as they are in an app without a config. Its `overrides`, `tsconfig` and `includeDesignSystem` are its own",
+      "Its `rules` apply over the package's, rule by rule, either way, and, with the package's components, its `elements` apply over the package's, element by element. The package's `exclude` patterns are added to the app's, as they are in an app without a config. Its `overrides`, `tsconfig` and `includeDesignSystem` are its own",
     );
     const pkg = withConfig(published(await initialised()), (config) => ({
       ...config,
@@ -648,6 +648,27 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
     const app = installedApp(pkg, { ...extra, 'onsystem.config.json': own });
     expect(await reported(app)).toEqual(['app/page.tsx']);
     expect((await loadConfig({ root: app })).elements).toEqual({ a: 'Link', img: 'Picture' });
+  });
+
+  it("takes none of what goes with the package's components with components of its own, and reads the app's own stylesheet", async () => {
+    expect(inTheApps).toContain(
+      "`components` brings the package's `importPath`, `docs`, `elements`, `tokens` and `libraries` with it, each unless the app's config sets it, so a config that sets `components` of its own takes none of those from the package. Zero config fills in what such a config leaves out, as in any project: without `tokens`, it reads the app's own stylesheet (`app/globals.css`) and the ones it `@import`s, the package's theme among them when it imports it.",
+    );
+    const app = installedApp(published(await initialised()), {
+      'onsystem.config.json': json({ components: ['components/ui/**/*.tsx'] }),
+      'components/ui/button.tsx': PACKAGE['src/button.tsx'],
+      'app/globals.css': '@import "@acme/ui/theme.css";\n@theme {\n  --color-brand: #1a7f37;\n}\n',
+      'app/page.tsx': 'export default () => <div className="bg-[#1a7f37] p-[13px]">x</div>;\n',
+    });
+    const config = await loadConfig({ root: app });
+    expect(config.importPath).toBeUndefined();
+    expect(config.tokens.map((t) => t.path)).toContain('app/globals.css');
+    const { findings } = await check(app);
+    // The app's own token, and the spacing scale of the package's theme it imports.
+    expect(findings.map((d) => d.message)).toContain(
+      'Hardcoded color `bg-[#1a7f37]`. Matches token color-brand (exact match) → `bg-brand`.',
+    );
+    expect(findings.map((d) => d.ruleId)).toContain('no-hardcoded-spacing');
   });
 
   it('is read alone with "extends": false, which can leave the app without the components and tokens of a package whose exports point at dist/', async () => {

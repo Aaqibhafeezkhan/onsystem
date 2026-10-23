@@ -131,10 +131,14 @@ const librariesSchema = z.union([z.literal(false), z.array(z.enum(LIBRARY_IDS))]
 const configShape = {
   $schema: z.string().optional(),
   extends: z
-    .boolean()
+    .boolean({
+      // `"extends": "@acme/ui"` otherwise reads "expected boolean, received string".
+      error: (issue) =>
+        `"extends" is true or false, not ${JSON.stringify(issue.input)}: the design-system package is found from the dependencies, the one whose package.json declares its config ("onsystem"). Leave "extends" out to build on it, or set it to false to read this config alone.`,
+    })
     .optional()
     .describe(
-      'Whether this config builds on the one a design-system package declares ("onsystem" in the package.json of a dependency): what it leaves out comes from there (components with their importPath, docs and elements; tokens; libraries), and its rules apply over the package\'s. Default: true. false reads this config alone.',
+      'Whether this config builds on the one a design-system package declares ("onsystem" in the package.json of a dependency, found from the dependencies): its rules apply over the package\'s, and, unless it sets components of its own, what it leaves out comes from the package\'s (components with their importPath, docs, elements, tokens and libraries). Default: true. false reads this config alone.',
     ),
   components: globsSchema
     .optional()
@@ -282,6 +286,8 @@ export interface ResolvedConfig {
    * `includeDesignSystem` stay with it.
    */
   designSystemPackage?: DesignSystemPackage | undefined;
+  /** The project's config sets `"extends": false`, so no design-system package's config is read. */
+  extendsOff?: boolean | undefined;
   /** `components` comes from the config file or `--components`, not from detection or the defaults. */
   configured?: boolean | undefined;
   /**
@@ -515,13 +521,18 @@ export async function loadConfigWith(
       `${declared.name}'s onsystem config names paths outside ${declared.installed ? 'the package' : 'the workspace'}, which were ignored: ${outside.join(', ')}.`,
     );
   }
-  // The design system's components, and what goes with them (importPath, docs, elements), come
-  // from the package's config unless this one names components of its own.
+  // The design system's components, and what goes with them (importPath, docs, elements, tokens,
+  // libraries), come from the package's config unless this one names components of its own:
+  // then zero config fills in what it leaves out, such as the app's own stylesheet for tokens.
   const inherits = pkg !== undefined && config.components === undefined;
   const configComponents =
     config.components === undefined ? packageComponents : toArray(config.components).map(fromBase);
   const configTokens =
-    config.tokens === undefined ? packageTokens : toArray(config.tokens).map(tokensFrom(fromBase));
+    config.tokens === undefined
+      ? inherits
+        ? packageTokens
+        : undefined
+      : toArray(config.tokens).map(tokensFrom(fromBase));
   const configDocs =
     config.docs === undefined
       ? inherits
@@ -529,7 +540,7 @@ export async function loadConfigWith(
         : undefined
       : toArray(config.docs).map(fromBase);
   const importPath = config.importPath ?? (inherits ? pkg.importPath : undefined);
-  const librariesSetting = config.libraries ?? pkg?.libraries;
+  const librariesSetting = config.libraries ?? (inherits ? pkg.libraries : undefined);
 
   // The package's rules, then this config's over them.
   const rules = {} as Record<RuleId, ResolvedRule>;
@@ -668,6 +679,7 @@ export async function loadConfigWith(
     overrides,
     ...(base !== root ? { base } : {}),
     ...(declared ? { designSystemPackage: declared } : {}),
+    ...(config.extends === false ? { extendsOff: true } : {}),
     configured: componentsSet,
     ...(deprecations.length ? { deprecations } : {}),
     ...(warnings.length ? { warnings } : {}),

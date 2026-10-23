@@ -239,12 +239,22 @@ function display(cwd: string, file: string): string {
  */
 function packageSteps(config: ResolvedConfig, cwd: string): DetectionStep[] {
   const declared = config.designSystemPackage;
-  // A config of its own (or --config) read alone: no dependency declares one, or it sets
-  // `"extends": false`.
-  if (config.configFile && !declared) return [];
+  const candidate = "a design-system package's config";
+  // A config of its own (or --config) read alone: it sets `"extends": false`, which names the
+  // package it leaves out, or no dependency declares one.
+  if (config.configFile && !declared) {
+    const found = config.extendsOff ? findDesignSystemPackage(config.root)?.found : undefined;
+    if (!found) return [];
+    return [
+      {
+        candidate,
+        accepted: false,
+        reason: `${found.name} (${found.installed ? 'installed' : 'a workspace package'}) declares ${display(cwd, found.config)}, not read: "extends": false in ${display(cwd, config.configFile)} reads it alone`,
+      },
+    ];
+  }
   const lookup = findDesignSystemPackage(config.root);
   if (!lookup) return [];
-  const candidate = "a design-system package's config";
   const skipped = lookup.skipped.length
     ? `; ${lookup.skipped.map((p) => p.name).join(', ')} ${lookup.skipped.length === 1 ? 'declares one' : 'declare one'} that cannot be read, skipped since installed`
     : '';

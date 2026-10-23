@@ -8,7 +8,7 @@
       "type": "string"
     },
     "extends": {
-      "description": "Whether this config builds on the one a design-system package declares (\"onsystem\" in the package.json of a dependency): what it leaves out comes from there (components with their importPath, docs and elements; tokens; libraries), and its rules apply over the package's. Default: true. false reads this config alone.",
+      "description": "Whether this config builds on the one a design-system package declares (\"onsystem\" in the package.json of a dependency, found from the dependencies): its rules apply over the package's, and, unless it sets components of its own, what it leaves out comes from the package's (components with their importPath, docs, elements, tokens and libraries). Default: true. false reads this config alone.",
       "type": "boolean"
     },
     "components": {
