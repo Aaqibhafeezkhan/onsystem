@@ -119,7 +119,9 @@ export async function init(
   const inherited = options.force ? undefined : config.designSystemPackage;
   // With --force, the config written here builds on the package's, unless the one there names
   // components of the app's own: those are written out again, as they are without a package.
-  const declaring = options.force ? config.designSystemPackage : undefined;
+  // Components given on the command line are the app's own, as in a config without the package.
+  const declaring =
+    options.force && !configOptions.components?.length ? config.designSystemPackage : undefined;
   const replaced =
     declaring && (config.inherits || !(await namesOwnComponents(config, declaring)))
       ? declaring
@@ -136,7 +138,10 @@ export async function init(
     if (configOptions.docs?.length) file.docs = configOptions.docs;
   } else if (replaced) {
     // What the config leaves out comes from the package's, as it does with none: it holds only
-    // the app's own rules and overrides, once they are added.
+    // the app's own rules and overrides, once they are added, and the old config's tokens when
+    // they name a stylesheet of the app's own beside the package's.
+    const tokens = existing ? ownTokens(existing, root, replaced) : undefined;
+    if (tokens) file.tokens = tokens;
   } else if (workspace) {
     // At a monorepo root, each project keeps zero config; the file holds what they share.
     notes.push(
@@ -241,7 +246,7 @@ export async function init(
     fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
     written.push(CONFIG_FILE);
   }
-  if (replaced) notes.push(replacedNote(replaced, io.cwd));
+  if (replaced) notes.push(replacedNote(replaced, io.cwd, file.tokens !== undefined));
   let registry: Unshipped | undefined;
   if (designSystem && manifest && name) {
     written.push(...declarePackage(root, manifest, name, options.force, notes));
@@ -651,9 +656,41 @@ function publishedDeclarations(
  * Said when --force writes a config in an app on a design-system package that declares one: the
  * new config builds on the package's, which still gives it what it leaves out.
  */
-function replacedNote(pkg: DesignSystemPackage, cwd: string): string {
+function replacedNote(pkg: DesignSystemPackage, cwd: string, keptTokens: boolean): string {
   const declared = relativePath(cwd, pkg.config) || pkg.config;
-  return `This project reads the config ${pkg.name} declares (${declared}). With --force it has one of its own, ${CONFIG_FILE}, read over that one: what it leaves out, such as "components", "importPath" and "tokens", still comes from ${pkg.name}'s config, and the rules and overrides you add to it apply over ${pkg.name}'s rules. "extends": false in it reads it alone.`;
+  const fields = keptTokens
+    ? '"components" and "importPath"'
+    : '"components", "importPath" and "tokens"';
+  const kept = keptTokens
+    ? ' It keeps the "tokens" the old one listed, which name a stylesheet of this project\'s own.'
+    : '';
+  return `This project reads the config ${pkg.name} declares (${declared}). With --force it has one of its own, ${CONFIG_FILE}, read over that one: what it leaves out, such as ${fields}, still comes from ${pkg.name}'s config, and the rules and overrides you add to it apply over ${pkg.name}'s rules.${kept} "extends": false in it reads it alone.`;
+}
+
+/**
+ * The `tokens` an existing JSON config lists, when one of them is outside the design-system
+ * package, links resolved: an app that takes the package's components and reads its own
+ * stylesheet too lists both. A list of the package's files only is left to the package's config.
+ */
+function ownTokens(file: string, root: string, pkg: DesignSystemPackage): string[] | undefined {
+  let tokens: unknown;
+  try {
+    tokens = (JSON.parse(fs.readFileSync(file, 'utf8')) as { tokens?: unknown }).tokens;
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(tokens) || !tokens.every((t): t is string => typeof t === 'string')) {
+    return undefined;
+  }
+  const real = (abs: string) => {
+    try {
+      return fs.realpathSync(abs);
+    } catch {
+      return abs;
+    }
+  };
+  const dir = real(pkg.dir);
+  return tokens.some((t) => !isInside(dir, real(path.resolve(root, t)))) ? tokens : undefined;
 }
 
 /**

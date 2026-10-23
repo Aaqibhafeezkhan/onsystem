@@ -480,6 +480,48 @@ describe('init in an app on a design-system package', () => {
     }
   });
 
+  it("keeps, with --force, the tokens of a config that lists its own stylesheet beside the package's", async () => {
+    // The documented way to take the package's components and read the app's stylesheet too.
+    const tokens = ['app/globals.css', 'node_modules/@acme/ui/theme.css'];
+    const app = installedApp(acmeUi(INIT_CONFIG), {
+      'onsystem.config.json': json({ tokens }),
+      'app/globals.css': '@theme {\n  --color-brand: #1a7f37;\n}\n',
+    });
+    const before = await check(app);
+    const init = await run(['init', '--yes', '--force', '--no-cache'], app);
+    expect(init.code).toBe(0);
+    expect(init.stdout).toContain(
+      'such as "components" and "importPath", still comes from @acme/ui\'s config',
+    );
+    expect(init.stdout).toContain(
+      'It keeps the "tokens" the old one listed, which name a stylesheet of this project\'s own.',
+    );
+    expect(JSON.parse(fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8'))).toEqual({
+      $schema: 'https://unpkg.com/onsystem/schema.json',
+      tokens,
+    });
+    fs.rmSync(path.join(app, 'onsystem.baseline.json'));
+    expect((await check(app)).findings).toEqual(before.findings);
+  });
+
+  it("says nothing of the package's config when --components names the app's own", async () => {
+    const app = installedApp(acmeUi(INIT_CONFIG), {
+      'onsystem.config.json': ONE_RULE,
+      'components/ui/button.tsx': BUTTON,
+    });
+    const init = await run(
+      ['init', '--yes', '--force', '--no-cache', '--components', 'components/ui/**/*.tsx'],
+      app,
+    );
+    expect(init.code).toBe(0);
+    expect(init.stdout).not.toContain('This project reads the config @acme/ui declares');
+    expect(
+      JSON.parse(fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8')),
+    ).toMatchObject({
+      components: ['components/ui/**/*.tsx'],
+    });
+  });
+
   it('writes, with --force, the components of a config that names its own again, as it does without the package', async () => {
     // The app's own shadcn components and stylesheet, as in a config written before the package
     // declared one.
