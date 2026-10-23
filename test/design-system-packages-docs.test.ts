@@ -305,12 +305,12 @@ describe('what apps get from a design-system package (docs/design-system-package
     );
     expect(whatAppsGet).toContain(`\`check\` says \`${notice}\`\n`);
     // Agents find no component.
-    expect(await tool(app, 'list_components', {})).toMatch(/^No components found/);
+    expect(await tool(app, 'list_components', {})).toMatch(/^No design-system components found/);
     expect(await tool(app, 'search_components', { query: 'button' })).toMatch(
       /^No components match/,
     );
     expect(await tool(app, 'get_component', { name: 'Button' })).toMatch(
-      /^No component named "Button"/,
+      /^No design-system components found/,
     );
     // check_ui reports from the same rules.
     const checked = await tool(app, 'check_ui', { path: 'app/page.tsx' });

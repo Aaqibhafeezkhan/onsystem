@@ -121,6 +121,25 @@ describe('MCP server over the in-memory transport', () => {
     expect(text(result)).toContain('Did you mean "Button"?');
   });
 
+  it('get_component says when the project has no components at all', async () => {
+    const ds = await load(fixture({ 'package.json': '{ "name": "plain" }' }));
+    const server = createServer({ getDesignSystem: () => Promise.resolve(ds) });
+    const other = new Client({ name: 'empty', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), other.connect(clientTransport)]);
+
+    const result = await other.callTool({ name: 'get_component', arguments: { name: 'Button' } });
+    const listing = await other.callTool({ name: 'list_components', arguments: {} });
+
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain('No design-system components found');
+    expect(text(result)).toContain('Check the "components" globs in the config');
+    expect(text(result)).toContain(`(root: ${ds.root})`);
+    expect(text(result)).not.toContain('Available: .');
+    expect(text(result)).toBe(text(listing));
+    await other.close();
+  });
+
   it('search_components', async () => {
     const result = await client.callTool({
       name: 'search_components',
