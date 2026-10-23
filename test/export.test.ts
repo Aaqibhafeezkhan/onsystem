@@ -352,6 +352,33 @@ const tok = (name: string, category: Token['category'], value: string): Token =>
   source: { file: 'a.css', line: 1 },
 });
 
+describe('export --format design-md, with values over several lines', () => {
+  // A comment or a value the stylesheet wraps over lines broke its table row: GitHub then showed
+  // the rest of the row as a code block and every later row as a paragraph.
+  it('keeps each table row on one line', () => {
+    const { tokens } = parseCssTokens(
+      [
+        '@theme {',
+        '  /* Line one.',
+        '     line two | x */',
+        '  --color-primary: #f00;',
+        '  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1),',
+        '    0 4px 6px -4px rgb(0 0 0 / 0.1);',
+        '}',
+      ].join('\n'),
+      'app/globals.css',
+    );
+    const lines = toDesignMd(tokens, { name: 'Wrapped' }).text.split('\n');
+    const rows = lines.filter((line, i) => i > 0 && lines[i - 1]?.startsWith('|') && line !== '');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row).toMatch(/^\|.*\|$/);
+    expect(lines.join('\n')).toContain(
+      '`0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)`',
+    );
+    expect(lines.join('\n')).toContain('Line one. line two \\| x');
+  });
+});
+
 describe('export of long and unusual values', () => {
   it('types the numbers, lengths, composites and color channels it typed before', () => {
     const tokens = [
