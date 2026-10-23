@@ -453,6 +453,80 @@ describe('init in an app on a design-system package', () => {
     fs.rmSync(path.join(app, 'onsystem.baseline.json'));
     expect((await check(app)).findings).toEqual(before.findings);
   });
+
+  it('writes $schema alone, with --force, over a config whose components are none of its own', async () => {
+    const before = await check(installedApp(acmeUi(INIT_CONFIG)));
+    const configs = {
+      'no components': ONE_RULE,
+      // The package's paths, copied from its config, as main's init --force wrote them.
+      "the package's": json({
+        components: ['node_modules/@acme/ui/src/*.tsx'],
+        importPath: '@acme/ui',
+        tokens: ['node_modules/@acme/ui/theme.css'],
+      }),
+      'a glob that matches nothing': json({ components: ['components/**/*.tsx'] }),
+    };
+    for (const [name, config] of Object.entries(configs)) {
+      const app = installedApp(acmeUi(INIT_CONFIG), { 'onsystem.config.json': config });
+      const init = await run(['init', '--yes', '--force', '--no-cache'], app);
+      expect(init.code, name).toBe(0);
+      expect(init.stdout, name).toContain('This project reads the config @acme/ui declares');
+      expect(
+        JSON.parse(fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8')),
+        name,
+      ).toEqual({ $schema: 'https://unpkg.com/onsystem/schema.json' });
+      fs.rmSync(path.join(app, 'onsystem.baseline.json'));
+      expect((await check(app)).findings, name).toEqual(before.findings);
+    }
+  });
+
+  it('writes, with --force, the components of a config that names its own again, as it does without the package', async () => {
+    // The app's own shadcn components and stylesheet, as in a config written before the package
+    // declared one.
+    const app = installedApp(acmeUi(INIT_CONFIG), {
+      'onsystem.config.json': json({ components: ['components/ui/**/*.tsx'] }),
+      'tsconfig.json': TSCONFIG,
+      'components/ui/button.tsx': BUTTON,
+      'app/globals.css': '@theme {\n  --color-brand: #1a7f37;\n  --spacing: 0.25rem;\n}\n',
+      'app/page.tsx':
+        'import { Button } from "@/components/ui/button";\nexport default () => <div className="bg-[#1a7f37] p-[13px]"><Button>Go</Button></div>;\n',
+    });
+    const before = await check(app);
+    expect(before.findings).toEqual([
+      'app/page.tsx:2 no-hardcoded-color error',
+      'app/page.tsx:2 no-hardcoded-spacing warning',
+    ]);
+    const init = await run(['init', '--yes', '--force', '--no-cache'], app);
+    expect(init.code).toBe(0);
+    expect(init.stdout).not.toContain('This project reads the config @acme/ui declares');
+    expect(JSON.parse(fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8'))).toEqual({
+      $schema: 'https://unpkg.com/onsystem/schema.json',
+      components: ['components/ui/**/*.tsx'],
+      tokens: ['app/globals.css'],
+    });
+    fs.rmSync(path.join(app, 'onsystem.baseline.json'));
+    // Its own Button is still a component, not app code, and --color-brand still a token.
+    expect((await check(app)).findings).toEqual(before.findings);
+  });
+});
+
+describe('inspect --explain in an app on a design-system package', () => {
+  it("names the package's config as where the components come from, unless the app's config names its own", async () => {
+    const explain = async (config: string) => {
+      const app = installedApp(acmeUi(INIT_CONFIG), {
+        'onsystem.config.json': config,
+        'components/ui/button.tsx': BUTTON,
+      });
+      const { stdout } = await run(['inspect', '--explain', '--no-cache'], app);
+      return stdout.split('\n').find((line) => line.startsWith('  components come from'));
+    };
+    expect(await explain(ONE_RULE)).toBe(
+      '  components come from node_modules/@acme/ui/onsystem.config.json, so zero config did not look',
+    );
+    expect(await explain(json({ components: ['components/ui/**/*.tsx'] }))).toBe(
+      '  components come from onsystem.config.json, over node_modules/@acme/ui/onsystem.config.json, so zero config did not look',
+    );
+  });
 });
 
 describe('init in an app that zero config reads an installed design-system package for', () => {

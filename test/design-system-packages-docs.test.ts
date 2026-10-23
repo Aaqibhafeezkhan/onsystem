@@ -652,6 +652,9 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
 
   it("takes none of what goes with the package's components with components of its own, and reads the app's own stylesheet", async () => {
     expect(inTheApps).toContain(
+      "A project reads up to two configs, the first over the second, field by field as [an app's own config](#an-apps-own-config) says, and zero config fills in the rest:",
+    );
+    expect(inTheApps).toContain(
       "`components` brings the package's `importPath`, `docs`, `elements`, `tokens` and `libraries` with it, each unless the app's config sets it, so a config that sets `components` of its own takes none of those from the package. Zero config fills in what such a config leaves out, as in any project: without `tokens`, it reads the app's own stylesheet (`app/globals.css`) and the ones it `@import`s, the package's theme among them when it imports it.",
     );
     const app = installedApp(published(await initialised()), {
@@ -669,6 +672,46 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
       'Hardcoded color `bg-[#1a7f37]`. Matches token color-brand (exact match) → `bg-brand`.',
     );
     expect(findings.map((d) => d.ruleId)).toContain('no-hardcoded-spacing');
+  });
+
+  it("reads the package's tokens alone with the package's components, and the app's stylesheet as well when its config names it", async () => {
+    expect(inTheApps).toContain(
+      'An app that takes the package\'s components this way, or without a config, reads the tokens the package\'s config names, when it names some, and not its own stylesheet\'s: tokens the app adds in `app/globals.css` are not read. To read them as well, list both in its config, `"tokens": ["app/globals.css", "node_modules/@acme/ui/theme.css"]` (`../../packages/ui/theme.css` from a workspace app), since a `tokens` list brings none of the stylesheets its files `@import`: the app keeps the package\'s components.',
+    );
+    const pkg = published(await initialised());
+    const extra = {
+      'app/globals.css': '@import "@acme/ui/theme.css";\n@theme {\n  --color-brand: #1a7f37;\n}\n',
+      'app/page.tsx': PAGE.replace(
+        '<div className="bg-blue-500">Color</div>',
+        '<div className="bg-blue-500">Color</div>\n      <div className="bg-[#1a7f37]">Brand</div>',
+      ),
+    };
+    const brand =
+      'Hardcoded color `bg-[#1a7f37]`. Matches token color-brand (exact match) → `bg-brand`.';
+    const configs: Record<string, string>[] = [{}, { 'onsystem.config.json': own }];
+    for (const config of configs) {
+      const app = installedApp(pkg, { ...extra, ...config });
+      expect((await loadConfig({ root: app })).tokens.map((t) => t.path)).toEqual([
+        'node_modules/@acme/ui/theme.css',
+      ]);
+      const { rules, findings } = await check(app);
+      expect(rules).toEqual(new Set(RULE_IDS));
+      expect(findings.map((d) => d.message)).not.toContain(brand);
+    }
+    const listed = (tokens: string[]) =>
+      installedApp(pkg, { ...extra, 'onsystem.config.json': json({ tokens }) });
+    // The app's stylesheet alone: not the package's theme it imports, which sets the spacing scale.
+    const alone = await check(listed(['app/globals.css']));
+    expect(alone.findings.map((d) => d.message)).toContain(brand);
+    expect(alone.rules).not.toContain('no-hardcoded-spacing');
+    const app = listed(['app/globals.css', 'node_modules/@acme/ui/theme.css']);
+    const config = await loadConfig({ root: app });
+    expect(config.components.every((glob) => glob.startsWith('node_modules/@acme/ui/'))).toBe(true);
+    expect(config.importPath).toBe('@acme/ui');
+    const { rules, findings } = await check(app);
+    expect(rules).toEqual(new Set(RULE_IDS));
+    expect(findings.map((d) => d.message)).toContain(brand);
+    expect(findings.find((d) => d.ruleId === 'no-hardcoded-spacing')?.line).toBe(8);
   });
 
   it('is read alone with "extends": false, which can leave the app without the components and tokens of a package whose exports point at dist/', async () => {
@@ -750,10 +793,27 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
       $schema: 'https://unpkg.com/onsystem/schema.json',
     });
     expect(inTheApps).toContain(
-      "`init --force` in an app on such a package writes a config with only `$schema` in it, for the app's own rules and overrides, and says what it builds on.",
+      "`init --force` in an app on such a package, without a config or with one whose `components` match no file outside the package, writes a config with only `$schema` in it, for the app's own rules and overrides, and says what it builds on.",
     );
     fs.rmSync(path.join(app, 'onsystem.baseline.json'));
     expect((await check(app)).rules).toEqual(new Set(RULE_IDS));
+  });
+
+  it('writes again, with init --force, the components of an app config that sets its own', async () => {
+    expect(inTheApps).toContain(
+      'In an app whose config names components of its own, it writes them again, as it does without such a package.',
+    );
+    const app = installedApp(published(await initialised()), {
+      'onsystem.config.json': json({ components: ['components/ui/**/*.tsx'] }),
+      'components/ui/button.tsx': PACKAGE['src/button.tsx'],
+    });
+    const init = await run(['init', '--yes', '--force', '--no-cache'], app);
+    expect(init.code).toBe(0);
+    expect(init.stdout).not.toContain('This project reads the config @acme/ui declares');
+    expect(JSON.parse(fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8'))).toEqual({
+      $schema: 'https://unpkg.com/onsystem/schema.json',
+      components: ['components/ui/**/*.tsx'],
+    });
   });
 
   it('needs importPath set to the package name for a package imported by subpath, when read alone', async () => {

@@ -6,7 +6,7 @@ An app's own config builds on the config its design-system package declares, ins
 
 A monorepo root's config builds on a project's design-system package config the same way in `check` and `inspect` from the root, so its `rules` and `overrides` apply to every project without a config of its own. Before, the config a project's design-system package declared took their place, without a word. From the project's folder, the root's config is still not read.
 
-`init --force` in an app on such a package writes a config with only `$schema`, for the app's own rules and overrides, and keeps the package's components, `importPath`, tokens and rules. Before, it wrote the package's paths into the app's config, or a config that lost the package's components.
+`init --force` in an app on such a package, without a config or with one whose `components` match no file outside the package, writes a config with only `$schema`, for the app's own rules and overrides, and keeps the package's components, `importPath`, tokens and rules. Before, it wrote the package's paths into the app's config, or a config that lost the package's components. In an app whose config names components of its own, it writes them again, as before.
 
 `init` in an app whose design system zero config reads from an installed package leaves `components` and `tokens` to zero config. It wrote paths into the package's folder, which pnpm names by version (`node_modules/.pnpm/@acme+ui@1.0.0_react@19.0.0/node_modules/@acme/ui/…`), so after an upgrade `check` failed with `Token file not found`, and the component files it listed matched nothing.
 

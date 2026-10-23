@@ -286,6 +286,11 @@ export interface ResolvedConfig {
    * `includeDesignSystem` stay with it.
    */
   designSystemPackage?: DesignSystemPackage | undefined;
+  /**
+   * The project's config sets no `components`, so what it leaves out of `components`,
+   * `importPath`, `docs`, `elements`, `tokens` and `libraries` comes from `designSystemPackage`'s.
+   */
+  inherits?: boolean | undefined;
   /** The project's config sets `"extends": false`, so no design-system package's config is read. */
   extendsOff?: boolean | undefined;
   /** `components` comes from the config file or `--components`, not from detection or the defaults. */
@@ -679,6 +684,7 @@ export async function loadConfigWith(
     overrides,
     ...(base !== root ? { base } : {}),
     ...(declared ? { designSystemPackage: declared } : {}),
+    ...(inherits ? { inherits: true } : {}),
     ...(config.extends === false ? { extendsOff: true } : {}),
     configured: componentsSet,
     ...(deprecations.length ? { deprecations } : {}),

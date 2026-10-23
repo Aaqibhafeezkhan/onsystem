@@ -117,8 +117,13 @@ export async function init(
   const relative = (abs: string) => relativePath(root, abs);
   // An app on a design-system package that declares its config needs none of its own.
   const inherited = options.force ? undefined : config.designSystemPackage;
-  // With --force, the config written here builds on the package's.
-  const replaced = options.force ? config.designSystemPackage : undefined;
+  // With --force, the config written here builds on the package's, unless the one there names
+  // components of the app's own: those are written out again, as they are without a package.
+  const declaring = options.force ? config.designSystemPackage : undefined;
+  const replaced =
+    declaring && (config.inherits || !(await namesOwnComponents(config, declaring)))
+      ? declaring
+      : undefined;
   // "components" holds what zero config found, not globs the user gave.
   let found = false;
   if (inherited) {
@@ -649,6 +654,26 @@ function publishedDeclarations(
 function replacedNote(pkg: DesignSystemPackage, cwd: string): string {
   const declared = relativePath(cwd, pkg.config) || pkg.config;
   return `This project reads the config ${pkg.name} declares (${declared}). With --force it has one of its own, ${CONFIG_FILE}, read over that one: what it leaves out, such as "components", "importPath" and "tokens", still comes from ${pkg.name}'s config, and the rules and overrides you add to it apply over ${pkg.name}'s rules. "extends": false in it reads it alone.`;
+}
+
+/**
+ * Whether the files a config's `components` match include some outside the design-system
+ * package, links resolved: a config that names only the package's (copied from its config, as
+ * `node_modules/@acme/ui/src/*.tsx`), or none, has no components of its own.
+ */
+async function namesOwnComponents(
+  config: ResolvedConfig,
+  pkg: DesignSystemPackage,
+): Promise<boolean> {
+  const real = (file: string) => {
+    try {
+      return fs.realpathSync(file);
+    } catch {
+      return path.resolve(file);
+    }
+  };
+  const dir = real(pkg.dir);
+  return (await componentFiles(config)).some((file) => !isInside(dir, real(file)));
 }
 
 /** Whether a path, relative to the root, is in a package installed in `node_modules`. */

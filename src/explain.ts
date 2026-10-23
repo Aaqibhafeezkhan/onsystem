@@ -23,9 +23,14 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
     out(`  ${(step.accepted ? 'found' : 'no').padEnd(6)} ${step.candidate}: ${step.reason}`);
   }
   if (config.configured) {
-    out(
-      `  components come from ${config.configFile ? `${display(cwd, config.configFile)}${over(config, cwd)}` : '--components'}, so zero config did not look`,
-    );
+    // A config that names no components of its own takes the package's, from its config.
+    const source =
+      config.inherits && config.designSystemPackage
+        ? display(cwd, config.designSystemPackage.config)
+        : config.configFile
+          ? `${display(cwd, config.configFile)}${over(config, cwd)}`
+          : '--components';
+    out(`  components come from ${source}, so zero config did not look`);
   } else {
     const steps: DetectionStep[] = [];
     detectProject(config.root, config.tsconfig, steps, config.designSystemPackage);
