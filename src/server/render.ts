@@ -30,6 +30,27 @@ function json(text: string): string {
   );
 }
 
+/** `text` with each line break in it escaped as in a JSON string: `\n`, `\r`, `\u2028`. */
+function escapeBreaks(text: string): string {
+  return text.replace(/[\n\r\v\f\u0085\u2028\u2029]/g, (c) => json(c).slice(1, -1));
+}
+
+/**
+ * An answer's lines, joined. Every answer this file renders ends here, and each of its lines is
+ * one line: a line break left in one, in a value the repository wrote (a type, a default, a
+ * path, a token's value, a rule message's), is escaped, so no text after it starts a line of the
+ * answer unmarked. The answer's only text over several lines, a `>` quote and an example's code,
+ * comes as a line per element.
+ */
+function answer(lines: readonly string[]): string {
+  return lines.map(escapeBreaks).join('\n');
+}
+
+/** A file or import path: in double quotes when it holds a line break, as git allows. */
+function pathOf(file: string): string {
+  return LINE_BREAK.test(file) ? json(file) : file;
+}
+
 function firstSentence(text: string | undefined, max = 140): string {
   if (!text) return '';
   // A sentence ends at . ! or ? followed by an uppercase letter or the end ("e.g. a menu" does not).
@@ -39,7 +60,7 @@ function firstSentence(text: string | undefined, max = 140): string {
 
 export function importStatement(component: ComponentInfo): string {
   const binding = component.exportName.split('.')[0] ?? component.name;
-  return `import { ${binding} } from "${component.importPath}"`;
+  return `import { ${binding} } from ${json(component.importPath)}`;
 }
 
 function variantSummary(component: ComponentInfo): string[] {
@@ -59,23 +80,61 @@ function nameOf(value: string): string {
   return /^[\w$./:@-]{1,40}$/.test(value) ? value : json(truncate(value, 40));
 }
 
-/** A prop's type, with each string literal cut to 40 characters, as `nameOf` does. */
+/**
+ * In a type's text: a string literal, in any quotes (group 1), or a gap between its parts: a run
+ * of spaces, line breaks and comments, with the comma before it.
+ */
+const TYPE_PART =
+  /("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*'|`(?:[^`\\]|\\[\s\S])*`)|,?(?:[\s\u0085]|\/\*[\s\S]*?(?:\*\/|$)|\/\/.*)+/g;
+
+/**
+ * A prop's type, or the type its props come from as the source writes it, on one line. Each
+ * string literal is cut to 40 characters (one in double quotes JSON-quoted, as `nameOf` does), with
+ * its line breaks escaped. Comments are left out, and a gap with a line break or a comment in it
+ * becomes one space, or none inside brackets: `Omit<\n  Props, // why\n  "size"\n>` is
+ * `Omit<Props, "size">`.
+ */
 function propType(type: string): string {
-  return type.replace(/"((?:[^"\\]|\\.)*)"/g, (literal, text: string) =>
-    text.length > 40 ? json(truncate(text, 40)) : literal,
+  return type.replace(TYPE_PART, (gap: string, literal: string | undefined, at: number) => {
+    if (literal !== undefined) {
+      const [quote = '', text] = [literal[0], literal.slice(1, -1)];
+      if (text.length <= 40) return escapeBreaks(literal);
+      return quote === '"'
+        ? json(truncate(text, 40))
+        : escapeBreaks(quote + truncate(text, 40) + quote);
+    }
+    if (!LINE_BREAK.test(gap) && !/\/[*/]/.test(gap)) return gap;
+    if (/^[>)\],;]?$/.test(type.charAt(at + gap.length))) return '';
+    if (gap.startsWith(',')) return ', ';
+    return at === 0 || /[<([]/.test(type.charAt(at - 1)) ? '' : ' ';
+  });
+}
+
+/**
+ * Whether a prop's default reads as a value, to show as written: one line of at most 40
+ * characters with no comment, in which, outside its string literals, only names, numbers and
+ * code punctuation stand, never two words in a row (`md`, `"md"`, `-1`, `[0, 0]`,
+ * `{ open: true }`, `(v) => v.trim()`). A `@default` sentence does not, nor does `"md" as Size`.
+ */
+function readsAsValue(text: string): boolean {
+  if (text.length > 40 || LINE_BREAK.test(text)) return false;
+  const code = text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '0');
+  return (
+    /^[\w$.,:;?!+\-*/%<>=&|^~()[\]{}\s]*$/.test(code) &&
+    !/\/[*/]/.test(code) &&
+    !/[\w$]\s+[\w$]/.test(code)
   );
 }
 
 /**
  * The repository's text (JSDoc, a docs page) as a Markdown quote, which it cannot end: each of
- * its lines starts with `>`, whichever line break ends the one before.
+ * its lines starts with `>`, whichever line break ends the one before. A line per element.
  */
-function quoted(text: string): string {
+function quoted(text: string): string[] {
   return text
     .trim()
     .split(LINE_BREAK)
-    .map((line) => (line.trim() ? `> ${line}` : '>'))
-    .join('\n');
+    .map((line) => (line.trim() ? `> ${line}` : '>'));
 }
 
 /**
@@ -131,7 +190,7 @@ class Marks {
     return said(text, max);
   }
 
-  quoted(text: string): string {
+  quoted(text: string): string[] {
     this.any = true;
     return quoted(text);
   }
@@ -141,6 +200,23 @@ class Marks {
     const shown = nameOf(text);
     if (shown !== text) this.any = true;
     return shown;
+  }
+
+  /** A file path, marked when it holds a line break. */
+  path(file: string): string {
+    const shown = pathOf(file);
+    if (shown !== file) this.any = true;
+    return shown;
+  }
+
+  /**
+   * A prop's default, as written when it reads as a value; otherwise, as for a `@default` that
+   * is a sentence or runs onto the next line, in double quotes and cut to 40 characters (a
+   * string literal's text, without its quotes).
+   */
+  value(text: string): string {
+    if (readsAsValue(text)) return text;
+    return this.said(/^"((?:[^"\\]|\\.)*)"$/.exec(text)?.[1] ?? text, 40);
   }
 
   /**
@@ -283,10 +359,10 @@ function iconLine(group: IconGroup<ComponentInfo>): string {
   const count = plural(items.length, 'icon');
   if (!group.folder) {
     const names = items.map((c) => c.name).join(', ');
-    return `${count} from "${from}" (each renders <svg>; import { Name } from "${from}"): ${names}`;
+    return `${count} from ${json(from)} (each renders <svg>; import { Name } from ${json(from)}): ${names}`;
   }
   const names = items.map((c) => `${c.name} (${c.importPath.slice(from.length + 1)})`).join(', ');
-  return `${count} in "${from}" (each renders <svg>; import { Name } from "${from}/<module>"): ${names}`;
+  return `${count} in ${json(from)} (each renders <svg>; import { Name } from ${json(`${from}/<module>`)}): ${names}`;
 }
 
 /** What a list says at its end about the icons it named and the components `limit` left out. */
@@ -305,10 +381,14 @@ function listTail(listed: Listing<unknown>): string[] {
 /** The shared explanation when a project has no design-system components to show. */
 export function noComponentsMessage(root: string, project?: string, monorepo = false): string {
   if (monorepo) {
-    return `No design-system components found in any project of this monorepo (root: ${root}). Check the "components" globs in the config. Run \`onsystem inspect\` there to see what was looked at.`;
+    return answer([
+      `No design-system components found in any project of this monorepo (root: ${root}). Check the "components" globs in the config. Run \`onsystem inspect\` there to see what was looked at.`,
+    ]);
   }
   const where = project ? ` in ${project}` : '';
-  return `No design-system components found${where}. Check the "components" globs in the config (root: ${root}).`;
+  return answer([
+    `No design-system components found${where}. Check the "components" globs in the config (root: ${root}).`,
+  ]);
 }
 
 /** `project`: the folder of a workspace root's project the list is for. */
@@ -324,7 +404,9 @@ export function renderComponentList(
   }
   const listed = listComponents(roots, (c) => c, filter);
   if (!listed.matched) {
-    return `No components match ${filterText(filter)}${where} (${roots.length} in all). Call list_components without filters to see them.`;
+    return answer([
+      `No components match ${filterText(filter)}${where} (${roots.length} in all). Call list_components without filters to see them.`,
+    ]);
   }
   const parts = ds.components.length - roots.length;
   const lines = [
@@ -336,7 +418,7 @@ export function renderComponentList(
   // A library's components, imported alike: the import is said once.
   for (const library of new Set(listed.shown.flatMap((c) => (c.library ? [c.library] : [])))) {
     if (own.length) lines.push('');
-    lines.push(`From ${library} (import { Name } from "${library}"):`, '');
+    lines.push(`From ${pathOf(library)} (import { Name } from ${json(library)}):`, '');
     for (const component of listed.shown.filter((c) => c.library === library)) {
       lines.push(...listItem(component, '', false));
     }
@@ -346,7 +428,7 @@ export function renderComponentList(
     lines.push(iconLine(group));
   }
   lines.push(...listTail(listed));
-  return lines.join('\n');
+  return answer(lines);
 }
 
 /** ` (from @signoff-ui, read-only)` for a component copied from a shadcn registry. */
@@ -388,7 +470,9 @@ export function renderCatalogList(catalog: Catalog, filter: ListFilter = {}): st
     (e) => e.package,
   );
   if (!listed.matched) {
-    return `No components match ${filterText(filter)} in any project (${roots.length} in all). Call list_components without filters to see them.`;
+    return answer([
+      `No components match ${filterText(filter)} in any project (${roots.length} in all). Call list_components without filters to see them.`,
+    ]);
   }
   const packages = new Set(roots.map((e) => e.package));
   const parts = catalog.entries.length - roots.length;
@@ -425,7 +509,7 @@ export function renderCatalogList(catalog: Catalog, filter: ListFilter = {}): st
     lines.push(...icons);
   }
   lines.push(...listTail(listed));
-  return lines.join('\n');
+  return answer(lines);
 }
 
 /** Several components under one name at a workspace root, and how to pick one. */
@@ -433,7 +517,7 @@ export function renderAmbiguous(name: string, entries: readonly CatalogEntry[]):
   const lines = [`"${name}" is the name of ${entries.length} components in this monorepo:`];
   for (const entry of entries) {
     lines.push(
-      `- ${entry.package}: ${entry.component.source.file}, used by ${listOf(entry.projects)} (${importStatement(entry.component)})`,
+      `- ${entry.package}: ${pathOf(entry.component.source.file)}, used by ${listOf(entry.projects)} (${importStatement(entry.component)})`,
     );
   }
   const dirs = [...new Set(entries.flatMap((e) => e.projects))];
@@ -441,7 +525,7 @@ export function renderAmbiguous(name: string, entries: readonly CatalogEntry[]):
     '',
     `Pass \`path\`: the file you are editing, or its project folder (${dirs.join(', ')}), to get the one that project uses.`,
   );
-  return lines.join('\n');
+  return answer(lines);
 }
 
 /** Inherited attributes worth naming, per element; the rest are summarised. */
@@ -490,7 +574,7 @@ const PROP_LINE = 160;
 /** A prop on one line; its JSDoc description and deprecation note are the repository's, quoted. */
 function renderProp(prop: PropInfo, marks: Marks): string {
   const optional = prop.required ? '' : '?';
-  const fallback = prop.default !== undefined ? ` = ${propType(prop.default)}` : '';
+  const fallback = prop.default !== undefined ? ` = ${marks.value(prop.default)}` : '';
   const deprecated = prop.deprecated
     ? ` DEPRECATED${prop.deprecated === true ? '' : `: ${marks.said(prop.deprecated, PROP_LINE)}`}.`
     : '';
@@ -517,15 +601,15 @@ export function renderComponent(
   }
   // shadcn/ui's purpose, said when the component has no description of its own, is ours.
   const description = descriptionOf(component);
-  if (component.description) lines.push(marks.quoted(component.description));
+  if (component.description) lines.push(...marks.quoted(component.description));
   else if (description) lines.push(description);
   lines.push('', importStatement(component));
   const facts = [
     component.element ? `Renders <${component.element}>` : undefined,
     component.parent ? `Part of ${component.parent}` : undefined,
     component.aliases.length ? `Also available as ${component.aliases.join(', ')}` : undefined,
-    `${component.source.file}:${component.source.line}`,
-    component.docs ? `docs: ${component.docs.file}` : undefined,
+    `${marks.path(component.source.file)}:${component.source.line}`,
+    component.docs ? `docs: ${marks.path(component.docs.file)}` : undefined,
   ].filter(Boolean);
   lines.push(facts.join(' · '));
   const noteAt = lines.length;
@@ -602,11 +686,11 @@ export function renderComponent(
   }
 
   if (component.docs?.sections.length) {
-    lines.push('', `## Docs (${component.docs.file})`);
+    lines.push('', `## Docs (${marks.path(component.docs.file)})`);
     for (const section of component.docs.sections) {
       if (/^examples?$/i.test(section.heading) && !section.body) continue;
       lines.push(`### ${marks.said(section.heading, 80)}`);
-      if (section.body) lines.push(marks.quoted(section.body));
+      if (section.body) lines.push(...marks.quoted(section.body));
     }
   }
 
@@ -615,11 +699,15 @@ export function renderComponent(
     for (const example of component.examples) {
       if (example.title) lines.push(`### ${marks.said(example.title, 80)}`);
       const fence = fenceFor(example.code);
-      lines.push(`${fence}${example.lang.replace(/[^\w+-]/g, '')}`, example.code, fence);
+      lines.push(
+        `${fence}${example.lang.replace(/[^\w+-]/g, '')}`,
+        ...example.code.split(/\r\n?|\n/),
+        fence,
+      );
     }
   }
   if (marks.any) lines.splice(noteAt, 0, QUOTED);
-  return lines.join('\n');
+  return answer(lines);
 }
 
 /** The first line of search results: best first, or, when none clearly matches, that none does. */
@@ -645,7 +733,9 @@ function searchItem(index: number, component: ComponentInfo, from = ''): string 
 
 export function renderSearch(query: string, hits: SearchHit[]): string {
   if (!hits.length) {
-    return `No components match "${query}". Try other words, or list_components to browse.`;
+    return answer([
+      `No components match "${query}". Try other words, or list_components to browse.`,
+    ]);
   }
   const lines = [searchHead(query, hits), ''];
   hits.forEach((hit, i) => {
@@ -656,7 +746,7 @@ export function renderSearch(query: string, hits: SearchHit[]): string {
     );
   });
   lines.push('', searchTail(hits));
-  return lines.join('\n');
+  return answer(lines);
 }
 
 /** Search hits at a workspace root, each with the package it comes from. */
@@ -665,7 +755,9 @@ export function renderCatalogSearch(
   hits: readonly (SearchHit & { entry: CatalogEntry })[],
 ): string {
   if (!hits.length) {
-    return `No components match "${query}" in any project. Try other words, or list_components to browse.`;
+    return answer([
+      `No components match "${query}" in any project. Try other words, or list_components to browse.`,
+    ]);
   }
   const lines = [searchHead(query, hits, " across the monorepo's projects"), ''];
   hits.forEach((hit, i) => {
@@ -676,7 +768,7 @@ export function renderCatalogSearch(
     );
   });
   lines.push('', `${searchTail(hits)} ${PICK_PROJECT}`);
-  return lines.join('\n');
+  return answer(lines);
 }
 
 /**
@@ -710,11 +802,15 @@ export function renderCatalogTokens(
   filter: { category?: string | undefined; query?: string | undefined } = {},
 ): string {
   if (!catalog.tokens.length) {
-    return `No design tokens found in any project of this monorepo (root: ${catalog.root}). Set "tokens" in a project's config: https://onsystem.vercel.app/docs/configuration`;
+    return answer([
+      `No design tokens found in any project of this monorepo (root: ${catalog.root}). Set "tokens" in a project's config: https://onsystem.vercel.app/docs/configuration`,
+    ]);
   }
   if (!tokens.length) {
     const what = [filter.category, filter.query && `"${filter.query}"`].filter(Boolean).join(' ');
-    return `No tokens match${what ? ` ${what}` : ''} in any project; call get_tokens without filters to see them.`;
+    return answer([
+      `No tokens match${what ? ` ${what}` : ''} in any project; call get_tokens without filters to see them.`,
+    ]);
   }
   const groups = new Map<string, { ds: DesignSystem; list: CatalogToken[] }>();
   for (const t of tokens) {
@@ -732,7 +828,7 @@ export function renderCatalogTokens(
     }
     lines.push('');
   }
-  return lines.join('\n').trimEnd();
+  return answer(lines).trimEnd();
 }
 
 export function renderTokens(
@@ -741,7 +837,9 @@ export function renderTokens(
   filter: { category?: string | undefined; query?: string | undefined } = {},
 ): string {
   if (!ds.tokens.length) {
-    return `No design tokens found in this project (root: ${ds.root}): no stylesheet or *.tokens.json defines any. Set "tokens" in the config: https://onsystem.vercel.app/docs/configuration`;
+    return answer([
+      `No design tokens found in this project (root: ${ds.root}): no stylesheet or *.tokens.json defines any. Set "tokens" in the config: https://onsystem.vercel.app/docs/configuration`,
+    ]);
   }
   if (!tokens.length) {
     const counts = new Map<string, number>();
@@ -749,7 +847,9 @@ export function renderTokens(
       counts.set(token.category, (counts.get(token.category) ?? 0) + 1);
     const categories = [...counts].map(([category, n]) => `${category} (${n})`).join(', ');
     const what = [filter.category, filter.query && `"${filter.query}"`].filter(Boolean).join(' ');
-    return `No tokens match${what ? ` ${what}` : ''}. The design system has ${categories}; call get_tokens without filters to see them.`;
+    return answer([
+      `No tokens match${what ? ` ${what}` : ''}. The design system has ${categories}; call get_tokens without filters to see them.`,
+    ]);
   }
   const groups = new Map<string, Token[]>();
   for (const token of tokens) {
@@ -780,7 +880,7 @@ export function renderTokens(
     }
     lines.push('');
   }
-  return lines.join('\n').trimEnd();
+  return answer(lines).trimEnd();
 }
 
 /** Diagnostics an agent sees at once: errors first, in source order, then warnings. */
@@ -810,9 +910,9 @@ export function renderCheck(
   result: CheckResult,
   capped = capDiagnostics(result, Infinity),
 ): string {
-  if (result.skipped) return `${result.file}: not checked. ${result.skipped}`;
+  if (result.skipped) return answer([`${result.file}: not checked. ${result.skipped}`]);
   if (!result.diagnostics.length) {
-    return `${result.file}: no design-system problems found.`;
+    return answer([`${result.file}: no design-system problems found.`]);
   }
   const lines = [
     `${result.file}: ${plural(result.errorCount, 'error')}, ${plural(result.warningCount, 'warning')}`,
@@ -838,5 +938,5 @@ export function renderCheck(
       ? 'Fix every error, then run check_ui again.'
       : 'Only warnings: fix them if the design system has an equivalent.',
   );
-  return lines.join('\n');
+  return answer(lines);
 }
