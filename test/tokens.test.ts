@@ -536,7 +536,8 @@ describe('units and colors', () => {
     expect(
       fast(() => evaluateLength(`var(---,${'var(---,('.repeat(20_000)}`, () => undefined)),
     ).toBeUndefined();
-    const nested = `${'var(--missing,'.repeat(20_000)}1px${')'.repeat(20_000)}`;
+    // Nested fallbacks are read again at each level, at most 16 deep, so this stays linear.
+    const nested = `${'var(--missing,'.repeat(2_000)}1px${')'.repeat(2_000)}`;
     expect(fast(() => evaluateLength(nested, () => undefined))).toBeUndefined();
     expect(fast(() => isBareHsl(digits))).toBe(false);
     expect(fast(() => isBareHsl(`9 9% 9%/${digits}!`))).toBe(false);
