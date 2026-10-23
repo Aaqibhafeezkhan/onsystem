@@ -657,7 +657,9 @@ async function check(
   const warnings = results.reduce((n, r) => n + r.warningCount, 0);
   if (errors > 0) return 1;
   if (maxWarnings !== undefined && warnings > maxWarnings) {
-    if (format === 'pretty') io.stderr(`Too many warnings (${warnings}, max ${maxWarnings}).`);
+    const message = `Too many warnings (${warnings}, max ${maxWarnings}).`;
+    if (format === 'github') io.stdout(`::error title=${NAME}::${message}`);
+    else io.stderr(message);
     return 1;
   }
   return 0;
