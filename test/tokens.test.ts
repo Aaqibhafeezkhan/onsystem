@@ -498,8 +498,13 @@ describe('units and colors', () => {
     expect(evaluateLength('var( --missing ,  0.5rem )', resolve)).toBe(8);
     expect(evaluateLength('calc(var(--gap) + var(--missing,2px))', resolve)).toBe(10);
     expect(evaluateLength('var(--missing, )', resolve)).toBeUndefined();
-    expect(evaluateLength('var(--missing, calc(1px + 2px))', resolve)).toBeUndefined();
-    expect(evaluateLength('var(--missing, var(--gap))', resolve)).toBeUndefined();
+    // A fallback may hold calc() or another var(), inside calc() too.
+    expect(evaluateLength('var(--missing, calc(1px + 2px))', resolve)).toBe(3);
+    expect(evaluateLength('var(--missing, var(--gap))', resolve)).toBe(8);
+    expect(evaluateLength('calc(2 * var(--missing, var(--gap)))', resolve)).toBe(16);
+    expect(evaluateLength('calc(var(--missing, var(--gap)) + 1px)', resolve)).toBe(9);
+    expect(evaluateLength('var(--missing, var(--gap)', resolve)).toBeUndefined();
+    expect(evaluateLength('var(gap, 4px)', resolve)).toBeUndefined();
 
     expect(isBareHsl('214.3 31.8% 91.4%')).toBe(true);
     expect(isBareHsl('-30deg, 50%, .5% / .5')).toBe(true);
@@ -527,10 +532,12 @@ describe('units and colors', () => {
     // spaces between two of its parts.
     expect(fast(() => lengthToPx(`9${digits}x`))).toBeUndefined();
     expect(fast(() => evaluateLength(`var(---,${spaces}x`, () => undefined))).toBeUndefined();
-    // 7.4 s before at 20,000 repeats: each `var(` scanned to the end for its `)`.
+    // 7.4 s at 20,000 repeats with a fallback regex: each `var(` scanned to the end for its `)`.
     expect(
       fast(() => evaluateLength(`var(---,${'var(---,('.repeat(20_000)}`, () => undefined)),
     ).toBeUndefined();
+    const nested = `${'var(--missing,'.repeat(20_000)}1px${')'.repeat(20_000)}`;
+    expect(fast(() => evaluateLength(nested, () => undefined))).toBeUndefined();
     expect(fast(() => isBareHsl(digits))).toBe(false);
     expect(fast(() => isBareHsl(`9 9% 9%/${digits}!`))).toBe(false);
     expect(fast(() => isBareRgb(`9 9 9/${digits}!`))).toBe(false);

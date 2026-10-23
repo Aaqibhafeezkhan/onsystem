@@ -36,16 +36,30 @@ export function evaluateLength(value: string, resolve: Resolve, depth = 0): numb
 function expandVars(value: string, resolve: Resolve, depth: number): string | undefined {
   let out = '';
   let last = 0;
-  // The fallback stops at a parenthesis: with `[^)]+`, each `var(` in an unclosed run like
-  // `var(--a,var(--a,(...` scanned to the end of the value, which is quadratic. A fallback that holds
-  // parentheses, such as `var(--a, calc(1px + 2px))`, had no px value before either.
-  for (const match of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,([^()]+))?\)/g)) {
-    const [whole, name = '', fallback] = match;
+  // Each var() runs to its matching parenthesis, so a fallback may hold calc() or another var(). A
+  // var() that is never closed ends the scan: the value has no px value, and no later `var(` is
+  // scanned to the end again, so an unclosed run like `var(--a,var(--a,(...` stays linear.
+  for (let at = value.indexOf('var(', last); at !== -1; at = value.indexOf('var(', last)) {
+    let level = 0;
+    let comma = -1;
+    let end = -1;
+    for (let i = at + 3; i < value.length; i++) {
+      const c = value[i];
+      if (c === '(') level++;
+      else if (c === ')' && --level === 0) {
+        end = i;
+        break;
+      } else if (c === ',' && level === 1 && comma === -1) comma = i;
+    }
+    if (end === -1) return undefined;
+    const name = value.slice(at + 4, comma === -1 ? end : comma).trim();
+    if (!/^--[\w-]+$/.test(name)) return undefined;
+    const fallback = comma === -1 ? undefined : value.slice(comma + 1, end);
     const resolved = resolve(name) ?? fallback;
     const px = resolved === undefined ? undefined : evaluateLength(resolved, resolve, depth + 1);
     if (px === undefined) return undefined;
-    out += `${value.slice(last, match.index)}${px}px`;
-    last = match.index + whole.length;
+    out += `${value.slice(last, at)}${px}px`;
+    last = end + 1;
   }
   return out + value.slice(last);
 }
