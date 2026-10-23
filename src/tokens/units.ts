@@ -36,7 +36,10 @@ export function evaluateLength(value: string, resolve: Resolve, depth = 0): numb
 function expandVars(value: string, resolve: Resolve, depth: number): string | undefined {
   let out = '';
   let last = 0;
-  for (const match of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,([^)]+))?\)/g)) {
+  // The fallback stops at a parenthesis: with `[^)]+`, each `var(` in an unclosed run like
+  // `var(--a,var(--a,(...` scanned to the end of the value, which is quadratic. A fallback that holds
+  // parentheses, such as `var(--a, calc(1px + 2px))`, had no px value before either.
+  for (const match of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,([^()]+))?\)/g)) {
     const [whole, name = '', fallback] = match;
     const resolved = resolve(name) ?? fallback;
     const px = resolved === undefined ? undefined : evaluateLength(resolved, resolve, depth + 1);
