@@ -167,7 +167,10 @@ async function discoverWorkspace(
   for (const dir of workspacePackageDirs(root)) {
     const config = await loadProjectConfig(dir, root, rootConfig.configFile, options);
     const files = (await componentFiles(config)).length;
-    const own = config.configFile !== undefined && config.configFile !== rootConfig.configFile;
+    // A config of its own, or one its design-system package declares, read under the root's.
+    const own =
+      (config.configFile !== undefined && config.configFile !== rootConfig.configFile) ||
+      config.designSystemPackage !== undefined;
     // An app on a published library (MUI) has its design system in node_modules.
     const library = config.libraries?.some((l) => l.dir !== undefined) ?? false;
     if (files || own || library) {

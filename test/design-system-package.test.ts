@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { main, type Io } from '../src/cli.js';
 import { DEFAULT_COMPONENTS, DEFAULT_EXCLUDE, loadConfig } from '../src/config.js';
 import { DesignSystemHost } from '../src/design-system.js';
+import { WorkspaceProjects } from '../src/server/projects.js';
 import { serveStdio } from '../src/server/stdio.js';
 import { silentLogger } from '../src/util/log.js';
 import { loadTarget } from '../src/workspace.js';
@@ -100,7 +101,7 @@ describe('init in a design-system package', () => {
     const init = await run(['init', '--yes', '--no-cache'], kit);
     expect(init.code).toBe(0);
     expect(init.stdout).toContain(
-      'This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json", also added to "files"), which every app that depends on @acme/kit reads when it has no config of its own.',
+      'This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json", also added to "files"), which every app that depends on @acme/kit reads, under its own config when it has one.',
     );
     expect(init.stdout).toContain(
       'Apps that install @acme/kit from a registry get only what "files" in package.json publishes, which leaves out src/ (3 component files and 1 token file)',
@@ -673,5 +674,78 @@ describe('a config a design-system package declares', () => {
     );
     await expect(changed).resolves.toEqual(['Button', 'Card', 'Input']);
     host.close();
+  }, 15_000);
+
+  it("is read again when it changes, under the app's own config", async () => {
+    const root = fixture({
+      ...MONOREPO,
+      ...kitAt('packages/kit', {}),
+      'apps/web/onsystem.config.json': json({ rules: { 'no-hardcoded-color': 'warn' } }),
+    });
+    const app = path.join(root, 'apps/web');
+    const config = await loadConfig({ root: app });
+    expect(config.configFile).toBe(path.join(app, 'onsystem.config.json'));
+    const host = new DesignSystemHost(config, { cache: false });
+    await host.get();
+    const changed = new Promise<string[]>((resolve) => {
+      host.onChange((ds) => {
+        if (ds.config.rules['no-hardcoded-spacing'].severity === 'error') {
+          resolve(ds.components.map((c) => c.name).sort());
+        }
+      });
+    });
+    host.watch();
+    await new Promise((r) => setTimeout(r, 100));
+    fs.writeFileSync(
+      path.join(root, 'packages/kit/onsystem.config.json'),
+      json({ rules: { 'no-hardcoded-spacing': 'error' } }),
+    );
+    await expect(changed).resolves.toEqual(['Button', 'Card', 'Input']);
+    expect((await host.get()).config.rules['no-hardcoded-color'].severity).toBe('warn');
+    host.close();
+  }, 15_000);
+
+  it('is read again when it changes, under a monorepo root config, by the server at the root', async () => {
+    const root = fixture({
+      ...MONOREPO,
+      ...kitAt('packages/kit', {}),
+      'onsystem.config.json': json({ rules: { 'no-hardcoded-color': 'warn' } }),
+    });
+    const { workspace } = await loadTarget({ cwd: root });
+    if (!workspace) throw new Error('expected a workspace');
+    const page = 'apps/web/app/page.tsx';
+    const severity = async () => {
+      const { config } = (await projects.forPath(page)).ds;
+      return config.rules['no-hardcoded-spacing'].severity;
+    };
+    let reloaded: () => void = () => undefined;
+    const projects = new WorkspaceProjects(workspace, {
+      cache: false,
+      watch: true,
+      logger: silentLogger,
+      onChange: () => {
+        reloaded();
+      },
+    });
+    const { ds } = await projects.forPath(page);
+    expect(ds.config.configFile).toBe(path.join(root, 'onsystem.config.json'));
+    expect(ds.config.designSystemPackage?.name).toBe('@acme/kit');
+    const changed = new Promise<void>((resolve) => {
+      reloaded = () => {
+        void severity().then((s) => {
+          if (s === 'error') resolve();
+        });
+      };
+    });
+    await new Promise((r) => setTimeout(r, 100));
+    fs.writeFileSync(
+      path.join(root, 'packages/kit/onsystem.config.json'),
+      json({ rules: { 'no-hardcoded-spacing': 'error' } }),
+    );
+    await changed;
+    const after = (await projects.forPath(page)).ds;
+    expect(after.config.rules['no-hardcoded-color'].severity).toBe('warn');
+    expect(after.components.map((c) => c.name).sort()).toEqual(['Button', 'Card', 'Input']);
+    projects.close();
   }, 15_000);
 });

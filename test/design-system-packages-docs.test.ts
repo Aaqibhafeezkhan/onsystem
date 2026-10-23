@@ -7,7 +7,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
-import { RULE_IDS } from '../src/config.js';
+import { loadConfig, RULE_IDS } from '../src/config.js';
 import { createServer } from '../src/server/index.js';
 import { fixture, load, TSCONFIG } from './helpers.js';
 import { section } from './markdown.js';
@@ -618,6 +618,36 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
       'config   onsystem.config.json, over node_modules/@acme/ui/onsystem.config.json (declared by @acme/ui)';
     expect(inspected.stdout.replaceAll('\\', '/')).toContain(`${line}\n`);
     expect(inTheApps).toContain(`\`\`\`text\n${line}\n\`\`\``);
+  });
+
+  it("adds the package's exclude patterns to its own, and, with the package's components, its elements over the package's", async () => {
+    expect(inTheApps).toContain(
+      "Its `rules` apply over the package's, rule by rule, and, with the package's components, its `elements` apply over the package's, element by element. The package's `exclude` patterns are added to the app's, as they are in an app without a config. Its `overrides`, `tsconfig` and `includeDesignSystem` are its own",
+    );
+    const pkg = withConfig(published(await initialised()), (config) => ({
+      ...config,
+      exclude: ['**/*.fixture.tsx'],
+      elements: { a: 'Link', img: 'Image' },
+    }));
+    const color = 'export default () => <div className="bg-blue-500">x</div>;\n';
+    const extra = { 'app/x.fixture.tsx': color, 'app/legacy/old.tsx': color };
+    /** The files `check .` reports findings in. */
+    const reported = async (app: string) => {
+      const { stdout } = await run(['check', '.', '--format', 'json', '--no-cache'], app);
+      return (JSON.parse(stdout) as { file: string; diagnostics: unknown[] }[])
+        .filter((r) => r.diagnostics.length)
+        .map((r) => r.file)
+        .sort();
+    };
+    // Without a config, then with one that has an exclude list of its own.
+    expect(await reported(installedApp(pkg, extra))).toEqual([
+      'app/legacy/old.tsx',
+      'app/page.tsx',
+    ]);
+    const own = json({ exclude: ['app/legacy/**'], elements: { img: 'Picture' } });
+    const app = installedApp(pkg, { ...extra, 'onsystem.config.json': own });
+    expect(await reported(app)).toEqual(['app/page.tsx']);
+    expect((await loadConfig({ root: app })).elements).toEqual({ a: 'Link', img: 'Picture' });
   });
 
   it('is read alone with "extends": false, which can leave the app without the components and tokens of a package whose exports point at dist/', async () => {

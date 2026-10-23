@@ -7,6 +7,8 @@ import { BASELINE_FILE, LEGACY_BASELINE_FILE } from './baseline.js';
 import {
   CONFIG_FILES,
   DEFAULT_DOCS,
+  DEFAULT_TOKENS,
+  FALLBACK_TOKENS,
   LEGACY_CONFIG_FILES,
   type LoadConfigOptions,
   type ResolvedConfig,
@@ -140,7 +142,12 @@ export async function init(
     const specifiers = new Set((config.imports ?? []).map((m) => m.specifier));
     const tokens = (await tokenFiles(config)).map(relative);
     const fromInstalled = installedFields(config.components, tokens);
-    if (fromInstalled.length) notes.push(installedNote(fromInstalled));
+    if (fromInstalled.length) notes.push(installedNote(fromInstalled, tokens));
+    // With "tokens" left to zero config, a config that names components can read other ones.
+    const changed =
+      fromInstalled.includes('tokens') && !fromInstalled.includes('components')
+        ? await tokensWithComponents(config, tokens)
+        : undefined;
     if (fromInstalled.includes('components')) {
       // Spelled out, they would miss the package's next version.
     } else if (specifiers.size > 1) {
@@ -150,6 +157,10 @@ export async function init(
     } else if (config.components.length > MAX_GLOBS) {
       notes.push(
         `"components" is left to zero config: it found ${config.components.length} files through the package's exports, which it keeps following as the package changes.`,
+      );
+    } else if (changed) {
+      notes.push(
+        `"components" is left to zero config as well: a config that names them reads the tokens only from the usual stylesheets (${DEFAULT_TOKENS[0]} and the like)${changed.lost.length ? `, which leave out ${andList(changed.lost)}` : ', not the ones zero config reads'}.`,
       );
     } else {
       // The detected globs, spelled out; a package imported by one name keeps it. A pattern
@@ -175,7 +186,7 @@ export async function init(
     found = true;
     const tokens = (await tokenFiles(config)).map(relative);
     const fromInstalled = installedFields([], tokens);
-    if (fromInstalled.length) notes.push(installedNote(fromInstalled));
+    if (fromInstalled.length) notes.push(installedNote(fromInstalled, tokens));
     else if (tokens.length) file.tokens = tokens;
   } else {
     if (!ask) {
@@ -504,7 +515,7 @@ function declarePackage(
     written.push('package.json');
   }
   notes.push(
-    `This is a design-system package: package.json declares its config ("${PACKAGE_FIELD}": "${value}"${files ? ', also added to "files"' : ''}), which every app that depends on ${name} reads when it has no config of its own.`,
+    `This is a design-system package: package.json declares its config ("${PACKAGE_FIELD}": "${value}"${files ? ', also added to "files"' : ''}), which every app that depends on ${name} reads, under its own config when it has one.`,
   );
   const guide = path.join(root, GUIDE_FILE);
   if (force || !fs.existsSync(guide)) {
@@ -663,9 +674,46 @@ function installedFields(
  * (`node_modules/.pnpm/@acme+ui@1.2.0_react@19.2.0/node_modules/@acme/ui`), and a list of its
  * files misses the ones a new version adds. Zero config finds it again each time.
  */
-function installedNote(fields: readonly string[]): string {
+function installedNote(
+  fields: readonly ('components' | 'tokens')[],
+  tokens: readonly string[],
+): string {
   const one = fields.length === 1;
-  return `${andList(fields.map((f) => `"${f}"`))} ${one ? 'is' : 'are'} left to zero config: ${one ? 'it comes' : 'they come'} from a package installed in node_modules, which zero config finds again after each upgrade, while a path written here would break once the package's folder or files change (pnpm keeps each version in a folder of its own in node_modules/.pnpm).`;
+  // The app's own stylesheet, next to the package's, is left to zero config with it.
+  const some = fields.includes('tokens') && !tokens.every(isInstalledPath);
+  const what = some
+    ? `${fields.includes('components') ? 'the components and ' : ''}some of the token files come`
+    : one
+      ? 'it comes'
+      : 'they come';
+  return `${andList(fields.map((f) => `"${f}"`))} ${one ? 'is' : 'are'} left to zero config: ${what} from a package installed in node_modules, which zero config finds again after each upgrade, while a path written here would break once the package's folder or files change (pnpm keeps each version in a folder of its own in node_modules/.pnpm).`;
+}
+
+/**
+ * What changes when a config names components and leaves `tokens` (relative to the root, as
+ * zero config finds them) to zero config: such a config turns detection off, so the stylesheets
+ * it found (components.json's `app/styles/tailwind.css`, and what they import from an installed
+ * package) give way to the usual ones ({@link DEFAULT_TOKENS}), with what those import. Undefined
+ * when that reads the same token files; else `lost` holds the ones it leaves out, the app's own
+ * first.
+ */
+async function tokensWithComponents(
+  config: ResolvedConfig,
+  tokens: readonly string[],
+): Promise<{ lost: string[] } | undefined> {
+  const usual = await tokenFiles({
+    ...config,
+    tokens: [
+      ...DEFAULT_TOKENS.map((p) => ({ path: p })),
+      ...FALLBACK_TOKENS.map((p) => ({ path: p, fallback: true })),
+    ],
+    tokensDetected: true,
+  });
+  const read = new Set(usual.map((f) => relativePath(config.root, f)));
+  if (read.size === tokens.length && tokens.every((t) => read.has(t))) return undefined;
+  const lost = tokens.filter((t) => !read.has(t));
+  const own = lost.filter((t) => !isInstalledPath(t));
+  return { lost: own.length ? own : lost };
 }
 
 const REGISTRY_DOCS = 'https://onsystem.vercel.app/docs/configuration#code-from-shadcn-registries';

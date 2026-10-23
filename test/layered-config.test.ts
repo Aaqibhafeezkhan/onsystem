@@ -300,6 +300,44 @@ describe("a workspace root's config, on a design-system package that declares on
     ]);
   });
 
+  it("lists a project whose package's config gives it tokens alone among those with a design system", async () => {
+    // An installed package published as dist/ without type declarations: its config gives the
+    // app its tokens and no component file.
+    const root = fixture({
+      'pnpm-workspace.yaml': 'packages:\n  - apps/*\n',
+      'package.json': json({ name: 'acme', private: true }),
+      'onsystem.config.json': json({ rules: { 'no-hardcoded-spacing': 'off' } }),
+      'apps/docs/package.json': json({ name: 'docs' }),
+      'apps/web/package.json': json({ name: 'web', dependencies: { '@acme/ui': '1.0.0' } }),
+      'apps/web/app/page.tsx':
+        'export default () => <div className="bg-blue-500 p-[13px]">x</div>;\n',
+      ...at('apps/web/node_modules/@acme/ui', {
+        'package.json': json({
+          name: '@acme/ui',
+          version: '1.0.0',
+          files: ['dist', 'theme.css', 'onsystem.config.json'],
+          exports: { '.': './dist/index.mjs', './theme.css': './theme.css' },
+          onsystem: './onsystem.config.json',
+        }),
+        'onsystem.config.json': json({ importPath: '@acme/ui', tokens: ['theme.css'] }),
+        'theme.css': THEME,
+        'dist/index.mjs': 'export function Button() {}\n',
+      }),
+    });
+    const inspect = await run(['inspect', '--no-cache'], root);
+    expect(inspect.stdout).toContain(
+      '2 packages (pnpm-workspace.yaml), 1 project with a design system',
+    );
+    expect(inspect.stdout).toContain(
+      `apps/web (web)\n  config     onsystem.config.json, over ${path.join('apps', 'web', 'node_modules', '@acme', 'ui', 'onsystem.config.json')} (declared by @acme/ui)\n`,
+    );
+    expect(inspect.stdout).toContain('Without a design system (1): apps/docs');
+    // Its tokens are checked, with the root's rules over the package's.
+    expect((await check(root)).findings).toEqual([
+      'apps/web/app/page.tsx:1 no-hardcoded-color error',
+    ]);
+  });
+
   it('reads no package config under it with "extends": false', async () => {
     const root = monorepo({ extends: false, rules: { 'no-hardcoded-spacing': 'off' } });
     const { workspace } = await loadTarget({ cwd: root });
@@ -402,6 +440,131 @@ describe('init in an app that zero config reads an installed design-system packa
     expect(after.code).toBe(1);
     expect(after.findings).toEqual(before.findings);
   });
+});
+
+describe("init in an app whose own stylesheet imports an installed design-system package's", () => {
+  /** `@acme/ui` as published: compiled code, its type declarations and its theme. */
+  const PUBLISHED = {
+    'package.json': json({
+      name: '@acme/ui',
+      version: '1.0.0',
+      types: './dist/index.d.ts',
+      exports: {
+        '.': { types: './dist/index.d.ts', import: './dist/index.mjs' },
+        './theme.css': './theme.css',
+      },
+    }),
+    'theme.css': '@theme {\n  --color-primary: oklch(0.55 0.2 260);\n  --spacing: 0.25rem;\n}\n',
+    'dist/index.mjs': 'export function Card() {}\n',
+    'dist/index.d.ts':
+      "import * as react from 'react';\ndeclare function Card(props: react.HTMLAttributes<HTMLDivElement>): react.JSX.Element;\nexport { Card };\n",
+  };
+
+  /**
+   * A shadcn app in @acme's npm scope, so zero config reads @acme/ui from its type declarations
+   * and resolves its theme: components.json names `css`, which imports the theme. @acme/ui is
+   * installed as npm does it, or as pnpm does, in a folder of its own under node_modules/.pnpm.
+   */
+  function shadcnApp(layout: 'npm' | 'pnpm', css: string): string {
+    const app = fixture(
+      {
+        'package.json': json({
+          name: '@acme/web',
+          dependencies: { '@acme/ui': '1.0.0', react: '19.0.0' },
+        }),
+        'tsconfig.json': TSCONFIG,
+        'components.json': json({
+          style: 'new-york',
+          tsx: true,
+          tailwind: { css, baseColor: 'neutral', cssVariables: true },
+          aliases: { components: '@/components', ui: '@/components/ui' },
+        }),
+        'components/ui/button.tsx': BUTTON,
+        'components/ui/input.tsx': INPUT,
+        [css]:
+          '@import "tailwindcss";\n@import "@acme/ui/theme.css";\n@theme {\n  --color-brand: oklch(0.7 0.1 150);\n}\n',
+        'app/page.tsx':
+          'import { Button } from "@/components/ui/button";\nexport default () => <div><Button className="bg-blue-500 text-brand">Go</Button><input /></div>;\n',
+      },
+      { nodeModules: true },
+    );
+    installUi(app, layout, '1.0.0');
+    return app;
+  }
+
+  /** Installs @acme/ui at `version` in place of the one installed. */
+  function installUi(app: string, layout: 'npm' | 'pnpm', version: string): void {
+    const link = path.join(app, 'node_modules/@acme/ui');
+    fs.rmSync(link, { force: true, recursive: true });
+    fs.rmSync(path.join(app, 'node_modules/.pnpm'), { force: true, recursive: true });
+    const dir =
+      layout === 'npm'
+        ? link
+        : path.join(
+            app,
+            `node_modules/.pnpm/@acme+ui@${version}_react@19.0.0/node_modules/@acme/ui`,
+          );
+    for (const [file, text] of Object.entries(PUBLISHED)) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), text.replace('"1.0.0"', `"${version}"`));
+    }
+    if (layout === 'pnpm') {
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      fs.symlinkSync(dir, link, 'junction');
+    }
+  }
+
+  /** `init --yes` in the app: what it says and writes, and what `check` then reports. */
+  async function init(app: string) {
+    const zero = await check(app, 'app/page.tsx');
+    const { code, stdout } = await run(['init', '--yes', '--no-cache'], app);
+    expect(code).toBe(0);
+    fs.rmSync(path.join(app, 'onsystem.baseline.json'));
+    const written = fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8');
+    return { zero, stdout, written, after: await check(app, 'app/page.tsx') };
+  }
+
+  it.each(['npm', 'pnpm'] as const)(
+    'leaves components to zero config as well when the stylesheet is not one of the usual ones (%s)',
+    async (layout) => {
+      const app = shadcnApp(layout, 'app/styles/tailwind.css');
+      const { zero, stdout, written, after } = await init(app);
+      expect(zero.rules).toEqual(
+        new Set(['no-unknown-prop', 'no-hardcoded-color', 'prefer-design-system-component']),
+      );
+      expect(stdout).toContain(
+        '"tokens" is left to zero config: some of the token files come from a package installed in node_modules, which zero config finds again after each upgrade',
+      );
+      expect(stdout).toContain(
+        '"components" is left to zero config as well: a config that names them reads the tokens only from the usual stylesheets (app/globals.css and the like), which leave out app/styles/tailwind.css.',
+      );
+      expect(JSON.parse(written)).toEqual({ $schema: 'https://unpkg.com/onsystem/schema.json' });
+      expect(after.findings).toEqual(zero.findings);
+      const inspect = await run(['inspect', '--no-cache'], app);
+      expect(inspect.stdout).toContain('files    2 component files, 2 token files');
+
+      // A new version moves pnpm's folder; zero config finds the theme again.
+      installUi(app, layout, '1.1.0');
+      expect((await check(app, 'app/page.tsx')).findings).toEqual(zero.findings);
+    },
+  );
+
+  it.each(['npm', 'pnpm'] as const)(
+    'writes the components when the usual stylesheets lead to the same tokens (%s)',
+    async (layout) => {
+      const app = shadcnApp(layout, 'app/globals.css');
+      const { zero, stdout, written, after } = await init(app);
+      expect(zero.rules).toContain('no-hardcoded-color');
+      expect(stdout).not.toContain('"components" is left to zero config');
+      expect(JSON.parse(written)).toEqual({
+        $schema: 'https://unpkg.com/onsystem/schema.json',
+        components: ['components/ui/**/*.{tsx,jsx}'],
+      });
+      expect(after.findings).toEqual(zero.findings);
+      installUi(app, layout, '1.1.0');
+      expect((await check(app, 'app/page.tsx')).findings).toEqual(zero.findings);
+    },
+  );
 });
 
 describe('init in a design-system package published as dist/', () => {
