@@ -671,7 +671,7 @@ function ownDeclaredConfig(dir: string): string | undefined {
 /** The error for workspace packages whose declaration cannot be read: their team can fix them. */
 function declarationError(lookup: DesignSystemPackageLookup, dir: string): ConfigError {
   return new ConfigError(
-    `${lookup.problems.map((p) => `${p.name}: ${p.problem}`).join('\n')}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
+    `${lookup.problems.map((p) => `${JSON.stringify(p.name)}: ${p.problem}`).join('\n')}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
   );
 }
 

@@ -78,7 +78,7 @@ describe('MCP server over the in-memory transport', () => {
   it('list_components', async () => {
     const result = await client.callTool({ name: 'list_components', arguments: {} });
     // The demo's description is its JSDoc: quoted, under the line that says so.
-    expect(text(result)).toMatch(/^5 components \(\+\d+ parts\)\. .+\nText quoted with > /);
+    expect(text(result)).toMatch(/^5 components \(\+\d+ parts\)\. .+\nText after >, /);
     expect(text(result)).toContain('Button <button> — "Triggers an action or event');
     expect(text(result)).toContain(
       'variant: default | destructive | outline | secondary | ghost | link (default default)',
@@ -148,7 +148,7 @@ describe('MCP server over the in-memory transport', () => {
       arguments: { query: 'confirm a destructive action', limit: 3 },
     });
     expect(text(result)).toMatch(
-      /^Components for "confirm a destructive action", best first:\nText quoted with > .+\n\n1\. Dialog — "/,
+      /^Components for "confirm a destructive action", best first:\nText after >, .+\n\n1\. Dialog — "/,
     );
     const { results } = result.structuredContent as { results: { name: string }[] };
     expect(results[0]?.name).toBe('Dialog');

@@ -309,7 +309,7 @@ describe('search_components when nothing clearly matches (the demo)', () => {
     expect(found.text).toMatch(
       new RegExp(
         // The demo's descriptions are its JSDoc: quoted, under the line that says so.
-        `^No component clearly matches "${query}"\\. The nearest have only a word or two in common with it:\\nText quoted with > .+\\n\\n1\\. ${nearest} `,
+        `^No component clearly matches "${query}"\\. The nearest have only a word or two in common with it:\\nText after >, .+\\n\\n1\\. ${nearest} `,
       ),
     );
     expect(found.text).toContain('the design system may have no component for this: ask');
@@ -321,7 +321,7 @@ describe('search_components when nothing clearly matches (the demo)', () => {
   it('keeps clear matches, best first, and leaves out the ones with a word in common', async () => {
     const modal = await search('modal window');
     expect(modal.text).toMatch(
-      /^Components for "modal window", best first:\nText quoted with > .+\n\n1\. Dialog — "/,
+      /^Components for "modal window", best first:\nText after >, .+\n\n1\. Dialog — "/,
     );
     expect(modal.results.map((r) => r.name)).toEqual(['Dialog']);
     expect(modal.results[0]).not.toHaveProperty('weak');
