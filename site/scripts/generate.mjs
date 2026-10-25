@@ -1,5 +1,5 @@
 // Generates the data the site renders, from the library itself, the demo design system in
-// examples/shadcn-demo, the benchmark results in bench/agents and the README, so what the
+// examples/shadcn-demo, the benchmark results in bench/v2 and the README, so what the
 // site shows is what the tool does at this commit. `pnpm build` and `pnpm dev` run it first.
 // It needs the library built: `pnpm --dir .. build`.
 import assert from 'node:assert/strict';
@@ -374,59 +374,6 @@ write('design-system.json', {
   ),
 });
 
-// ─── The benchmark ──────────────────────────────────────────────────────────
-
-const bench = path.join(repo, 'bench/agents');
-const tasks = JSON.parse(fs.readFileSync(path.join(bench, 'tasks.json'), 'utf8'));
-const MODEL_NAMES = { 'haiku-4-5': 'Claude Haiku 4.5', 'opus-5': 'Claude Opus 5' };
-const models = fs
-  .readdirSync(path.join(bench, 'results'))
-  .filter((dir) => fs.statSync(path.join(bench, 'results', dir)).isDirectory())
-  .sort()
-  .map((dir) => {
-    const runs = fs
-      .readdirSync(path.join(bench, 'results', dir))
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => JSON.parse(fs.readFileSync(path.join(bench, 'results', dir, f), 'utf8')));
-    const summary = (condition) => {
-      const list = runs.filter((r) => r.condition === condition);
-      assert.equal(list.length, tasks.length, `${dir}/${condition} should have a run per task`);
-      const sum = (key) => list.reduce((total, r) => total + r[key], 0);
-      return {
-        runs: list.length,
-        clean: list.filter((r) => r.errors === 0).length,
-        errors: sum('errors'),
-        warnings: sum('warnings'),
-        cost: Math.round(sum('cost') * 100) / 100,
-        seconds: Math.round(sum('seconds') / list.length),
-        turns: Math.round((sum('turns') / list.length) * 10) / 10,
-        toolCalls: Math.round((sum('mcpCalls') / list.length) * 10) / 10,
-        hookBlocks: sum('hookBlocks'),
-      };
-    };
-    const base = summary('base');
-    const plugin = summary('plugin');
-    return {
-      id: dir,
-      name: MODEL_NAMES[dir] ?? dir,
-      base,
-      plugin,
-      costDelta: Math.round(((plugin.cost - base.cost) / base.cost) * 100),
-      tasks: tasks.map((task) => {
-        const of = (condition) => {
-          const run = runs.find((r) => r.task === task.id && r.condition === condition);
-          return { errors: run.errors, byRule: run.byRule };
-        };
-        return { id: task.id, base: of('base'), plugin: of('plugin') };
-      }),
-    };
-  });
-write('bench.json', {
-  project: 'vercel/ai-chatbot',
-  tasks: tasks.map((t) => ({ id: t.id, file: t.file, prompt: t.prompt })),
-  models,
-});
-
 // ─── The benchmark, v2 ──────────────────────────────────────────────────────
 
 // /benchmark renders bench/v2's standard run from the files `run.mjs report` writes: the tables
@@ -699,7 +646,6 @@ write('benchmark.json', {
     precision: labelPrecision,
   },
   method: {
-    v1: benchLinks(section(v2Readme, '## What changes from v1', 'bench/v2/README.md')),
     arms: benchLinks(section(v2Readme, '### Arms', 'bench/v2/README.md')),
     scoring: benchLinks(section(v2Readme, '### Scoring', 'bench/v2/README.md')),
     statistics: benchLinks(section(v2Readme, '### Statistics', 'bench/v2/README.md')),

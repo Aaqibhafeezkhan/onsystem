@@ -112,6 +112,59 @@ describe('onsystem check', () => {
     expect(warnOnly.stderr).toContain('Too many warnings');
   });
 
+  it.each(['github', 'json', 'sarif'])(
+    'explains a failed warning cap with --format %s',
+    async (format) => {
+      const { code, stdout, stderr } = await run([
+        'check',
+        'app/settings/danger-zone.tsx',
+        '--no-cache',
+        '--config',
+        path.join(import.meta.dirname, 'fixtures/warn-only.config.json'),
+        '--root',
+        DEMO_ROOT,
+        '--max-warnings',
+        '0',
+        '--format',
+        format,
+      ]);
+      const message = 'Too many warnings (11, max 0).';
+      expect(code).toBe(1);
+      if (format === 'github') {
+        expect(stdout).toContain(`::error title=onsystem::${message}`);
+        expect(stderr).toBe('');
+      } else {
+        expect(stderr).toBe(message);
+        const output = JSON.parse(stdout) as unknown;
+        if (format === 'json') {
+          expect(output).toEqual([expect.objectContaining({ errorCount: 0, warningCount: 11 })]);
+        } else {
+          expect(output).toMatchObject({ version: '2.1.0' });
+        }
+      }
+    },
+  );
+
+  it('does not report a failed cap when the warning count equals the limit', async () => {
+    for (const format of ['pretty', 'github', 'json', 'sarif']) {
+      const { code, stdout, stderr } = await run([
+        'check',
+        'app/settings/danger-zone.tsx',
+        '--no-cache',
+        '--config',
+        path.join(import.meta.dirname, 'fixtures/warn-only.config.json'),
+        '--root',
+        DEMO_ROOT,
+        '--max-warnings',
+        '11',
+        '--format',
+        format,
+      ]);
+      expect(code).toBe(0);
+      expect(stdout + stderr).not.toContain('Too many warnings');
+    }
+  });
+
   it('reports usage errors with exit code 2', async () => {
     expect((await run(['check'])).code).toBe(2);
     expect((await run(['check', 'nope/**/*.tsx'])).stderr).toContain('no files match');

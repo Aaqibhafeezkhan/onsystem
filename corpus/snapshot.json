@@ -1,6 +1,6 @@
 {
   "$comment": "Written by `node scripts/corpus.mjs --update`. Counts per run and rule; `labels` records which labelled findings were reported.",
-  "version": "0.7.0",
+  "version": "0.9.0",
   "runs": {
     "saas-starter": {
       "inspect": {
@@ -9,7 +9,7 @@
         "components": 7,
         "parts": 23,
         "tokens": {
-          "color": 40,
+          "color": 32,
           "radius": 8,
           "spacing": 1
         },
@@ -151,7 +151,7 @@
         "parts": 224,
         "tokens": {
           "color": 33,
-          "radius": 3
+          "radius": 6
         },
         "warnings": 0
       },
@@ -189,7 +189,7 @@
         "tokens": {
           "color": 102,
           "other": 1,
-          "radius": 6
+          "radius": 7
         },
         "warnings": 0
       },
@@ -230,7 +230,7 @@
             "tokens": {
               "color": 102,
               "other": 1,
-              "radius": 6
+              "radius": 7
             },
             "warnings": 0
           }
@@ -276,12 +276,13 @@
         "components": 430,
         "parts": 23,
         "tokens": {
-          "color": 24
+          "color": 24,
+          "radius": 7
         },
         "warnings": 1
       },
       "files": 1484,
-      "flagged": 1009,
+      "flagged": 1011,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 52,
@@ -292,6 +293,11 @@
           "errors": 10910,
           "warnings": 245,
           "fixes": 6726
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 47,
+          "fixes": 47
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -307,7 +313,8 @@
         "components": 430,
         "parts": 23,
         "tokens": {
-          "color": 24
+          "color": 24,
+          "radius": 7
         },
         "warnings": 1
       },
@@ -324,6 +331,11 @@
           "warnings": 11,
           "fixes": 137
         },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 5,
+          "fixes": 5
+        },
         "prefer-design-system-component": {
           "errors": 15,
           "warnings": 0,
@@ -338,12 +350,13 @@
         "components": 108,
         "parts": 23,
         "tokens": {
-          "color": 24
+          "color": 24,
+          "radius": 7
         },
         "warnings": 0
       },
       "files": 1422,
-      "flagged": 989,
+      "flagged": 991,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 56,
@@ -354,6 +367,11 @@
           "errors": 10853,
           "warnings": 215,
           "fixes": 6726
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 47,
+          "fixes": 47
         },
         "prefer-design-system-component": {
           "errors": 973,
@@ -370,12 +388,13 @@
         "components": 430,
         "parts": 23,
         "tokens": {
-          "color": 24
+          "color": 24,
+          "radius": 7
         },
         "warnings": 1
       },
       "files": 1484,
-      "flagged": 1009,
+      "flagged": 1011,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 52,
@@ -386,6 +405,11 @@
           "errors": 10910,
           "warnings": 245,
           "fixes": 6726
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 47,
+          "fixes": 47
         },
         "prefer-design-system-component": {
           "errors": 1000,
@@ -405,7 +429,8 @@
             "components": 430,
             "parts": 23,
             "tokens": {
-              "color": 24
+              "color": 24,
+              "radius": 7
             },
             "warnings": 1
           },
@@ -423,7 +448,8 @@
             "components": 430,
             "parts": 23,
             "tokens": {
-              "color": 24
+              "color": 24,
+              "radius": 7
             },
             "warnings": 1
           }
@@ -431,7 +457,7 @@
         "others": 8
       },
       "files": 1521,
-      "flagged": 1029,
+      "flagged": 1031,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 54,
@@ -442,6 +468,11 @@
           "errors": 11207,
           "warnings": 256,
           "fixes": 6863
+        },
+        "no-hardcoded-radius": {
+          "errors": 0,
+          "warnings": 52,
+          "fixes": 52
         },
         "prefer-design-system-component": {
           "errors": 1015,
@@ -669,18 +700,21 @@
     "calcom-web": {
       "inspect": {
         "detected": "primary: workspace package @calcom/ui (993 imports); also: components.json (ui: @coss/ui/components → ../../packages/coss-ui/src/components) (140 imports)",
-        "files": "142 component files, 1 token file, 2 docs",
+        "files": "142 component files, 5 token files, 2 docs",
         "components": 165,
         "parts": 311,
         "tokens": {
-          "color": 41,
-          "typography": 3,
-          "radius": 4
+          "color": 107,
+          "typography": 29,
+          "radius": 22,
+          "shadow": 18,
+          "other": 9,
+          "spacing": 1
         },
         "warnings": 1
       },
       "files": 576,
-      "flagged": 140,
+      "flagged": 143,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 17,
@@ -688,14 +722,19 @@
           "fixes": 5
         },
         "no-hardcoded-color": {
-          "errors": 237,
-          "warnings": 19,
-          "fixes": 78
+          "errors": 227,
+          "warnings": 14,
+          "fixes": 99
         },
         "no-hardcoded-radius": {
           "errors": 0,
           "warnings": 33,
-          "fixes": 28
+          "fixes": 32
+        },
+        "no-hardcoded-spacing": {
+          "errors": 0,
+          "warnings": 54,
+          "fixes": 40
         },
         "prefer-design-system-component": {
           "errors": 94,
@@ -765,13 +804,16 @@
         "projects": {
           "apps/web": {
             "detected": "primary: workspace package @calcom/ui (993 imports); also: components.json (ui: @coss/ui/components → ../../packages/coss-ui/src/components) (140 imports)",
-            "files": "142 component files, 1 token file, 2 docs",
+            "files": "142 component files, 5 token files, 2 docs",
             "components": 165,
             "parts": 311,
             "tokens": {
-              "color": 41,
-              "typography": 3,
-              "radius": 4
+              "color": 107,
+              "typography": 29,
+              "radius": 22,
+              "shadow": 18,
+              "other": 9,
+              "spacing": 1
             },
             "warnings": 1
           },
@@ -874,7 +916,7 @@
         "others": 102
       },
       "files": 928,
-      "flagged": 159,
+      "flagged": 162,
       "rules": {
         "icon-button-accessible-name": {
           "errors": 18,
@@ -882,19 +924,19 @@
           "fixes": 5
         },
         "no-hardcoded-color": {
-          "errors": 422,
-          "warnings": 19,
-          "fixes": 88
+          "errors": 412,
+          "warnings": 14,
+          "fixes": 109
         },
         "no-hardcoded-radius": {
           "errors": 0,
           "warnings": 38,
-          "fixes": 33
+          "fixes": 37
         },
         "no-hardcoded-spacing": {
           "errors": 0,
-          "warnings": 5,
-          "fixes": 5
+          "warnings": 59,
+          "fixes": 45
         },
         "no-unknown-component": {
           "errors": 0,

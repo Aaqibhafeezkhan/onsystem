@@ -23,9 +23,14 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
     out(`  ${(step.accepted ? 'found' : 'no').padEnd(6)} ${step.candidate}: ${step.reason}`);
   }
   if (config.configured) {
-    out(
-      `  components come from ${config.configFile ? display(cwd, config.configFile) : '--components'}, so zero config did not look`,
-    );
+    // A config that names no components of its own takes the package's, from its config.
+    const source =
+      config.inherits && config.designSystemPackage
+        ? display(cwd, config.designSystemPackage.config)
+        : config.configFile
+          ? `${display(cwd, config.configFile)}${over(config, cwd)}`
+          : '--components';
+    out(`  components come from ${source}, so zero config did not look`);
   } else {
     const steps: DetectionStep[] = [];
     detectProject(config.root, config.tsconfig, steps, config.designSystemPackage);
@@ -64,7 +69,7 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
   field(
     'config',
     config.configFile
-      ? `${display(cwd, config.configFile)}${config.designSystemPackage ? ` (declared by ${config.designSystemPackage.name})` : ''}`
+      ? `${display(cwd, config.configFile)}${over(config, cwd)}${config.designSystemPackage ? ` (declared by ${config.designSystemPackage.name})` : ''}`
       : '(none)',
   );
   field('components', listOf(config.components) || '(none)');
@@ -219,22 +224,42 @@ export function nodeModulesFor(dir: string): string | undefined {
   }
 }
 
+/** `, over packages/ui/onsystem.config.json` for a config read over a design-system package's. */
+function over(config: ResolvedConfig, cwd: string): string {
+  const declared = config.designSystemPackage;
+  return declared && config.configFile !== declared.config
+    ? `, over ${display(cwd, declared.config)}`
+    : '';
+}
+
 function display(cwd: string, file: string): string {
   const rel = relativePath(cwd, file);
   return rel && !rel.startsWith('..') ? rel : file;
 }
 
 /**
- * Whether a dependency's declared config was taken on, for a project without a config of its
- * own: the package it came from and the others that declare one, or that none does.
+ * Whether a dependency's declared config was read, taken on by a project without a config of its
+ * own or under the one it has: the package it came from and the others that declare one, or that
+ * none does.
  */
 function packageSteps(config: ResolvedConfig, cwd: string): DetectionStep[] {
   const declared = config.designSystemPackage;
-  // A config of its own (or --config) is read first; the dependencies are not looked at.
-  if (config.configFile && !declared) return [];
+  const candidate = "a design-system package's config";
+  // A config of its own (or --config) read alone: it sets `"extends": false`, which names the
+  // package it leaves out, or no dependency declares one.
+  if (config.configFile && !declared) {
+    const found = config.extendsOff ? findDesignSystemPackage(config.root)?.found : undefined;
+    if (!found) return [];
+    return [
+      {
+        candidate,
+        accepted: false,
+        reason: `${found.name} (${found.installed ? 'installed' : 'a workspace package'}) declares ${display(cwd, found.config)}, not read: "extends": false in ${display(cwd, config.configFile)} reads it alone`,
+      },
+    ];
+  }
   const lookup = findDesignSystemPackage(config.root);
   if (!lookup) return [];
-  const candidate = "a design-system package's config";
   const skipped = lookup.skipped.length
     ? `; ${lookup.skipped.map((p) => p.name).join(', ')} ${lookup.skipped.length === 1 ? 'declares one' : 'declare one'} that cannot be read, skipped since installed`
     : '';
@@ -251,7 +276,7 @@ function packageSteps(config: ResolvedConfig, cwd: string): DetectionStep[] {
     {
       candidate,
       accepted: true,
-      reason: `${declared.name} (${declared.installed ? 'installed' : 'a workspace package'}) declares ${display(cwd, declared.config)}, which this project takes on, with its paths from ${display(cwd, declared.dir)}${lookup.others.length ? `; ${lookup.others.join(', ')} also declare one, not read: one config is taken on, from the package the code imports most` : ''}${skipped}`,
+      reason: `${declared.name} (${declared.installed ? 'installed' : 'a workspace package'}) declares ${display(cwd, declared.config)}, which this project ${config.configFile === declared.config ? 'takes on' : `reads under ${display(cwd, config.configFile ?? '')}`}, with its paths from ${display(cwd, declared.dir)}${lookup.others.length ? `; ${lookup.others.join(', ')} also declare one, not read: one config is taken on, from the package the code imports most` : ''}${skipped}`,
     },
   ];
 }

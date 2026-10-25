@@ -167,7 +167,10 @@ async function discoverWorkspace(
   for (const dir of workspacePackageDirs(root)) {
     const config = await loadProjectConfig(dir, root, rootConfig.configFile, options);
     const files = (await componentFiles(config)).length;
-    const own = config.configFile !== undefined && config.configFile !== rootConfig.configFile;
+    // A config of its own, or one its design-system package declares, read under the root's.
+    const own =
+      (config.configFile !== undefined && config.configFile !== rootConfig.configFile) ||
+      config.designSystemPackage !== undefined;
     // An app on a published library (MUI) has its design system in node_modules.
     const library = config.libraries?.some((l) => l.dir !== undefined) ?? false;
     if (files || own || library) {
@@ -196,10 +199,11 @@ async function discoverWorkspace(
 }
 
 /**
- * A project's config: its own config file, else the config its design-system package declares
- * (a dependency with `"onsystem"` in its package.json), else the workspace root's, with paths
- * relative to the workspace root, else zero config. `loadConfig` from the project's folder finds
- * the first two the same way. CLI flags that apply to every project carry over.
+ * A project's config: its own config file, else the workspace root's, with paths relative to
+ * the workspace root, read over the config its design-system package declares (a dependency with
+ * `"onsystem"` in its package.json), else zero config. `loadConfig` from the project's folder
+ * finds its own config and the package's the same way. CLI flags that apply to every project
+ * carry over.
  */
 function loadProjectConfig(
   dir: string,
@@ -219,7 +223,7 @@ function loadProjectConfig(
   }
   const lookup = findDesignSystemPackage(dir, packages);
   // A declaration that cannot be read is reported from the project's own load.
-  if (lookup?.found || lookup?.problems.length) {
+  if (lookup?.problems.length) {
     return loadConfigWith({ ...shared, root: dir }, { packages, lookup });
   }
   return loadConfigWith(

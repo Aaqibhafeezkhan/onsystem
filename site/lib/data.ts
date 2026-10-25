@@ -2,7 +2,6 @@
  * Typed access to generated/*.json, which scripts/generate.mjs writes at build time from the
  * library, the demo design system, the benchmark results, docs/*.md and the README.
  */
-import benchJson from '@/generated/bench.json';
 import benchmarkJson from '@/generated/benchmark.json';
 import corpusJson from '@/generated/corpus.json';
 import demoJson from '@/generated/demo.json';
@@ -42,37 +41,6 @@ export interface Demo {
   changes: { start: number; end: number }[];
   /** Median time of one check of the draft, measured at build time. */
   checkMs: number;
-}
-
-export interface RunSummary {
-  runs: number;
-  clean: number;
-  errors: number;
-  warnings: number;
-  cost: number;
-  seconds: number;
-  turns: number;
-  toolCalls: number;
-  hookBlocks: number;
-}
-
-export interface BenchModel {
-  id: string;
-  name: string;
-  base: RunSummary;
-  plugin: RunSummary;
-  costDelta: number;
-  tasks: {
-    id: string;
-    base: { errors: number; byRule: Record<string, number> };
-    plugin: { errors: number; byRule: Record<string, number> };
-  }[];
-}
-
-export interface Bench {
-  project: string;
-  tasks: { id: string; file: string; prompt: string }[];
-  models: BenchModel[];
 }
 
 /** A rate with its 95% Wilson interval, as bench/v2's results.json has it (fractions). */
@@ -201,7 +169,6 @@ export interface Benchmark {
   };
   /** Sections of bench/v2/README.md, as Markdown with links relative to the repository root. */
   method: {
-    v1: string;
     arms: string;
     scoring: string;
     statistics: string;
@@ -363,7 +330,6 @@ function typed<T>(json: unknown): T {
 }
 
 export const demo = typed<Demo>(demoJson);
-export const bench = typed<Bench>(benchJson);
 export const benchmark = typed<Benchmark>(benchmarkJson);
 export const corpus = typed<Corpus>(corpusJson);
 export const tools = typed<Tools>(toolsJson);

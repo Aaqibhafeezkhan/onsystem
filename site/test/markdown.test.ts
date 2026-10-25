@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { InlineMarkdown } from '@/components/markdown';
 import { MarkdownBlocks, parseBlocks } from '@/components/markdown-blocks';
+import { resolveDocHref } from '@/lib/site';
 
 const inline = (text: string) => renderToStaticMarkup(createElement(InlineMarkdown, { text }));
 const text = (html: string) => html.replace(/<[^>]+>/g, '');
@@ -95,6 +96,18 @@ describe('MarkdownBlocks', () => {
     // A renamed step fails the build rather than dropping the buttons without a word.
     expect(() => render({ 'hold-your-agent': 'BUTTONS' })).toThrow(
       'inSteps names hold-your-agent, but the steps are run-it, hold-your-agent-to-it, try-it.',
+    );
+  });
+});
+
+describe('resolveDocHref', () => {
+  it("turns the site's own URLs into paths, and no other host's", () => {
+    expect(resolveDocHref('https://onsystem.vercel.app')).toBe('/');
+    expect(resolveDocHref('https://onsystem.vercel.app/')).toBe('/');
+    expect(resolveDocHref('https://onsystem.vercel.app/docs/ci')).toBe('/docs/ci');
+    // A host that only starts with the site's stays a link to that host.
+    expect(resolveDocHref('https://onsystem.vercel.app.example.com/x')).toBe(
+      'https://onsystem.vercel.app.example.com/x',
     );
   });
 });

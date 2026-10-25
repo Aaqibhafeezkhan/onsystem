@@ -5,6 +5,7 @@ import { escapePath, globSync } from 'tinyglobby';
 
 import { readProjectConfig, type ProjectConfig } from './extract/program.js';
 import { buildEntries, exportedFiles, moduleFile, sourceTarget } from './package-source.js';
+import { importedStylesheets } from './tokens/imports.js';
 import { globBase, isHomeOrAbove, isInside, relativePath, toPosix } from './util/paths.js';
 import { unique } from './util/strings.js';
 
@@ -132,6 +133,19 @@ const STYLESHEETS = [
   'styles/globals.css',
   'globals.css',
   'src/index.css',
+];
+
+/**
+ * An app's own stylesheets, where zero config looks for them without components.json (the
+ * stylesheets of `DEFAULT_TOKENS` in config.ts).
+ */
+export const APP_STYLESHEETS = [
+  'app/globals.css',
+  'src/app/globals.css',
+  'styles/globals.css',
+  'src/styles/globals.css',
+  'src/index.css',
+  'app/app.css',
 ];
 
 /**
@@ -553,14 +567,30 @@ function fromComponentsJson(
   const tailwind = asRecord(json.tailwind);
   const css =
     typeof tailwind.css === 'string' && tailwind.css ? path.resolve(dir, tailwind.css) : undefined;
+  const named = css && fs.existsSync(css) ? [css] : [];
   return {
     components: [`${escapePath(relativePath(root, uiDir) || '.')}/**/*.{tsx,jsx}`],
-    tokens: css && fs.existsSync(css) ? [escapePath(relativePath(root, css))] : [],
+    tokens: (dir === root ? withAppStylesheets(root, named) : named).map((f) =>
+      escapePath(relativePath(root, f)),
+    ),
     imports,
     dirs: [uiDir],
     source: `${ui} → ${relativePath(root, uiDir) || '.'}`,
     ...ownerPackage(root, uiDir, ui),
   };
+}
+
+/**
+ * The stylesheets an app's tokens come from when its components.json names a stylesheet in
+ * another package, as cal.com's names coss/ui's: the app's own stylesheets first, which hold
+ * its own tokens, then the named one, unless they import it, so that the cascade places it.
+ */
+function withAppStylesheets(root: string, named: string[]): string[] {
+  if (named.every((file) => isInside(root, file))) return named;
+  const own = APP_STYLESHEETS.map((f) => path.join(root, f)).filter(isFile);
+  if (!own.length) return named;
+  const imported = new Set(importedStylesheets(own, stylesheetResolver(root)));
+  return [...own, ...named.filter((file) => !imported.has(file))];
 }
 
 /** How a shadcn registry is named in components.json: `@` and a name, so none leads out of the folder. */

@@ -1,7 +1,7 @@
 /** Root font size used to convert rem/em to px for comparisons. */
 export const ROOT_FONT_SIZE = 16;
 
-const LENGTH = /^(-?(?:\d+\.?\d*|\.\d+))(px|rem|em)?$/i;
+const LENGTH = /^(-?(?:\d+(?:\.\d*)?|\.\d+))(px|rem|em)?$/i;
 
 /** `"0.5rem"` → 8, `"12px"` → 12, `"4"` → 4. Returns undefined for anything else. */
 export function lengthToPx(value: string | number): number | undefined {
@@ -36,13 +36,30 @@ export function evaluateLength(value: string, resolve: Resolve, depth = 0): numb
 function expandVars(value: string, resolve: Resolve, depth: number): string | undefined {
   let out = '';
   let last = 0;
-  for (const match of value.matchAll(/var\(\s*(--[\w-]+)\s*(?:,\s*([^)]+))?\)/g)) {
-    const [whole, name = '', fallback] = match;
+  // Each var() runs to its matching parenthesis, so a fallback may hold calc() or another var(). A
+  // var() that is never closed ends the scan: the value has no px value, and no later `var(` is
+  // scanned to the end again, so an unclosed run like `var(--a,var(--a,(...` stays linear.
+  for (let at = value.indexOf('var(', last); at !== -1; at = value.indexOf('var(', last)) {
+    let level = 0;
+    let comma = -1;
+    let end = -1;
+    for (let i = at + 3; i < value.length; i++) {
+      const c = value[i];
+      if (c === '(') level++;
+      else if (c === ')' && --level === 0) {
+        end = i;
+        break;
+      } else if (c === ',' && level === 1 && comma === -1) comma = i;
+    }
+    if (end === -1) return undefined;
+    const name = value.slice(at + 4, comma === -1 ? end : comma).trim();
+    if (!/^--[\w-]+$/.test(name)) return undefined;
+    const fallback = comma === -1 ? undefined : value.slice(comma + 1, end);
     const resolved = resolve(name) ?? fallback;
     const px = resolved === undefined ? undefined : evaluateLength(resolved, resolve, depth + 1);
     if (px === undefined) return undefined;
-    out += `${value.slice(last, match.index)}${px}px`;
-    last = match.index + whole.length;
+    out += `${value.slice(last, at)}${px}px`;
+    last = end + 1;
   }
   return out + value.slice(last);
 }
