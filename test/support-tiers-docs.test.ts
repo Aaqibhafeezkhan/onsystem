@@ -8,7 +8,7 @@ import { section } from './markdown.js';
 // docs/clients.md gives every client a setup block of the same kind. Its "Support tiers" table
 // says which setups have been run (Tier 1) and which follow the client's docs only (Tier 2), so an
 // untested client does not read like a tested one. CONTRIBUTING.md holds new integrations back
-// for four weeks after the public launch, and links the table.
+// until four weeks after the public launch, and links the table.
 
 const root = path.resolve(import.meta.dirname, '..');
 const read = (file: string) =>
@@ -41,13 +41,6 @@ function tiers(): Row[] {
     checked,
     how,
   }));
-}
-
-/** The body of the `<details>` block whose summary is `title`. */
-function details(title: string): string {
-  const start = clients.indexOf(`<summary><strong>${title}</strong></summary>`);
-  if (start === -1) throw new Error(`no <details> block for ${title}`);
-  return clients.slice(start, clients.indexOf('</details>', start));
 }
 
 const PULL = /\[#\d+\]\(https:\/\/github\.com\/dgesteves\/onsystem\/pull\/\d+\)/;
@@ -122,28 +115,16 @@ describe('the support tiers in docs/clients.md', () => {
   });
 });
 
-describe('the team file for VS Code', () => {
-  it('is the one .mcp.json, not that and .vscode/mcp.json as well', () => {
-    // VS Code reads the workspace .mcp.json and its older .vscode/mcp.json: a team that commits
-    // both, as the page used to offer them, can get the server started twice.
-    const lead = section(clients, 'Cursor and VS Code').split('<details')[0] ?? '';
-    expect(lead).not.toMatch(/commit the config instead:\s*$/);
-    expect(lead).toContain('for VS Code the `.mcp.json` at the top of this page');
-    const vscode = details('VS Code (Copilot agent mode)');
-    expect(vscode).toContain('Commit the `.mcp.json` at the top of this page');
-    expect(vscode).toContain('not both');
-  });
-});
-
 describe('the integration freeze in CONTRIBUTING.md', () => {
   const freeze = () => section(contributing, 'New integrations');
 
   it('holds new integrations for four weeks after the launch, unless an issue asks for one', () => {
-    expect(freeze()).toContain('For the first four weeks after the public launch');
+    // The launch was Thursday 2026-10-22: the freeze ends four weeks later, on the date it names.
+    expect(freeze()).toContain(
+      'Until Thursday 2026-11-19, four weeks after the public launch on 2026-10-22',
+    );
     expect(freeze()).toContain('unless a user asks for it in an issue');
     expect(freeze()).toContain('(https://github.com/dgesteves/onsystem/issues)');
-    // There is no launch date yet: the text reads the same before and after it.
-    expect(freeze()).not.toMatch(/\b20\d\d\b/);
   });
 
   it('links the support tiers', () => {

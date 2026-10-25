@@ -4,7 +4,7 @@ Bug reports with a minimal snippet and the `inspect` output are the most useful 
 
 ## New integrations
 
-For the first four weeks after the public launch, we add no new integration (a client, a framework or another way to install or run onsystem) unless a user asks for it in an issue. That time goes to the integrations onsystem already has. To ask for one, [open an issue](https://github.com/dgesteves/onsystem/issues) that names it and says what you would use it for.
+Until Thursday 2026-11-19, four weeks after the public launch on 2026-10-22, we add no new integration (a client, a framework or another way to install or run onsystem) unless a user asks for it in an issue. That time goes to the integrations onsystem already has. To ask for one, [open an issue](https://github.com/dgesteves/onsystem/issues) that names it and says what you would use it for.
 
 Fixes to the existing integrations are welcome at any time. So is checking a Tier 2 setup in the [support tiers](docs/clients.md#support-tiers): run it in the client, then open a pull request that moves its row to Tier 1 with the client's version, the date and what you saw (`test/support-tiers-docs.test.ts` lists the Tier 1 setups too).
 
