@@ -753,10 +753,14 @@ function HowItWorks() {
             every pull request, and the <TextLink href={docsHref('eslint')}>ESLint plugin</TextLink>{' '}
             runs them wherever ESLint 9 or 10 runs.
           </p>
+          {/* A long id wraps after a hyphen on a narrow screen: kept on one line, it set the
+              width of all three stacked cards, and at 320 px they ran 8 px past the page. */}
           <ul className="mt-3 grid gap-1.5">
             {rules.map((rule) => (
               <li key={rule.id} className="flex items-baseline justify-between gap-3">
-                <span className="truncate font-mono text-[12.5px] text-fg-soft">{rule.id}</span>
+                <span className="font-mono text-[12.5px] [overflow-wrap:anywhere] text-fg-soft">
+                  {rule.id}
+                </span>
                 <span
                   className={`shrink-0 font-mono text-[11px] ${rule.severity === 'error' ? 'text-error' : 'text-warn'}`}
                 >

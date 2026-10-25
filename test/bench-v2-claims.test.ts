@@ -99,7 +99,7 @@ describe('bench/v2 results', () => {
   });
 
   it('names the onsystem version that scored the runs, and what changed in dub since', () => {
-    const results = flat(readme.slice(0, readme.indexOf('## What changes from v1')));
+    const results = flat(readme.slice(0, readme.indexOf('\n## Method\n')));
     expect(results).toContain(`**Results (2026-10-12, onsystem ${info.onsystem}):**`);
     expect(results).toContain(`as onsystem ${info.onsystem} counts them`);
     expect(flat(notes)).toContain(`They are onsystem ${info.onsystem}'s own count`);

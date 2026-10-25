@@ -7,9 +7,9 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
-import { RULE_IDS } from '../src/config.js';
+import { loadConfig, RULE_IDS } from '../src/config.js';
 import { createServer } from '../src/server/index.js';
-import { fixture, load } from './helpers.js';
+import { fixture, load, TSCONFIG } from './helpers.js';
 import { section } from './markdown.js';
 
 // docs/design-system-packages.md: what an app that depends on a design-system package gets, by
@@ -48,8 +48,16 @@ const PACKAGE = {
   'src/input.tsx': 'export function Input(props: { name?: string }) { return <input /> }\n',
   'dist/index.mjs':
     'export function Button() {}\nexport function Card() {}\nexport function Input() {}\n',
-  'dist/index.d.ts':
-    'export declare function Button(props: { variant?: "default" | "outline" }): unknown;\nexport declare function Card(props: object): unknown;\nexport declare function Input(props: object): unknown;\n',
+  // As tsc emits them from the sources.
+  'dist/index.d.ts': [
+    "import * as react from 'react';",
+    "import * as react_jsx_runtime from 'react/jsx-runtime';",
+    'declare function Button(props: react.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "default" | "outline" }): react_jsx_runtime.JSX.Element;',
+    'declare function Card(props: react.HTMLAttributes<HTMLDivElement>): react_jsx_runtime.JSX.Element;',
+    'declare function Input(props: react.InputHTMLAttributes<HTMLInputElement>): react_jsx_runtime.JSX.Element;',
+    'export { Button, Card, Input };',
+    '',
+  ].join('\n'),
 };
 
 /**
@@ -180,14 +188,40 @@ function published(pkg: Record<string, string>): Record<string, string> {
 const at = (prefix: string, files: Record<string, string>) =>
   Object.fromEntries(Object.entries(files).map(([file, text]) => [`${prefix}/${file}`, text]));
 
-/** An app that installs the package from a registry, with `pkg` in node_modules. */
-function installedApp(pkg: Record<string, string>, extra: Record<string, string> = {}): string {
-  return fixture({
-    'package.json': json({ name: 'web', dependencies: { '@acme/ui': '1.0.0' } }),
-    'app/page.tsx': PAGE,
-    ...at('node_modules/@acme/ui', pkg),
-    ...extra,
-  });
+/**
+ * An app that installs the package from a registry, with `pkg` in node_modules. With `react`,
+ * React's types are installed too, which type declarations need to declare a component.
+ */
+function installedApp(
+  pkg: Record<string, string>,
+  extra: Record<string, string> = {},
+  { react = false, name = 'web' }: { react?: boolean; name?: string } = {},
+): string {
+  return fixture(
+    {
+      'package.json': json({
+        name,
+        dependencies: { '@acme/ui': '1.0.0', ...(react ? { react: '19.0.0' } : {}) },
+      }),
+      ...(react ? { 'tsconfig.json': TSCONFIG } : {}),
+      'app/page.tsx': PAGE,
+      ...at('node_modules/@acme/ui', pkg),
+      ...extra,
+    },
+    { nodeModules: react },
+  );
+}
+
+/** A published package without its type declarations: no `.d.ts`, and no `types` to name one. */
+function withoutTypes(pkg: Record<string, string>): Record<string, string> {
+  const manifest = JSON.parse(pkg['package.json'] ?? '{}') as {
+    exports: Record<string, unknown>;
+  };
+  const { types: _, ...main } = manifest.exports['.'] as Record<string, unknown>;
+  return {
+    ...without(pkg, (file) => file.endsWith('.d.ts')),
+    'package.json': json({ ...manifest, exports: { ...manifest.exports, '.': main } }),
+  };
 }
 
 /** A pnpm monorepo: the package in packages/ui, and the app in apps/web. Returns the app. */
@@ -251,11 +285,12 @@ async function tool(root: string, name: string, args: Record<string, unknown>): 
 }
 
 describe('what apps get from a design-system package (docs/design-system-packages.md)', () => {
-  it('has a row for a workspace package and for four ways of publishing one', () => {
+  it('has a row for a workspace package and for five ways of publishing one', () => {
     expect(rows().map(([how]) => how)).toEqual([
       'As a workspace package',
       'From a registry, with the config, the token files and the component sources (`src/`) published',
-      'From a registry, with the config, the token files and compiled `dist/` published, but not `src/`',
+      'From a registry, with the config, the token files, compiled `dist/` and its type declarations (`.d.ts`) published, but not `src/`',
+      'From a registry, with the config, the token files and compiled `dist/` published, but neither `src/` nor type declarations',
       'From a registry, without the config, named like a design system (`@acme/ui`), with `exports` that point at the component sources (`./src/index.ts`)',
       'From a registry, without the config, with `exports` that point at `dist/`, or named otherwise (`@acme/kit`)',
     ]);
@@ -271,10 +306,30 @@ describe('what apps get from a design-system package (docs/design-system-package
     );
   });
 
-  it('runs the token rules from a package published without src/, and says the component rules did not run', async () => {
+  it('runs every rule from a package published as dist/ with its type declarations, which give its components', async () => {
     const pkg = await initialised();
     const distOnly = without(published(pkg), (file) => file.startsWith('src/'));
-    expect(Object.keys(distOnly).sort()).toEqual([
+    const app = installedApp(distOnly, {}, { react: true });
+    const { rules, stderr } = await check(app);
+    expect(rules).toEqual(rulesIn(rows()[2]?.[1] ?? ''));
+    expect(rows()[2]?.[1]).toBe('All eight, from its type declarations');
+    expect(stderr).not.toContain('No design-system components found');
+    const library =
+      'library  Design-system package (@acme/ui 1.0.0): 3 components from its type declarations';
+    expect((await run(['inspect', '--no-cache'], app)).stdout).toContain(library);
+    expect(whatAppsGet).toContain(`\`${library}\``);
+    expect(await tool(app, 'get_component', { name: 'Button' })).toContain('@acme/ui');
+    expect(whatAppsGet).toContain(
+      'every rule runs, and agents find the components with `list_components`, `search_components` and `get_component`.',
+    );
+    // --require-design-system finds the design system (exit code 2 would say it did not).
+    expect((await run(['check', '.', '--require-design-system', '--no-cache'], app)).code).toBe(1);
+  });
+
+  it('runs the token rules from a package published without src/ or type declarations, and says the component rules did not run', async () => {
+    const pkg = await initialised();
+    const withTypes = without(published(pkg), (file) => file.startsWith('src/'));
+    expect(Object.keys(withTypes).sort()).toEqual([
       'dist/index.d.ts',
       'dist/index.mjs',
       'onsystem.config.json',
@@ -282,12 +337,13 @@ describe('what apps get from a design-system package (docs/design-system-package
       'theme.css',
     ]);
     // init's config, as published: apps import the package by one name, so it sets importPath.
-    expect(JSON.parse(distOnly['onsystem.config.json'] ?? '{}')).toMatchObject({
+    expect(JSON.parse(withTypes['onsystem.config.json'] ?? '{}')).toMatchObject({
       importPath: '@acme/ui',
     });
-    const app = installedApp(distOnly);
+    expect(whatAppsGet).toContain('When the package publishes no type declarations either:');
+    const app = installedApp(withoutTypes(withTypes), {}, { react: true });
     const { rules, findings, stderr } = await check(app);
-    const cell = rows()[2]?.[1] ?? '';
+    const cell = rows()[3]?.[1] ?? '';
     expect(rules).toEqual(rulesIn(cell));
     // The icon rule runs on the native <button> only: the package's <Button> is not known.
     expect(
@@ -305,12 +361,12 @@ describe('what apps get from a design-system package (docs/design-system-package
     );
     expect(whatAppsGet).toContain(`\`check\` says \`${notice}\`\n`);
     // Agents find no component.
-    expect(await tool(app, 'list_components', {})).toMatch(/^No components found/);
+    expect(await tool(app, 'list_components', {})).toMatch(/^No design-system components found/);
     expect(await tool(app, 'search_components', { query: 'button' })).toMatch(
       /^No components match/,
     );
     expect(await tool(app, 'get_component', { name: 'Button' })).toMatch(
-      /^No component named "Button"/,
+      /^No design-system components found/,
     );
     // check_ui reports from the same rules.
     const checked = await tool(app, 'check_ui', { path: 'app/page.tsx' });
@@ -321,16 +377,16 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(whatAppsGet).toContain('**`--require-design-system` fails** (exit code 2)');
   });
 
-  it('checks no component imported from a package published without src/, with importPath or without it, but knows its icons only with it', async () => {
+  it('checks no component imported from a package published without src/ or type declarations, with importPath or without it, but knows its icons only with it', async () => {
     const pkg = await initialised();
-    const distOnly = without(published(pkg), (file) => file.startsWith('src/'));
+    const distOnly = withoutTypes(without(published(pkg), (file) => file.startsWith('src/')));
     const noImportPath = (files: Record<string, string>) =>
       withConfig(files, ({ importPath: _, ...config }) => config);
     expect(whatAppsGet).toContain(
-      '**`importPath` does not turn the component rules on.** `init` sets it when apps import the package by one name, such as `@acme/ui`.',
+      '**`importPath` does not turn the component rules on**, with no declarations to read. `init` sets it when apps import the package by one name, such as `@acme/ui`.',
     );
     // <Badge>, which the package does not have, is not reported either.
-    const expected = rulesIn(rows()[2]?.[1] ?? '');
+    const expected = rulesIn(rows()[3]?.[1] ?? '');
     const withImportPath = await check(installedApp(distOnly));
     expect(withImportPath.rules).toEqual(expected);
     expect(withImportPath.findings.filter((d) => d.message.includes('Badge'))).toEqual([]);
@@ -343,7 +399,6 @@ describe('what apps get from a design-system package (docs/design-system-package
     const withIcon = {
       ...distOnly,
       'dist/index.mjs': `${distOnly['dist/index.mjs'] ?? ''}export function ChevronLeft() {}\n`,
-      'dist/index.d.ts': `${distOnly['dist/index.d.ts'] ?? ''}export declare function ChevronLeft(props: object): unknown;\n`,
     };
     const iconPage = { 'app/page.tsx': ICON_PAGE };
     const icon = await check(installedApp(withIcon, iconPage));
@@ -369,13 +424,35 @@ describe('what apps get from a design-system package (docs/design-system-package
     expect(stderr).toContain("@acme/ui's onsystem config was skipped");
     // The app itself has no components or tokens: only the accessibility rule, on <button>.
     expect(rules).toEqual(new Set(['icon-button-accessible-name']));
-    expect(rows()[4]?.[1]).toContain(
+    expect(rows()[5]?.[1]).toContain(
       'A declaration whose config is not published is skipped with a warning',
     );
   });
 
+  it("reads the components of a package without the config from its type declarations in the app's scope, or named by its importPath", async () => {
+    const distOnly = without(published(PACKAGE), (file) => file.startsWith('src/'));
+    expect(rows()[5]?.[1]).toContain(
+      "unless the package publishes type declarations and is named like a design system in the app's own npm scope (`@acme/ui` for `@acme/web`), or the app's `importPath` names it: then its components are read from them.",
+    );
+    const componentRules = ['no-unknown-component', 'no-unknown-prop', 'no-unknown-variant'];
+    const scoped = await check(installedApp(distOnly, {}, { react: true, name: '@acme/web' }));
+    const named = await check(
+      installedApp(
+        distOnly,
+        { 'onsystem.config.json': json({ importPath: '@acme/ui' }) },
+        { react: true },
+      ),
+    );
+    const unscoped = await check(installedApp(distOnly, {}, { react: true }));
+    for (const rule of componentRules) {
+      expect(scoped.rules).toContain(rule);
+      expect(named.rules).toContain(rule);
+      expect(unscoped.rules).not.toContain(rule);
+    }
+  });
+
   it('runs every rule from a package named like a design system whose exports point at its sources, with no config', async () => {
-    const cell = rows()[3]?.[1] ?? '';
+    const cell = rows()[4]?.[1] ?? '';
     expect(cell).toMatch(/^All eight, through zero config/);
     // As published before init: no config, and no declaration.
     const app = installedApp(published(SOURCE_PACKAGE));
@@ -399,7 +476,7 @@ describe('what apps get from a design-system package (docs/design-system-package
     const why =
       'no     installed package @acme/ui: its exports point at build output (node_modules/@acme/ui/dist/index.mjs), not at component sources, and only sources are read';
     expect(withoutTheConfig).toContain(`\`${why}\``);
-    expect(rows()[4]?.[0]).toContain('with `exports` that point at `dist/`');
+    expect(rows()[5]?.[0]).toContain('with `exports` that point at `dist/`');
     const distOnly = without(published(PACKAGE), (file) => file.startsWith('src/'));
     // A `source` condition for the package's own repository, before the build that apps get.
     const sourceCondition = {
@@ -501,7 +578,7 @@ describe('what apps get from a design-system package (docs/design-system-package
 
   it('runs the token rules only for what the published tokens define', async () => {
     const pkg = await initialised();
-    const distOnly = without(published(pkg), (file) => file.startsWith('src/'));
+    const distOnly = withoutTypes(without(published(pkg), (file) => file.startsWith('src/')));
     const colorsOnly = {
       ...withConfig(distOnly, ({ importPath: _, ...config }) => config),
       'theme.css': '@theme {\n  --color-primary: oklch(0.55 0.2 260);\n}\n',
@@ -515,34 +592,167 @@ describe('what apps get from a design-system package (docs/design-system-package
   });
 });
 
-describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () => {
+describe("an app's own config (docs/design-system-packages.md#an-apps-own-config)", () => {
   const own = json({ rules: { 'no-hardcoded-color': 'warn' } });
+  /** The same, read alone. */
+  const alone = json({ extends: false, rules: { 'no-hardcoded-color': 'warn' } });
 
-  it("replaces the package's: the components and tokens of a package whose exports point at dist/ are gone", async () => {
+  it("builds on the package's: a config that only changes a rule's severity keeps every rule", async () => {
     const pkg = await initialised();
-    const app = installedApp(published(pkg), { 'onsystem.config.json': own });
+    expect(inTheApps).toContain(
+      'So a config that only changes a rule\'s severity, `{ "rules": { "no-hardcoded-color": "warn" } }`, keeps the package\'s components and tokens, and every other rule as the package sets it.',
+    );
+    for (const app of [
+      installedApp(published(pkg), { 'onsystem.config.json': own }),
+      workspaceApp(pkg, { 'onsystem.config.json': own }),
+    ]) {
+      const { rules, findings } = await check(app);
+      expect(rules).toEqual(new Set(RULE_IDS));
+      expect(findings.find((d) => d.ruleId === 'no-hardcoded-color')?.line).toBe(6);
+    }
+    const inspected = await run(
+      ['inspect', '--no-cache'],
+      installedApp(published(pkg), { 'onsystem.config.json': own }),
+    );
+    const line =
+      'config   onsystem.config.json, over node_modules/@acme/ui/onsystem.config.json (declared by @acme/ui)';
+    expect(inspected.stdout.replaceAll('\\', '/')).toContain(`${line}\n`);
+    expect(inTheApps).toContain(`\`\`\`text\n${line}\n\`\`\``);
+  });
+
+  it("adds the package's exclude patterns to its own, and, with the package's components, its elements over the package's", async () => {
+    expect(inTheApps).toContain(
+      "Its `rules` apply over the package's, rule by rule, either way, and, with the package's components, its `elements` apply over the package's, element by element. The package's `exclude` patterns are added to the app's, as they are in an app without a config. Its `overrides`, `tsconfig` and `includeDesignSystem` are its own",
+    );
+    const pkg = withConfig(published(await initialised()), (config) => ({
+      ...config,
+      exclude: ['**/*.fixture.tsx'],
+      elements: { a: 'Link', img: 'Image' },
+    }));
+    const color = 'export default () => <div className="bg-blue-500">x</div>;\n';
+    const extra = { 'app/x.fixture.tsx': color, 'app/legacy/old.tsx': color };
+    /** The files `check .` reports findings in. */
+    const reported = async (app: string) => {
+      const { stdout } = await run(['check', '.', '--format', 'json', '--no-cache'], app);
+      return (JSON.parse(stdout) as { file: string; diagnostics: unknown[] }[])
+        .filter((r) => r.diagnostics.length)
+        .map((r) => r.file)
+        .sort();
+    };
+    // Without a config, then with one that has an exclude list of its own.
+    expect(await reported(installedApp(pkg, extra))).toEqual([
+      'app/legacy/old.tsx',
+      'app/page.tsx',
+    ]);
+    const own = json({ exclude: ['app/legacy/**'], elements: { img: 'Picture' } });
+    const app = installedApp(pkg, { ...extra, 'onsystem.config.json': own });
+    expect(await reported(app)).toEqual(['app/page.tsx']);
+    expect((await loadConfig({ root: app })).elements).toEqual({ a: 'Link', img: 'Picture' });
+  });
+
+  it("takes none of what goes with the package's components with components of its own, and reads the app's own stylesheet", async () => {
+    expect(inTheApps).toContain(
+      "A project reads up to two configs, the first over the second, field by field as [an app's own config](#an-apps-own-config) says, and zero config fills in the rest:",
+    );
+    expect(inTheApps).toContain(
+      "`components` brings the package's `importPath`, `docs`, `elements`, `tokens` and `libraries` with it, each unless the app's config sets it, so a config that sets `components` of its own takes none of those from the package. Zero config fills in what such a config leaves out, as in any project: without `tokens`, it reads the app's own stylesheet (`app/globals.css`) and the ones it `@import`s, the package's theme among them when it imports it.",
+    );
+    const app = installedApp(published(await initialised()), {
+      'onsystem.config.json': json({ components: ['components/ui/**/*.tsx'] }),
+      'components/ui/button.tsx': PACKAGE['src/button.tsx'],
+      'app/globals.css': '@import "@acme/ui/theme.css";\n@theme {\n  --color-brand: #1a7f37;\n}\n',
+      'app/page.tsx': 'export default () => <div className="bg-[#1a7f37] p-[13px]">x</div>;\n',
+    });
+    const config = await loadConfig({ root: app });
+    expect(config.importPath).toBeUndefined();
+    expect(config.tokens.map((t) => t.path)).toContain('app/globals.css');
+    const { findings } = await check(app);
+    // The app's own token, and the spacing scale of the package's theme it imports.
+    expect(findings.map((d) => d.message)).toContain(
+      'Hardcoded color `bg-[#1a7f37]`. Matches token color-brand (exact match) → `bg-brand`.',
+    );
+    expect(findings.map((d) => d.ruleId)).toContain('no-hardcoded-spacing');
+  });
+
+  it("reads the package's tokens alone with the package's components, and the app's stylesheet as well when its config names it", async () => {
+    expect(inTheApps).toContain(
+      'An app that takes the package\'s components this way, or without a config, reads the tokens the package\'s config names, when it names some, and not its own stylesheet\'s: tokens the app adds in `app/globals.css` are not read. To read them as well, list both in its config, `"tokens": ["app/globals.css", "node_modules/@acme/ui/theme.css"]` (`../../packages/ui/theme.css` from a workspace app), since a `tokens` list brings none of the stylesheets its files `@import`: the app keeps the package\'s components.',
+    );
+    const pkg = published(await initialised());
+    const extra = {
+      'app/globals.css': '@import "@acme/ui/theme.css";\n@theme {\n  --color-brand: #1a7f37;\n}\n',
+      'app/page.tsx': PAGE.replace(
+        '<div className="bg-blue-500">Color</div>',
+        '<div className="bg-blue-500">Color</div>\n      <div className="bg-[#1a7f37]">Brand</div>',
+      ),
+    };
+    const brand =
+      'Hardcoded color `bg-[#1a7f37]`. Matches token color-brand (exact match) → `bg-brand`.';
+    const configs: Record<string, string>[] = [{}, { 'onsystem.config.json': own }];
+    for (const config of configs) {
+      const app = installedApp(pkg, { ...extra, ...config });
+      expect((await loadConfig({ root: app })).tokens.map((t) => t.path)).toEqual([
+        'node_modules/@acme/ui/theme.css',
+      ]);
+      const { rules, findings } = await check(app);
+      expect(rules).toEqual(new Set(RULE_IDS));
+      expect(findings.map((d) => d.message)).not.toContain(brand);
+    }
+    const listed = (tokens: string[]) =>
+      installedApp(pkg, { ...extra, 'onsystem.config.json': json({ tokens }) });
+    // The app's stylesheet alone: not the package's theme it imports, which sets the spacing scale.
+    const alone = await check(listed(['app/globals.css']));
+    expect(alone.findings.map((d) => d.message)).toContain(brand);
+    expect(alone.rules).not.toContain('no-hardcoded-spacing');
+    const app = listed(['app/globals.css', 'node_modules/@acme/ui/theme.css']);
+    const config = await loadConfig({ root: app });
+    expect(config.components.every((glob) => glob.startsWith('node_modules/@acme/ui/'))).toBe(true);
+    expect(config.importPath).toBe('@acme/ui');
+    const { rules, findings } = await check(app);
+    expect(rules).toEqual(new Set(RULE_IDS));
+    expect(findings.map((d) => d.message)).toContain(brand);
+    expect(findings.find((d) => d.ruleId === 'no-hardcoded-spacing')?.line).toBe(8);
+  });
+
+  it('is read alone with "extends": false, which can leave the app without the components and tokens of a package whose exports point at dist/', async () => {
+    const pkg = await initialised();
+    const app = installedApp(withoutTypes(published(pkg)), { 'onsystem.config.json': alone });
     const { rules, stderr } = await check(app);
     expect(rules).toEqual(new Set(['icon-button-accessible-name']));
     expect(stderr).toContain('No design system found (no components or color tokens)');
+    // Type declarations it publishes are still read, since it declares its config.
+    const declarations = await check(
+      installedApp(
+        without(published(pkg), (file) => file.startsWith('src/')),
+        { 'onsystem.config.json': alone },
+        { react: true },
+      ),
+    );
+    expect(declarations.rules).toContain('no-unknown-variant');
+    expect(declarations.rules).not.toContain('no-hardcoded-color');
     expect(inTheApps).toContain(
-      "So a config that only changes a rule's severity can leave the app without the package's components and tokens, and `check` then says which rules did not run.",
+      'of those, it reads only the type declarations a package publishes, when it declares its config',
+    );
+    expect(inTheApps).toContain('`"extends": false` in the app\'s config reads it alone.');
+    expect(inTheApps).toContain(
+      "So such a config that only changes a rule's severity can leave the app without the package's components and tokens, and `check` then says which rules did not run.",
     );
   });
 
-  it('still finds a package named like a design system through zero config, in the workspace or installed with exports that point at its sources', async () => {
+  it('still finds a package named like a design system through zero config with "extends": false, in the workspace or installed with exports that point at its sources', async () => {
     const pkg = await initialised();
-    const config = { 'onsystem.config.json': own };
+    const config = { 'onsystem.config.json': alone };
     expect((await check(workspaceApp(pkg, config))).rules).toContain('no-unknown-variant');
     const sources = await initialised(SOURCE_PACKAGE);
     expect((await check(installedApp(published(sources), config))).rules).toContain(
       'no-unknown-variant',
     );
     expect(inTheApps).toContain(
-      'it finds a package named like a design system, as a workspace package or installed in `node_modules` with `exports` that point at its component sources ([without the config](#without-the-config)), but not one named otherwise (`@acme/kit`) or one whose `exports` point at compiled code.',
+      'it finds a package named like a design system, as a workspace package or installed in `node_modules` with `exports` that point at its component sources ([without the config](#without-the-config)), but not one named otherwise (`@acme/kit`) or one whose `exports` point at compiled code:',
     );
   });
 
-  it("gets every rule back with the package's components, importPath and tokens copied in", async () => {
+  it('gets every rule back with "extends": false and the package\'s components, importPath and tokens copied in', async () => {
     const pkg = await initialised();
     const config = JSON.parse(pkg['onsystem.config.json'] ?? '{}') as {
       importPath: string;
@@ -557,6 +767,7 @@ describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () 
     );
     const copied = (glob: string) =>
       json({
+        extends: false,
         components: [glob],
         importPath: config.importPath,
         tokens: config.tokens.map((t) => `${glob.split('/src/')[0]}/${t}`),
@@ -570,22 +781,42 @@ describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () 
     expect((await check(workspace)).rules).toEqual(new Set(RULE_IDS));
   });
 
-  it('is what init --force in the app says it gives up', async () => {
-    // When it also loses the package's components or tokens, init says which and what to copy
-    // (test/init-registry-apps.test.ts).
+  it("is what init --force writes in the app: $schema alone, building on the package's", async () => {
     const pkg = await initialised();
-    const init = await run(
-      ['init', '--yes', '--force', '--no-cache'],
-      installedApp(published(pkg)),
-    );
+    const app = installedApp(published(pkg));
+    const init = await run(['init', '--yes', '--force', '--no-cache'], app);
     expect(init.code).toBe(0);
     expect(init.stdout).toContain(
-      "with --force it has one of its own, which is read instead, so @acme/ui's rules and later changes to its config no longer reach it.",
+      'With --force it has one of its own, onsystem.config.json, read over that one: what it leaves out, such as "components", "importPath" and "tokens", still comes from @acme/ui\'s config',
     );
-    expect(inTheApps).toContain('`init --force` in such an app says what it loses');
+    expect(JSON.parse(fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8'))).toEqual({
+      $schema: 'https://unpkg.com/onsystem/schema.json',
+    });
+    expect(inTheApps).toContain(
+      "`init --force` in an app on such a package, without a config or with one whose `components` match no file outside the package, writes a config with only `$schema` in it, for the app's own rules and overrides, and says what it builds on.",
+    );
+    fs.rmSync(path.join(app, 'onsystem.baseline.json'));
+    expect((await check(app)).rules).toEqual(new Set(RULE_IDS));
   });
 
-  it('needs importPath set to the package name for a package imported by subpath', async () => {
+  it('writes again, with init --force, the components of an app config that sets its own', async () => {
+    expect(inTheApps).toContain(
+      'In an app whose config names components of its own, it writes them again, as it does without such a package.',
+    );
+    const app = installedApp(published(await initialised()), {
+      'onsystem.config.json': json({ components: ['components/ui/**/*.tsx'] }),
+      'components/ui/button.tsx': PACKAGE['src/button.tsx'],
+    });
+    const init = await run(['init', '--yes', '--force', '--no-cache'], app);
+    expect(init.code).toBe(0);
+    expect(init.stdout).not.toContain('This project reads the config @acme/ui declares');
+    expect(JSON.parse(fs.readFileSync(path.join(app, 'onsystem.config.json'), 'utf8'))).toEqual({
+      $schema: 'https://unpkg.com/onsystem/schema.json',
+      components: ['components/ui/**/*.tsx'],
+    });
+  });
+
+  it('needs importPath set to the package name for a package imported by subpath, when read alone', async () => {
     const pkg = await initialised(SUBPATH_PACKAGE);
     const config = JSON.parse(pkg['onsystem.config.json'] ?? '{}') as {
       components: string[];
@@ -614,6 +845,7 @@ describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () 
     for (const [prefix, app] of layouts) {
       const copied = (importPath?: string) =>
         json({
+          extends: false,
           components: config.components.map((glob) => `${prefix}/${glob}`),
           ...(importPath ? { importPath } : {}),
           tokens: config.tokens.map((file) => `${prefix}/${file}`),
@@ -625,6 +857,11 @@ describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () 
       expect(declared.rules).toContain('no-unknown-variant');
       expect(iconLines(declared.findings)).toEqual([NATIVE_BUTTON_LINE, NATIVE_BUTTON_LINE + 1]);
       expect(inputImport(declared.findings)).toBe('@acme/ui/components/input');
+      // A config of its own that builds on the package's: the same, imports by subpath.
+      const layered = await check(app(pkg, { ...page, 'onsystem.config.json': own }));
+      expect(layered.rules).toEqual(declared.rules);
+      expect(iconLines(layered.findings)).toEqual([NATIVE_BUTTON_LINE, NATIVE_BUTTON_LINE + 1]);
+      expect(inputImport(layered.findings)).toBe('@acme/ui/components/input');
       // Copied without importPath: the package's imports go unchecked, without a word.
       const bare = await check(app(pkg, { ...page, 'onsystem.config.json': copied() }));
       for (const rule of ['no-unknown-component', 'no-unknown-prop', 'no-unknown-variant']) {
@@ -642,18 +879,5 @@ describe("an app's own config (docs/design-system-packages.md#in-the-apps)", () 
         'import { Button } from "@acme/ui"\n',
       );
     }
-    // init --force in such an app writes the copied config without importPath.
-    const forced = installedApp(pkg, page);
-    expect((await run(['init', '--yes', '--force', '--no-cache'], forced)).code).toBe(0);
-    const written = JSON.parse(
-      fs.readFileSync(path.join(forced, 'onsystem.config.json'), 'utf8'),
-    ) as Record<string, unknown>;
-    expect(written).toMatchObject({
-      components: ['node_modules/@acme/ui/src/components/**/*.tsx'],
-    });
-    expect(written).not.toHaveProperty('importPath');
-    expect(inTheApps).toContain(
-      '`init --force` in such an app says what it loses, but it writes no `importPath` there either.',
-    );
   });
 });

@@ -34,7 +34,7 @@ export type { Oklch };
  * colors, to be used as `hsl(var(--border))`.
  */
 const BARE_HSL =
-  /^(-?\d*\.?\d+)(deg)?(?:\s*,\s*|\s+)(\d*\.?\d+)%(?:\s*,\s*|\s+)(\d*\.?\d+)%(?:\s*\/\s*(\d*\.?\d+%?))?$/;
+  /^(-?(?:\d+(?:\.\d+)?|\.\d+))(deg)?(?:\s*,\s*|\s+)(\d+(?:\.\d+)?|\.\d+)%(?:\s*,\s*|\s+)(\d+(?:\.\d+)?|\.\d+)%(?:\s*\/\s*((?:\d+(?:\.\d+)?|\.\d+)%?))?$/;
 
 export function isBareHsl(value: string): boolean {
   return BARE_HSL.test(value.trim());
@@ -47,7 +47,7 @@ export function isBareHsl(value: string): boolean {
  * known to be a color: one the Tailwind config reads with `rgb()`.
  */
 const BARE_RGB =
-  /^(\d{1,3})(?:\s*,\s*|\s+)(\d{1,3})(?:\s*,\s*|\s+)(\d{1,3})(?:\s*\/\s*(\d*\.?\d+%?))?$/;
+  /^(\d{1,3})(?:\s*,\s*|\s+)(\d{1,3})(?:\s*,\s*|\s+)(\d{1,3})(?:\s*\/\s*((?:\d+(?:\.\d+)?|\.\d+)%?))?$/;
 
 export function isBareRgb(value: string): boolean {
   const match = BARE_RGB.exec(value.trim());

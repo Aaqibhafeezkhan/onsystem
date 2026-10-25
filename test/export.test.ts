@@ -344,6 +344,134 @@ describe('export --format design-md', () => {
   });
 });
 
+const tok = (name: string, category: Token['category'], value: string): Token => ({
+  name,
+  category,
+  value,
+  usage: [],
+  source: { file: 'a.css', line: 1 },
+});
+
+describe('export --format design-md, with values over several lines', () => {
+  // A comment or a value the stylesheet wraps over lines broke its table row: GitHub then showed
+  // the rest of the row as a code block and every later row as a paragraph.
+  it('keeps each table row on one line', () => {
+    const { tokens } = parseCssTokens(
+      [
+        '@theme {',
+        '  /* Line one.',
+        '     line two | x */',
+        '  --color-primary: #f00;',
+        '  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1),',
+        '    0 4px 6px -4px rgb(0 0 0 / 0.1);',
+        '}',
+      ].join('\n'),
+      'app/globals.css',
+    );
+    const lines = toDesignMd(tokens, { name: 'Wrapped' }).text.split('\n');
+    const rows = lines.filter((line, i) => i > 0 && lines[i - 1]?.startsWith('|') && line !== '');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) expect(row).toMatch(/^\|.*\|$/);
+    expect(lines.join('\n')).toContain(
+      '`0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)`',
+    );
+    expect(lines.join('\n')).toContain('Line one. line two \\| x');
+  });
+});
+
+describe('export of long and unusual values', () => {
+  it('types the numbers, lengths, composites and color channels it typed before', () => {
+    const tokens = [
+      tok('font-size-sm', 'typography', '0.875rem'),
+      tok('line-height-tight', 'typography', '1.25'),
+      tok('line-height-snug', 'typography', '1.'),
+      tok('line-height-loose', 'typography', '24px'),
+      tok('tracking-tight', 'typography', '-.025em'),
+      tok('type-body', 'typography', 'fontFamily: Inter; fontSize: 1rem; lineHeight: 1.5;'),
+      tok('type-caption', 'typography', 'fontSize : .75rem;lineHeight:  16px'),
+      tok('space-2', 'spacing', '.5rem'),
+      tok('radius-sm', 'radius', '2.px'),
+      tok('border', 'color', '214.3 31.8% 91.4%'),
+      tok('ring', 'color', '221.2deg, 83.2%, 53.3% / .5'),
+      tok('success', 'color', '22 163 74 / 50%'),
+    ];
+    const json = JSON.parse(toDtcg(tokens).text) as Tree;
+    expect(json.typography?.['font-size-sm']?.$value).toEqual({ value: 0.875, unit: 'rem' });
+    expect(json.typography?.['line-height-tight']).toMatchObject({ $type: 'number', $value: 1.25 });
+    expect(json.typography?.['line-height-snug']).toMatchObject({ $type: 'number', $value: 1 });
+    expect(json.typography?.['line-height-loose']?.$value).toEqual({ value: 24, unit: 'px' });
+    expect(json.typography?.['tracking-tight']?.$value).toBe('-.025em');
+    expect(json.typography?.['type-body']).toMatchObject({
+      $type: 'typography',
+      $value: { fontFamily: 'Inter', fontSize: { value: 1, unit: 'rem' }, lineHeight: 1.5 },
+    });
+    expect(json.typography?.['type-caption']?.$value).toEqual({
+      fontSize: { value: 0.75, unit: 'rem' },
+      lineHeight: { value: 16, unit: 'px' },
+    });
+    expect(json.spacing?.['space-2']?.$value).toEqual({ value: 0.5, unit: 'rem' });
+    expect(json.radius?.sm?.$value).toEqual({ value: 2, unit: 'px' });
+    expect(json.color?.ring?.$value).toEqual({
+      colorSpace: 'hsl',
+      components: [221.2, 83.2, 53.3],
+      alpha: 0.5,
+    });
+    expect(json.color?.success?.$extensions).toMatchObject({
+      'com.github.dgesteves.onsystem': { channels: 'rgb' },
+    });
+
+    const md = toDesignMd(tokens, { name: 'Same' }).text;
+    expect(md).toContain(
+      'colors:\n  border: hsl(214.3 31.8% 91.4%)\n  ring: hsl(221.2deg, 83.2%, 53.3% / .5)\n  success: rgb(22 163 74 / 50%)\n',
+    );
+    expect(md).toContain('  line-height-snug:\n    lineHeight: 1\n');
+    expect(md).toContain('  tracking-tight:\n    letterSpacing: -.025em\n');
+    expect(md).toContain('  type-caption:\n    fontSize: .75rem\n    lineHeight: 16px\n');
+    expect(md).toContain('rounded:\n  sm: 2.px\nspacing:\n  space-2: .5rem\n');
+  });
+
+  it('exports long values in time that grows with their length', () => {
+    const digits = `9${'99'.repeat(50_000)}!`;
+    const nines = '9'.repeat(100_000);
+    const tokens = [
+      tok('font-size-huge', 'typography', digits),
+      tok('line-height-huge', 'typography', digits),
+      tok('space-huge', 'spacing', digits),
+      tok('radius-huge', 'radius', digits),
+      tok('type-n', 'typography', `lineHeight: ${digits}`),
+      tok('type-a', 'typography', `-:${' '.repeat(100_000)};!`),
+      // 126 characters, which took 3.6 s: each `-: :` could split two ways.
+      tok('type-b', 'typography', `-::;-:${' :;-:'.repeat(24)}`),
+      tok('color-hsl', 'color', nines),
+      tok('color-hsl-alpha', 'color', `9 9% 9%/${nines}!`),
+      tok('color-rgb-alpha', 'color', `9 9 9/${nines}!`),
+    ];
+    const started = performance.now();
+    const dtcg = toDtcg(tokens);
+    const md = toDesignMd(tokens, { name: 'Long' });
+    // Seconds per token before; a few milliseconds for all of them now.
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(dtcg.count).toBe(tokens.length);
+    expect(md.text).toContain('# Long');
+  });
+
+  it('keeps a token named __proto__ in its group, and leaves Object.prototype alone', () => {
+    const { tokens } = parseCssTokens(
+      ':root { --__proto__.polluted: #ffffff; } @theme { --color-__proto__: #111111; }',
+      'a.css',
+    );
+    try {
+      const { text, count } = toDtcg(tokens);
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+      expect(count).toBe(2);
+      const group = (JSON.parse(text) as Tree).color?.['__proto__'];
+      expect(Object.keys(group ?? {})).toEqual(['$root', 'polluted']);
+    } finally {
+      delete (Object.prototype as Record<string, unknown>).polluted;
+    }
+  });
+});
+
 describe('onsystem export', () => {
   it('prints the export on stdout', async () => {
     const { code, stdout } = await run(['export', '--format', 'design-md', '--no-cache']);

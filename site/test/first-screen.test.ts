@@ -96,7 +96,7 @@ describe('the first screen', () => {
     const copy = text(match?.[2] ?? '');
     expect(headline).toBe('Keeps coding agents on your design system.');
     expect(words(`${headline} ${copy}`)).toBeLessThanOrEqual(45);
-    // The three invention rules fired 0 times in the benchmark's 1,240 runs: they come last.
+    // The three invention rules fired 0 times in the benchmark's 1,200 runs: they come last.
     expect(copy).toMatch(/palette colors, native elements and APIs your design system lacks/);
     expect(copy).toContain('every edit and pull request');
     expect(copy).toContain(

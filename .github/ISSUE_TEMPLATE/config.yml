@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Question or idea
+    url: https://github.com/dgesteves/onsystem/discussions
+    about: How to set something up, or an idea to talk through first.
   - name: Report a vulnerability
     url: https://github.com/dgesteves/onsystem/security/advisories/new
     about: Report security issues privately, not in a public issue.

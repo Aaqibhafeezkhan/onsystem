@@ -655,15 +655,14 @@ describe('the README', () => {
       `${count(measures.length)} measures, ${count(measures.filter((m) => m.independent).length).toLowerCase()} of them independent of onsystem.`,
     );
 
-    // Anywhere else it counts them, it says the same number; and the two places that list the
-    // scorers, the v2 column of the table of what changes from v1 and their blind spots under
-    // Threats to validity, name every measure (`onsystem check` as onsystem).
+    // Anywhere else it counts them, it says the same number; and where it lists the scorers,
+    // their blind spots under Threats to validity, it names every measure (`onsystem check` as
+    // onsystem).
     for (const m of v2.matchAll(/\b(one|two|three|four|five|six) (?:scorers|measures)\b/gi))
       expect(m[1]?.toLowerCase(), m[0]).toBe(count(measures.length).toLowerCase());
     const lines = v2.split('\n');
     const blindSpots = "- **The scorers' blind spots.** ";
     const lists = {
-      'What changes from v1': lines.find((l) => /^\| Scoring +\|/.test(l))?.split('|')[3],
       'Threats to validity': lines.find((l) => l.startsWith(blindSpots))?.slice(blindSpots.length),
     };
     const named = (name: string) =>
