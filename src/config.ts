@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -831,6 +833,9 @@ async function readConfig(
   return parsed.data;
 }
 
+/** Where require keeps the CommonJS modules it has loaded, by path. */
+const requireCache = createRequire(import.meta.url).cache;
+
 async function readConfigFile(file: string): Promise<unknown> {
   if (/\.[cm]?ts$/.test(file) && !nodeRunsTypeScript()) {
     throw new ConfigError(
@@ -845,7 +850,17 @@ async function readConfigFile(file: string): Promise<unknown> {
     }
   }
   try {
-    const mod = (await import(pathToFileURL(file).href)) as { default?: unknown };
+    // A process that runs on (the MCP server, an editor's ESLint) reads the config again when it
+    // changes, and `import()` of the same URL returns the module it loaded first. The query
+    // changes with the file's content, so an edited config is a new module; an unchanged one is
+    // the same. A CommonJS one (`module.exports` in a .js file) is kept by require, by its real
+    // path. The modules a config imports are not loaded again.
+    const version = createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 16);
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete requireCache[fs.realpathSync(file)];
+    const mod = (await import(`${pathToFileURL(file).href}?v=${version}`)) as {
+      default?: unknown;
+    };
     return mod.default ?? mod;
   } catch (error) {
     const message = (error as Error).message;
