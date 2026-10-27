@@ -499,11 +499,12 @@ export async function loadConfigWith(
   const excludeFromPackage = (e: string) => (e.startsWith('**/') ? e : fromPackage(e));
   // A dependency's config reads only within its package when installed, or its workspace: a
   // path that leaves it is ignored, so a published package cannot have its apps read files
-  // elsewhere on the machine.
+  // elsewhere on the machine. The warning JSON-quotes the package's name and each path, which
+  // are its text: a line break in one stays inside the quotes, on that line.
   const outside: string[] = [];
   const within = (field: string) => (p: string) => {
     if (!declared || staysIn(declared.dir, declared.boundary, slashGlob(p))) return true;
-    outside.push(`${field} ${p}`);
+    outside.push(`${field} ${json(p)}`);
     return false;
   };
   const pathOf = (t: TokenSource) => (typeof t === 'string' ? t : t.path);
@@ -525,7 +526,7 @@ export async function loadConfigWith(
     pkg?.docs === undefined ? undefined : toArray(pkg.docs).filter(within('docs')).map(fromPackage);
   if (declared && outside.length) {
     warnings.push(
-      `${declared.name}'s onsystem config names paths outside ${declared.installed ? 'the package' : 'the workspace'}, which were ignored: ${outside.join(', ')}.`,
+      `The onsystem config of ${json(declared.name)} names paths outside ${declared.installed ? 'the package' : 'the workspace'}, which were ignored: ${outside.join(', ')}.`,
     );
   }
   // The design system's components, and what goes with them (importPath, docs, elements, tokens,

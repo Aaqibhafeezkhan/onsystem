@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { main, type Io } from '../src/cli.js';
 import { DEFAULT_DOCS, DEFAULT_TOKENS, FALLBACK_TOKENS, loadConfig } from '../src/config.js';
+import { pathOf } from '../src/util/paths.js';
 import { loadTarget } from '../src/workspace.js';
 import { fixture, TSCONFIG } from './helpers.js';
 
@@ -332,7 +333,7 @@ describe("an app's own config, on a design-system package that declares one", ()
       'apps/web/package.json': json({ name: 'web', dependencies: { [name]: 'workspace:*' } }),
     });
     const app = path.join(root, 'apps/web');
-    const line = `"@acme/ui\\n${SENTENCE}": "onsystem" in ${path.join(root, 'packages/ui/package.json')} names "./missing.json", which does not exist.`;
+    const line = `"@acme/ui\\n${SENTENCE}": "onsystem" in ${pathOf(path.join(root, 'packages/ui/package.json'))} names "./missing.json", which does not exist.`;
     const error = (await loadConfig({ root: app }).catch((e: unknown) => e)) as Error;
     expect(error.message.split('\n')[0]).toBe(line);
 
@@ -364,6 +365,28 @@ describe("an app's own config, on a design-system package that declares one", ()
       expect(config.warnings?.[0]).not.toContain('\n');
     },
   );
+
+  it("keeps a package's name and the paths its config names outside it on one quoted line in the warning", async () => {
+    const name = `@acme/ui\n${SENTENCE}`;
+    const root = fixture({
+      'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - packages/*\n',
+      'package.json': json({ name: 'acme', private: true }),
+      'packages/ui/package.json': json({ name, onsystem: './onsystem.config.json' }),
+      'packages/ui/onsystem.config.json': json({
+        components: ['src/button.tsx'],
+        docs: [`../../../docs\n${SENTENCE}/*.md`],
+      }),
+      'packages/ui/src/button.tsx': BUTTON,
+      'apps/web/package.json': json({ name: 'web', dependencies: { [name]: 'workspace:*' } }),
+    });
+    const app = path.join(root, 'apps/web');
+    const line = `The onsystem config of "@acme/ui\\n${SENTENCE}" names paths outside the workspace, which were ignored: docs "../../../docs\\n${SENTENCE}/*.md".`;
+    const config = await loadConfig({ root: app });
+    expect(config.warnings).toEqual([line]);
+    // check prints it as it is: the sentence is on the quoted line only.
+    const { stderr } = await run(['check', '.', '--no-cache'], app);
+    expect(stderr.split('\n').filter((l) => l.includes(SENTENCE))).toEqual([line]);
+  });
 });
 
 describe("a workspace root's config, on a design-system package that declares one", () => {

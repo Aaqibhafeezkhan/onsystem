@@ -12,6 +12,7 @@ import { DesignSystemHost } from '../src/design-system.js';
 import { WorkspaceProjects } from '../src/server/projects.js';
 import { serveStdio } from '../src/server/stdio.js';
 import { silentLogger } from '../src/util/log.js';
+import { pathOf } from '../src/util/paths.js';
 import { loadTarget } from '../src/workspace.js';
 import { fixture } from './helpers.js';
 
@@ -404,7 +405,7 @@ describe('a config a design-system package declares', () => {
     const missing = await error(withField('./onsystem.config.json'));
     expect(missing.name).toBe('ConfigError');
     expect(missing.message).toMatch(
-      /^"@acme\/kit": "onsystem" in .*package\.json names "\.\/onsystem\.config\.json", which does not exist\.\nFix the "onsystem" field in that package, or give .* a config of its own \(onsystem\.config\.json\), which is read instead\.$/,
+      /^"@acme\/kit": "onsystem" in .*package\.json"? names "\.\/onsystem\.config\.json", which does not exist\.\nFix the "onsystem" field in that package, or give .* a config of its own \(onsystem\.config\.json\), which is read instead\.$/,
     );
     const code = await error(
       withField('./onsystem.config.mjs', {
@@ -446,8 +447,8 @@ describe('a config a design-system package declares', () => {
     expect(config.designSystemPackage).toBeUndefined();
     expect(config.components).toEqual(DEFAULT_COMPONENTS);
     expect(config.warnings).toEqual([
-      `The onsystem config of "@acme/kit" was skipped: "onsystem" in ${path.join(root, 'node_modules/@acme/kit/package.json')} names "./onsystem.config.json", which does not exist. "@acme/kit" is installed in node_modules, so this project is read as if it declared none.`,
-      `The onsystem config of "left-pad" was skipped: "onsystem" in ${path.join(root, 'node_modules/left-pad/package.json')} is {"other":"use"}: it names a JSON config file in the package, such as "./onsystem.config.json". "left-pad" is installed in node_modules, so this project is read as if it declared none.`,
+      `The onsystem config of "@acme/kit" was skipped: "onsystem" in ${pathOf(path.join(root, 'node_modules/@acme/kit/package.json'))} names "./onsystem.config.json", which does not exist. "@acme/kit" is installed in node_modules, so this project is read as if it declared none.`,
+      `The onsystem config of "left-pad" was skipped: "onsystem" in ${pathOf(path.join(root, 'node_modules/left-pad/package.json'))} is {"other":"use"}: it names a JSON config file in the package, such as "./onsystem.config.json". "left-pad" is installed in node_modules, so this project is read as if it declared none.`,
     ]);
 
     // check says each once, and checks the app as zero config does.
@@ -488,7 +489,7 @@ describe('a config a design-system package declares', () => {
       'packages/kit/package.json': json({ name: '@acme/kit', onsystem: './onsystem.config.json' }),
     });
     await expect(loadConfig({ root: path.join(workspace, 'apps/web') })).rejects.toThrow(
-      /^"@acme\/kit": "onsystem" in .*package\.json names "\.\/onsystem\.config\.json", which does not exist\./,
+      /^"@acme\/kit": "onsystem" in .*package\.json"? names "\.\/onsystem\.config\.json", which does not exist\./,
     );
   });
 
@@ -540,7 +541,7 @@ describe('a config a design-system package declares', () => {
     expect(installed.tokens.map((t) => t.path)).toEqual(['node_modules/@acme/kit/src/globals.css']);
     expect(installed.docs).toEqual([]);
     expect(installed.warnings).toEqual([
-      "@acme/kit's onsystem config names paths outside the package, which were ignored: tokens ../../../../outside/theme.css, docs ../../../../outside/*.md, docs {src,../../../../outside}/**/*.md, docs /etc/*.md.",
+      'The onsystem config of "@acme/kit" names paths outside the package, which were ignored: tokens "../../../../outside/theme.css", docs "../../../../outside/*.md", docs "{src,../../../../outside}/**/*.md", docs "/etc/*.md".',
     ]);
     const model = (await run(['inspect', '--format', 'json', '--no-cache'], app)).stdout;
     expect(model).toContain('--primary');
@@ -563,7 +564,7 @@ describe('a config a design-system package declares', () => {
     expect(workspace.tokens.map((t) => t.path)).toEqual(['../../packages/tokens/theme.css']);
     expect(workspace.docs).toEqual([]);
     expect(workspace.warnings).toEqual([
-      "@acme/kit's onsystem config names paths outside the workspace, which were ignored: tokens ../../../outside/theme.css, docs ../../../outside/*.md.",
+      'The onsystem config of "@acme/kit" names paths outside the workspace, which were ignored: tokens "../../../outside/theme.css", docs "../../../outside/*.md".',
     ]);
   });
 
