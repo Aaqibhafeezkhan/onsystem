@@ -31,7 +31,7 @@ export function absolute(markdown: string, page: string): string {
 const pitch =
   'Keeps coding agents on your design system. Catches palette colors, native elements and APIs your design system lacks in agent-written React, at every edit and pull request, with the fix. Set it up once in your design-system package; every app in your monorepo gets it.';
 const details =
-  'It reads React components, props, cva variants and tokens from source with the TypeScript compiler. In Claude Code, a hook checks each file right after it is written and hands the errors back with their fixes; other agents run check_ui over MCP; the CI check gates pull requests. Static analysis, run locally: no model calls, no API key, zero config. It works alongside @shadcn/lint.';
+  'It reads React components, props, cva variants and tokens from source with the TypeScript compiler. In Claude Code and Codex CLI, a hook checks each file right after it is written and hands the errors back with their fixes; other agents run check_ui over MCP; the CI check gates pull requests. Static analysis, run locally: no model calls, no API key, zero config. It works alongside @shadcn/lint.';
 
 /**
  * What a visitor gives their agent to have it set onsystem up, as @shadcn/lint's quickstart gives
@@ -95,7 +95,7 @@ Add onsystem to the agent you are running in, in files the repository keeps, so 
 
 ${config('.claude/settings.json')}
 
-  Claude Code loads it the next time it starts in this folder, once the user accepts the folder's trust prompt. Do not add onsystem to \`.mcp.json\` as well: both register the same tools. To install it for the user alone instead, they run \`${marketplace ?? ''}\`, then \`${install ?? ''}\`.
+  Claude Code loads it the next time it starts in this folder, once the user accepts the folder's trust prompt. Do not add an onsystem entry to \`.mcp.json\` for Claude Code: the plugin and that entry register the same tools. If the repository already commits a \`.mcp.json\` with onsystem for the other clients ([one \`.mcp.json\` for the team](${SITE_URL}/docs/clients)), add \`"disabledMcpjsonServers": ["onsystem"]\` to the same \`.claude/settings.json\`, so Claude Code skips that entry. To install it for the user alone instead, they run \`${marketplace ?? ''}\`, then \`${install ?? ''}\`.
 - **Cursor**: the MCP server. \`.cursor/mcp.json\`:
 
 ${config('.cursor/mcp.json')}
@@ -104,7 +104,7 @@ ${config('.cursor/mcp.json')}
 
 ${config('.vscode/mcp.json')}
 
-- **Codex CLI**: the plugin, with the MCP server and the skill: \`${codexMarketplace ?? ''}\`, then \`${codexInstall ?? ''}\`.
+- **Codex CLI**: the plugin, with the hook that checks each file an \`apply_patch\` changes, the MCP server and the skill: \`${codexMarketplace ?? ''}\`, then \`${codexInstall ?? ''}\`. Codex runs the hook only once the user has reviewed and trusted it in \`/hooks\`.
 - **Any other agent**: the MCP server runs over stdio as \`${NPX} --root <the project's absolute path>\`, and [Set up your agent](${SITE_URL}/docs/clients#other-clients) has the config for each client. If the project has an \`AGENTS.md\`, add this line to it:
 
 ${config('AGENTS.md')}
@@ -223,16 +223,24 @@ export function llmsFullTxt(): string {
     ['Benchmark', '/benchmark', indexed(benchmarkMarkdown(benchmark, benchmarkFormat))],
     ['Playground', '/playground', indexed(playgroundMarkdown(playground.presets, designSystem))],
   ];
-  // Each page's own `##` sections become `###` under its `##` title; code blocks stay as they are.
+  // Each page's own `##` sections become `###` under its `##` title. Code blocks keep their text,
+  // but one with a line that starts with `#` (get_component's Markdown answer in the Tools page, a
+  // shell comment) is indented two spaces, which Markdown takes off again, so that a reader who
+  // splits this file at its `#` lines does not take that line for a section of it.
   const nest = (body: string) => {
-    let fenced = false;
-    return body
-      .split('\n')
-      .map((line) => {
-        if (/^\s*```/.test(line)) fenced = !fenced;
-        return !fenced && /^#{2,5} /.test(line) ? `#${line}` : line;
-      })
-      .join('\n');
+    const lines: string[] = [];
+    let block: string[] | undefined;
+    for (const line of body.split('\n')) {
+      if (block) {
+        block.push(line);
+        if (!/^\s*```/.test(line)) continue;
+        const hashed = block.some((l) => l.startsWith('#'));
+        lines.push(...(hashed ? block.map((l) => (l ? `  ${l}` : l)) : block));
+        block = undefined;
+      } else if (/^\s*```/.test(line)) block = [line];
+      else lines.push(/^#{2,5} /.test(line) ? `#${line}` : line);
+    }
+    return [...lines, ...(block ?? [])].join('\n');
   };
   return `# onsystem\n\n> ${pitch}\n\n${details}\n\n${sections
     .map(([title, page, body]) => `## ${title}\n\n${absolute(nest(withoutMarkers(body)), page)}`)

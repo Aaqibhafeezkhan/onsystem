@@ -280,7 +280,10 @@ export interface FalsePositiveRate {
   /** Random labels still reported, all severities and errors only. */
   sample: Precision;
   sampleErrors: Precision;
-  /** Audit labels still reported (picked as suspicious, so not an estimate). */
+  /**
+   * Audit labels still reported. They were picked because they looked suspicious, so their share
+   * of false positives says nothing about the rate: the report prints their counts only.
+   */
   audit: Precision;
   /**
    * The random sample's FP rate per run and rule, weighted by how many findings each has now. It

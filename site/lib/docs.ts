@@ -40,7 +40,7 @@ const PAGES = [
     source: 'docs/clients.md',
     title: 'Set up your agent',
     description:
-      'MCP configs for Cursor, VS Code, Claude Desktop, Codex CLI, Copilot CLI, Windsurf, JetBrains, Zed, Gemini CLI, Grok Build and Claude Code without the plugin.',
+      'MCP configs for Cursor, VS Code, Claude Desktop, Codex CLI, Copilot CLI, Windsurf, JetBrains, Zed, Gemini CLI, Antigravity, Grok Build and Claude Code.',
   },
   {
     href: '/docs/plugin',
