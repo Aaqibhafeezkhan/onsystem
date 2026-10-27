@@ -6,7 +6,7 @@ import { escapePath, globSync } from 'tinyglobby';
 import { readProjectConfig, type ProjectConfig } from './extract/program.js';
 import { buildEntries, exportedFiles, moduleFile, sourceTarget } from './package-source.js';
 import { importedStylesheets } from './tokens/imports.js';
-import { globBase, isHomeOrAbove, isInside, relativePath, toPosix } from './util/paths.js';
+import { globBase, isHomeOrAbove, isInside, pathOf, relativePath, toPosix } from './util/paths.js';
 import { unique } from './util/strings.js';
 
 /**
@@ -1431,7 +1431,9 @@ export function declaredConfig(
 ): { file: string } | { problem: string } | undefined {
   const value = pkg?.[PACKAGE_FIELD];
   if (value === undefined) return undefined;
-  const field = `"${PACKAGE_FIELD}" in ${path.join(dir, 'package.json')}`;
+  // The package's folder can be named by any text (an installed package's is its name): a path
+  // that holds more than a path's characters is JSON-quoted.
+  const field = `"${PACKAGE_FIELD}" in ${pathOf(path.join(dir, 'package.json'))}`;
   if (typeof value !== 'string' || !value.endsWith('.json')) {
     return {
       problem: `${field} is ${JSON.stringify(value)}: it names a JSON config file in the package, such as "./onsystem.config.json".`,

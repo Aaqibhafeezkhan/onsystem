@@ -3,7 +3,8 @@ import type { DesignSystem } from '../design-system.js';
 import { descriptionOf, type SearchHit } from '../search/index.js';
 import { formatPx } from '../tokens/units.js';
 import type { CheckResult, ComponentInfo, Diagnostic, PropInfo, Token } from '../types.js';
-import { plural, truncate } from '../util/strings.js';
+import { pathOf } from '../util/paths.js';
+import { json, plural, truncate } from '../util/strings.js';
 
 /**
  * Tool results are read by models, so they are rendered as compact Markdown:
@@ -25,17 +26,6 @@ const BREAK_CHAR = /[\n\r\v\f\x1c-\x1e\u0085\u2028\u2029]/g;
 function oneLine(text: string): string {
   // eslint-disable-next-line no-control-regex -- U+001C to U+001E break lines, and `\s` misses them.
   return text.replace(/[\s\x1c-\x1e\u0085]+/g, ' ');
-}
-
-/**
- * `text` as a JSON string, with U+0085, U+2028 and U+2029 escaped too, so it stays on one line
- * (JSON escapes the other line breaks).
- */
-export function json(text: string): string {
-  return JSON.stringify(text).replace(
-    /[\u0085\u2028\u2029]/g,
-    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
-  );
 }
 
 /** `text` with each line break in it escaped as in a JSON string: `\n`, `\r`, `\u001e`, `\u2028`. */
@@ -62,15 +52,6 @@ export type Answer = string & { readonly [ANSWERED]: true };
  */
 export function answer(lines: readonly string[]): Answer {
   return lines.map(escapeBreaks).join('\n') as Answer;
-}
-
-/**
- * A file, folder or import path, as written when it holds only the characters of a path (letters,
- * digits and `_ @ $ . + ~ / \ : ( ) [ ] { } # % , = ! -`, as in `app/(site)/[id]/page.tsx`);
- * otherwise, as for a path that holds a space or a line break (git allows one), JSON-quoted.
- */
-export function pathOf(file: string): string {
-  return /^[\p{L}\p{N}_@$.+~/\\:()[\]{}#%,=!-]+$/u.test(file) ? file : json(file);
 }
 
 function firstSentence(text: string | undefined, max = 140): string {

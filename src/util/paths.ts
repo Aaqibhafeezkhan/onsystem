@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { json } from './strings.js';
+
 export function toPosix(p: string): string {
   return p.split(path.sep).join('/');
 }
@@ -177,4 +179,13 @@ function splitTopLevel(text: string): string[] {
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+}
+
+/**
+ * A file, folder or import path, as written when it holds only the characters of a path (letters,
+ * digits and `_ @ $ . + ~ / \ : ( ) [ ] { } # % , = ! -`, as in `app/(site)/[id]/page.tsx`);
+ * otherwise, as for a path that holds a space or a line break (git allows one), JSON-quoted.
+ */
+export function pathOf(file: string): string {
+  return /^[\p{L}\p{N}_@$.+~/\\:()[\]{}#%,=!-]+$/u.test(file) ? file : json(file);
 }

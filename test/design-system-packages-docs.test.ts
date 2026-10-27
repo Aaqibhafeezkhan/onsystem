@@ -421,7 +421,7 @@ describe('what apps get from a design-system package (docs/design-system-package
       (file) => !file.startsWith('dist/') && file !== 'package.json',
     );
     const { rules, stderr } = await check(installedApp(bare));
-    expect(stderr).toContain("@acme/ui's onsystem config was skipped");
+    expect(stderr).toContain('The onsystem config of "@acme/ui" was skipped');
     // The app itself has no components or tokens: only the accessibility rule, on <button>.
     expect(rules).toEqual(new Set(['icon-button-accessible-name']));
     expect(rows()[5]?.[1]).toContain(
@@ -465,7 +465,7 @@ describe('what apps get from a design-system package (docs/design-system-package
     const pkg = await initialised(SOURCE_PACKAGE);
     const unpublished = without(published(pkg), (file) => file === 'onsystem.config.json');
     const skipped = await check(installedApp(unpublished));
-    expect(skipped.stderr).toContain("@acme/ui's onsystem config was skipped");
+    expect(skipped.stderr).toContain('The onsystem config of "@acme/ui" was skipped');
     expect(skipped.rules).toEqual(rulesIn(cell));
     expect(withoutTheConfig).toContain(
       'An app reads an installed package that declares no config, or whose declared config is not published, as zero config reads a workspace package',

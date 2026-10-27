@@ -11,6 +11,7 @@ import {
   PackageFinder,
   packageImports,
   PACKAGE_FIELD,
+  type DeclarationProblem,
   type DesignSystemPackage,
   type DesignSystemPackageLookup,
   type DesignSystemSource,
@@ -31,7 +32,7 @@ import {
   slashGlob,
   toPosix,
 } from './util/paths.js';
-import { closest } from './util/strings.js';
+import { closest, json } from './util/strings.js';
 
 export const RULE_IDS = [
   'no-hardcoded-color',
@@ -461,14 +462,15 @@ export async function loadConfigWith(
     } else {
       // The project's own config still works on its own; the package's team can fix theirs.
       warnings.push(
-        `${lookup.problems.map((p) => `${p.name}: ${p.problem}`).join('\n')}\nSo ${configFile} is read alone, without the config a design-system package declares. Fix the "${PACKAGE_FIELD}" field in that package, or set "extends": false in ${path.basename(configFile)}.`,
+        `${problemLines(lookup.problems)}\nSo ${configFile} is read alone, without the config a design-system package declares. Fix the "${PACKAGE_FIELD}" field in that package, or set "extends": false in ${path.basename(configFile)}.`,
       );
     }
   }
   // Installed packages whose declaration cannot be read: the project is read as if they had none.
   for (const { name, problem } of lookup?.skipped ?? []) {
+    const quoted = json(name);
     warnings.push(
-      `${name}'s onsystem config was skipped: ${problem} ${name} is installed in node_modules, so this project is read as if it declared none.`,
+      `The onsystem config of ${quoted} was skipped: ${problem} ${quoted} is installed in node_modules, so this project is read as if it declared none.`,
     );
   }
   const pkg: ParsedConfig | undefined = declared
@@ -710,10 +712,19 @@ function ownDeclaredConfig(dir: string): string | undefined {
   return declared?.file;
 }
 
+/**
+ * Each declaration that cannot be read, on a line of its own. The package's name is the
+ * repository's text (any string can name a dependency in package.json), so it is JSON-quoted:
+ * a line break or a sentence in it stays inside the quotes, on that line.
+ */
+function problemLines(problems: readonly DeclarationProblem[]): string {
+  return problems.map((p) => `${json(p.name)}: ${p.problem}`).join('\n');
+}
+
 /** The error for workspace packages whose declaration cannot be read: their team can fix them. */
 function declarationError(lookup: DesignSystemPackageLookup, dir: string): ConfigError {
   return new ConfigError(
-    `${lookup.problems.map((p) => `${JSON.stringify(p.name)}: ${p.problem}`).join('\n')}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
+    `${problemLines(lookup.problems)}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
   );
 }
 

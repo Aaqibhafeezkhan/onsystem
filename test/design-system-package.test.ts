@@ -446,8 +446,8 @@ describe('a config a design-system package declares', () => {
     expect(config.designSystemPackage).toBeUndefined();
     expect(config.components).toEqual(DEFAULT_COMPONENTS);
     expect(config.warnings).toEqual([
-      `@acme/kit's onsystem config was skipped: "onsystem" in ${path.join(root, 'node_modules/@acme/kit/package.json')} names "./onsystem.config.json", which does not exist. @acme/kit is installed in node_modules, so this project is read as if it declared none.`,
-      `left-pad's onsystem config was skipped: "onsystem" in ${path.join(root, 'node_modules/left-pad/package.json')} is {"other":"use"}: it names a JSON config file in the package, such as "./onsystem.config.json". left-pad is installed in node_modules, so this project is read as if it declared none.`,
+      `The onsystem config of "@acme/kit" was skipped: "onsystem" in ${path.join(root, 'node_modules/@acme/kit/package.json')} names "./onsystem.config.json", which does not exist. "@acme/kit" is installed in node_modules, so this project is read as if it declared none.`,
+      `The onsystem config of "left-pad" was skipped: "onsystem" in ${path.join(root, 'node_modules/left-pad/package.json')} is {"other":"use"}: it names a JSON config file in the package, such as "./onsystem.config.json". "left-pad" is installed in node_modules, so this project is read as if it declared none.`,
     ]);
 
     // check says each once, and checks the app as zero config does.

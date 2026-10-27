@@ -23,17 +23,16 @@ import { uncheckedNotice } from '../lint/index.js';
 import { notReadNotices } from '../not-read.js';
 import { descriptionOf, type SearchHit } from '../search/index.js';
 import { TOKEN_CATEGORIES, type ComponentInfo } from '../types.js';
-import { isInside, relativePath, SCRIPT_FILE } from '../util/paths.js';
+import { isInside, pathOf, relativePath, SCRIPT_FILE } from '../util/paths.js';
+import { json } from '../util/strings.js';
 import { NAME, VERSION } from '../version.js';
 import {
   answer,
   type Answer,
   capDiagnostics,
   importStatement,
-  json,
   listComponents,
   noComponentsMessage,
-  pathOf,
   type Listing,
   renderAmbiguous,
   renderCatalogList,
