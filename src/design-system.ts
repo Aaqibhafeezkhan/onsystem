@@ -913,16 +913,17 @@ export class DesignSystemHost {
   }
 
   /**
-   * Watches the config file, the tsconfig and the tsconfigs it extends through
-   * their directories: editors save by renaming a new file over the old one,
-   * which ends a watch on the file. Called again after each build, so a new
-   * `extends` target is picked up.
+   * Watches the config file, the config a design-system package declares, which a project with
+   * a config of its own reads under that one, the tsconfig and the tsconfigs it extends through
+   * their directories: editors save by renaming a new file over the old one, which ends a watch
+   * on the file. Called again after each build, so a new `extends` target is picked up.
    */
   private watchConfigFiles(): void {
     const { root, configFile, tsconfig, designSystemPackage } = this.config;
     const files = [
       configFile,
-      // The design-system package's package.json, which names its config.
+      // The design-system package's config, and its package.json, which names it.
+      designSystemPackage?.config,
       designSystemPackage && path.join(designSystemPackage.dir, 'package.json'),
       // Zero-config detection reads these; a change re-runs it.
       ...DETECTION_FILES.map((f) => path.join(root, f)),
@@ -1010,10 +1011,15 @@ export class DesignSystemHost {
   /** Re-reads the config, re-watches what it points at and rebuilds. */
   private async reloadConfig(): Promise<void> {
     const { root, configFile, designSystemPackage, warnings } = this.config;
-    // A design-system package's config is found again from the project, so it is rebased again.
+    // A design-system package's config is found again from the project, so it is rebased again;
+    // a config of the project's own is read again, over it.
     const load =
       this.options.loadConfig ??
-      (() => loadConfig({ root, config: designSystemPackage ? undefined : configFile }));
+      (() =>
+        loadConfig({
+          root,
+          config: configFile === designSystemPackage?.config ? undefined : configFile,
+        }));
     try {
       this.config = await load();
     } catch (error) {
