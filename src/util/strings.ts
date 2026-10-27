@@ -74,6 +74,17 @@ export function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
+/**
+ * `text` as a JSON string, with U+0085, U+2028 and U+2029 escaped too, so it stays on one line
+ * (JSON escapes the other line breaks).
+ */
+export function json(text: string): string {
+  return JSON.stringify(text).replace(
+    /[\u0085\u2028\u2029]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
 export function plural(count: number, word: string, pluralWord = `${word}s`): string {
   return `${count} ${count === 1 ? word : pluralWord}`;
 }

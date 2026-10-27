@@ -187,7 +187,7 @@ describe('init in a design-system package tells its team what installed apps get
       `${sibling}/package.json`,
     );
     expect((await loadConfig({ root: app })).warnings).toContain(
-      "@acme/ui's onsystem config names paths outside the package, which were ignored: tokens ../tailwind-config/theme.css.",
+      'The onsystem config of "@acme/ui" names paths outside the package, which were ignored: tokens "../tailwind-config/theme.css".',
     );
     expect((await run(['check', '.', '--no-cache'], app)).stdout).toContain(
       'No color tokens found: no-hardcoded-color did not run.',

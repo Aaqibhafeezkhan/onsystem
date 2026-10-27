@@ -11,6 +11,7 @@ import {
   PackageFinder,
   packageImports,
   PACKAGE_FIELD,
+  type DeclarationProblem,
   type DesignSystemPackage,
   type DesignSystemPackageLookup,
   type DesignSystemSource,
@@ -31,7 +32,7 @@ import {
   slashGlob,
   toPosix,
 } from './util/paths.js';
-import { closest } from './util/strings.js';
+import { closest, json } from './util/strings.js';
 
 export const RULE_IDS = [
   'no-hardcoded-color',
@@ -56,7 +57,7 @@ function unknownKeys(what: string, known: readonly string[]) {
     return issue.keys
       .map((key) => {
         const guess = closest(key, known, 0.5);
-        return `Unknown ${what} "${key}". ${guess ? `Did you mean "${guess}"?` : `Expected one of: ${known.join(', ')}.`}`;
+        return `Unknown ${what} ${JSON.stringify(key)}. ${guess ? `Did you mean "${guess}"?` : `Expected one of: ${known.join(', ')}.`}`;
       })
       .join('\n');
   };
@@ -81,7 +82,7 @@ const ruleSettingSchema = z.union(
       if (typeof issue.input !== 'string') return undefined;
       const input = issue.input;
       const guess = SEVERITIES.find((s) => input && (s.startsWith(input) || input.startsWith(s)));
-      return `Invalid severity "${input}": use "off", "warn" or "error"${guess ? ` (did you mean "${guess}"?)` : ''}.`;
+      return `Invalid severity ${JSON.stringify(input)}: use "off", "warn" or "error"${guess ? ` (did you mean "${guess}"?)` : ''}.`;
     },
   },
 );
@@ -122,7 +123,7 @@ const librariesSchema = z.union([z.literal(false), z.array(z.enum(LIBRARY_IDS))]
       : undefined;
     if (typeof unknown === 'string') {
       const guess = closest(unknown, LIBRARY_IDS, 0.5);
-      return `Unknown library "${unknown}". ${guess ? `Did you mean "${guess}"?` : `Expected one of: ${LIBRARY_IDS.join(', ')}.`}`;
+      return `Unknown library ${JSON.stringify(unknown)}. ${guess ? `Did you mean "${guess}"?` : `Expected one of: ${LIBRARY_IDS.join(', ')}.`}`;
     }
     return `"libraries" is false, to read no library, or a list of the ones to read: ${JSON.stringify(LIBRARY_IDS)}.`;
   },
@@ -461,14 +462,15 @@ export async function loadConfigWith(
     } else {
       // The project's own config still works on its own; the package's team can fix theirs.
       warnings.push(
-        `${lookup.problems.map((p) => `${p.name}: ${p.problem}`).join('\n')}\nSo ${configFile} is read alone, without the config a design-system package declares. Fix the "${PACKAGE_FIELD}" field in that package, or set "extends": false in ${path.basename(configFile)}.`,
+        `${problemLines(lookup.problems)}\nSo ${configFile} is read alone, without the config a design-system package declares. Fix the "${PACKAGE_FIELD}" field in that package, or set "extends": false in ${path.basename(configFile)}.`,
       );
     }
   }
   // Installed packages whose declaration cannot be read: the project is read as if they had none.
   for (const { name, problem } of lookup?.skipped ?? []) {
+    const quoted = json(name);
     warnings.push(
-      `${name}'s onsystem config was skipped: ${problem} ${name} is installed in node_modules, so this project is read as if it declared none.`,
+      `The onsystem config of ${quoted} was skipped: ${problem} ${quoted} is installed in node_modules, so this project is read as if it declared none.`,
     );
   }
   const pkg: ParsedConfig | undefined = declared
@@ -497,11 +499,12 @@ export async function loadConfigWith(
   const excludeFromPackage = (e: string) => (e.startsWith('**/') ? e : fromPackage(e));
   // A dependency's config reads only within its package when installed, or its workspace: a
   // path that leaves it is ignored, so a published package cannot have its apps read files
-  // elsewhere on the machine.
+  // elsewhere on the machine. The warning JSON-quotes the package's name and each path, which
+  // are its text: a line break in one stays inside the quotes, on that line.
   const outside: string[] = [];
   const within = (field: string) => (p: string) => {
     if (!declared || staysIn(declared.dir, declared.boundary, slashGlob(p))) return true;
-    outside.push(`${field} ${p}`);
+    outside.push(`${field} ${json(p)}`);
     return false;
   };
   const pathOf = (t: TokenSource) => (typeof t === 'string' ? t : t.path);
@@ -523,7 +526,7 @@ export async function loadConfigWith(
     pkg?.docs === undefined ? undefined : toArray(pkg.docs).filter(within('docs')).map(fromPackage);
   if (declared && outside.length) {
     warnings.push(
-      `${declared.name}'s onsystem config names paths outside ${declared.installed ? 'the package' : 'the workspace'}, which were ignored: ${outside.join(', ')}.`,
+      `The onsystem config of ${json(declared.name)} names paths outside ${declared.installed ? 'the package' : 'the workspace'}, which were ignored: ${outside.join(', ')}.`,
     );
   }
   // The design system's components, and what goes with them (importPath, docs, elements, tokens,
@@ -710,10 +713,19 @@ function ownDeclaredConfig(dir: string): string | undefined {
   return declared?.file;
 }
 
+/**
+ * Each declaration that cannot be read, on a line of its own. The package's name is the
+ * repository's text (any string can name a dependency in package.json), so it is JSON-quoted:
+ * a line break or a sentence in it stays inside the quotes, on that line.
+ */
+function problemLines(problems: readonly DeclarationProblem[]): string {
+  return problems.map((p) => `${json(p.name)}: ${p.problem}`).join('\n');
+}
+
 /** The error for workspace packages whose declaration cannot be read: their team can fix them. */
 function declarationError(lookup: DesignSystemPackageLookup, dir: string): ConfigError {
   return new ConfigError(
-    `${lookup.problems.map((p) => `${p.name}: ${p.problem}`).join('\n')}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
+    `${problemLines(lookup.problems)}\nFix the "${PACKAGE_FIELD}" field in that package, or give ${dir} a config of its own (onsystem.config.json), which is read instead.`,
   );
 }
 

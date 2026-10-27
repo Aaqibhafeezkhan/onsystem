@@ -364,7 +364,7 @@ describe('a home folder that looks like a workspace or a repository', () => {
     expect(ds.components.map((c) => c.name)).toEqual(['Credentials']);
     expect(ds.model.stats.files.docs).toBe(0);
     expect((ds.config.warnings ?? []).join('\n')).toContain(
-      "evil-ds's onsystem config names paths outside the workspace, which were ignored: docs ../../../../.aws/credentials.",
+      'The onsystem config of "evil-ds" names paths outside the workspace, which were ignored: docs "../../../../.aws/credentials".',
     );
     const client = await connect(ds);
     try {

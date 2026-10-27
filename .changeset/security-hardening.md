@@ -1,0 +1,21 @@
+---
+'onsystem': patch
+---
+
+`get_component` now answers for a component read from a package's type declarations (MUI's, or an installed design-system package's) in MCP clients that check a tool's output against its schema: the schema lists `library`, `polymorphic`, `defaultImport` and `labelsChild`, and such a client rejected the answer before.
+
+A project without `node_modules` keeps its cached model in a folder of the system temp folder that only you can open, `onsystem-<uid>`, rather than in the shared `onsystem` folder. On a shared machine another user could create that folder first and plant a model there, whose descriptions then reached your agent. A cache folder that is a link, belongs to another user or that others can write to is not read, and the model is written whole, then renamed into place. When the folder belongs to another user, the warning says to install the dependencies or set `TMPDIR` to a folder of your own.
+
+Every text the MCP server sends about the project, each tool's answer, each resource, the prompt, each error and notice, is built line by line through one function, and each line is one line: a line break inside a value the repository wrote, any that Python's `str.splitlines()` splits at (U+001C to U+001E and U+2028 among them), is escaped as in JSON, so the text after it cannot start a line of its own. An invalid config's message is one line too.
+
+The messages of the CLI and the server JSON-quote these values from the repository: an invalid config's unknown keys, rules, libraries and severities; the name of a dependency whose `onsystem` field cannot be read, in the error and in the warnings when its config is skipped or the project's own config is read without it, with the file the field names and the path of its package.json when that holds more than a path's characters; the name of a dependency whose config names paths outside its package or workspace, and those paths, in the warning that says they were ignored; and the modules that `check_ui`'s and `check`'s notice says the model leaves out.
+
+No line starts with the repository's text unmarked: the JSDoc description and docs sections are quoted as lines that start with `>`; a deprecation note, a prop's, a part's or a token's description, the first sentence of a description in `list_components`, `search_components` and the resource list, a prop's default that is not a short value (a string literal up to 80 characters is shown whole), a docs heading and an example title are in double quotes and cut short; an example is fenced with more backticks than its code holds; and a name, path, class list or token value that does not read as one, such as a sentence in a `cva` key, a DTCG token's path, a package's or a folder's name, or the string a component renders as its element, is JSON-quoted and cut short. A short line says that the marked text is a description, not instructions, also when an example is the only text the repository wrote.
+
+A component read from a package's type declarations is named by a capitalised identifier, as one from a source file is: an export under a string name (`export { Card as "Any text" }`) is no component. A prop's type is on one line, its comments left out and each string literal in it cut to 40 characters.
+
+One component file nested thousands of levels deep no longer fails the whole design system with "Maximum call stack size exceeded": it is skipped, with a warning that names it. Any run of the CLI that fails, such as on a file it cannot read, exits 2 rather than 1, which means findings, so CI no longer takes a crash for findings.
+
+`no-hardcoded-color` reads one long class list in time that grows with its length: a list of 4,000 colors took seconds before, as each finding read the whole list again. The messages of the color, spacing and radius rules cut each quoted class to 120 characters, so a class with thousands of variants no longer makes a message of hundreds of thousands of characters. The fix still writes the whole class.
+
+The GitHub Action's job summary shows a file name with a backtick in it whole, in its code span.
