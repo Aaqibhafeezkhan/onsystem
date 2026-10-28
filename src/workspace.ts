@@ -3,11 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-  CONFIG_FILES,
   hasOwnConfig,
-  LEGACY_CONFIG_FILES,
   loadConfig,
   loadConfigWith,
+  PROJECT_MARKERS,
   type LoadConfigOptions,
   type ResolvedConfig,
 } from './config.js';
@@ -21,19 +20,8 @@ import {
 } from './detect.js';
 import { isInside, relativePath } from './util/paths.js';
 
-/**
- * What marks the folder a file belongs to: the nearest one at or above it with a config,
- * a components.json, a package.json or an Nx project.json. The Claude Code hook finds a
- * file's project the same way, so `check` from a workspace root and the hook agree on
- * every file.
- */
-export const PROJECT_MARKERS = [
-  ...CONFIG_FILES,
-  ...LEGACY_CONFIG_FILES,
-  'components.json',
-  'package.json',
-  'project.json',
-];
+// The list lives in config.ts, so that design-system.ts, which this module imports, reads it too.
+export { PROJECT_MARKERS };
 
 /** One folder of a workspace, with the config `check` would use when run from it. */
 export interface Project {
@@ -104,6 +92,20 @@ export class Workspace {
       this.bare.set(dir, project);
     }
     return project;
+  }
+
+  /** The workspace without the projects at `roots`. */
+  without(roots: readonly string[]): Workspace {
+    return new Workspace(
+      this.root,
+      this.source,
+      this.projects.filter((p) => !roots.includes(p.root)),
+      this.others,
+      this.configFile,
+      this.options,
+      this.rootConfig,
+      this.otherConfigs,
+    );
   }
 
   private rootProject(): Project {
@@ -215,6 +217,7 @@ function loadProjectConfig(
     cwd: options.cwd,
     includeDesignSystem: options.includeDesignSystem,
     jsonConfigOnly: options.jsonConfigOnly,
+    jsonConfigWithin: options.jsonConfigWithin,
   };
   // One finder and one look through the dependencies, shared with the load.
   const packages = new PackageFinder(dir);

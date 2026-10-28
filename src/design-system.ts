@@ -7,7 +7,13 @@ import path from 'node:path';
 import { glob } from 'tinyglobby';
 import ts from 'typescript';
 
-import { loadConfig, rulesFor, type ResolvedConfig, type TokenSourceConfig } from './config.js';
+import {
+  loadConfig,
+  PROJECT_MARKERS,
+  rulesFor,
+  type ResolvedConfig,
+  type TokenSourceConfig,
+} from './config.js';
 import {
   presetResolver,
   registryFolders,
@@ -443,12 +449,14 @@ function outsideWarning(root: string, files: readonly string[]): string {
 /**
  * Absolute paths matching `patterns` under the root. `node_modules` is skipped
  * even when `exclude` replaces the defaults, except by patterns that name it
- * (tokens published as a package). Files that lead outside the project are left out.
+ * (tokens published as a package). Files that lead outside the project are left out. Those that
+ * `skip` accepts are left out before that check, so they are not named as leading outside.
  */
 async function find(
   config: ResolvedConfig,
   patterns: string[],
   contain = new Containment(config),
+  skip: (file: string) => boolean = () => false,
 ): Promise<string[]> {
   const options = { cwd: config.root, absolute: true, dot: false };
   // A design-system package's own excludes, when an app's `exclude` adds the defaults to them.
@@ -485,7 +493,7 @@ async function find(
       });
     }),
   ]);
-  return (await contain.filter(unique(found.flat()))).sort();
+  return (await contain.filter(unique(found.flat()).filter((file) => !skip(file)))).sort();
 }
 
 /** The design system's own component files, as absolute paths. */
@@ -511,9 +519,16 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
     seen.add(real);
     return true;
   };
+  // Zero config in a folder that is no project but holds some (a folder of repositories): a token
+  // file in one of them is that project's, so `**/*.tokens.json` leaves it out, without naming it
+  // in the log when it leads outside.
+  const others =
+    config.tokensDetected && !config.configFile && !holdsProject(config.root)
+      ? (file: string) => inProjectBelow(config.root, file)
+      : () => false;
   const add = async (sources: TokenSourceConfig[]) => {
     for (const source of sources) {
-      for (const file of await find(config, [source.path], contain)) {
+      for (const file of await find(config, [source.path], contain, others)) {
         if (await isNew(file)) tokens.push({ file, prefix: source.prefix });
       }
     }
@@ -528,6 +543,19 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
   // A DESIGN.md stands in only when no stylesheet or DTCG file was found.
   if (!tokens.length) await add(config.tokens.filter((t) => t.fallback));
   return { components, tokens, docs, outside: [...contain.outside] };
+}
+
+function holdsProject(dir: string): boolean {
+  return PROJECT_MARKERS.some((name) => fs.existsSync(path.join(dir, name)));
+}
+
+/** Whether a folder between `root` and `file` (in it) holds a project. */
+function inProjectBelow(root: string, file: string): boolean {
+  for (let dir = path.dirname(path.resolve(file)); isInside(root, dir); dir = path.dirname(dir)) {
+    if (path.relative(root, dir) === '') return false;
+    if (holdsProject(dir)) return true;
+  }
+  return false;
 }
 
 /**
@@ -865,7 +893,7 @@ export class DesignSystemHost {
   ) {}
 
   get(): Promise<DesignSystem> {
-    this.current ??= this.build(false);
+    this.current ??= this.kept(this.build(false));
     return this.current;
   }
 
@@ -873,12 +901,25 @@ export class DesignSystemHost {
     const next = this.build(true);
     // Keep serving the previous model if the rebuild fails.
     const previous = this.current;
-    this.current = next.catch(async (error: unknown) => {
-      (this.options.logger ?? silentLogger).error(`reload failed: ${(error as Error).message}`);
-      if (previous) return previous;
-      throw error;
-    });
+    this.current = this.kept(
+      next.catch(async (error: unknown) => {
+        (this.options.logger ?? silentLogger).error(`reload failed: ${(error as Error).message}`);
+        if (previous) return previous;
+        throw error;
+      }),
+    );
     return this.current;
+  }
+
+  /**
+   * `build`, dropped if it fails with no earlier model to serve instead (a first build that
+   * fails), so the next `get()` builds again.
+   */
+  private kept(build: Promise<DesignSystem>): Promise<DesignSystem> {
+    build.catch(() => {
+      if (this.current === build) this.current = undefined;
+    });
+    return build;
   }
 
   onChange(listener: (ds: DesignSystem) => void): () => void {
