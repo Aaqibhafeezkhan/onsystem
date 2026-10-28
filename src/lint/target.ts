@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ResolvedConfig } from '../config.js';
@@ -131,6 +132,8 @@ export class LintTarget {
   private readonly sources?: Set<string>;
   /** Published libraries the model read from type declarations: `@mui/material`. */
   readonly libraries: Set<string>;
+  /** The packages whose `exports` were read, by package.json: undefined where there is none. */
+  private readonly manifests = new Map<string, { name: string; keys: string[] } | undefined>();
 
   /**
    * `resolver` finds the module an import points at and what it exports
@@ -141,7 +144,7 @@ export class LintTarget {
   constructor(
     readonly model: DesignSystemModel,
     readonly config: Pick<ResolvedConfig, 'elements' | 'importPath'> &
-      Partial<Pick<ResolvedConfig, 'designSystems'>>,
+      Partial<Pick<ResolvedConfig, 'designSystems' | 'imports'>>,
     private readonly resolver?: Pick<ModuleResolver, 'locate' | 'exportsOf'>,
   ) {
     // With several design systems, the most imported one's components win a shared name:
@@ -260,16 +263,61 @@ export class LintTarget {
    * model left out rather than an invented one: its module exists outside the
    * folders extraction read and exports `name`, or re-exports from such a
    * module (an excluded `icons/` folder, a barrel's `export * from "./icons"`).
-   * A module declared in a package's `exports` but not on disk counts too,
-   * except the design system's own import path.
+   * A module declared in a package's `exports` but not on disk counts too (built to `dist/`,
+   * not built yet), except the design system's own import path, and one the exports map onto
+   * a source file: `@acme/ui/components/tooltip` is `src/components/tooltip.tsx` through
+   * `"./components/*": "./src/components/*.tsx"`, and with no such file it does not exist.
    */
   outsideModel(specifier: string, name: string, fromFile = 'snippet.tsx'): boolean {
     const location = this.resolver?.locate(specifier, fromFile);
     if (!location) return false;
-    if (!location.file) {
-      return !this.importPaths.has(specifier) && specifier !== this.config.importPath;
+    if (location.file) return this.mayExport(location.file, name, 0);
+    if (this.importPaths.has(specifier) || specifier === this.config.importPath) return false;
+    const source = this.exportedSource(specifier);
+    return source === undefined || this.mayExport(source, name, 0);
+  }
+
+  /**
+   * The source file a package's `exports` map `specifier` onto, relative to the root, whether
+   * it exists or not: through its subpath, else the pattern with the longest prefix, as Node.js
+   * picks them. Undefined when they map it onto anything else (`dist/`), or not at all.
+   */
+  private exportedSource(specifier: string): string | undefined {
+    const imports = this.config.imports ?? [];
+    // A barrel's export stands for each file it re-exports, which is no one module.
+    if (imports.filter((m) => m.specifier === specifier).length > 1) return undefined;
+    let found: { specifier: string; target: string; length: number } | undefined;
+    for (const mapping of imports) {
+      const length = matchLength(mapping.specifier, specifier);
+      if (length === undefined || (found && found.length >= length)) continue;
+      const star = mapping.specifier.indexOf('*');
+      const match = specifier.slice(star, specifier.length - (mapping.specifier.length - star - 1));
+      const target = star === -1 ? mapping.target : mapping.target.replaceAll('*', match);
+      found = { specifier: mapping.specifier, target, length };
     }
-    return this.mayExport(location.file, name, 0);
+    if (!found || !isSourceFile(found.target)) return undefined;
+    // `imports` holds the exports that lead to component files: another one may come first
+    // (`"./components/icons": "./dist/icons.js"` before `"./components/*"`).
+    const { length } = found;
+    const keys = this.exportKeys(path.resolve(this.model.root, found.target), specifier);
+    const first = keys?.every(
+      (key) => key === found.specifier || (matchLength(key, specifier) ?? -1) < length,
+    );
+    return first ? found.target : undefined;
+  }
+
+  /**
+   * The `exports` keys of the package `file` is in, as specifiers (`@acme/ui/components/*`),
+   * when it is the package `specifier` imports from. Each package.json is read once.
+   */
+  private exportKeys(file: string, specifier: string): string[] | undefined {
+    for (let dir = path.dirname(file); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+      const manifest = path.join(dir, 'package.json');
+      if (!this.manifests.has(manifest)) this.manifests.set(manifest, readExportKeys(manifest));
+      const pkg = this.manifests.get(manifest);
+      if (pkg) return pkg.name === packageOf(specifier) ? pkg.keys : undefined;
+    }
+    return undefined;
   }
 
   /**
@@ -508,6 +556,57 @@ function isPackageName(specifier: string): boolean {
   return specifier.startsWith('@')
     ? /^@[^/]+\/[^/]+$/.test(specifier)
     : /^[a-z0-9][^/]*$/i.test(specifier);
+}
+
+/**
+ * How closely an export key, written as a specifier (`@acme/ui/components/*`), matches
+ * `specifier`: the length before its `*`, or Infinity when it is the specifier itself.
+ * Undefined when it does not match.
+ */
+function matchLength(key: string, specifier: string): number | undefined {
+  const star = key.indexOf('*');
+  if (star === -1) return key === specifier ? Infinity : undefined;
+  return specifier.length >= key.length &&
+    specifier.startsWith(key.slice(0, star)) &&
+    specifier.endsWith(key.slice(star + 1))
+    ? star
+    : undefined;
+}
+
+/** A package.json's name and `exports` keys, as specifiers; undefined when there is none. */
+function readExportKeys(manifest: string): { name: string; keys: string[] } | undefined {
+  let pkg: unknown;
+  try {
+    pkg = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+  } catch {
+    return undefined;
+  }
+  const { name, exports } = (pkg ?? {}) as { name?: unknown; exports?: unknown };
+  if (typeof name !== 'string') return { name: '', keys: [] };
+  const keys = exports && typeof exports === 'object' ? Object.keys(exports) : [];
+  return {
+    name,
+    keys: keys.filter((key) => key.startsWith('.')).map((key) => `${name}${key.slice(1)}`),
+  };
+}
+
+/** The package an import specifier names: `@acme/ui` for `@acme/ui/components/button`. */
+function packageOf(specifier: string): string {
+  return specifier
+    .split('/')
+    .slice(0, specifier.startsWith('@') ? 2 : 1)
+    .join('/');
+}
+
+/**
+ * A TypeScript or JSX source file, not a declaration file or compiled JSX in a build folder: a
+ * pattern target such as `src/components/*.tsx` (a barrel's, which maps every file onto one
+ * specifier, keeps its `*`) is none.
+ */
+function isSourceFile(file: string): boolean {
+  if (file.includes('*') || /\.d\.[cm]?ts$/.test(file)) return false;
+  if (/\.[cm]?tsx?$/.test(file)) return true;
+  return /\.jsx$/.test(file) && !/(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(file);
 }
 
 function stripExtension(file: string): string {

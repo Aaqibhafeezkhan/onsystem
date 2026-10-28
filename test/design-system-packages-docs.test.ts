@@ -330,6 +330,7 @@ describe('what apps get from a design-system package (docs/design-system-package
     const pkg = await initialised();
     const withTypes = without(published(pkg), (file) => file.startsWith('src/'));
     expect(Object.keys(withTypes).sort()).toEqual([
+      'ONSYSTEM.md',
       'dist/index.d.ts',
       'dist/index.mjs',
       'onsystem.config.json',
@@ -360,8 +361,13 @@ describe('what apps get from a design-system package (docs/design-system-package
       '`no-unknown-component`, `no-unknown-prop` and `no-unknown-variant` check none of the components the app imports from the package',
     );
     expect(whatAppsGet).toContain(`\`check\` says \`${notice}\`\n`);
-    // Agents find no component.
-    expect(await tool(app, 'list_components', {})).toMatch(/^No design-system components found/);
+    // Agents find no component, and list_components says why.
+    const why =
+      '@acme/ui publishes neither its component sources nor their type declarations, so its components are unknown here and the component rules did not run: ask its team to add its sources to "files" in its package.json, or to publish type declarations.';
+    expect(await tool(app, 'list_components', {})).toContain(why);
+    expect(whatAppsGet).toContain(
+      `**\`list_components\` and \`inspect --explain\` say why:** \`${why}\``,
+    );
     expect(await tool(app, 'search_components', { query: 'button' })).toMatch(
       /^No components match/,
     );
@@ -851,10 +857,16 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
           tokens: config.tokens.map((file) => `${prefix}/${file}`),
           rules: { 'no-hardcoded-color': 'warn' },
         });
-      // No config of its own: the package's config, imports by subpath.
+      // No config of its own: the package's config, imports by subpath. Its exports map
+      // `@acme/ui/components/badge` onto a file there is none of.
       const declared = await check(app(pkg, page));
       expect(declared.rules).toContain('no-unknown-prop');
       expect(declared.rules).toContain('no-unknown-variant');
+      expect(
+        declared.findings.filter((d) => d.ruleId === 'no-unknown-component').map((d) => d.message),
+      ).toEqual([
+        '"Badge" is not a design-system component (imported from "@acme/ui/components/badge"). Use search_components to find an existing one.',
+      ]);
       expect(iconLines(declared.findings)).toEqual([NATIVE_BUTTON_LINE, NATIVE_BUTTON_LINE + 1]);
       expect(inputImport(declared.findings)).toBe('@acme/ui/components/input');
       // A config of its own that builds on the package's: the same, imports by subpath.
@@ -869,10 +881,21 @@ describe("an app's own config (docs/design-system-packages.md#an-apps-own-config
       }
       expect(iconLines(bare.findings)).toEqual([NATIVE_BUTTON_LINE + 1]);
       expect(bare.stderr).toBe('');
-      // With the package's name as importPath: the same rules as the package's config.
+      // With the package's name as importPath: the same rules as the package's config. In the
+      // workspace, whose exports declare the subpath, this config does not read them: the
+      // invented <Badge> is said to be unchecked there.
       const named = app(pkg, { ...page, 'onsystem.config.json': copied('@acme/ui') });
       const withName = await check(named);
-      expect(withName.rules).toEqual(declared.rules);
+      if (app === installedApp) {
+        expect(withName.rules).toEqual(declared.rules);
+      } else {
+        expect(withName.rules).toEqual(
+          new Set([...declared.rules].filter((rule) => rule !== 'no-unknown-component')),
+        );
+        expect(withName.stderr).toContain(
+          '<Badge> comes from "@acme/ui/components/badge", which the design-system model does not include, so it was not checked',
+        );
+      }
       expect(iconLines(withName.findings)).toEqual([NATIVE_BUTTON_LINE, NATIVE_BUTTON_LINE + 1]);
       expect(inputImport(withName.findings)).toBe('@acme/ui');
       expect(await tool(named, 'get_component', { name: 'Button' })).toContain(

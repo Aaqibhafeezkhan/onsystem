@@ -495,7 +495,8 @@ function readManifest(root: string): Manifest | undefined {
 /**
  * Declares the config in the package's package.json, `"onsystem": "./onsystem.config.json"`,
  * and adds it to `files` when the package lists the files it publishes, so apps that install it
- * get it too. Writes ONSYSTEM.md for the apps' teams unless one exists. Returns what it wrote.
+ * get it too. Writes ONSYSTEM.md for the apps' teams unless one exists, and adds it to `files`
+ * as well, for the teams of apps that install the package. Returns what it wrote.
  */
 function declarePackage(
   root: string,
@@ -513,9 +514,11 @@ function declarePackage(
     changed = true;
   }
   const files = Array.isArray(json.files) ? (json.files as unknown[]) : undefined;
-  if (files && !ships(files, CONFIG_FILE)) {
-    files.push(CONFIG_FILE);
-    changed = true;
+  for (const file of [CONFIG_FILE, GUIDE_FILE]) {
+    if (files && !ships(files, file)) {
+      files.push(file);
+      changed = true;
+    }
   }
   if (changed) {
     fs.writeFileSync(
@@ -525,7 +528,7 @@ function declarePackage(
     written.push('package.json');
   }
   notes.push(
-    `This is a design-system package: package.json declares its config ("${PACKAGE_FIELD}": "${value}"${files ? ', also added to "files"' : ''}), which every app that depends on ${name} reads, under its own config when it has one.`,
+    `This is a design-system package: package.json declares its config ("${PACKAGE_FIELD}": "${value}"${files ? `, also added to "files" with ${GUIDE_FILE}` : ''}), which every app that depends on ${name} reads, under its own config when it has one.`,
   );
   const guide = path.join(root, GUIDE_FILE);
   if (force || !fs.existsSync(guide)) {

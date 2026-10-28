@@ -102,7 +102,7 @@ describe('init in a design-system package', () => {
     const init = await run(['init', '--yes', '--no-cache'], kit);
     expect(init.code).toBe(0);
     expect(init.stdout).toContain(
-      'This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json", also added to "files"), which every app that depends on @acme/kit reads, under its own config when it has one.',
+      'This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json", also added to "files" with ONSYSTEM.md), which every app that depends on @acme/kit reads, under its own config when it has one.',
     );
     expect(init.stdout).toContain(
       'Apps that install @acme/kit from a registry get only what "files" in package.json publishes, which leaves out src/ (3 component files and 1 token file)',
@@ -113,7 +113,7 @@ describe('init in a design-system package', () => {
     );
     const manifest = read(path.join(kit, 'package.json'));
     expect(manifest.onsystem).toBe('./onsystem.config.json');
-    expect(manifest.files).toEqual(['dist/**', 'onsystem.config.json']);
+    expect(manifest.files).toEqual(['dist/**', 'onsystem.config.json', 'ONSYSTEM.md']);
     expect(read(path.join(kit, 'onsystem.config.json'))).toEqual({
       $schema: 'https://unpkg.com/onsystem/schema.json',
       components: ['src/button.tsx', 'src/card.tsx', 'src/input.tsx'],
@@ -179,7 +179,7 @@ describe('init in a design-system package', () => {
     expect(init.stdout).not.toContain('from a registry');
     expect(fs.readFileSync(path.join(kit, 'ONSYSTEM.md'), 'utf8')).toBe('Ours.\n');
     expect(fs.readFileSync(path.join(kit, 'package.json'), 'utf8')).toBe(
-      `{\n\t"name": "@acme/kit",\n\t"private": true,\n\t"files": [\n\t\t"dist",\n\t\t"src",\n\t\t"onsystem.config.json"\n\t],\n\t"exports": {\n\t\t".": "./dist/index.mjs"\n\t},\n\t"onsystem": "./onsystem.config.json"\n}`,
+      `{\n\t"name": "@acme/kit",\n\t"private": true,\n\t"files": [\n\t\t"dist",\n\t\t"src",\n\t\t"onsystem.config.json",\n\t\t"ONSYSTEM.md"\n\t],\n\t"exports": {\n\t\t".": "./dist/index.mjs"\n\t},\n\t"onsystem": "./onsystem.config.json"\n}`,
     );
   });
 
