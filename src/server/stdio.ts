@@ -35,6 +35,12 @@ export interface ServerHandle {
 
 type Served = { host: DesignSystemHost } | { projects: WorkspaceProjects };
 
+/** The folder of projects the server answers for, and where it really is, links resolved. */
+interface Folder {
+  dir: string;
+  real: string;
+}
+
 /** What answers a request: `target` is the `path` or `filename` it names, if any. */
 type Resolve = (target: string | undefined) => Promise<Served>;
 
@@ -57,11 +63,13 @@ type Resolve = (target: string | undefined) => Promise<Served>;
  * project marker, or the monorepo root above that, served as if the server had been
  * started there, except that a config there is read only when it is JSON: a prompt can
  * choose the path, so a JavaScript or TypeScript config is not run. Each root found is
- * loaded once and kept; a request without an absolute path is answered from the one root
- * found so far. The same holds for a `--root` (or a client's root) that is no project but
- * holds projects in its folders, such as a folder of repositories, except that only an
- * absolute path in that folder is answered, from the project in it that holds the file (never
+ * loaded once and kept, by its real path; a request without an absolute path is answered from
+ * the one root found so far. The same holds for a `--root` (or a client's root) that is no
+ * project but holds projects in its folders, such as a folder of repositories, except that only
+ * an absolute path in that folder is answered, from the project in it that holds the file (never
  * from a folder outside or above it), and a file in none of them from that folder, as before.
+ * Links are resolved: a path, or the project it leads to, that is really outside the folder is
+ * refused, and a workspace in it serves only its packages that are really in it.
  *
  * A load that fails, such as on an invalid config, is not kept: the next request loads
  * again, so fixing the config is enough, also when it was invalid at startup.
@@ -90,21 +98,33 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
    * The project at `root` (the working directory when undefined), or a monorepo root's
    * projects. `jsonConfigOnly` for a root found from a tool call's path: its configs, and those
    * of the projects in it, are read only when they are JSON, never run. `within`: the folder of
-   * projects it was found in, for the error on a config that is not JSON.
+   * projects it was found in, for the error on a config that is not JSON, and outside which no
+   * workspace package is served.
    */
   const load = async (
     root: string | undefined,
     jsonConfigOnly = false,
-    within?: string,
+    within?: Folder,
   ): Promise<Served> => {
     const configOptions = {
       ...options,
       root,
       jsonConfigOnly,
-      jsonConfigWithin: jsonConfigOnly ? within : undefined,
+      jsonConfigWithin: jsonConfigOnly ? within?.dir : undefined,
     };
     const target = await loadTarget(configOptions);
-    const { config, workspace } = target;
+    const { config } = target;
+    let { workspace } = target;
+    // A workspace can name packages anywhere (`../../outside`, or a link in it).
+    if (workspace && within) {
+      const outside = workspace.projects.filter((p) => !isInside(within.real, realPath(p.root)));
+      if (outside.length) {
+        logger.warn(
+          `${pathOf(workspace.root)} names workspace packages outside ${pathOf(within.dir)}, the folder the server answers for (links resolved), which it leaves out: ${outside.map((p) => pathOf(p.root)).join(', ')}. To include them, start the server with --root ${pathOf(workspace.root)}.`,
+        );
+        workspace = workspace.without(outside.map((p) => p.root));
+      }
+    }
     // Once per project, as it loads: a reload of the config does not repeat them.
     for (const text of config.deprecations ?? []) logger.warn(text);
     for (const text of (workspace ? workspace.warnings : config.warnings) ?? []) logger.warn(text);
@@ -142,19 +162,20 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
   };
 
   /**
-   * The roots loaded or loading, by folder. One that fails is logged and dropped, so the next
-   * request loads it again, and until then it is no project found.
+   * The roots loaded or loading, by `key` (the real path of `dir`, for a root found from a path).
+   * One that fails is logged and dropped, so the next request loads it again, and until then it
+   * is no project found.
    */
-  const found = new Map<string, Promise<Served>>();
-  const loadOnce = (dir: string, start: () => Promise<Served>): Promise<Served> => {
-    const known = found.get(dir);
-    if (known) return known;
+  const found = new Map<string, { dir: string; served: Promise<Served> }>();
+  const loadOnce = (key: string, dir: string, start: () => Promise<Served>): Promise<Served> => {
+    const known = found.get(key);
+    if (known) return known.served;
     const served = start();
-    found.set(dir, served);
+    found.set(key, { dir, served });
     // Errors surface through tool results; log them, and do not crash on an unobserved rejection.
     served.catch((error: unknown) => {
       logger.error((error as Error).message);
-      if (found.get(dir) === served) found.delete(dir);
+      if (found.get(key)?.served === served) found.delete(key);
     });
     return served;
   };
@@ -165,7 +186,7 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
     if (started) return;
     started = true;
     const dir = path.resolve(options.cwd, root ?? '.');
-    const served = () => loadOnce(dir, () => load(root));
+    const served = () => loadOnce(dir, dir, () => load(root));
     // Loading from the start, so the first request does not wait for all of it.
     void served();
     decide(served);
@@ -174,12 +195,13 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
    * Each request's project, from the absolute path it names. `within`: a folder that is no
    * project but holds some (the `--root` or client root the server was started for), which
    * answers for a file in none of them. Then only a path in it is answered, from a project in
-   * it: never from a folder outside or above it, nor from a relative path, which the tools would
-   * read against whichever project answers.
+   * it: never from a folder outside or above it, links resolved, nor from a relative path, which
+   * the tools would read against whichever project answers.
    */
   const serveByPath = (within?: string) => {
     if (started) return;
     started = true;
+    const folder = within === undefined ? undefined : { dir: within, real: realPath(within) };
     const where = within
       ? `${pathOf(within)} holds no project of its own, only projects in its folders`
       : `${options.cwd} holds no project and the client reported no roots`;
@@ -208,15 +230,23 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
             `No project at or above ${pathOf(target)}: no folder from there up holds a package.json, components.json, project.json or onsystem config (the home folder and the filesystem root do not count). Pass the absolute path of a file in your project.`,
           );
         }
-        if (!found.has(dir)) logger.info(`using ${dir}, the project of ${target}`);
-        return loadOnce(dir, () => load(dir, dir !== within, within));
+        // Links resolved, and in the letter case on disk, so that paths that differ only in case
+        // (macOS, Windows) name one project.
+        const real = realPath(dir);
+        if (folder && !(isInside(folder.real, real) && isInside(folder.real, realPath(file)))) {
+          throw new ProjectNotFoundError(
+            `${pathOf(target)} leads outside ${pathOf(folder.dir)}, the folder the server answers for, through a link. Pass the absolute path of a file inside it, or start the server with --root <project folder>.`,
+          );
+        }
+        if (!found.has(real)) logger.info(`using ${dir}, the project of ${target}`);
+        return loadOnce(real, dir, () => load(dir, dir !== within, folder));
       }
       // Without a path: the project found so far, when there is just one.
       const [only, ...others] = found.values();
-      if (only && !others.length) return only;
+      if (only && !others.length) return only.served;
       throw new ProjectNotFoundError(
         only
-          ? `Requests have named files in ${found.size} projects (${[...found.keys()].map(pathOf).join(', ')}). Pass \`path\` (for check_ui with \`code\`, \`filename\`) as the absolute path of the file you are editing, so the answer comes from its project.`
+          ? `Requests have named files in ${found.size} projects (${[...found.values()].map((f) => pathOf(f.dir)).join(', ')}). Pass \`path\` (for check_ui with \`code\`, \`filename\`) as the absolute path of the file you are editing, so the answer comes from its project.`
           : within
             ? `onsystem cannot tell which project to answer for: ${pathOf(within)} holds no project of its own, only projects in its folders. ${askForPath}`
             : `onsystem cannot tell which project to answer for: it was started in ${options.cwd}, which holds no project, and the client reported no workspace roots. ${askForPath}`,
@@ -331,6 +361,25 @@ function holdsOnlyProjects(dir: string): boolean {
   };
   const below = folders(dir);
   return below.some(hasProjectMarker) || below.some((f) => folders(f).some(hasProjectMarker));
+}
+
+/**
+ * Where `p` really is: links resolved, in the letter case the file system keeps
+ * (`realpathSync.native`; plain `realpathSync` keeps the case given on macOS). A path that does
+ * not exist yet, such as the `filename` of new code, from the nearest folder above it that does.
+ */
+function realPath(p: string): string {
+  const rest: string[] = [];
+  for (let dir = path.resolve(p); ;) {
+    try {
+      return path.join(fs.realpathSync.native(dir), ...rest);
+    } catch {
+      const parent = path.dirname(dir);
+      if (parent === dir) return path.resolve(p);
+      rest.unshift(path.basename(dir));
+      dir = parent;
+    }
+  }
 }
 
 /** First `file://` root the client reports, if it supports roots (deprecated in 2026-07-28). */

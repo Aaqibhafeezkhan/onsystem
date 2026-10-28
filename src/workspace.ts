@@ -94,6 +94,20 @@ export class Workspace {
     return project;
   }
 
+  /** The workspace without the projects at `roots`. */
+  without(roots: readonly string[]): Workspace {
+    return new Workspace(
+      this.root,
+      this.source,
+      this.projects.filter((p) => !roots.includes(p.root)),
+      this.others,
+      this.configFile,
+      this.options,
+      this.rootConfig,
+      this.otherConfigs,
+    );
+  }
+
   private rootProject(): Project {
     return { root: this.root, dir: '.', name: packageName(this.root), config: this.rootConfig };
   }

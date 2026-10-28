@@ -413,28 +413,28 @@ describe('--root on a folder that holds projects but is none', () => {
   });
 });
 
-describe('--root on a folder of a monorepo that holds its projects', () => {
-  /**
-   * `mono`, a pnpm workspace whose root config turns off the rule a page in `apps/web` breaks,
-   * and whose `packages/secret` has a component and a token `apps/web` does not depend on.
-   */
-  function monorepo() {
-    return fixture({
-      'package.json': JSON.stringify({ name: 'mono', private: true }),
-      'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n  - 'packages/*'\n",
-      'onsystem.config.json': JSON.stringify({ rules: { 'no-unknown-variant': 'off' } }),
-      'packages/secret/package.json': JSON.stringify({ name: '@mono/secret' }),
-      'packages/secret/components/ui/vault.tsx': 'export function Vault() { return <div /> }\n',
-      'packages/secret/tokens/brand.tokens.json': JSON.stringify({
-        danger: { $type: 'color', $value: '#ef4444' },
-      }),
-      'apps/web/package.json': JSON.stringify({ name: 'web' }),
-      'apps/web/components/ui/chip.tsx': CHIP,
-      'apps/web/app/page.tsx': 'export default () => <Chip tone="loud" />;\n',
-      'apps/web/app/alert.tsx': 'export default () => <div className="bg-[#ef4444]" />;\n',
-    });
-  }
+/**
+ * `mono`, a pnpm workspace whose root config turns off the rule a page in `apps/web` breaks,
+ * and whose `packages/secret` has a component and a token `apps/web` does not depend on.
+ */
+function monorepo() {
+  return fixture({
+    'package.json': JSON.stringify({ name: 'mono', private: true }),
+    'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n  - 'packages/*'\n",
+    'onsystem.config.json': JSON.stringify({ rules: { 'no-unknown-variant': 'off' } }),
+    'packages/secret/package.json': JSON.stringify({ name: '@mono/secret' }),
+    'packages/secret/components/ui/vault.tsx': 'export function Vault() { return <div /> }\n',
+    'packages/secret/tokens/brand.tokens.json': JSON.stringify({
+      danger: { $type: 'color', $value: '#ef4444' },
+    }),
+    'apps/web/package.json': JSON.stringify({ name: 'web' }),
+    'apps/web/components/ui/chip.tsx': CHIP,
+    'apps/web/app/page.tsx': 'export default () => <Chip tone="loud" />;\n',
+    'apps/web/app/alert.tsx': 'export default () => <div className="bg-[#ef4444]" />;\n',
+  });
+}
 
+describe('--root on a folder of a monorepo that holds its projects', () => {
   it("answers from the project in it, never from the monorepo root's config or packages", async () => {
     const mono = monorepo();
     const apps = path.join(mono, 'apps');
@@ -470,6 +470,222 @@ describe('--root on a folder of a monorepo that holds its projects', () => {
       `using ${path.join(apps, 'web')}, the project of ${path.join(apps, 'web/app/page.tsx')}`,
     );
     expect(infos.join('\n')).not.toContain(`using ${mono},`);
+    await served.close();
+  });
+});
+
+const VAULT = 'export function Vault(props: { sealed?: boolean }) { return <div /> }\n';
+
+/** A project outside the folder the server answers for: no answer may show its Vault. */
+function vaultProject() {
+  return fixture({
+    'package.json': JSON.stringify({ name: 'vault' }),
+    'components/ui/vault.tsx': VAULT,
+    'app/page.tsx': 'export default () => <Vault sealed />;\n',
+  });
+}
+
+/** Links `at` to the folder `target`: a junction on Windows, which needs no rights to make. */
+function link(target: string, at: string) {
+  fs.symlinkSync(target, at, 'junction');
+}
+
+describe('--root on a folder of projects, with links and workspace packages that lead outside it', () => {
+  const leads = (parent: string) =>
+    `leads outside ${pathOf(parent)}, the folder the server answers for, through a link`;
+
+  it('refuses a link in the folder to a project outside it', async () => {
+    const parent = folderOfRepos();
+    const linked = path.join(parent, 'vault');
+    link(vaultProject(), linked);
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    const page = path.join(linked, 'app/page.tsx');
+    for (const [name, args] of [
+      ['get_component', { name: 'Vault', path: page }],
+      ['check_ui', { path: page }],
+      ['check_ui', { code: '<Vault />', filename: path.join(linked, 'app/new.tsx') }],
+      ['list_components', { path: linked }],
+    ] as const) {
+      const refused = await served.call(name, args);
+      expect(refused.isError, `${name} ${JSON.stringify(args)}`).toBe(true);
+      expect(text(refused)).toContain(leads(parent));
+      expect(text(refused)).not.toContain('sealed');
+    }
+    // Nothing was loaded from it: without a path, there is still no project to answer from.
+    const vault = await served.call('get_component', { name: 'Vault' });
+    expect(vault.isError).toBe(true);
+    expect(text(vault)).toContain('holds no project of its own');
+    await served.close();
+  });
+
+  it('refuses a link in the folder to a monorepo outside it', async () => {
+    const parent = folderOfRepos();
+    const linked = path.join(parent, 'mono');
+    link(monorepo(), linked);
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    for (const [name, args] of [
+      ['list_components', { path: path.join(linked, 'apps/web') }],
+      ['get_component', { name: 'Vault', path: path.join(linked, 'packages/secret') }],
+      ['search_components', { query: 'vault', path: path.join(linked, 'apps/web/app/page.tsx') }],
+    ] as const) {
+      const refused = await served.call(name, args);
+      expect(refused.isError, `${name} ${JSON.stringify(args)}`).toBe(true);
+      expect(text(refused)).toContain(leads(parent));
+      expect(text(refused)).not.toContain('Chip');
+    }
+    const listed = await served.call('list_components');
+    expect(listed.isError).toBe(true);
+    expect(text(listed)).toContain('holds no project of its own');
+    await served.close();
+  });
+
+  it('refuses a linked folder in a project, and keeps answering from the project', async () => {
+    const parent = folderOfRepos();
+    link(vaultProject(), path.join(parent, 'a/vendor'));
+    const infos: string[] = [];
+    const logger = { ...silentLogger, info: (message: string) => infos.push(message) };
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger,
+    });
+    const page = await served.call('check_ui', { path: path.join(parent, 'a/app/page.tsx') });
+    expect(page.structuredContent).toMatchObject({ errorCount: 1 });
+
+    const refused = await served.call('get_component', {
+      name: 'Vault',
+      path: path.join(parent, 'a/vendor/app/page.tsx'),
+    });
+    expect(refused.isError).toBe(true);
+    expect(text(refused)).toContain(leads(parent));
+    expect(text(refused)).not.toContain('sealed');
+    expect(infos.join('\n')).not.toContain(`using ${path.join(parent, 'a/vendor')},`);
+    // Without a path: a, still the one project found.
+    const chip = await served.call('get_component', { name: 'Chip' });
+    expect(text(chip)).toContain('tone?: "neutral" | "accent"');
+    const vault = await served.call('get_component', { name: 'Vault' });
+    expect(vault.isError).toBe(true);
+    expect(text(vault)).not.toContain('sealed');
+    await served.close();
+  });
+
+  it('refuses a link in a monorepo in the folder to a project outside it', async () => {
+    const parent = fixture({
+      'mono/package.json': JSON.stringify({ name: 'mono', private: true }),
+      'mono/pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n",
+      'mono/apps/web/package.json': JSON.stringify({ name: 'web' }),
+      'mono/apps/web/components/ui/chip.tsx': CHIP,
+    });
+    const mono = path.join(parent, 'mono');
+    link(vaultProject(), path.join(mono, 'apps/vendor'));
+    const warnings: string[] = [];
+    const logger = { ...silentLogger, warn: (message: string) => warnings.push(message) };
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger,
+    });
+
+    const web = await served.call('list_components', { path: path.join(mono, 'apps/web') });
+    expect(text(web)).toContain('Chip');
+    const refused = await served.call('get_component', {
+      name: 'Vault',
+      path: path.join(mono, 'apps/vendor/app/page.tsx'),
+    });
+    expect(refused.isError).toBe(true);
+    expect(text(refused)).toContain(leads(parent));
+    for (const [name, args] of [
+      ['list_components', {}],
+      ['get_component', { name: 'Vault' }],
+    ] as const) {
+      expect(text(await served.call(name, args)), name).not.toContain('sealed');
+    }
+    // The query is lowercase: a capital V would be the component's name.
+    expect(text(await served.call('search_components', { query: 'vault' }))).not.toContain('Vault');
+    expect(warnings.join('\n')).toContain(pathOf(path.join(mono, 'apps/vendor')));
+    await served.close();
+  });
+
+  it('leaves out the packages of a workspace in the folder that are outside it, and says so', async () => {
+    const root = fixture({
+      'folder/mono/package.json': JSON.stringify({ name: 'mono', private: true }),
+      'folder/mono/pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n  - '../../outside'\n",
+      'folder/mono/apps/web/package.json': JSON.stringify({ name: 'web' }),
+      'folder/mono/apps/web/components/ui/chip.tsx': CHIP,
+      'outside/package.json': JSON.stringify({ name: 'outside' }),
+      'outside/components/ui/vault.tsx': VAULT,
+    });
+    const folder = path.join(root, 'folder');
+    const mono = path.join(folder, 'mono');
+    const warnings: string[] = [];
+    const logger = { ...silentLogger, warn: (message: string) => warnings.push(message) };
+    const served = await serve({
+      cwd: fixture({}),
+      root: folder,
+      cache: false,
+      watch: false,
+      logger,
+    });
+
+    const web = await served.call('list_components', { path: path.join(mono, 'apps/web') });
+    expect(web.isError).toBeFalsy();
+    expect(text(web)).toContain('Chip');
+    for (const [name, args] of [
+      ['list_components', {}],
+      ['get_component', { name: 'Vault' }],
+    ] as const) {
+      const answer = text(await served.call(name, args));
+      expect(answer, name).not.toContain('sealed');
+      expect(answer, name).not.toContain('outside');
+    }
+    const search = text(await served.call('search_components', { query: 'vault' }));
+    expect(search).not.toContain('Vault');
+    expect(search).not.toContain('outside');
+    const warned = warnings.find((line) => line.includes(path.join(root, 'outside')));
+    expect(warned).toContain(`${pathOf(mono)} names workspace packages outside ${pathOf(folder)}`);
+    expect(warned).toContain(`start the server with --root ${pathOf(mono)}`);
+    await served.close();
+  });
+
+  it('loads a project named in two letter cases once, where the file system ignores case', async (ctx) => {
+    const parent = fixture({
+      'Web/package.json': JSON.stringify({ name: 'web' }),
+      'Web/components/ui/chip.tsx': CHIP,
+    });
+    if (!fs.existsSync(path.join(parent, 'web'))) ctx.skip();
+    const infos: string[] = [];
+    const logger = { ...silentLogger, info: (message: string) => infos.push(message) };
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger,
+    });
+    for (const dir of ['Web', 'web']) {
+      const listed = await served.call('list_components', { path: path.join(parent, dir) });
+      expect(listed.isError, dir).toBeFalsy();
+    }
+    const chip = await served.call('get_component', { name: 'Chip' });
+    expect(chip.isError).toBeFalsy();
+    expect(text(chip)).toContain('tone?: "neutral" | "accent"');
+    expect(infos.filter((line) => line.startsWith('using '))).toHaveLength(1);
     await served.close();
   });
 });
