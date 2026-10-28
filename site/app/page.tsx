@@ -969,6 +969,7 @@ function WorksWith() {
     'JetBrains IDEs',
     'Zed',
     'Gemini CLI',
+    'Antigravity',
     'Grok Build',
     'Any stdio MCP client',
   ];

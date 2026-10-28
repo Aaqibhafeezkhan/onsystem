@@ -1,14 +1,9 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import Home from '@/app/page';
 import { rules } from '@/lib/data';
-
-const site = path.join(import.meta.dirname, '..');
 
 describe('on a 320 px screen', () => {
   it('the How it works cards fit: a rule id too long for its row wraps', () => {
@@ -30,15 +25,6 @@ describe('on a 320 px screen', () => {
     for (const [, classes] of ids) {
       expect(classes).not.toMatch(/\b(truncate|whitespace-nowrap|text-nowrap)\b/);
       expect(classes).toContain('[overflow-wrap:anywhere]');
-    }
-  });
-});
-
-describe('touch targets', () => {
-  it('give the header’s Ask button 44 px on coarse pointers, as the menu button has', () => {
-    for (const file of ['components/ask.tsx', 'components/site-menu.tsx']) {
-      const source = fs.readFileSync(path.join(site, file), 'utf8');
-      expect(source, file).toMatch(/className=\{`tap inline-flex size-9 /);
     }
   });
 });

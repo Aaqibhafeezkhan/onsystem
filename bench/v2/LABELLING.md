@@ -1,6 +1,6 @@
 # Labelling guide
 
-The blind labels are the benchmark's check on its two automatic scorers. `tsc` sees invented components, props and variants but not hardcoded values; onsystem sees both but is the tool under test. A labeller reading a sample of the generated files, a person or an AI reviewer (each run's `labels/LABELLER.md` says which), says what each scorer missed or got wrong.
+The blind labels are the benchmark's check on its three automatic scorers ([Scoring](README.md#scoring)). `tsc` sees invented components, props and variants but not hardcoded values; onsystem sees both but is the tool under test; @shadcn/lint, added after the standard run, sees hardcoded values and restyled components but not invented APIs. A labeller reading a sample of the generated files, a person or an AI reviewer (each run's `labels/LABELLER.md` says which), says what each scorer missed, and which of onsystem's findings are wrong.
 
 ## What you get
 

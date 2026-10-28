@@ -1,13 +1,13 @@
 # onsystem as an Agent Plugin
 
-The [Agent Plugins 1.0](https://github.com/agentplugins/agent-plugins-spec) package of onsystem, for GitHub Copilot CLI and any other client of the standard. It keeps your agent on your React design system: it reads the project's real components, props, `cva` variants and design tokens, gives them to the agent before it writes UI, and checks what it writes against them.
+The [Agent Plugins 1.0](https://github.com/agentplugins/agent-plugins-spec) package of onsystem, for VS Code and any other client of the standard. It keeps your agent on your React design system: it reads the project's real components, props, `cva` variants and design tokens, gives them to the agent before it writes UI, and checks what it writes against them.
 
 ## What it adds
 
 - **An MCP server,** `onsystem` (`mcp.json`), with five read-only tools: `list_components`, `get_component`, `search_components`, `get_tokens` and `check_ui`.
 - **A skill** (`skills/onsystem`) that tells the agent to look components and tokens up before writing UI and to fix every `check_ui` finding.
 
-There is no hook: the format has none. The [Claude Code plugin](../onsystem) checks each edit as it happens; with other agents, add the [CI check](https://onsystem.vercel.app/docs/ci).
+There is no hook: the format has none. The [Claude Code plugin](../onsystem), which Codex CLI installs too, checks each edit as it happens; with other agents, add the [CI check](https://onsystem.vercel.app/docs/ci).
 
 ## What it runs
 
@@ -19,10 +19,13 @@ Everything runs on your machine. The server reads the project's component files,
 
 ## Install
 
-GitHub Copilot CLI:
+VS Code: add a clone's `plugins/onsystem-agent` folder to the `chat.pluginLocations` setting.
+
+GitHub Copilot CLI: install onsystem from the marketplace, which gives it the Claude Code plugin's MCP server and skill, the same as this package's. Copilot CLI has deprecated installing a plugin straight from a repository.
 
 ```sh
-copilot plugin install dgesteves/onsystem:plugins/onsystem-agent
+copilot plugin marketplace add dgesteves/onsystem
+copilot plugin install onsystem@dgesteves
 ```
 
 Other clients: [Set up your agent](https://onsystem.vercel.app/docs/clients#plugins-for-other-agents).

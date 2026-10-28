@@ -107,6 +107,45 @@ function Suggestions({
   );
 }
 
+/**
+ * "Apply N fixes", after how many findings need a decision. While edited code is checked again it
+ * keeps the last result's counts with its button off, as the findings below keep theirs, so the
+ * row holds its place instead of going and coming back.
+ */
+export function ApplyAll({
+  diagnostics,
+  stale,
+  noteId,
+  onApply,
+}: {
+  diagnostics: PresetResult['diagnostics'];
+  stale: boolean;
+  noteId: string;
+  onApply: () => void;
+}) {
+  const fixes = diagnostics.filter((d) => d.fix?.length).length;
+  if (!fixes) return null;
+  const open = undecided(diagnostics);
+  return (
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${stale ? 'opacity-60' : ''}`}>
+      {open > 0 && (
+        <span id={noteId} className="text-[12.5px] text-subtle">
+          {decisionNote(open)}
+        </span>
+      )}
+      <button
+        type="button"
+        disabled={stale}
+        aria-describedby={open > 0 ? noteId : undefined}
+        onClick={onApply}
+        className="tap cursor-pointer rounded-md border border-cyan/40 bg-cyan/10 px-2.5 py-1 text-[13px] font-medium text-cyan-bright transition-colors hover:bg-cyan/20 disabled:cursor-default disabled:hover:bg-cyan/10"
+      >
+        {applyLabel(fixes)}
+      </button>
+    </div>
+  );
+}
+
 function plural(n: number, noun: string): string {
   return `${String(n)} ${noun}${n === 1 ? '' : 's'}`;
 }
@@ -193,6 +232,19 @@ function showInAddress(hash: string) {
   }
 }
 
+/**
+ * Copies `text`, which may still be on its way. Safari refuses a clipboard write that starts after
+ * the click's handler awaits anything, so the write starts at once, with the text as a promise.
+ */
+export async function copyText(text: Promise<string>): Promise<void> {
+  if (typeof ClipboardItem !== 'undefined' && 'write' in navigator.clipboard) {
+    const blob = text.then((value) => new Blob([value], { type: 'text/plain' }));
+    await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+  } else {
+    await navigator.clipboard.writeText(await text);
+  }
+}
+
 export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes: number }) {
   const first = presets[0];
   const [presetId, setPresetId] = useState(first?.id ?? '');
@@ -209,7 +261,7 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   const [link, setLink] = useState<{ code: string; hash: string } | undefined>(undefined);
   /** Whether the address has been read: until then, it is not written. */
   const [linked, setLinked] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const textarea = useRef<HTMLTextAreaElement>(null);
   const summaryBox = useRef<HTMLDivElement>(null);
   const findingsBox = useRef<HTMLElement>(null);
@@ -374,23 +426,28 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   }, [code, link, linked]);
 
   const copyLink = () => {
-    const copy = (hash: string) => {
-      showInAddress(hash);
-      const { origin, pathname, search } = window.location;
-      navigator.clipboard.writeText(`${origin}${pathname}${search}${hash}`).then(
-        () => {
-          setCopied(true);
-          clearTimeout(copiedTimer.current);
-          copiedTimer.current = setTimeout(() => {
-            setCopied(false);
-          }, 1600);
-        },
-        () => undefined,
-      );
-    };
     // The fragment is ready unless the code changed a moment ago.
-    if (link?.code === code) copy(link.hash);
-    else void linkHash(code, presets).then(copy);
+    const hash = link?.code === code ? Promise.resolve(link.hash) : linkHash(code, presets);
+    const url = hash.then((fragment) => {
+      showInAddress(fragment);
+      const { origin, pathname, search } = window.location;
+      return `${origin}${pathname}${search}${fragment}`;
+    });
+    const done = (status: 'copied' | 'failed') => {
+      setCopyStatus(status);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => {
+        setCopyStatus('idle');
+      }, 1600);
+    };
+    copyText(url).then(
+      () => {
+        done('copied');
+      },
+      () => {
+        done('failed');
+      },
+    );
   };
 
   // The list keeps the last result while the edited code is checked again; its offsets only
@@ -400,8 +457,6 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
   // gone: leave them out.
   const shown = empty || (problem && stale) ? undefined : checked;
   const diagnostics = shown?.result.diagnostics ?? [];
-  const fixable = stale ? [] : diagnostics.filter((d) => d.fix?.length);
-  const open = stale ? 0 : undecided(diagnostics);
   const syntax = diagnostics.some((d) => d.ruleId === 'syntax');
   // The findings with no automatic fix, as suggestions; offsets into the code they were checked on.
   const decisions = useMemo(
@@ -490,11 +545,19 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
           onClick={copyLink}
           className="tap ml-auto inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-fg"
         >
-          {copied ? <CheckIcon className="size-4 text-cyan" /> : <CopyIcon className="size-4" />}
+          {copyStatus === 'copied' ? (
+            <CheckIcon className="size-4 text-cyan" />
+          ) : (
+            <CopyIcon className="size-4" />
+          )}
           Copy link
         </button>
         <span className="sr-only" role="status">
-          {copied ? 'Link copied to the clipboard' : ''}
+          {copyStatus === 'copied'
+            ? 'Link copied to the clipboard'
+            : copyStatus === 'failed'
+              ? 'Could not copy. The link is in the address bar.'
+              : ''}
         </span>
         <button
           type="button"
@@ -630,26 +693,15 @@ export function Playground({ presets, maxBytes }: { presets: Preset[]; maxBytes:
                 </>
               )}
             </h2>
-            {fixable.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                {open > 0 && (
-                  <span id={`${ids}-open`} className="text-[12.5px] text-subtle">
-                    {decisionNote(open)}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  aria-describedby={open > 0 ? `${ids}-open` : undefined}
-                  onClick={() => {
-                    const result = applyFixes(code, fixable);
-                    apply(result.code, { fixes: result.count });
-                  }}
-                  className="tap cursor-pointer rounded-md border border-cyan/40 bg-cyan/10 px-2.5 py-1 text-[13px] font-medium text-cyan-bright transition-colors hover:bg-cyan/20"
-                >
-                  {applyLabel(fixable.length)}
-                </button>
-              </div>
-            )}
+            <ApplyAll
+              diagnostics={diagnostics}
+              stale={stale}
+              noteId={`${ids}-open`}
+              onApply={() => {
+                const result = applyFixes(code, diagnostics);
+                apply(result.code, { fixes: result.count });
+              }}
+            />
           </div>
 
           <p className="sr-only" role="status">

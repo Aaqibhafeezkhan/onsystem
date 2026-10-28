@@ -39,8 +39,11 @@ const PAGES = [
     group: 'Get started',
     source: 'docs/clients.md',
     title: 'Set up your agent',
+    // Names every client docs/clients.md sets up (site/test/docs-agree.test.ts) in 160 characters
+    // at most (site/test/shell.test.ts), and is at 151. Before adding the next client, shorten the
+    // wording: drop the "and" before the last name, or "MCP " at the start.
     description:
-      'MCP configs for Cursor, VS Code, Claude Desktop, Codex CLI, Copilot CLI, Windsurf, JetBrains, Zed, Gemini CLI, Grok Build and Claude Code without the plugin.',
+      'MCP configs for Cursor, VS Code, Claude Desktop, Codex CLI, Copilot CLI, Windsurf, JetBrains, Zed, Gemini CLI, Antigravity, Grok Build and Claude Code.',
   },
   {
     href: '/docs/plugin',

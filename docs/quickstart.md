@@ -39,7 +39,7 @@ Or add it yourself. Pick one:
   ```
 
 - **Cursor or VS Code**: use the [one-click install links](clients.md#cursor-and-vs-code), or commit the config there to the repository.
-- **Any other MCP client**: run `npx -y onsystem` as a stdio server. There are [configs for Claude Desktop, Codex CLI, GitHub Copilot CLI, Windsurf, JetBrains IDEs, Zed, Gemini CLI and Grok Build](clients.md#other-clients).
+- **Any other MCP client**: run `npx -y onsystem` as a stdio server. There are [configs for Claude Desktop, Codex CLI, GitHub Copilot CLI, Windsurf, JetBrains IDEs, Zed, Gemini CLI, Antigravity and Grok Build](clients.md#other-clients).
 
 ## Try it
 
