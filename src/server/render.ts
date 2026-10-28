@@ -1,5 +1,6 @@
 import type { Catalog, CatalogEntry, CatalogToken } from '../catalog.js';
 import type { DesignSystem } from '../design-system.js';
+import { unpublishedComponents } from '../explain.js';
 import { descriptionOf, type SearchHit } from '../search/index.js';
 import { formatPx } from '../tokens/units.js';
 import type { CheckResult, ComponentInfo, Diagnostic, PropInfo, Token } from '../types.js';
@@ -455,8 +456,17 @@ function listTail(listed: Listing<unknown>): string[] {
   return lines;
 }
 
-/** The shared explanation when a project has no design-system components to show. */
-export function noComponentsMessage(root: string, project?: string, monorepo = false): Answer {
+/**
+ * The shared explanation when a project has no design-system components to show. `reason`, when
+ * known, says why instead ({@link unpublishedComponents}).
+ */
+export function noComponentsMessage(
+  root: string,
+  project?: string,
+  monorepo = false,
+  reason?: string,
+): Answer {
+  if (reason) return answer([reason]);
   if (monorepo) {
     return answer([
       `No design-system components found in any project of this monorepo (root: ${root}). Check the "components" globs in the config. Run \`onsystem inspect\` there to see what was looked at.`,
@@ -477,7 +487,7 @@ export function renderComponentList(
   const roots = ds.roots();
   const where = project ? ` in ${pathOf(project)}` : '';
   if (!roots.length) {
-    return noComponentsMessage(ds.root, project);
+    return noComponentsMessage(ds.root, project, false, unpublishedComponents(ds));
   }
   const listed = listComponents(roots, (c) => c, filter);
   if (!listed.matched) {
@@ -650,7 +660,7 @@ export function renderNotFound(
   return answer([
     `No component named ${json(name)}${where}.` +
       (guess ? ` Did you mean ${json(guess)}?` : '') +
-      ` Available: ${names.join(', ')}.`,
+      (names.length ? ` Available: ${names.join(', ')}.` : ''),
   ]);
 }
 

@@ -90,9 +90,9 @@ describe('init in a design-system package tells its team what installed apps get
     expect(next).toBe(
       'Next: commit onsystem.config.json, package.json and ONSYSTEM.md. A workspace app that depends on @northwind/ui now finds it with no config of its own: run `npx onsystem inspect` in one to see it, and give its team ONSYSTEM.md. An app that installs @northwind/ui from a registry gets no component checks until "files" publishes src/.',
     );
-    // What it publishes is the team's call: only the config is added.
+    // What it publishes is the team's call: only the config and ONSYSTEM.md are added.
     expect(JSON.parse(read(path.join(ui, 'package.json')))).toMatchObject({
-      files: ['dist', 'theme.css', 'onsystem.config.json'],
+      files: ['dist', 'theme.css', 'onsystem.config.json', 'ONSYSTEM.md'],
     });
 
     // What it says is what such an app gets: the token rules, and no component.

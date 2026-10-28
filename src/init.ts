@@ -495,7 +495,9 @@ function readManifest(root: string): Manifest | undefined {
 /**
  * Declares the config in the package's package.json, `"onsystem": "./onsystem.config.json"`,
  * and adds it to `files` when the package lists the files it publishes, so apps that install it
- * get it too. Writes ONSYSTEM.md for the apps' teams unless one exists. Returns what it wrote.
+ * get it too. Writes ONSYSTEM.md for the apps' teams unless one exists, and adds it to `files`
+ * as well, for the teams of apps that install the package, unless `files` leaves it out
+ * (`!ONSYSTEM.md`). Returns what it wrote.
  */
 function declarePackage(
   root: string,
@@ -513,8 +515,12 @@ function declarePackage(
     changed = true;
   }
   const files = Array.isArray(json.files) ? (json.files as unknown[]) : undefined;
-  if (files && !ships(files, CONFIG_FILE)) {
-    files.push(CONFIG_FILE);
+  const added: string[] = [];
+  for (const file of [CONFIG_FILE, GUIDE_FILE]) {
+    // The apps need the config the field names; leaving the guide out is the team's call.
+    if (!files || ships(files, file) || (file === GUIDE_FILE && excludes(files, file))) continue;
+    files.push(file);
+    added.push(file);
     changed = true;
   }
   if (changed) {
@@ -525,7 +531,7 @@ function declarePackage(
     written.push('package.json');
   }
   notes.push(
-    `This is a design-system package: package.json declares its config ("${PACKAGE_FIELD}": "${value}"${files ? ', also added to "files"' : ''}), which every app that depends on ${name} reads, under its own config when it has one.`,
+    `This is a design-system package: package.json declares its config ("${PACKAGE_FIELD}": "${value}"${added.length ? `, with ${added.join(' and ')} added to "files"` : ''}), which every app that depends on ${name} reads, under its own config when it has one.`,
   );
   const guide = path.join(root, GUIDE_FILE);
   if (force || !fs.existsSync(guide)) {
@@ -923,6 +929,15 @@ function aliasFolder(alias: string, project: ProjectConfig): string | undefined 
     }
   }
   return undefined;
+}
+
+/** Whether npm's `files` list leaves `file` out with a negated entry: `!ONSYSTEM.md`, `!*.md`. */
+function excludes(files: readonly unknown[], file: string): boolean {
+  return files.some((entry) => {
+    if (typeof entry !== 'string' || !entry.startsWith('!')) return false;
+    const pattern = entry.slice(1).replace(/^\.?\//, '');
+    return pattern === file || matchesGlob(file, pattern);
+  });
 }
 
 /** Whether npm's `files` list publishes `file`, a path relative to the package. */

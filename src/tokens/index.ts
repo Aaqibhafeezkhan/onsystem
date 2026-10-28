@@ -49,6 +49,7 @@ export async function loadTokens(
   // Stylesheets form one theme (`.dark` in one file, `:root` in another), so
   // they become tokens together, where the first of them was listed.
   const sheets: CssSheet[] = [];
+  const sheetFiles: string[] = [];
   let sheetsAt: number | undefined;
   for (const source of sources) {
     const rel = relativePath(root, source.file);
@@ -72,6 +73,7 @@ export async function loadTokens(
         warnings.push(...result.warnings);
       } else {
         sheets.push(readCssSheet(text, rel));
+        sheetFiles.push(rel);
         sheetsAt ??= all.length;
       }
     } catch (error) {
@@ -79,11 +81,64 @@ export async function loadTokens(
     }
   }
   if (sheets.length) {
+    // A Tailwind v4 theme partial (`@theme`, without `@import "tailwindcss"`), such as a
+    // design-system package ships, is read by an app that imports Tailwind itself. In a project
+    // that runs Tailwind v4, then, its default spacing unit and radius scale apply, unless the
+    // partial clears them.
+    const partial = sheets.findIndex((s) => s.theme.size > 0 || s.resets.size > 0);
+    const sheet = sheets[partial];
+    if (sheet && !sheets.some((s) => s.tailwind) && (await runsTailwindV4(root))) {
+      sheet.tailwind = sheetFiles[partial];
+    }
     const result = cssSheetTokens(sheets);
     all.splice(sheetsAt ?? all.length, 0, ...result.tokens);
     warnings.push(...result.warnings);
   }
   return { tokens: mergeTokens(all), warnings };
+}
+
+/** The packages that run Tailwind CSS v4 in a build: PostCSS's, Vite's and its CLI. */
+const TAILWIND_V4_PACKAGES = ['@tailwindcss/postcss', '@tailwindcss/vite', '@tailwindcss/cli'];
+
+/**
+ * Whether the project at `root` runs Tailwind CSS v4, whose default theme has a spacing unit and
+ * the radius scale up to `rounded-4xl`: its package.json depends on a package that runs v4, or on
+ * `tailwindcss` in a range that is not v3's (`^3.4.1`, `~3.4`, `3.x`), which has neither. Its
+ * plugins (`@tailwindcss/typography`) say nothing of the version.
+ */
+async function runsTailwindV4(root: string): Promise<boolean> {
+  let pkg: unknown;
+  try {
+    pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
+  } catch {
+    return false;
+  }
+  if (typeof pkg !== 'object' || pkg === null) return false;
+  // What is installed comes first: `dependencies`, then `devDependencies`, then a peer range.
+  const lists: Record<string, unknown>[] = [];
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies']) {
+    const dependencies = (pkg as Record<string, unknown>)[field];
+    if (typeof dependencies === 'object' && dependencies !== null) {
+      lists.push(dependencies as Record<string, unknown>);
+    }
+  }
+  if (lists.some((list) => TAILWIND_V4_PACKAGES.some((name) => Object.hasOwn(list, name)))) {
+    return true;
+  }
+  const declared = lists.find((list) => Object.hasOwn(list, 'tailwindcss'));
+  return declared !== undefined && !beforeV4(declared.tailwindcss);
+}
+
+/** A range of Tailwind CSS v3 or older in package.json: `^3.4.1`, `~3`, `3.x`, `^2 || ^3`. */
+function beforeV4(range: unknown): boolean {
+  return (
+    typeof range === 'string' &&
+    range
+      .split('||')
+      .every((alternative) =>
+        /^(?:npm:tailwindcss@)?[\^~=v]*\s*[0-3](?:\.|$)/.test(alternative.trim()),
+      )
+  );
 }
 
 /**

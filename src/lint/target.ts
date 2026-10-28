@@ -1,11 +1,13 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ResolvedConfig } from '../config.js';
+import { exportedTargets } from '../detect.js';
 import type { ModuleResolver } from '../modules.js';
 import { TokenIndex } from '../tokens/index.js';
 import { tokenFamily } from '../tokens/roles.js';
 import type { ComponentInfo, DesignSystemModel, Token } from '../types.js';
-import { matchesGlob, toPosix } from '../util/paths.js';
+import { isInside, matchesGlob, relativePath, toPosix } from '../util/paths.js';
 import { unique } from '../util/strings.js';
 import { COLOR_UTILITY, parseUtility } from './tailwind.js';
 
@@ -131,6 +133,8 @@ export class LintTarget {
   private readonly sources?: Set<string>;
   /** Published libraries the model read from type declarations: `@mui/material`. */
   readonly libraries: Set<string>;
+  /** The name in each package.json read, by its path: undefined where there is none. */
+  private readonly manifests = new Map<string, string | undefined>();
 
   /**
    * `resolver` finds the module an import points at and what it exports
@@ -141,7 +145,7 @@ export class LintTarget {
   constructor(
     readonly model: DesignSystemModel,
     readonly config: Pick<ResolvedConfig, 'elements' | 'importPath'> &
-      Partial<Pick<ResolvedConfig, 'designSystems'>>,
+      Partial<Pick<ResolvedConfig, 'designSystems' | 'imports'>>,
     private readonly resolver?: Pick<ModuleResolver, 'locate' | 'exportsOf'>,
   ) {
     // With several design systems, the most imported one's components win a shared name:
@@ -260,16 +264,58 @@ export class LintTarget {
    * model left out rather than an invented one: its module exists outside the
    * folders extraction read and exports `name`, or re-exports from such a
    * module (an excluded `icons/` folder, a barrel's `export * from "./icons"`).
-   * A module declared in a package's `exports` but not on disk counts too,
-   * except the design system's own import path.
+   * A module declared in a package's `exports` but not on disk counts too (built to `dist/`,
+   * not built yet), except the design system's own import path, and one whose export, as the
+   * package.json writes it, leads to a source file only: `@acme/ui/components/tooltip` is
+   * `src/components/tooltip.tsx` through `"./components/*": "./src/components/*.tsx"`, and with
+   * no such file it does not exist.
    */
   outsideModel(specifier: string, name: string, fromFile = 'snippet.tsx'): boolean {
     const location = this.resolver?.locate(specifier, fromFile);
     if (!location) return false;
-    if (!location.file) {
-      return !this.importPaths.has(specifier) && specifier !== this.config.importPath;
+    if (location.file) return this.mayExport(location.file, name, 0);
+    if (this.importPaths.has(specifier) || specifier === this.config.importPath) return false;
+    const source = this.exportedSource(specifier);
+    return source === undefined || this.mayExport(source, name, 0);
+  }
+
+  /**
+   * The module a design-system package's `exports` lead `specifier` to, relative to the root, as
+   * its package.json writes them: the first of the entry's targets that is on disk, else, when
+   * each of them is a source file, the first (which does not exist). Undefined when a target
+   * leads to a build folder (`"./*": "./dist/components/*.js"`, maybe not built yet, whose
+   * sources may be anywhere), the entry blocks the subpath (`null`), or no entry maps it.
+   */
+  private exportedSource(specifier: string): string | undefined {
+    const name = packageOf(specifier);
+    // The package is where a file its exports lead to is.
+    const led = this.config.imports?.find((m) => packageOf(m.specifier) === name);
+    const dir = led && this.packageDir(path.resolve(this.model.root, led.target), name);
+    const targets = dir ? exportedTargets(dir, `.${specifier.slice(name.length)}`) : undefined;
+    if (!dir || !targets?.length) return undefined;
+    const files = targets.map((target) => path.resolve(dir, target));
+    // TypeScript resolves a `.jsx` target to the `.tsx` file of that name too.
+    const file =
+      files
+        .flatMap((f) => (f.endsWith('.jsx') ? [f, `${f.slice(0, -4)}.tsx`] : [f]))
+        .find((f) => isInside(dir, f) && isFile(f)) ??
+      (targets.every(isSourceFile) ? files[0] : undefined);
+    return file && relativePath(this.model.root, file);
+  }
+
+  /**
+   * The folder of package `name` that `file` is in: the nearest package.json above it with a
+   * name, when that name is `name`. One without a name (`{"type": "module"}` in a subfolder) is
+   * no package's. Each package.json is read once.
+   */
+  private packageDir(file: string, name: string): string | undefined {
+    for (let dir = path.dirname(file); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+      const manifest = path.join(dir, 'package.json');
+      if (!this.manifests.has(manifest)) this.manifests.set(manifest, manifestName(manifest));
+      const found = this.manifests.get(manifest);
+      if (found !== undefined) return found === name ? dir : undefined;
     }
-    return this.mayExport(location.file, name, 0);
+    return undefined;
   }
 
   /**
@@ -508,6 +554,39 @@ function isPackageName(specifier: string): boolean {
   return specifier.startsWith('@')
     ? /^@[^/]+\/[^/]+$/.test(specifier)
     : /^[a-z0-9][^/]*$/i.test(specifier);
+}
+
+/** The name a package.json gives its package; undefined when it has none, or there is none. */
+function manifestName(manifest: string): string | undefined {
+  try {
+    const { name } = (JSON.parse(fs.readFileSync(manifest, 'utf8')) ?? {}) as { name?: unknown };
+    return typeof name === 'string' && name ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isFile(file: string): boolean {
+  return fs.statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
+/** The package an import specifier names: `@acme/ui` for `@acme/ui/components/button`. */
+function packageOf(specifier: string): string {
+  return specifier
+    .split('/')
+    .slice(0, specifier.startsWith('@') ? 2 : 1)
+    .join('/');
+}
+
+/**
+ * An export target that is a TypeScript or JSX source file (`./src/components/tooltip.tsx`), not
+ * a declaration file or a file in a build folder (`./dist/tooltip.tsx`, not built yet).
+ */
+function isSourceFile(target: string): boolean {
+  if (/\.d\.[cm]?ts$/.test(target) || /^(?:\.\/)?(?:dist|build|lib|out|esm|cjs)\//.test(target)) {
+    return false;
+  }
+  return /\.(?:[cm]?tsx?|jsx)$/.test(target);
 }
 
 function stripExtension(file: string): string {
