@@ -7,11 +7,12 @@ import { serveStdio as serveEras } from '@modelcontextprotocol/server/stdio';
 
 import {
   CONFIG_FILES,
+  ConfigError,
   LEGACY_CONFIG_FILES,
   loadConfig,
   type LoadConfigOptions,
 } from '../config.js';
-import { DesignSystemHost } from '../design-system.js';
+import { buildModel, DesignSystemHost } from '../design-system.js';
 import { isWorkspaceRoot } from '../detect.js';
 import type { Logger } from '../util/log.js';
 import { isInside, pathOf } from '../util/paths.js';
@@ -69,7 +70,8 @@ type Resolve = (target: string | undefined) => Promise<Served>;
  * an absolute path in that folder is answered, from the project in it that holds the file (never
  * from a folder outside or above it), and a file in none of them from that folder, as before.
  * Links are resolved: a path, or the project it leads to, that is really outside the folder is
- * refused, and a workspace in it serves only its packages that are really in it.
+ * refused, a workspace in it serves only its packages that are really in it, and a project in it
+ * that a link replaces while the server runs is not built again from where the link leads.
  *
  * A load that fails, such as on an invalid config, is not kept: the next request loads
  * again, so fixing the config is enough, also when it was invalid at startup.
@@ -99,7 +101,7 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
    * projects. `jsonConfigOnly` for a root found from a tool call's path: its configs, and those
    * of the projects in it, are read only when they are JSON, never run. `within`: the folder of
    * projects it was found in, for the error on a config that is not JSON, and outside which no
-   * workspace package is served.
+   * workspace package is served, and no project or package is built.
    */
   const load = async (
     root: string | undefined,
@@ -125,6 +127,7 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
         workspace = workspace.without(outside.map((p) => p.root));
       }
     }
+    const build = within ? buildWithin(within) : undefined;
     // Once per project, as it loads: a reload of the config does not repeat them.
     for (const text of config.deprecations ?? []) logger.warn(text);
     for (const text of (workspace ? workspace.warnings : config.warnings) ?? []) logger.warn(text);
@@ -134,6 +137,7 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
         watch: options.watch,
         logger,
         onChange: notify,
+        build,
       });
       logger.info(
         `monorepo root: ${workspace.projects.length} of ${workspace.projects.length + workspace.others.length} workspace packages have a design system${workspace.projects.length ? ` (${workspace.projects.map((p) => p.dir).join(', ')})` : ''}`,
@@ -149,6 +153,7 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
       logger,
       // Keep CLI overrides when the config file is edited.
       loadConfig: () => loadConfig(configOptions),
+      build,
     });
     host.onChange(notify);
     if (options.watch) host.watch();
@@ -341,6 +346,22 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
       await handle.close();
     },
   });
+}
+
+/**
+ * `buildModel` for a project found in the folder `within`, which refuses to build it once its
+ * folder leads outside `within` (a project or workspace package replaced by a link while the
+ * server watches it): that rebuild fails, so the model built from inside the folder stays.
+ */
+function buildWithin(within: Folder): typeof buildModel {
+  return async (config, options) => {
+    if (!isInside(within.real, realPath(config.root))) {
+      throw new ConfigError(
+        `${pathOf(config.root)} now leads outside ${pathOf(within.dir)}, the folder the server answers for, through a link: it is not read from there.`,
+      );
+    }
+    return buildModel(config, options);
+  };
 }
 
 /**

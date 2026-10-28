@@ -43,6 +43,8 @@ async function serve(options: Omit<Parameters<typeof serveStdio>[0], 'transport'
   return {
     call: (name: string, args: Record<string, unknown> = {}) =>
       client.callTool({ name, arguments: args }),
+    read: async (uri: string) =>
+      (await client.readResource({ uri })).contents.map((c) => ('text' in c ? c.text : '')),
     close: async () => {
       await client.close();
       await server.close();
@@ -477,17 +479,40 @@ describe('--root on a folder of a monorepo that holds its projects', () => {
 const VAULT = 'export function Vault(props: { sealed?: boolean }) { return <div /> }\n';
 
 /** A project outside the folder the server answers for: no answer may show its Vault. */
-function vaultProject() {
+function vaultProject(files: Record<string, string> = {}) {
   return fixture({
     'package.json': JSON.stringify({ name: 'vault' }),
     'components/ui/vault.tsx': VAULT,
     'app/page.tsx': 'export default () => <Vault sealed />;\n',
+    ...files,
   });
 }
 
 /** Links `at` to the folder `target`: a junction on Windows, which needs no rights to make. */
 function link(target: string, at: string) {
   fs.symlinkSync(target, at, 'junction');
+}
+
+const SEALED_TOKEN = JSON.stringify({ 'vault-steel': { $type: 'color', $value: '#123456' } });
+
+/**
+ * Replaces the folder `dir`, which a running server watches, with a link to `target`. False where
+ * the file system does not let a watched folder be moved.
+ */
+function replaceWithLink(dir: string, target: string): boolean {
+  const moved = path.join(fixture({}), path.basename(dir));
+  try {
+    fs.renameSync(dir, moved);
+  } catch (error) {
+    if (['EPERM', 'EBUSY', 'EACCES'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+      return false;
+    }
+    throw error;
+  }
+  link(target, dir);
+  // A change in the moved folder too, for a watcher that follows the folder rather than its path.
+  fs.writeFileSync(path.join(moved, 'components/ui/moved.tsx'), 'export const moved = 1;\n');
+  return true;
 }
 
 describe('--root on a folder of projects, with links and workspace packages that lead outside it', () => {
@@ -663,6 +688,125 @@ describe('--root on a folder of projects, with links and workspace packages that
     await served.close();
   });
 
+  /** A logger that keeps the info and error lines, and waits for the first reload after `from`. */
+  function reloadLog() {
+    const lines: string[] = [];
+    const keep = (message: string) => lines.push(message);
+    return {
+      lines,
+      logger: { ...silentLogger, info: keep, error: keep },
+      reloaded: (from: number) =>
+        vi.waitFor(
+          () => {
+            expect(lines.slice(from).some((line) => /^reload(ed | failed: )/.test(line))).toBe(
+              true,
+            );
+          },
+          { timeout: 10_000, interval: 200 },
+        ),
+    };
+  }
+
+  it('keeps the model read from inside when a loaded project is replaced by a link while watching', async (ctx) => {
+    const parent = fixture({
+      'a/package.json': JSON.stringify({ name: 'a' }),
+      'a/components/ui/chip.tsx': CHIP,
+      'a/app/page.tsx': 'export default () => <Chip tone="loud" />;\n',
+      'a/tokens/brand.tokens.json': JSON.stringify({
+        brand: { $type: 'color', $value: '#2563eb' },
+      }),
+      'b/package.json': JSON.stringify({ name: 'b' }),
+    });
+    const a = path.join(parent, 'a');
+    const log = reloadLog();
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: true,
+      logger: log.logger,
+    });
+    const page = await served.call('check_ui', { path: path.join(a, 'app/page.tsx') });
+    expect(page.structuredContent).toMatchObject({ errorCount: 1 });
+
+    // Give the watcher a moment to attach before the change.
+    await new Promise((r) => setTimeout(r, 100));
+    const from = log.lines.length;
+    if (!replaceWithLink(a, vaultProject({ 'tokens/vault.tokens.json': SEALED_TOKEN }))) {
+      await served.close();
+      ctx.skip();
+    }
+    await log.reloaded(from);
+    expect(log.lines).toContain(
+      `reload failed: ${pathOf(a)} now leads outside ${pathOf(parent)}, the folder the server answers for, through a link: it is not read from there.`,
+    );
+
+    for (const [name, args] of [
+      ['get_component', { name: 'Vault' }],
+      ['list_components', {}],
+      ['get_tokens', {}],
+      ['search_components', { query: 'vault' }],
+    ] as const) {
+      const answer = text(await served.call(name, args));
+      expect(answer, name).not.toContain('sealed');
+      expect(answer, name).not.toContain('vault-steel');
+    }
+    expect((await served.read('ds://tokens')).join('\n')).not.toContain('vault-steel');
+    // Still answered from the model read from inside the folder.
+    expect(text(await served.call('get_component', { name: 'Chip' }))).toContain(
+      'tone?: "neutral" | "accent"',
+    );
+    expect(text(await served.call('get_tokens', {}))).toContain('brand');
+    await served.close();
+  }, 20_000);
+
+  it('keeps the model read from inside when a workspace package in the folder is replaced by a link while watching', async (ctx) => {
+    const parent = fixture({
+      'mono/package.json': JSON.stringify({ name: 'mono', private: true }),
+      'mono/pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n",
+      'mono/apps/web/package.json': JSON.stringify({ name: 'web' }),
+      'mono/apps/web/components/ui/chip.tsx': CHIP,
+      'mono/apps/web/tokens/brand.tokens.json': JSON.stringify({
+        brand: { $type: 'color', $value: '#2563eb' },
+      }),
+    });
+    const web = path.join(parent, 'mono/apps/web');
+    const log = reloadLog();
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: true,
+      logger: log.logger,
+    });
+    const listed = await served.call('list_components', { path: web });
+    expect(text(listed)).toContain('Chip');
+
+    await new Promise((r) => setTimeout(r, 100));
+    const from = log.lines.length;
+    if (!replaceWithLink(web, vaultProject({ 'tokens/vault.tokens.json': SEALED_TOKEN }))) {
+      await served.close();
+      ctx.skip();
+    }
+    await log.reloaded(from);
+    expect(log.lines).toContain(
+      `reload failed: ${pathOf(web)} now leads outside ${pathOf(parent)}, the folder the server answers for, through a link: it is not read from there.`,
+    );
+
+    for (const [name, args] of [
+      ['list_components', {}],
+      ['get_component', { name: 'Vault' }],
+      ['get_tokens', {}],
+      ['search_components', { query: 'vault' }],
+    ] as const) {
+      const answer = text(await served.call(name, args));
+      expect(answer, name).not.toContain('sealed');
+      expect(answer, name).not.toContain('vault-steel');
+    }
+    expect(text(await served.call('list_components', {}))).toContain('Chip');
+    await served.close();
+  }, 20_000);
+
   it('loads a project named in two letter cases once, where the file system ignores case', async (ctx) => {
     const parent = fixture({
       'Web/package.json': JSON.stringify({ name: 'web' }),
@@ -722,6 +866,21 @@ describe('zero config at a folder that holds projects but is none', () => {
     expect(await found(path.join(parent, 'b'))).toEqual([own]);
     fs.writeFileSync(path.join(parent, 'package.json'), JSON.stringify({ name: 'all' }));
     expect(await found(parent)).toEqual([own]);
+  });
+
+  it('says nothing about a token file of a project in it that leads outside', async () => {
+    const parent = folderOfRepos();
+    link(fixture({ 'brand.tokens.json': SEALED_TOKEN }), path.join(parent, 'b/tokens/linked'));
+    const { model } = await buildModel(await loadConfig({ root: parent }), { cache: false });
+    expect(model.tokens).toEqual([]);
+    expect(model.warnings.join('\n')).not.toContain('Not read');
+    // From b itself, the link is still named as a file that is not read.
+    const own = await buildModel(await loadConfig({ root: path.join(parent, 'b') }), {
+      cache: false,
+    });
+    expect(own.model.warnings.join('\n')).toContain(
+      'Not read: tokens/linked/brand.tokens.json leads',
+    );
   });
 
   it('gives check no fix from another project', async () => {

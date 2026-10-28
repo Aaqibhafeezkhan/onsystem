@@ -449,12 +449,14 @@ function outsideWarning(root: string, files: readonly string[]): string {
 /**
  * Absolute paths matching `patterns` under the root. `node_modules` is skipped
  * even when `exclude` replaces the defaults, except by patterns that name it
- * (tokens published as a package). Files that lead outside the project are left out.
+ * (tokens published as a package). Files that lead outside the project are left out. Those that
+ * `skip` accepts are left out before that check, so they are not named as leading outside.
  */
 async function find(
   config: ResolvedConfig,
   patterns: string[],
   contain = new Containment(config),
+  skip: (file: string) => boolean = () => false,
 ): Promise<string[]> {
   const options = { cwd: config.root, absolute: true, dot: false };
   // A design-system package's own excludes, when an app's `exclude` adds the defaults to them.
@@ -491,7 +493,7 @@ async function find(
       });
     }),
   ]);
-  return (await contain.filter(unique(found.flat()))).sort();
+  return (await contain.filter(unique(found.flat()).filter((file) => !skip(file)))).sort();
 }
 
 /** The design system's own component files, as absolute paths. */
@@ -518,15 +520,16 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
     return true;
   };
   // Zero config in a folder that is no project but holds some (a folder of repositories): a token
-  // file in one of them is that project's, so `**/*.tokens.json` leaves it out.
+  // file in one of them is that project's, so `**/*.tokens.json` leaves it out, without naming it
+  // in the log when it leads outside.
   const others =
     config.tokensDetected && !config.configFile && !holdsProject(config.root)
       ? (file: string) => inProjectBelow(config.root, file)
       : () => false;
   const add = async (sources: TokenSourceConfig[]) => {
     for (const source of sources) {
-      for (const file of await find(config, [source.path], contain)) {
-        if (!others(file) && (await isNew(file))) tokens.push({ file, prefix: source.prefix });
+      for (const file of await find(config, [source.path], contain, others)) {
+        if (await isNew(file)) tokens.push({ file, prefix: source.prefix });
       }
     }
   };
