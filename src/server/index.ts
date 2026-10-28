@@ -19,6 +19,7 @@ import * as z from 'zod';
 import type { Catalog, CatalogEntry, ProjectSet, ServedProject } from '../catalog.js';
 import { excludedBy } from '../config.js';
 import type { DesignSystem } from '../design-system.js';
+import { unpublishedComponents } from '../explain.js';
 import { uncheckedNotice } from '../lint/index.js';
 import { notReadNotices } from '../not-read.js';
 import { descriptionOf, type SearchHit } from '../search/index.js';
@@ -702,7 +703,11 @@ function register(serve: Registrar, { getDesignSystem, getProjects }: CreateServ
       const { ds } = found;
       const component = ds.getComponent(name);
       if (!component) {
-        if (!ds.roots().length) return refuse(noComponentsMessage(ds.root, found.project?.dir));
+        if (!ds.roots().length) {
+          return refuse(
+            noComponentsMessage(ds.root, found.project?.dir, false, unpublishedComponents(ds)),
+          );
+        }
         const names = ds.roots().map((c) => c.name);
         return refuse(renderNotFound(name, ds.suggestComponent(name), names));
       }

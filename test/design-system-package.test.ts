@@ -102,7 +102,7 @@ describe('init in a design-system package', () => {
     const init = await run(['init', '--yes', '--no-cache'], kit);
     expect(init.code).toBe(0);
     expect(init.stdout).toContain(
-      'This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json", also added to "files" with ONSYSTEM.md), which every app that depends on @acme/kit reads, under its own config when it has one.',
+      'This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json", with onsystem.config.json and ONSYSTEM.md added to "files"), which every app that depends on @acme/kit reads, under its own config when it has one.',
     );
     expect(init.stdout).toContain(
       'Apps that install @acme/kit from a registry get only what "files" in package.json publishes, which leaves out src/ (3 component files and 1 token file)',

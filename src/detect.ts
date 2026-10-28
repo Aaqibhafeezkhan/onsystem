@@ -1371,6 +1371,17 @@ function exportMatches(dir: string, subpath: string): { middle: string; value: u
   return matches.sort((a, b) => b.rank - a.rank);
 }
 
+/**
+ * The targets package `dir`'s `exports` map `subpath` (`./components/tooltip`) to, as written:
+ * through the entry Node.js picks (its exact subpath, else the most specific pattern) and every
+ * condition but `types`, with `*` filled in. Undefined when no entry maps the subpath; none when
+ * the entry blocks it (`null`).
+ */
+export function exportedTargets(dir: string, subpath: string): string[] | undefined {
+  const [match] = exportMatches(dir, subpath);
+  return match && exportTargets(match.value).map((t) => t.replaceAll('*', match.middle));
+}
+
 /** Every target of an export condition map, in order, but its types, or those of `conditions` alone. */
 function exportTargets(value: unknown, conditions?: ReadonlySet<string>): string[] {
   if (typeof value === 'string') return [value];

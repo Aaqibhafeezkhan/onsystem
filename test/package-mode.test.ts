@@ -144,6 +144,22 @@ describe('a design-system package whose tokens are a Tailwind theme partial', ()
     expect(ds.tokens.filter((t) => t.category === 'radius')).toHaveLength(4);
   });
 
+  // Tailwind v3 has no `--spacing` unit and no `rounded-xs` or `rounded-4xl`, and its plugins
+  // run on either version.
+  it.each([['^3.4.0'], ['~3.4.17'], ['3.x']])(
+    'adds nothing in an app on Tailwind v3 (%s)',
+    async (range) => {
+      const ds = await load(nextApp({ tailwindcss: range, '@tailwindcss/typography': '^0.5.16' }));
+      expect(ds.tokens.filter((t) => t.category === 'spacing')).toEqual([]);
+      expect(ds.tokens.filter((t) => t.category === 'radius')).toHaveLength(4);
+    },
+  );
+
+  it('reads Tailwind v4 from the package that runs it, whatever the tailwindcss range', async () => {
+    const ds = await load(nextApp({ tailwindcss: '^3.4.0', '@tailwindcss/postcss': '^4' }));
+    expect(ds.tokens.filter((t) => t.category === 'spacing')).toHaveLength(1);
+  });
+
   it("adds no spacing unit when the partial clears Tailwind's", async () => {
     const app = nextApp();
     fs.writeFileSync(
@@ -217,6 +233,92 @@ describe('an import through a subpath export with no file behind it', () => {
       modules: ['@acme/ui/components/icons'],
     });
   });
+
+  it('finds the package past a package.json with no name in its folders', async () => {
+    const root = fixture({
+      ...ACME,
+      'packages/ui/src/components/package.json': json({ type: 'module' }),
+      'apps/web/app/page.tsx': SUBPATHS,
+    });
+    const ds = await load(path.join(root, 'apps/web'));
+    const result = ds.check(SUBPATHS, 'app/page.tsx');
+    expect(
+      result.diagnostics.filter((d) => d.ruleId === 'no-unknown-component').map((d) => d.line),
+    ).toEqual([8]);
+  });
+
+  // `init`'s config in a package whose "./*" leads to `dist/components`, which `tsc` builds from
+  // `src/components`, with Tooltip in a `.ts` file its components glob leaves out.
+  const DIST_STAR = {
+    'pnpm-workspace.yaml': 'packages:\n  - apps/*\n  - packages/*\n',
+    'package.json': json({ name: 'acme', private: true }),
+    'packages/ui/package.json': json({
+      name: '@acme/ui',
+      version: '0.0.0',
+      private: true,
+      type: 'module',
+      exports: {
+        './styles.css': './src/styles.css',
+        './*': { types: './dist/components/*.d.ts', default: './dist/components/*.js' },
+      },
+      onsystem: './onsystem.config.json',
+    }),
+    'packages/ui/onsystem.config.json': json({ components: ['src/components/**/*.{tsx,jsx}'] }),
+    'packages/ui/src/components/button.tsx':
+      'export function Button(props: { variant?: "default" | "outline"; children?: unknown }) { return <button /> }\n',
+    'packages/ui/src/components/tooltip.ts':
+      'export { Root as Tooltip } from "@radix-ui/react-tooltip";\n',
+    'apps/web/package.json': json({ name: 'web', dependencies: { '@acme/ui': 'workspace:*' } }),
+  };
+  const BUILT = {
+    'packages/ui/dist/components/button.js': 'export function Button() {}\n',
+    'packages/ui/dist/components/button.d.ts': 'export declare function Button(): unknown;\n',
+    'packages/ui/dist/components/tooltip.js':
+      'export { Root as Tooltip } from "@radix-ui/react-tooltip";\n',
+    'packages/ui/dist/components/tooltip.d.ts':
+      'export { Root as Tooltip } from "@radix-ui/react-tooltip";\n',
+  };
+  const DIST_PAGE = `import { Button } from "@acme/ui/button";
+import { Tooltip } from "@acme/ui/tooltip";
+import { Popover } from "@acme/ui/popover";
+
+export default function Page() {
+  return (
+    <Button>
+      <Tooltip>Save</Tooltip>
+      <Popover />
+    </Button>
+  );
+}
+`;
+
+  it.each([
+    ['not built', {}, false],
+    ['not built, linked', {}, true],
+    ['built', BUILT, false],
+    ['built, linked', BUILT, true],
+  ])(
+    'is only unchecked when the export leads to dist/ (%s)',
+    async (_, built: Record<string, string>, linked) => {
+      const root = fixture({ ...DIST_STAR, ...built, 'apps/web/app/page.tsx': DIST_PAGE });
+      if (linked) {
+        // As pnpm links a workspace package.
+        fs.mkdirSync(path.join(root, 'apps/web/node_modules/@acme'), { recursive: true });
+        fs.symlinkSync(
+          path.join(root, 'packages/ui'),
+          path.join(root, 'apps/web/node_modules/@acme/ui'),
+          'junction',
+        );
+      }
+      const ds = await load(path.join(root, 'apps/web'));
+      expect(ds.config.designSystemPackage?.name).toBe('@acme/ui');
+      const result = ds.check(DIST_PAGE, 'app/page.tsx');
+      expect(result.diagnostics.filter((d) => d.ruleId === 'no-unknown-component')).toEqual([]);
+      // Tooltip is real, in src/components/tooltip.ts. Popover may be too, as far as the
+      // package.json says: its source is any file the build reads.
+      expect(result.unchecked?.names.sort()).toEqual(['Popover', 'Tooltip']);
+    },
+  );
 });
 
 function text(result: unknown): string {
@@ -272,6 +374,45 @@ describe('an app whose design-system package publishes no sources', () => {
     const listed = text(await client.callTool({ name: 'list_components', arguments: {} }));
     expect(listed).toBe(REASON);
     expect(listed).not.toContain('globs');
+    expect(
+      text(await client.callTool({ name: 'get_component', arguments: { name: 'Button' } })),
+    ).toBe(REASON);
+  });
+
+  it('says that "libraries": false turned off the declarations the package publishes', async () => {
+    const root = app();
+    const nm = path.join(root, 'node_modules/@northwind/ui');
+    const manifest = JSON.parse(fs.readFileSync(path.join(nm, 'package.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    fs.writeFileSync(
+      path.join(nm, 'package.json'),
+      json({ ...manifest, types: './dist/index.d.ts' }),
+    );
+    fs.writeFileSync(
+      path.join(nm, 'dist/index.d.ts'),
+      'import type * as React from "react";\nexport declare function Button(props: { children?: React.ReactNode }): React.JSX.Element;\n',
+    );
+    // With the declarations read, there is no reason to give.
+    const read = await load(root);
+    expect(read.model.components.map((c) => c.name)).toEqual(['Button']);
+    fs.writeFileSync(path.join(root, 'onsystem.config.json'), json({ libraries: false }));
+    const ds = await load(root);
+    const server = createServer({ getDesignSystem: () => Promise.resolve(ds) });
+    const client = new Client({ name: 'test-client', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    clients.push(client);
+    const off =
+      '@northwind/ui publishes no component sources, and "libraries": false in the config turns off the type declarations it publishes, so its components are unknown here and the component rules did not run: set "libraries" to [], which reads its declarations and no library, or remove it. The token rules still check against the tokens it publishes. See https://onsystem.vercel.app/docs/design-system-packages#what-apps-get';
+    expect(text(await client.callTool({ name: 'list_components', arguments: {} }))).toBe(off);
+    expect(
+      text(await client.callTool({ name: 'get_component', arguments: { name: 'Button' } })),
+    ).toBe(off);
+    // As it says, [] reads them.
+    fs.writeFileSync(path.join(root, 'onsystem.config.json'), json({ libraries: [] }));
+    expect((await load(root)).model.components.map((c) => c.name)).toEqual(['Button']);
   });
 
   it('lists no "Available" names when there are none', () => {
@@ -314,5 +455,44 @@ describe('init in a published design-system package', () => {
       'onsystem.config.json',
       'ONSYSTEM.md',
     ]);
+  });
+
+  const PACKAGE = (files: string[]) => ({
+    'package.json': json({
+      name: '@northwind/ui',
+      version: '1.4.0',
+      files,
+      exports: { '.': './src/index.ts', './theme.css': './theme.css' },
+    }),
+    'theme.css': PARTIAL,
+    'src/index.ts':
+      'export * from "./button";\nexport * from "./card";\nexport * from "./input";\n',
+    'src/button.tsx':
+      'export function Button(props: { children?: unknown }) { return <button /> }\n',
+    'src/card.tsx': 'export function Card(props: { children?: unknown }) { return <div /> }\n',
+    'src/input.tsx': 'export function Input(props: { name?: string }) { return <input /> }\n',
+  });
+  const note = (added: string) =>
+    `This is a design-system package: package.json declares its config ("onsystem": "./onsystem.config.json"${added}), which every app that depends on @northwind/ui reads, under its own config when it has one.`;
+
+  it('names only the files it added to "files"', async () => {
+    const root = fixture(PACKAGE(['src', 'onsystem.config.json']));
+    const init = await run(['init', '--yes', '--no-cache'], root);
+    expect(init.stdout).toContain(note(', with ONSYSTEM.md added to "files"'));
+    // Run again, it adds nothing, and says nothing of "files".
+    const again = await run(['init', '--yes', '--force', '--no-cache'], root);
+    expect(again.stdout).toContain(note(''));
+  });
+
+  it('leaves ONSYSTEM.md out when "files" leaves it out', async () => {
+    const root = fixture(PACKAGE(['dist', 'src', '!ONSYSTEM.md']));
+    const init = await run(['init', '--yes', '--no-cache'], root);
+    expect(init.code).toBe(0);
+    expect(fs.existsSync(path.join(root, 'ONSYSTEM.md'))).toBe(true);
+    expect(init.stdout).toContain(note(', with onsystem.config.json added to "files"'));
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as {
+      files: string[];
+    };
+    expect(manifest.files).toEqual(['dist', 'src', '!ONSYSTEM.md', 'onsystem.config.json']);
   });
 });

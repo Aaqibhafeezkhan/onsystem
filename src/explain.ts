@@ -197,8 +197,9 @@ export function explainProject(ds: DesignSystem, cwd: string, indent = ''): stri
 /**
  * Why a project that takes on the config of a design-system package installed in node_modules
  * knows none of its components: the package publishes neither their sources nor their type
- * declarations. The one message for it, where a project without components would otherwise be
- * told to check the "components" globs. Undefined otherwise.
+ * declarations, or `"libraries": false` turns off the declarations it publishes. The one message
+ * for it, where a project without components would otherwise be told to check the "components"
+ * globs. Undefined otherwise.
  */
 export function unpublishedComponents(
   ds: Pick<DesignSystem, 'config' | 'model'>,
@@ -208,7 +209,12 @@ export function unpublishedComponents(
   const tokens = ds.model.tokens.length
     ? ' The token rules still check against the tokens it publishes.'
     : '';
-  return `${pathOf(declared.name)} publishes neither its component sources nor their type declarations, so its components are unknown here and the component rules did not run: ask its team to add its sources to "files" in its package.json, or to publish type declarations.${tokens} See https://onsystem.vercel.app/docs/design-system-packages#what-apps-get`;
+  const name = pathOf(declared.name);
+  const see = 'See https://onsystem.vercel.app/docs/design-system-packages#what-apps-get';
+  if (ds.config.librariesOff?.some((library) => library.package === declared.name)) {
+    return `${name} publishes no component sources, and "libraries": false in the config turns off the type declarations it publishes, so its components are unknown here and the component rules did not run: set "libraries" to [], which reads its declarations and no library, or remove it.${tokens} ${see}`;
+  }
+  return `${name} publishes neither its component sources nor their type declarations, so its components are unknown here and the component rules did not run: ask its team to add its sources to "files" in its package.json, or to publish type declarations.${tokens} ${see}`;
 }
 
 /** Why a library the project depends on is not read: `left out by "libraries" in onsystem.config.json`. */

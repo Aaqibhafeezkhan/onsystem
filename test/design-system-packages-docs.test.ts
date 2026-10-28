@@ -361,19 +361,17 @@ describe('what apps get from a design-system package (docs/design-system-package
       '`no-unknown-component`, `no-unknown-prop` and `no-unknown-variant` check none of the components the app imports from the package',
     );
     expect(whatAppsGet).toContain(`\`check\` says \`${notice}\`\n`);
-    // Agents find no component, and list_components says why.
+    // Agents find no component, and list_components and get_component say why.
     const why =
       '@acme/ui publishes neither its component sources nor their type declarations, so its components are unknown here and the component rules did not run: ask its team to add its sources to "files" in its package.json, or to publish type declarations.';
     expect(await tool(app, 'list_components', {})).toContain(why);
     expect(whatAppsGet).toContain(
-      `**\`list_components\` and \`inspect --explain\` say why:** \`${why}\``,
+      `**\`list_components\`, \`get_component\` and \`inspect --explain\` say why:** \`${why}\``,
     );
     expect(await tool(app, 'search_components', { query: 'button' })).toMatch(
       /^No components match/,
     );
-    expect(await tool(app, 'get_component', { name: 'Button' })).toMatch(
-      /^No design-system components found/,
-    );
+    expect(await tool(app, 'get_component', { name: 'Button' })).toContain(why);
     // check_ui reports from the same rules.
     const checked = await tool(app, 'check_ui', { path: 'app/page.tsx' });
     expect(new Set([...checked.matchAll(/ \[([a-z-]+)\] /g)].map((m) => m[1]))).toEqual(rules);
