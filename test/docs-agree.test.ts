@@ -69,24 +69,31 @@ describe('bench/v2', () => {
   it('LABELLING.md names the automatic scorers that Scoring lists', () => {
     const measures = [...scoring.matchAll(/^\d+\. \*\*(.+?)\*\*/gm)].map((m) => m[1] ?? '');
     expect(measures).toHaveLength(4);
-    // The blind labels are the one measure that is not automatic.
-    const automatic = measures.filter((m) => !m.startsWith('Blind labels'));
-    expect(automatic).toEqual([
-      '`tsc` (independent).',
-      "`onsystem check` (the tool's own).",
-      '@shadcn/lint (independent, added after the standard run).',
-    ]);
+    // The blind labels are the one measure that is not automatic; each of the others is one scorer.
+    const automatic = measures.filter((m) => !/label/i.test(m));
+    expect(automatic).toHaveLength(3);
+    const titled = (scorer: string) => automatic.filter((m) => m.includes(scorer)).length;
+    expect(['tsc', 'onsystem', '@shadcn/lint'].map(titled)).toEqual([1, 1, 1]);
     const intro = read('bench/v2/LABELLING.md').split('\n\n')[1] ?? '';
-    expect(intro).toContain('three automatic scorers');
+    expect(intro).toMatch(/\bthree\b[^.]*\bscorers\b/);
     for (const scorer of ['`tsc`', 'onsystem', '@shadcn/lint']) expect(intro).toContain(scorer);
   });
 
   it('says that prepare checks tsc and onsystem only, as lib/repo.mjs does', () => {
-    expect(read('bench/v2/lib/repo.mjs')).toContain(
-      'checking that tsc and onsystem score the controls as expected',
-    );
-    const prepare = scoring.split('\n\n').find((p) => p.startsWith('`prepare` checks')) ?? '';
-    expect(prepare).toContain('`prepare` checks that `tsc` and onsystem can be trusted');
+    // runControls, the check prepare runs, scores its controls with tsc and onsystem alone.
+    const repo = read('bench/v2/lib/repo.mjs');
+    const start = repo.indexOf('async function runControls(');
+    expect(start).toBeGreaterThan(-1);
+    const controls = repo.slice(start, repo.indexOf('\n}\n', start));
+    expect(controls).toMatch(/\btypecheck\(/);
+    expect(controls).toMatch(/\bonsystemCheck\(/);
+    expect(controls).not.toMatch(/shadcn/i);
+    // The paragraph on prepare names tsc and onsystem as what it checks, and says @shadcn/lint is not.
+    const prepare = scoring.split('\n\n').find((p) => p.includes('`prepare`')) ?? '';
+    const checks = prepare.split(/[:.]\s/)[0] ?? '';
+    expect(checks).toContain('`tsc`');
+    expect(checks).toContain('onsystem');
+    expect(checks).not.toContain('@shadcn/lint');
     expect(prepare).toContain('@shadcn/lint');
   });
 

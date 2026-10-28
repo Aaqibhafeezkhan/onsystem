@@ -42,7 +42,7 @@ export const faqEntries = (corpus: FaqCorpus): [question: string, answer: string
   ],
   [
     'Does it work with agents other than Claude Code?',
-    'Yes. Any MCP client gets the tools, including `check_ui`, which the agent runs on its own output, and `onsystem check` in CI gates the pull request whichever agent wrote it. The hook that checks each edit as it happens runs in Claude Code and Codex CLI, which installs the same plugin and runs its hook once you trust it in `/hooks`; other agents have no hook so far. [Set up your agent](/docs/clients) has a config for each client.',
+    'Yes. Any MCP client gets the tools, including `check_ui`, which the agent runs on its own output, and `onsystem check` in CI gates the pull request whichever agent wrote it. The hook that checks each edit as it happens runs in Claude Code and Codex CLI, which installs the same plugin and runs its hook once you trust it in `/hooks`. [Set up your agent](/docs/clients) has a config for each client.',
   ],
   [
     'How often is it wrong?',

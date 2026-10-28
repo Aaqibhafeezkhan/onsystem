@@ -21,7 +21,7 @@ Everything runs on your machine. The server reads the project's component files,
 
 VS Code: add a clone's `plugins/onsystem-agent` folder to the `chat.pluginLocations` setting.
 
-GitHub Copilot CLI: install onsystem from the marketplace, which gives it the Claude Code plugin's MCP server and skill, the same as this package's. Copilot CLI has deprecated installing a plugin straight from a repository, as this folder would need.
+GitHub Copilot CLI: install onsystem from the marketplace, which gives it the Claude Code plugin's MCP server and skill, the same as this package's. Copilot CLI has deprecated installing a plugin straight from a repository.
 
 ```sh
 copilot plugin marketplace add dgesteves/onsystem
