@@ -4,17 +4,14 @@ onsystem is built in the open, and this page lists what is in review, what comes
 
 ## Merged, in the next release
 
-- Token readers: `hsl(var(--x))` theme colors, stylesheet import order, Tailwind v3's default radius scale, and an app's own stylesheet next to a shared one ([#201](https://github.com/dgesteves/onsystem/pull/201))
-- Website, already live: shareable playground links, no layout shift when the fonts load, and a larger Ask button on phones ([#200](https://github.com/dgesteves/onsystem/pull/200))
+Nothing yet: everything merged so far is in 0.10.1 or earlier, as the [changelog](CHANGELOG.md) shows. The website and docs changes are live: shareable playground links ([#200](https://github.com/dgesteves/onsystem/pull/200)), a compatibility section in the README ([#203](https://github.com/dgesteves/onsystem/pull/203)) and support tiers for every client setup ([#204](https://github.com/dgesteves/onsystem/pull/204)).
 
 ## In review
 
 Open pull requests. Each one ships in the next release once it is reviewed and merged.
 
-- Security hardening: a per-user cache folder, repository text quoted as text in MCP answers, a color rule that stays fast on long class strings, and exit code 2 for crashes ([#199](https://github.com/dgesteves/onsystem/pull/199))
-- Layered configs: an app's config builds on its design-system package's, and a monorepo root's rules apply over both ([#202](https://github.com/dgesteves/onsystem/pull/202))
-- A compatibility section in the README: Node.js, operating systems, ESLint, TypeScript, React, Tailwind, shadcn/ui bases and MCP clients ([#203](https://github.com/dgesteves/onsystem/pull/203))
-- Support tiers for every client setup, and no new integrations for four weeks after launch unless someone asks for one ([#204](https://github.com/dgesteves/onsystem/pull/204))
+- Docs that match what onsystem does: the setup prompt, the FAQ on the hook, the agent plugin's Copilot install, Antigravity in the quickstart and the benchmark's scorer text ([#241](https://github.com/dgesteves/onsystem/pull/241))
+- MCP server robustness: it recovers once a broken config is fixed, reloads edited JS and TS configs, and checks each project with its own design system when `--root` is a folder of projects ([#242](https://github.com/dgesteves/onsystem/pull/242))
 
 ## Next
 
