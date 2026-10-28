@@ -294,8 +294,11 @@ export class LintTarget {
     const targets = dir ? exportedTargets(dir, `.${specifier.slice(name.length)}`) : undefined;
     if (!dir || !targets?.length) return undefined;
     const files = targets.map((target) => path.resolve(dir, target));
+    // TypeScript resolves a `.jsx` target to the `.tsx` file of that name too.
     const file =
-      files.find((f) => isInside(dir, f) && isFile(f)) ??
+      files
+        .flatMap((f) => (f.endsWith('.jsx') ? [f, `${f.slice(0, -4)}.tsx`] : [f]))
+        .find((f) => isInside(dir, f) && isFile(f)) ??
       (targets.every(isSourceFile) ? files[0] : undefined);
     return file && relativePath(this.model.root, file);
   }
@@ -577,12 +580,13 @@ function packageOf(specifier: string): string {
 
 /**
  * An export target that is a TypeScript or JSX source file (`./src/components/tooltip.tsx`), not
- * a declaration file or compiled JSX in a build folder.
+ * a declaration file or a file in a build folder (`./dist/tooltip.tsx`, not built yet).
  */
-function isSourceFile(file: string): boolean {
-  if (/\.d\.[cm]?ts$/.test(file)) return false;
-  if (/\.[cm]?tsx?$/.test(file)) return true;
-  return /\.jsx$/.test(file) && !/(?:^|\/)(?:dist|build|lib|out|esm|cjs)\//.test(file);
+function isSourceFile(target: string): boolean {
+  if (/\.d\.[cm]?ts$/.test(target) || /^(?:\.\/)?(?:dist|build|lib|out|esm|cjs)\//.test(target)) {
+    return false;
+  }
+  return /\.(?:[cm]?tsx?|jsx)$/.test(target);
 }
 
 function stripExtension(file: string): string {

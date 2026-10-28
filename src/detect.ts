@@ -1338,7 +1338,10 @@ function exportedFile(
 
 /**
  * The entries of package `dir`'s `exports` that map `subpath`, with what their `*` stands for:
- * an exact subpath first, then the most specific pattern, as Node.js picks them.
+ * an exact subpath first, then the patterns, as Node.js orders them (`PATTERN_KEY_COMPARE`): the
+ * longest prefix before the `*` first, then the longest key, so `./components/*.js` comes before
+ * `./components/*` for `./components/tip.js`. A pattern has one `*`, which stands for at least
+ * one character.
  */
 function exportMatches(dir: string, subpath: string): { middle: string; value: unknown }[] {
   const exports = readJson(path.join(dir, 'package.json'))?.exports;
@@ -1350,25 +1353,27 @@ function exportMatches(dir: string, subpath: string): { middle: string; value: u
       : exports === undefined
         ? []
         : [['.', exports]];
-  const matches: { middle: string; value: unknown; rank: number }[] = [];
+  const matches: { middle: string; value: unknown; rank: number; length: number }[] = [];
   for (const [key, value] of entries) {
     const star = key.indexOf('*');
     if (star === -1) {
-      if (key === subpath) matches.push({ middle: '', value, rank: Infinity });
+      if (key === subpath) matches.push({ middle: '', value, rank: Infinity, length: key.length });
       continue;
     }
+    if (key.lastIndexOf('*') !== star) continue;
     const prefix = key.slice(0, star);
     const suffix = key.slice(star + 1);
     if (
       subpath.startsWith(prefix) &&
       subpath.endsWith(suffix) &&
-      subpath.length >= prefix.length + suffix.length
+      subpath.length > prefix.length + suffix.length
     ) {
       const middle = subpath.slice(prefix.length, subpath.length - suffix.length);
-      matches.push({ middle, value, rank: prefix.length });
+      matches.push({ middle, value, rank: prefix.length, length: key.length });
     }
   }
-  return matches.sort((a, b) => b.rank - a.rank);
+  // Only one exact subpath can match, so its rank never ties.
+  return matches.sort((a, b) => b.rank - a.rank || b.length - a.length);
 }
 
 /**

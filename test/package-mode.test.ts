@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -301,15 +302,7 @@ export default function Page() {
     'is only unchecked when the export leads to dist/ (%s)',
     async (_, built: Record<string, string>, linked) => {
       const root = fixture({ ...DIST_STAR, ...built, 'apps/web/app/page.tsx': DIST_PAGE });
-      if (linked) {
-        // As pnpm links a workspace package.
-        fs.mkdirSync(path.join(root, 'apps/web/node_modules/@acme'), { recursive: true });
-        fs.symlinkSync(
-          path.join(root, 'packages/ui'),
-          path.join(root, 'apps/web/node_modules/@acme/ui'),
-          'junction',
-        );
-      }
+      if (linked) link(root);
       const ds = await load(path.join(root, 'apps/web'));
       expect(ds.config.designSystemPackage?.name).toBe('@acme/ui');
       const result = ds.check(DIST_PAGE, 'app/page.tsx');
@@ -319,7 +312,145 @@ export default function Page() {
       expect(result.unchecked?.names.sort()).toEqual(['Popover', 'Tooltip']);
     },
   );
+
+  // Of two patterns with the same prefix, Node.js takes the longer key: "./components/*.js"
+  // over "./components/*" for "./components/tip.js", whichever comes first. Tip's source is
+  // src/components/tip.ts, built to dist/components/tip.js.
+  const TIP = 'export { Root as Tip } from "@radix-ui/react-tooltip";\n';
+  const ORDERED = (exports: Record<string, unknown>) => ({
+    ...DIST_STAR,
+    'packages/ui/package.json': json({
+      name: '@acme/ui',
+      version: '0.0.0',
+      private: true,
+      type: 'module',
+      exports,
+      onsystem: './onsystem.config.json',
+    }),
+    'packages/ui/src/components/tip.ts': TIP,
+    'packages/ui/dist/components/tip.js': TIP,
+    'packages/ui/dist/components/tip.d.ts': TIP,
+  });
+  const BUILT_JS = { types: './dist/components/*.d.ts', default: './dist/components/*.js' };
+  const SOURCE = './src/components/*.tsx';
+
+  // Each order of the two keys, under "./components/" and at the package's root, each linked
+  // into node_modules and not.
+  it.each(
+    [
+      ['./components/*', { './components/*': SOURCE, './components/*.js': BUILT_JS }],
+      ['./components/*.js', { './components/*.js': BUILT_JS, './components/*': SOURCE }],
+      ['./*', { './*': SOURCE, './*.js': BUILT_JS }],
+      ['./*.js', { './*.js': BUILT_JS, './*': SOURCE }],
+    ].flatMap(([first, exports]) => [
+      [first, false, exports],
+      [first, true, exports],
+    ]) as [string, boolean, Record<string, unknown>][],
+  )(
+    'takes the longer of two patterns with the same prefix (%s first, linked: %s)',
+    async (first, linked, exports) => {
+      const at = first.startsWith('./components/') ? 'components/' : '';
+      const page = `import { Button } from "@acme/ui/${at}button";
+import { Tip } from "@acme/ui/${at}tip.js";
+
+export default function Page() {
+  return <Button><Tip>Save</Tip></Button>;
+}
+`;
+      const root = fixture({ ...ORDERED(exports), 'apps/web/app/page.tsx': page });
+      if (linked) {
+        link(root);
+        // What Node.js resolves the import to.
+        const resolved = createRequire(path.join(root, 'apps/web/app/page.tsx')).resolve(
+          `@acme/ui/${at}tip.js`,
+        );
+        expect(resolved).toBe(
+          fs.realpathSync(path.join(root, 'packages/ui/dist/components/tip.js')),
+        );
+      }
+      const ds = await load(path.join(root, 'apps/web'));
+      const result = ds.check(page, 'app/page.tsx');
+      expect(result.diagnostics.filter((d) => d.ruleId === 'no-unknown-component')).toEqual([]);
+      expect(result.unchecked?.names).toEqual(['Tip']);
+    },
+  );
+
+  it('looks for the .tsx file TypeScript resolves a .jsx export to', async () => {
+    const page = `import { Button } from "@acme/ui/button";
+import { Tip } from "@acme/ui/tip";
+import { Popover } from "@acme/ui/popover";
+
+export default function Page() {
+  return <Button><Tip>Save</Tip><Popover /></Button>;
+}
+`;
+    const root = fixture({
+      ...Object.fromEntries(
+        Object.entries(DIST_STAR).filter(([file]) => !file.endsWith('button.tsx')),
+      ),
+      'packages/ui/package.json': json({
+        name: '@acme/ui',
+        version: '0.0.0',
+        private: true,
+        type: 'module',
+        exports: { './*': './src/components/*.jsx' },
+        onsystem: './onsystem.config.json',
+      }),
+      // A package in JSX, but for one component in TypeScript.
+      'packages/ui/onsystem.config.json': json({ components: ['src/components/*.jsx'] }),
+      'packages/ui/src/components/button.jsx':
+        'export function Button({ variant, children }) { return <button>{children}</button> }\n',
+      'packages/ui/src/components/tip.tsx':
+        'export function Tip(props: { children?: unknown }) { return <span /> }\n',
+      'apps/web/app/page.tsx': page,
+    });
+    const ds = await load(path.join(root, 'apps/web'));
+    const result = ds.check(page, 'app/page.tsx');
+    // Tip is in src/components/tip.tsx, which the components glob leaves out; Popover is nowhere.
+    expect(
+      result.diagnostics.filter((d) => d.ruleId === 'no-unknown-component').map((d) => d.message),
+    ).toEqual([
+      '"Popover" is not a design-system component (imported from "@acme/ui/popover"). Use search_components to find an existing one.',
+    ]);
+    expect(result.unchecked?.names).toEqual(['Tip']);
+  });
+
+  it('leaves an export into a build folder unchecked, whatever its extension', async () => {
+    const page = `import { Button } from "@acme/ui/components/button";
+import { Popover } from "@acme/ui/components/popover";
+
+export default function Page() {
+  return <Button><Popover /></Button>;
+}
+`;
+    const root = fixture({
+      ...DIST_STAR,
+      'packages/ui/package.json': json({
+        name: '@acme/ui',
+        version: '0.0.0',
+        private: true,
+        type: 'module',
+        exports: { './components/*': './dist/components/*.tsx' },
+        onsystem: './onsystem.config.json',
+      }),
+      'apps/web/app/page.tsx': page,
+    });
+    const ds = await load(path.join(root, 'apps/web'));
+    const result = ds.check(page, 'app/page.tsx');
+    expect(result.diagnostics.filter((d) => d.ruleId === 'no-unknown-component')).toEqual([]);
+    expect(result.unchecked?.names).toEqual(['Popover']);
+  });
 });
+
+/** Links the workspace's `@acme/ui` into `apps/web/node_modules`, as pnpm does. */
+function link(root: string) {
+  fs.mkdirSync(path.join(root, 'apps/web/node_modules/@acme'), { recursive: true });
+  fs.symlinkSync(
+    path.join(root, 'packages/ui'),
+    path.join(root, 'apps/web/node_modules/@acme/ui'),
+    'junction',
+  );
+}
 
 function text(result: unknown): string {
   const content = (result as CallToolResult).content[0];
