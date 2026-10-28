@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import { Catalog, type ProjectSet, type ServedProject } from '../catalog.js';
-import { DesignSystemHost, type DesignSystem } from '../design-system.js';
+import { DesignSystemHost, type DesignSystem, type HostOptions } from '../design-system.js';
 import type { Logger } from '../util/log.js';
 import { isInside } from '../util/paths.js';
 import type { Project, Workspace } from '../workspace.js';
@@ -12,6 +12,8 @@ export interface WorkspaceProjectsOptions {
   logger: Logger;
   /** Called when a project's design system reloads. */
   onChange?: () => void;
+  /** Builds each project's model; `buildModel` when undefined. */
+  build?: HostOptions['build'];
 }
 
 /**
@@ -76,6 +78,7 @@ export class WorkspaceProjects implements ProjectSet {
     host = new DesignSystemHost(project.config, {
       cache: this.options.cache,
       logger: this.options.logger,
+      build: this.options.build,
       loadConfig: () => this.workspace.configFor(project),
     });
     host.onChange(() => this.options.onChange?.());

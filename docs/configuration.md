@@ -84,6 +84,8 @@ Docs are Markdown or MDX, one file per component, matched by `component:` frontm
 
 CLI flags override the file: `--root`, `--config`, `--components`, `--tokens`, `--docs` (repeatable), `--no-cache`, `--no-watch`. Run `onsystem --help` for the rest.
 
+The MCP server reads the config file again when it changes (unless it runs with `--no-watch`). A `.mjs`, `.js` or `.ts` config is run again, but a module it imports is not: restart the server after editing one. Each edit of such a config also keeps a small copy of it in memory until the server restarts.
+
 ## Code from shadcn registries
 
 `npx shadcn add` also installs items from other registries, often into a folder of their own: AI Elements into `components/ai-elements`, signoff-ui into `components/signoff-ui`. That code is the registry's: you update it with `shadcn add`, not by hand.

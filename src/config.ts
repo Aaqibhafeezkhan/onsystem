@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -29,6 +31,7 @@ import {
   globBase,
   isInside,
   matchesGlob,
+  pathOf,
   slashGlob,
   toPosix,
 } from './util/paths.js';
@@ -327,6 +330,20 @@ export const LEGACY_CONFIG_FILES = CONFIG_FILES.map((name) =>
   name.replace(/^onsystem\./, 'design-system-mcp.'),
 );
 
+/**
+ * What marks the folder a file belongs to: the nearest one at or above it with a config,
+ * a components.json, a package.json or an Nx project.json. The Claude Code hook finds a
+ * file's project the same way, so `check` from a workspace root and the hook agree on
+ * every file.
+ */
+export const PROJECT_MARKERS = [
+  ...CONFIG_FILES,
+  ...LEGACY_CONFIG_FILES,
+  'components.json',
+  'package.json',
+  'project.json',
+];
+
 export const DEFAULT_COMPONENTS = [
   'components/ui/**/*.{tsx,jsx}',
   'src/components/ui/**/*.{tsx,jsx}',
@@ -395,6 +412,12 @@ export interface LoadConfigOptions {
    * choose, unlike the folder the server was started in.
    */
   jsonConfigOnly?: boolean | undefined;
+  /**
+   * With `jsonConfigOnly`: the folder the MCP server was started for (its `--root` or the
+   * client's root) when that folder is no project but holds the one read, which the error for a
+   * JavaScript or TypeScript config names.
+   */
+  jsonConfigWithin?: string | undefined;
 }
 
 export class ConfigError extends Error {
@@ -816,12 +839,18 @@ type TokenSource = z.output<typeof tokenSourceSchema>;
 /** A config file, read and validated: a JSON one only with `jsonConfigOnly`. */
 async function readConfig(
   file: string,
-  options: Pick<LoadConfigOptions, 'jsonConfigOnly'>,
+  options: Pick<LoadConfigOptions, 'cwd' | 'root' | 'jsonConfigOnly' | 'jsonConfigWithin'>,
 ): Promise<ParsedConfig> {
   if (!fs.existsSync(file)) throw new ConfigError(`Config file not found: ${file}`);
   if (options.jsonConfigOnly && !file.endsWith('.json')) {
+    const within = options.jsonConfigWithin;
+    const project = options.root
+      ? path.resolve(options.cwd ?? process.cwd(), options.root)
+      : path.dirname(file);
     throw new ConfigError(
-      `${file} was not run: the server runs a JavaScript or TypeScript config only in a project it was started in (its working directory, --root or the client's roots), not in one found from the path a tool call names. Start the server in the project, or use onsystem.config.json.`,
+      within
+        ? `${pathOf(file)} was not run: the server was started for ${pathOf(within)} (with --root or the client's root), which holds no project of its own, only projects in its folders, and a project found in it from the path a tool call names reads only a JSON config. Start the server with --root ${pathOf(project)} to use this config, or use onsystem.config.json.`
+        : `${pathOf(file)} was not run: the server runs a JavaScript or TypeScript config only in a project it was started in (its working directory, --root or the client's roots), not in one found from the path a tool call names. Start the server in the project, or use onsystem.config.json.`,
     );
   }
   const parsed = configSchema.safeParse(await readConfigFile(file));
@@ -830,6 +859,9 @@ async function readConfig(
   }
   return parsed.data;
 }
+
+/** Where require keeps the CommonJS modules it has loaded, by path. */
+const requireCache = createRequire(import.meta.url).cache;
 
 async function readConfigFile(file: string): Promise<unknown> {
   if (/\.[cm]?ts$/.test(file) && !nodeRunsTypeScript()) {
@@ -845,7 +877,17 @@ async function readConfigFile(file: string): Promise<unknown> {
     }
   }
   try {
-    const mod = (await import(pathToFileURL(file).href)) as { default?: unknown };
+    // A process that runs on (the MCP server, an editor's ESLint) reads the config again when it
+    // changes, and `import()` of the same URL returns the module it loaded first. The query
+    // changes with the file's content, so an edited config is a new module; an unchanged one is
+    // the same. A CommonJS one (`module.exports` in a .js file) is kept by require, by its real
+    // path. The modules a config imports are not loaded again.
+    const version = createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 16);
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+    delete requireCache[fs.realpathSync(file)];
+    const mod = (await import(`${pathToFileURL(file).href}?v=${version}`)) as {
+      default?: unknown;
+    };
     return mod.default ?? mod;
   } catch (error) {
     const message = (error as Error).message;
