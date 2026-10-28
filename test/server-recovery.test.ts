@@ -1,5 +1,8 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import * as nodeModule from 'node:module';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -11,6 +14,7 @@ import { loadConfig } from '../src/config.js';
 import { buildModel, DesignSystemHost, tokenFiles } from '../src/design-system.js';
 import { serveStdio } from '../src/server/stdio.js';
 import { silentLogger } from '../src/util/log.js';
+import { pathOf } from '../src/util/paths.js';
 import { fixture } from './helpers.js';
 
 function text(result: unknown): string {
@@ -119,12 +123,58 @@ describe('a design system whose first build fails', () => {
   });
 });
 
+/**
+ * A Node.js process that loads src/config.ts as the built CLI does, each source file compiled by
+ * TypeScript as it is imported, and prints the severity of no-unknown-variant that an edited
+ * CommonJS config gives, before and after the edit.
+ */
+const COMMONJS_RELOAD = `
+import fs from 'node:fs';
+import { registerHooks } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
+
+registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL?.endsWith('.ts')) {
+      const url = new URL(specifier.replace(/\\.js$/, '.ts'), context.parentURL);
+      if (fs.existsSync(url)) return { url: url.href, format: 'module', shortCircuit: true };
+    }
+    return next(specifier, context);
+  },
+  load(url, context, next) {
+    if (!url.startsWith('file:') || !url.endsWith('.ts')) return next(url, context);
+    const { outputText } = ts.transpileModule(fs.readFileSync(new URL(url), 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.ESNext,
+        target: ts.ScriptTarget.ES2023,
+        verbatimModuleSyntax: true,
+      },
+      fileName: fileURLToPath(url),
+    });
+    return { format: 'module', source: outputText, shortCircuit: true };
+  },
+});
+const [config, root] = process.argv.slice(1);
+const { loadConfig } = await import(config);
+const severities = [];
+for (const severity of ['off', 'warn']) {
+  fs.writeFileSync(
+    path.join(root, 'onsystem.config.js'),
+    "module.exports = { rules: { 'no-unknown-variant': '" + severity + "' } };\\n",
+  );
+  severities.push((await loadConfig({ root })).rules['no-unknown-variant'].severity);
+}
+console.log(JSON.stringify(severities));
+`;
+
 describe('a config written in code, edited while the process runs', () => {
   const configs = [
     ['onsystem.config.mjs', 'export default'],
     ['onsystem.config.ts', 'export default'],
-    // CommonJS, in a package without "type": "module". Node.js keeps it in require's cache, which
-    // Vitest's module runner does not use: the built CLI was checked by hand for this one.
+    // CommonJS, in a package without "type": "module". Vitest's module runner keeps no CommonJS
+    // module in require's cache, as Node.js does: the test below runs this one in Node.js itself.
     ['onsystem.config.js', 'module.exports ='],
   ] as const;
   for (const [name, exported] of configs) {
@@ -140,6 +190,23 @@ describe('a config written in code, edited while the process runs', () => {
       expect((await loadConfig({ root })).rules['no-unknown-variant'].severity).toBe('warn');
     });
   }
+
+  // module.registerHooks is in Node.js 22.15 and later.
+  it.skipIf(!('registerHooks' in nodeModule))(
+    'is read again from a CommonJS onsystem.config.js in Node.js, which keeps it in require.cache',
+    () => {
+      const root = chipProject('chips');
+      const repo = path.resolve(import.meta.dirname, '..');
+      const config = pathToFileURL(path.join(repo, 'src/config.ts')).href;
+      const run = spawnSync(
+        process.execPath,
+        ['--input-type=module', '-e', COMMONJS_RELOAD, config, root],
+        { cwd: repo, encoding: 'utf8', timeout: 60_000 },
+      );
+      expect(run.status, run.stderr).toBe(0);
+      expect(JSON.parse(run.stdout)).toEqual(['off', 'warn']);
+    },
+  );
 
   it('reloads the rules the MCP server applies', async () => {
     const root = chipProject('chips');
@@ -224,6 +291,112 @@ describe('--root on a folder that holds projects but is none', () => {
     await served.close();
   });
 
+  it('refuses a path outside the folder, and loads nothing from there', async () => {
+    const parent = folderOfRepos();
+    const elsewhere = chipProject('elsewhere');
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    const outside = await served.call('get_component', {
+      name: 'Chip',
+      path: path.join(elsewhere, 'app/page.tsx'),
+    });
+    expect(outside.isError).toBe(true);
+    expect(text(outside)).toContain(
+      `is outside ${pathOf(parent)}, the folder the server answers for`,
+    );
+    expect(text(outside)).toContain('Pass the absolute path of a file inside it');
+    expect(text(outside)).not.toContain('tone?:');
+    // Nothing was loaded from it: without a path, there is still no project to answer from.
+    const chip = await served.call('get_component', { name: 'Chip' });
+    expect(chip.isError).toBe(true);
+    expect(text(chip)).toContain('holds no project of its own');
+    await served.close();
+  });
+
+  it('refuses a relative path, also once another project has answered', async () => {
+    const parent = folderOfRepos();
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    const code = 'export default () => <div className="bg-[#ef4444]" />;\n';
+    // b answers first, with the token for the color the code hard-codes.
+    const inB = await served.call('check_ui', { code, filename: path.join(parent, 'b/app/x.tsx') });
+    expect(text(inB)).toContain('danger');
+
+    for (const args of [
+      { code, filename: 'a/app/new.tsx' },
+      { code, filename: 'app/new.tsx' },
+      { path: 'a/app/page.tsx' },
+      { path: 'app/page.tsx' },
+    ]) {
+      const relative = await served.call('check_ui', args);
+      expect(relative.isError, JSON.stringify(args)).toBe(true);
+      expect(text(relative)).toContain('it is a relative path');
+      expect(text(relative)).toContain('as the absolute path of the file you are editing');
+      expect(text(relative)).not.toContain('danger');
+    }
+    await served.close();
+  });
+
+  it('names the projects, quoted, when requests have named more than one', async () => {
+    const parent = fixture({
+      'my app/package.json': JSON.stringify({ name: 'my-app' }),
+      'my app/components/ui/chip.tsx': CHIP,
+      'b/package.json': JSON.stringify({ name: 'b' }),
+      'b/components/ui/chip.tsx': CHIP,
+    });
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    for (const dir of ['my app', 'b']) {
+      const listed = await served.call('list_components', { path: path.join(parent, dir) });
+      expect(listed.isError).toBeFalsy();
+    }
+    const chip = await served.call('get_component', { name: 'Chip' });
+    expect(chip.isError).toBe(true);
+    expect(text(chip)).toContain(
+      `Requests have named files in 2 projects (${JSON.stringify(path.join(parent, 'my app'))}, ${path.join(parent, 'b')})`,
+    );
+    await served.close();
+  });
+
+  it('says to start the server for a project in the folder to use its JavaScript config', async () => {
+    const parent = fixture({
+      'my app/package.json': JSON.stringify({ name: 'my-app' }),
+      'my app/components/ui/chip.tsx': CHIP,
+      'my app/onsystem.config.mjs': 'export default {};\n',
+      'b/package.json': JSON.stringify({ name: 'b' }),
+    });
+    const served = await serve({
+      cwd: fixture({}),
+      root: parent,
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    const project = path.join(parent, 'my app');
+    const refused = await served.call('list_components', { path: project });
+    expect(refused.isError).toBe(true);
+    expect(text(refused)).toContain(
+      `${JSON.stringify(path.join(project, 'onsystem.config.mjs'))} was not run: the server was started for ${pathOf(parent)}`,
+    );
+    expect(text(refused)).toContain(`Start the server with --root ${JSON.stringify(project)}`);
+    await served.close();
+  });
+
   it('still serves a folder without a package.json that holds no other project', async () => {
     const root = fixture({ 'components/ui/chip.tsx': CHIP });
     const served = await serve({
@@ -236,6 +409,88 @@ describe('--root on a folder that holds projects but is none', () => {
     const listed = await served.call('list_components');
     expect(listed.isError).toBeFalsy();
     expect(text(listed)).toContain('Chip');
+    await served.close();
+  });
+});
+
+describe('--root on a folder of a monorepo that holds its projects', () => {
+  /**
+   * `mono`, a pnpm workspace whose root config turns off the rule a page in `apps/web` breaks,
+   * and whose `packages/secret` has a component and a token `apps/web` does not depend on.
+   */
+  function monorepo() {
+    return fixture({
+      'package.json': JSON.stringify({ name: 'mono', private: true }),
+      'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n  - 'packages/*'\n",
+      'onsystem.config.json': JSON.stringify({ rules: { 'no-unknown-variant': 'off' } }),
+      'packages/secret/package.json': JSON.stringify({ name: '@mono/secret' }),
+      'packages/secret/components/ui/vault.tsx': 'export function Vault() { return <div /> }\n',
+      'packages/secret/tokens/brand.tokens.json': JSON.stringify({
+        danger: { $type: 'color', $value: '#ef4444' },
+      }),
+      'apps/web/package.json': JSON.stringify({ name: 'web' }),
+      'apps/web/components/ui/chip.tsx': CHIP,
+      'apps/web/app/page.tsx': 'export default () => <Chip tone="loud" />;\n',
+      'apps/web/app/alert.tsx': 'export default () => <div className="bg-[#ef4444]" />;\n',
+    });
+  }
+
+  it("answers from the project in it, never from the monorepo root's config or packages", async () => {
+    const mono = monorepo();
+    const apps = path.join(mono, 'apps');
+    const infos: string[] = [];
+    const logger = { ...silentLogger, info: (message: string) => infos.push(message) };
+    const served = await serve({
+      cwd: fixture({}),
+      root: apps,
+      cache: false,
+      watch: false,
+      logger,
+    });
+
+    // The root config, which turns the rule off, does not apply.
+    const page = await served.call('check_ui', { path: path.join(apps, 'web/app/page.tsx') });
+    expect(page.structuredContent).toMatchObject({ errorCount: 1 });
+    expect(text(page)).toContain('"loud" is not a valid tone for <Chip>');
+    const alert = await served.call('check_ui', { path: path.join(apps, 'web/app/alert.tsx') });
+    expect(text(alert)).not.toContain('danger');
+    const listed = await served.call('list_components', { path: path.join(apps, 'web') });
+    expect(text(listed)).toContain('Chip');
+    expect(text(listed)).not.toContain('Vault');
+    const all = await served.call('list_components');
+    expect(text(all)).not.toContain('Vault');
+
+    const secret = await served.call('get_component', {
+      name: 'Vault',
+      path: path.join(mono, 'packages/secret/components/ui/vault.tsx'),
+    });
+    expect(secret.isError).toBe(true);
+    expect(text(secret)).toContain(`is outside ${pathOf(apps)}`);
+    expect(infos).toContain(
+      `using ${path.join(apps, 'web')}, the project of ${path.join(apps, 'web/app/page.tsx')}`,
+    );
+    expect(infos.join('\n')).not.toContain(`using ${mono},`);
+    await served.close();
+  });
+});
+
+describe('a JavaScript config in a project found from a path', () => {
+  it('is named, quoted, in the error', async () => {
+    const parent = fixture({
+      'my app/package.json': JSON.stringify({ name: 'my-app' }),
+      'my app/onsystem.config.mjs': 'export default {};\n',
+    });
+    const served = await serve({
+      cwd: fixture({}),
+      cache: false,
+      watch: false,
+      logger: silentLogger,
+    });
+    const refused = await served.call('list_components', { path: path.join(parent, 'my app') });
+    expect(refused.isError).toBe(true);
+    expect(text(refused)).toContain(
+      `${JSON.stringify(path.join(parent, 'my app/onsystem.config.mjs'))} was not run: the server runs a JavaScript or TypeScript config only in a project it was started in`,
+    );
     await served.close();
   });
 });

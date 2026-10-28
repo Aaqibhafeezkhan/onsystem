@@ -59,8 +59,9 @@ type Resolve = (target: string | undefined) => Promise<Served>;
  * choose the path, so a JavaScript or TypeScript config is not run. Each root found is
  * loaded once and kept; a request without an absolute path is answered from the one root
  * found so far. The same holds for a `--root` (or a client's root) that is no project but
- * holds projects in its folders, such as a folder of repositories, except that a file in
- * none of them is answered from that folder, as before.
+ * holds projects in its folders, such as a folder of repositories, except that only an
+ * absolute path in that folder is answered, from the project in it that holds the file (never
+ * from a folder outside or above it), and a file in none of them from that folder, as before.
  *
  * A load that fails, such as on an invalid config, is not kept: the next request loads
  * again, so fixing the config is enough, also when it was invalid at startup.
@@ -88,10 +89,20 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
   /**
    * The project at `root` (the working directory when undefined), or a monorepo root's
    * projects. `jsonConfigOnly` for a root found from a tool call's path: its configs, and those
-   * of the projects in it, are read only when they are JSON, never run.
+   * of the projects in it, are read only when they are JSON, never run. `within`: the folder of
+   * projects it was found in, for the error on a config that is not JSON.
    */
-  const load = async (root: string | undefined, jsonConfigOnly = false): Promise<Served> => {
-    const configOptions = { ...options, root, jsonConfigOnly };
+  const load = async (
+    root: string | undefined,
+    jsonConfigOnly = false,
+    within?: string,
+  ): Promise<Served> => {
+    const configOptions = {
+      ...options,
+      root,
+      jsonConfigOnly,
+      jsonConfigWithin: jsonConfigOnly ? within : undefined,
+    };
     const target = await loadTarget(configOptions);
     const { config, workspace } = target;
     // Once per project, as it loads: a reload of the config does not repeat them.
@@ -161,7 +172,10 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
   };
   /**
    * Each request's project, from the absolute path it names. `within`: a folder that is no
-   * project but holds some, which answers for a file in none of them.
+   * project but holds some (the `--root` or client root the server was started for), which
+   * answers for a file in none of them. Then only a path in it is answered, from a project in
+   * it: never from a folder outside or above it, nor from a relative path, which the tools would
+   * read against whichever project answers.
    */
   const serveByPath = (within?: string) => {
     if (started) return;
@@ -170,29 +184,42 @@ export function serveStdio(options: ServeOptions): Promise<ServerHandle> {
       ? `${pathOf(within)} holds no project of its own, only projects in its folders`
       : `${options.cwd} holds no project and the client reported no roots`;
     logger.info(`${where}: finding each request's project from the absolute path it names`);
+    const askForPath = `Pass \`path\` (for check_ui with \`code\`, \`filename\`) as the absolute path of the file you are editing, and it answers from that file's project. Or start the server with --root <project folder>.`;
     decide(async (target) => {
-      if (target !== undefined && path.isAbsolute(target)) {
-        const dir =
-          within && isInside(within, target) && projectDirOf(target, within) === within
-            ? within
-            : findProjectRoot(target);
+      const named = target !== undefined && target !== '';
+      if (within && named && !path.isAbsolute(target)) {
+        throw new ProjectNotFoundError(
+          `onsystem cannot tell which project ${pathOf(target)} is in: it is a relative path, and ${pathOf(within)} holds no project of its own, only projects in its folders. ${askForPath}`,
+        );
+      }
+      if (named && path.isAbsolute(target)) {
+        const file = path.resolve(target);
+        if (within && !isInside(within, file)) {
+          throw new ProjectNotFoundError(
+            `${pathOf(target)} is outside ${pathOf(within)}, the folder the server answers for. Pass the absolute path of a file inside it, or start the server with --root <project folder>.`,
+          );
+        }
+        const up = findProjectRoot(file);
+        // In `within`, never a folder above it (a monorepo root that holds it): the nearest
+        // project in it then, or `within` itself.
+        const dir = within && !(up && isInside(within, up)) ? projectDirOf(file, within) : up;
         if (!dir) {
           throw new ProjectNotFoundError(
-            `No project at or above ${target}: no folder from there up holds a package.json, components.json, project.json or onsystem config (the home folder and the filesystem root do not count). Pass the absolute path of a file in your project.`,
+            `No project at or above ${pathOf(target)}: no folder from there up holds a package.json, components.json, project.json or onsystem config (the home folder and the filesystem root do not count). Pass the absolute path of a file in your project.`,
           );
         }
         if (!found.has(dir)) logger.info(`using ${dir}, the project of ${target}`);
-        return loadOnce(dir, () => load(dir, dir !== within));
+        return loadOnce(dir, () => load(dir, dir !== within, within));
       }
-      // Without an absolute path: the project found so far, when there is just one.
+      // Without a path: the project found so far, when there is just one.
       const [only, ...others] = found.values();
       if (only && !others.length) return only;
       throw new ProjectNotFoundError(
         only
-          ? `Requests have named files in ${found.size} projects (${[...found.keys()].join(', ')}). Pass \`path\` (for check_ui with \`code\`, \`filename\`) as the absolute path of the file you are editing, so the answer comes from its project.`
+          ? `Requests have named files in ${found.size} projects (${[...found.keys()].map(pathOf).join(', ')}). Pass \`path\` (for check_ui with \`code\`, \`filename\`) as the absolute path of the file you are editing, so the answer comes from its project.`
           : within
-            ? `onsystem cannot tell which project to answer for: ${pathOf(within)} holds no project of its own, only projects in its folders. Pass \`path\` (for check_ui with \`code\`, \`filename\`) as the absolute path of the file you are editing, and it answers from that file's project. Or start the server with --root <project folder>.`
-            : `onsystem cannot tell which project to answer for: it was started in ${options.cwd}, which holds no project, and the client reported no workspace roots. Pass \`path\` (for check_ui with \`code\`, \`filename\`) as the absolute path of the file you are editing, and it answers from that file's project. Or start the server with --root <project folder>.`,
+            ? `onsystem cannot tell which project to answer for: ${pathOf(within)} holds no project of its own, only projects in its folders. ${askForPath}`
+            : `onsystem cannot tell which project to answer for: it was started in ${options.cwd}, which holds no project, and the client reported no workspace roots. ${askForPath}`,
       );
     });
   };

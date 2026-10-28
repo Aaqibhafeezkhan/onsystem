@@ -8,9 +8,8 @@ import { glob } from 'tinyglobby';
 import ts from 'typescript';
 
 import {
-  CONFIG_FILES,
-  LEGACY_CONFIG_FILES,
   loadConfig,
+  PROJECT_MARKERS,
   rulesFor,
   type ResolvedConfig,
   type TokenSourceConfig,
@@ -543,17 +542,8 @@ async function resolveFiles(config: ResolvedConfig): Promise<ResolvedFiles> {
   return { components, tokens, docs, outside: [...contain.outside] };
 }
 
-/** What marks a project's folder, as `PROJECT_MARKERS` in workspace.ts lists it. */
-const PROJECT_FILES = [
-  ...CONFIG_FILES,
-  ...LEGACY_CONFIG_FILES,
-  'components.json',
-  'package.json',
-  'project.json',
-];
-
 function holdsProject(dir: string): boolean {
-  return PROJECT_FILES.some((name) => fs.existsSync(path.join(dir, name)));
+  return PROJECT_MARKERS.some((name) => fs.existsSync(path.join(dir, name)));
 }
 
 /** Whether a folder between `root` and `file` (in it) holds a project. */
