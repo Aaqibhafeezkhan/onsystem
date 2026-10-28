@@ -510,8 +510,12 @@ function replaceWithLink(dir: string, target: string): boolean {
     throw error;
   }
   link(target, dir);
-  // A change in the moved folder too, for a watcher that follows the folder rather than its path.
-  fs.writeFileSync(path.join(moved, 'components/ui/moved.tsx'), 'export const moved = 1;\n');
+  // A new file in both folders, so that every watcher reports a change: one that follows the moved
+  // folder (inotify) reports the name, and Node.js 26 on Linux reports it only once it finds the
+  // file by its path, which now leads to `target`.
+  for (const folder of [target, moved]) {
+    fs.writeFileSync(path.join(folder, 'components/ui/moved.tsx'), 'export const moved = 1;\n');
+  }
   return true;
 }
 
