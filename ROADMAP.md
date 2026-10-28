@@ -5,6 +5,7 @@ onsystem is built in the open, and this page lists what is in review, what comes
 ## Merged, in the next release
 
 - Token readers: `hsl(var(--x))` theme colors, stylesheet import order, Tailwind v3's default radius scale, and an app's own stylesheet next to a shared one ([#201](https://github.com/dgesteves/onsystem/pull/201))
+- Website, already live: shareable playground links, no layout shift when the fonts load, and a larger Ask button on phones ([#200](https://github.com/dgesteves/onsystem/pull/200))
 
 ## In review
 
@@ -12,7 +13,6 @@ Open pull requests. Each one ships in the next release once it is reviewed and m
 
 - Security hardening: a per-user cache folder, repository text quoted as text in MCP answers, a color rule that stays fast on long class strings, and exit code 2 for crashes ([#199](https://github.com/dgesteves/onsystem/pull/199))
 - Layered configs: an app's config builds on its design-system package's, and a monorepo root's rules apply over both ([#202](https://github.com/dgesteves/onsystem/pull/202))
-- Website: shareable playground links, no layout shift when the fonts load, and a larger Ask button on phones ([#200](https://github.com/dgesteves/onsystem/pull/200))
 - A compatibility section in the README: Node.js, operating systems, ESLint, TypeScript, React, Tailwind, shadcn/ui bases and MCP clients ([#203](https://github.com/dgesteves/onsystem/pull/203))
 - Support tiers for every client setup, and no new integrations for four weeks after launch unless someone asks for one ([#204](https://github.com/dgesteves/onsystem/pull/204))
 
@@ -45,6 +45,7 @@ Grouped by area, in the planned order within each group.
 - Examples: a demo that runs with zero config, Tailwind v3 and React Aria apps, and a typecheck in CI [#216](https://github.com/dgesteves/onsystem/issues/216)
 - A docs reference: every CLI flag with a test that keeps it in sync, a supported-stack table, measured speed and size [#217](https://github.com/dgesteves/onsystem/issues/217)
 - Pages that still disagree with the code: the setup prompt, the FAQ on the hook, the Copilot install, the benchmark's scorer count [#218](https://github.com/dgesteves/onsystem/issues/218)
+- An "Open in playground" link on each rule page's examples (`/rules/<id>`): it needs the playground's link code (`linkHash`) moved into `site/lib/`
 
 **Measurement**
 

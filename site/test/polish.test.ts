@@ -78,10 +78,12 @@ describe('touch targets', () => {
       /@media \(pointer: coarse\) \{[\s\S]*?\.tap::after \{[\s\S]*?width: max\(100%, 44px\);[\s\S]*?height: max\(100%, 44px\);/,
     );
     for (const file of [
+      'components/ask.tsx',
       'components/copy-button.tsx',
       'components/tabs.tsx',
       'components/loop-demo.tsx',
       'components/playground.tsx',
+      'components/site-menu.tsx',
       'components/theme-switch.tsx',
     ]) {
       expect(fs.readFileSync(path.join(site, file), 'utf8'), file).toMatch(/className=\{?[`"]tap /);
