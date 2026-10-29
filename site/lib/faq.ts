@@ -38,7 +38,7 @@ export const faqEntries = (corpus: FaqCorpus): [question: string, answer: string
   ],
   [
     'Is there a model behind it?',
-    'No. The agent is already the model; what it lacks is ground truth. Everything here is deterministic static analysis that takes milliseconds and can be tested rule by rule. The trade-off: it cannot judge intent, such as whether a `Dialog` was the right call. That stays with the agent and the reviewer.',
+    'No. The agent is already the model; what it lacks is ground truth. Everything here is deterministic static analysis, which checks a file in milliseconds once it has read the design system ([measured](/docs/how-it-works#performance-and-footprint)) and can be tested rule by rule. The trade-off: it cannot judge intent, such as whether a `Dialog` was the right call. That stays with the agent and the reviewer.',
   ],
   [
     'Does it work with agents other than Claude Code?',
@@ -72,6 +72,10 @@ export const faqEntries = (corpus: FaqCorpus): [question: string, answer: string
   [
     'Is the Claude Code plugin safe to install everywhere?',
     'Yes. The hook stays quiet in projects without a design system, only reports on what Claude just changed, honours a baseline, and never blocks an edit because it could not run. Code installed from other shadcn registries is different: the hook checks it as your own code until you list its folder in `components`, and then leaves it alone, as it does `components/ui` ([Code from shadcn registries](/docs/configuration#code-from-shadcn-registries)).',
+  ],
+  [
+    'Can I add our own rules?',
+    "Not to onsystem itself yet. Its rules are a fixed set: the config sets each one to `error`, `warn` or `off` and rejects a rule id it does not know, and the hook, `check_ui`, `onsystem check` and the GitHub Action run only these. Two things cover most requests. A native element your design system wraps is already a finding: with a `Link` component, a raw `<a>` is reported by `prefer-design-system-component`, and the config's `elements` maps an element to the component that replaces it. For a rule only your team needs, write an ESLint rule: it runs next to onsystem's [ESLint plugin](/docs/eslint) in the editor and in CI, though not in the hook or `check_ui`. A rule most design systems would want is welcome as a pull request: [Adding a lint rule](https://github.com/dgesteves/onsystem/blob/main/CONTRIBUTING.md#adding-a-lint-rule) lists the steps.",
   ],
   [
     'Does it work with Vue, Svelte or Angular?',

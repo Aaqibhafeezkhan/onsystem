@@ -103,7 +103,7 @@ describe('llms-full.txt', () => {
     expect(hashed).toEqual([]);
     expect(lines.filter((line) => line.startsWith('# '))).toEqual(['# onsystem']);
     // Cut at its `## ` lines, the Tools section runs to the end of the page.
-    const tools = full.slice(full.indexOf('\n## Tools\n'), full.indexOf('\n## Troubleshooting\n'));
+    const tools = full.slice(full.indexOf('\n## Tools\n'), full.indexOf('\n## CLI reference\n'));
     expect(tools.slice(1).match(/\n## /g)).toBeNull();
     expect(tools).toContain('\n  # Badge\n');
     expect(tools).toContain('> check_ui {');

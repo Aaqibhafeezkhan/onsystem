@@ -91,6 +91,7 @@ export const DOCS_FILES: Record<string, string> = {
   'tokens.md': '/docs/tokens',
   'eslint.md': '/docs/eslint',
   'tools.md': '/docs/tools',
+  'cli.md': '/docs/cli',
   'troubleshooting.md': '/docs/troubleshooting',
   'how-it-works.md': '/docs/how-it-works',
   'migrating.md': '/docs/migrating',

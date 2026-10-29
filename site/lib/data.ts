@@ -252,6 +252,7 @@ export interface Docs {
   eslint: string;
   rules: string;
   tools: string;
+  cli: string;
   troubleshooting: string;
   howItWorks: string;
   migrating: string;

@@ -118,6 +118,14 @@ const PAGES = [
     description: 'The five MCP tools, the resources and the prompt, with real responses.',
   },
   {
+    href: '/docs/cli',
+    group: 'Reference',
+    source: 'docs/cli.md',
+    title: 'CLI reference',
+    description:
+      'Every command and option of the onsystem CLI: serve, check and its exit codes, inspect, export and init.',
+  },
+  {
     href: '/docs/troubleshooting',
     group: 'Help',
     source: 'docs/troubleshooting.md',

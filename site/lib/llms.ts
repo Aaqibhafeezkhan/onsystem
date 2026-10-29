@@ -216,6 +216,7 @@ export function llmsFullTxt(): string {
       ].join('\n\n'),
     ],
     ['Tools', '/docs/tools', docs.tools],
+    ['CLI reference', '/docs/cli', docs.cli],
     ['Troubleshooting', '/docs/troubleshooting', docs.troubleshooting],
     ['FAQ', '/docs/faq', faqMarkdown(corpus)],
     ['How it works', '/docs/how-it-works', docs.howItWorks],
