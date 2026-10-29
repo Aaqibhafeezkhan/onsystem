@@ -22,7 +22,7 @@ DTCG files are read as the [Format Module 2025.10](https://www.designtokens.org/
 - `$root` tokens: the token a group has for itself. `color.accent.$root` is referenced as `{color.accent.$root}` and its custom property is `--color-accent`,
 - groups that extend another: `"$extends": "{button}"` (or JSON Schema's `"$ref": "#/button"`) gives the group every token and property of `button`, and its own tokens replace the ones at the same path. Circular extension, a reference that resolves to nothing and `$extends` that names a token are reported by `inspect` and left out.
 
-A token is named by its path (`color.brand.500`), unless onsystem's extension keeps another name for it, and its custom property is the path with dashes (`--color-brand-500`, or `--acme-color-brand-500` with `"prefix": "acme"`). Values for other themes can sit under `$extensions.modes` (`{ "dark": "#000" }`). A DTCG file and the CSS generated from it are merged by custom property.
+A token is named by its path (`color.brand.500`), unless onsystem's extension keeps another name for it, and its custom property is the path with dashes (`--color-brand-500`, or `--acme-color-brand-500` with `"prefix": "acme"`). Values for other themes can sit under `$extensions.modes` (`{ "dark": "#000" }`). A DTCG file and the CSS generated from it are merged by custom property, and a token that has none (a Tailwind `@theme inline` value such as `--radius-sm`) by its name and Tailwind class.
 
 ### onsystem's extension
 
@@ -85,11 +85,13 @@ One group per category (`color`, `spacing`, `radius`, `typography`, `shadow`, `o
 - An alias stays a reference: `--card: var(--background)` is `"{color.background}"`.
 - What DTCG has no type for (`color-mix()`, a `var()` no token defines, lengths in `em` or `%`) is written as the CSS string, without `$type`.
 
-Read back as a token source, the file gives the same tokens with the same names: the shadcn demo's `check` reports the same findings from its exported file as from `globals.css`, and names `destructive`, not `color.destructive`. The test suite runs this round trip.
+Read back as a token source, the file gives the same tokens with the same names: the shadcn demo's `check` reports the same findings from its exported file as from `globals.css`, and names `destructive`, not `color.destructive`. Zero config reads a `*.tokens.json` anywhere in the project, so a file exported into it is read next to the stylesheet it came from: the two merge, and `inspect` lists as many tokens as before. The test suite runs both.
 
 ### DESIGN.md
 
-Front matter in the DESIGN.md schema (`version`, `name`, `colors`, `typography`, `rounded`, `spacing`), then a section per category in the format's order (Colors, Typography, Layout, Elevation & Depth, Shapes, and Other tokens), each with one sentence and a table of the tokens: their value, a column per mode, the class and custom property code uses, and the description. Values the schema cannot hold, such as a `var()` font family, are left out of the front matter and kept in the table. Aliases stay references (`"{colors.background}"`).
+Front matter in the DESIGN.md schema (`version`, `name`, `colors`, `typography`, `rounded`, `spacing`), then a section per category in the format's order (Colors, Typography, Layout, Elevation & Depth, Shapes, and Other tokens), each with one sentence and a table of the tokens: their value, a column per mode, the class and custom property code uses, and the description. Values the schema cannot hold, such as a `var()` font family, are left out of the front matter and kept in the table. Aliases stay references (`"{colors.background}"`), except in typography: a reference names one value, and a typography level holds several, so an alias is written as the level it names.
+
+Tailwind's spacing unit is written as the steps of Tailwind v3's default scale, which v4 still makes: from `"0.5": 0.125rem` to `"96": 24rem`. DESIGN.md has no multiplier: a reader takes each spacing entry as a step, so the unit alone (`base: 0.25rem`) would make 4px the only one. Read back as a token source, the file gives the same colors, radii and spacing steps. A DESIGN.md token names no class, so `check` leaves a length on the scale alone and snaps one off it to the nearest step: `p-[13px]` becomes `p-[12px]`. The test suite runs this round trip.
 
 ## Status colors
 

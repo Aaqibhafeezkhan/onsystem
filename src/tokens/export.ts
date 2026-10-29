@@ -502,7 +502,7 @@ export function toDesignMd(tokens: readonly Token[], options: { name: string }):
   const lookup = varLookup(tokens);
   const keys = designKeys(tokens);
   const front: Record<string, unknown> = { version: 'alpha', name: options.name };
-  const sections: Record<string, Record<string, unknown>> = {};
+  const sections: Record<string, Map<string, unknown>> = {};
   const body: string[] = [`# ${options.name}`];
   const byName = new Map(tokens.map((t) => [t.name, t]));
 
@@ -510,14 +510,23 @@ export function toDesignMd(tokens: readonly Token[], options: { name: string }):
     const list = tokens.filter((t) => t.category === section.category);
     if (!list.length) continue;
     if (section.key) {
-      const values: Record<string, unknown> = {};
+      // A Map keeps the keys in order: an object puts `"1"` before `"0.5"`.
+      const values = new Map<string, unknown>();
+      let steps: Map<string, string> | undefined;
       for (const token of list) {
+        if (isSpacingUnit(token)) {
+          steps = spacingSteps(token, lookup);
+          continue;
+        }
         const key = keys.get(token);
         if (key === undefined) continue;
         // An alias stays a reference to a token of the same section that the front matter has.
+        // A typography level is no single value, which a reference must name: it is written out.
         const target = token.aliasOf ? byName.get(token.aliasOf) : undefined;
         const targetKey =
+          section.key !== 'typography' &&
           target?.category === token.category &&
+          !isSpacingUnit(target) &&
           frontMatterValue(target, section.key, lookup) !== undefined
             ? keys.get(target)
             : undefined;
@@ -526,13 +535,15 @@ export function toDesignMd(tokens: readonly Token[], options: { name: string }):
             ? frontMatterValue(token, section.key, lookup)
             : `{${section.key}.${targetKey}}`;
         if (value === undefined) continue;
-        if (key in values) {
+        if (values.has(key)) {
           warnings.push(`${token.name} is left out of the front matter: another token has its key`);
           continue;
         }
-        values[key] = value;
+        values.set(key, value);
       }
-      if (Object.keys(values).length) sections[section.key] = values;
+      // A step the project sets itself (`--spacing-4`) keeps its own value.
+      for (const [key, value] of steps ?? []) if (!values.has(key)) values.set(key, value);
+      if (values.size) sections[section.key] = values;
     }
     body.push('', `## ${section.heading}`, '', section.intro, '', ...table(list, keys));
   }
@@ -549,6 +560,33 @@ function designKeys(tokens: readonly Token[]): Map<Token, string> {
     out.set(token, parts.join('-') || 'base');
   }
   return out;
+}
+
+/** Tailwind's spacing unit, `--spacing`, which `p-4` takes 4 times. */
+function isSpacingUnit(token: Token): boolean {
+  return token.category === 'spacing' && token.tailwind === '';
+}
+
+/** The steps of Tailwind's default spacing scale, `p-0.5` to `p-96`, in spacing units. */
+const SPACING_STEPS = [
+  0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48,
+  52, 56, 60, 64, 72, 80, 96,
+];
+
+/**
+ * Tailwind's spacing unit as the steps it makes: `"4": 1rem` for `p-4`. A DESIGN.md has no
+ * multiplier: a reader takes each spacing entry as a step, so the unit alone (`base: 0.25rem`)
+ * would make 4px the only one.
+ */
+function spacingSteps(token: Token, lookup: Lookup): Map<string, string> {
+  const plain = PLAIN_LENGTH.exec(token.value.trim());
+  const [amount, unit] = plain
+    ? [Number(plain[1]), plain[2] ?? 'px']
+    : [evaluateLength(token.value, lookup), 'px'];
+  const steps = new Map<string, string>();
+  if (amount === undefined || !Number.isFinite(amount) || amount <= 0) return steps;
+  for (const n of SPACING_STEPS) steps.set(String(n), `${round(n * amount)}${unit}`);
+  return steps;
 }
 
 function frontMatterValue(

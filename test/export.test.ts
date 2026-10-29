@@ -272,7 +272,10 @@ describe('export --format design-md', () => {
       'version: alpha\nname: shadcn-demo\ncolors:\n  background: oklch(1 0 0)\n',
     );
     expect(yaml).toContain('rounded:\n  sm: 6px\n  md: 8px\n  lg: 0.625rem\n');
-    expect(yaml).toContain('spacing:\n  base: 0.25rem\n');
+    // DESIGN.md has no multiplier: Tailwind's spacing unit is written as the steps it makes.
+    expect(yaml).toContain('spacing:\n  "0.5": 0.125rem\n  "1": 0.25rem\n  "1.5": 0.375rem\n');
+    expect(yaml).toContain('  "4": 1rem\n');
+    expect(yaml).not.toContain('base:');
     // `var(--font-geist-sans)` is no font name: the table has it, the front matter does not.
     expect(yaml).not.toContain('typography');
     expect(body.match(/^## .*/gm)).toEqual([
@@ -341,6 +344,108 @@ describe('export --format design-md', () => {
       value: '#1a1c1e',
       aliasOf: 'colors.ink',
     });
+  });
+});
+
+describe('export, then read back', () => {
+  const stock = fs.readFileSync(
+    path.join(import.meta.dirname, 'fixtures/shadcn-neutral/globals.css'),
+    'utf8',
+  );
+  const page = `export default function Page() {
+  return (
+    <div className="gap-[8px] p-[13px]" style={{ padding: "16px" }}>
+      Hello
+    </div>
+  );
+}
+`;
+  const findings = async (cwd: string) => {
+    const { stdout } = await run(['check', 'app', '--format', 'json', '--no-cache'], cwd);
+    return (JSON.parse(stdout) as CheckResult[]).flatMap((r) => r.diagnostics);
+  };
+
+  it('keeps the spacing scale in a DESIGN.md, which another project then reads', async () => {
+    const app = fixture({
+      'package.json': '{"name":"app"}',
+      'app/globals.css': stock,
+      'app/page.tsx': page,
+    });
+    const file = path.join(app, 'DESIGN.md');
+    expect(
+      await run(['export', '--format', 'design-md', '--out', file, '--no-cache'], app),
+    ).toMatchObject({ code: 0, stderr: '' });
+    const md = fs.readFileSync(file, 'utf8');
+    expect(md).toContain('spacing:\n  "0.5": 0.125rem\n  "1": 0.25rem\n');
+    expect(md).toContain('  "96": 24rem\n---\n');
+
+    // A project with only the DESIGN.md to read tokens from.
+    const other = fixture({
+      'package.json': '{"name":"other"}',
+      'DESIGN.md': md,
+      'app/page.tsx': page,
+    });
+    expect((await findings(app)).map((d) => d.suggestion)).toEqual(['gap-2', 'p-3', 'p-4']);
+    // 8px and 16px are steps of the scale, which a DESIGN.md token names no class for, and 13px
+    // is nearest 12px. Read as the only step, `base: 0.25rem` made all three `p-[4px]`.
+    expect((await findings(other)).map((d) => d.message)).toEqual([
+      'Hardcoded spacing `p-[13px]` (13px) is off the scale. Nearest: `p-[12px]` (12px).',
+    ]);
+  });
+
+  it('writes a typography alias as the level it names, not a reference to a whole level', () => {
+    const { tokens } = parseCssTokens(
+      `@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: 'Inter Variable', sans-serif;
+}`,
+      'app/globals.css',
+    );
+    expect(tokens.find((t) => t.name === 'font-heading')?.aliasOf).toBe('font-sans');
+    const { text, warnings } = toDesignMd(tokens, { name: 'Fonts' });
+    expect(warnings).toEqual([]);
+    // In front matter, a reference names one value; `{typography.font-sans}` is a whole level,
+    // which DESIGN.md's linter read as a string of 22 unknown properties.
+    expect(text).toContain(
+      `typography:\n  font-heading:\n    fontFamily: "'Inter Variable', sans-serif"\n  font-sans:\n    fontFamily: "'Inter Variable', sans-serif"\n`,
+    );
+    const back = parseDesignMd(text, 'DESIGN.md');
+    expect(back.warnings).toEqual([]);
+    expect(back.tokens.find((t) => t.name === 'typography.font-heading')?.value).toBe(
+      "fontFamily: 'Inter Variable', sans-serif",
+    );
+  });
+
+  it('adds no tokens when the stylesheet and a DTCG file exported from it are both read', async () => {
+    const app = fixture({
+      'package.json': '{"name":"app"}',
+      'app/globals.css': stock,
+      'app/page.tsx': page,
+    });
+    const designMd = async () => {
+      const out = path.join(app, 'DESIGN.md');
+      const result = await run(
+        ['export', '--format', 'design-md', '--out', out, '--no-cache'],
+        app,
+      );
+      return { ...result, text: fs.readFileSync(out, 'utf8') };
+    };
+    const before = await designMd();
+    expect(before).toMatchObject({ code: 0, stderr: '' });
+    expect(before.stdout).toMatch(/^Wrote 42 tokens to /);
+
+    // Zero config reads `**/*.tokens.json`, so the export is read back next to the stylesheet.
+    // Its `@theme inline` tokens (`rounded-sm`, `font-sans`) have no custom property: they merge
+    // with the stylesheet's by name and Tailwind key.
+    const dtcg = path.join(app, 'design.tokens.json');
+    expect(
+      await run(['export', '--format', 'dtcg', '--out', dtcg, '--no-cache'], app),
+    ).toMatchObject({ code: 0, stderr: '' });
+    const after = await designMd();
+    expect(after).toMatchObject({ code: 0, stderr: '' });
+    expect(after.stdout).toMatch(/^Wrote 42 tokens to /);
+    expect(after.text).toBe(before.text);
+    expect(await findings(app)).toHaveLength(3);
   });
 });
 
