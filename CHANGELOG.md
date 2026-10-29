@@ -1,5 +1,11 @@
 # onsystem (formerly @dgesteves/design-system-mcp)
 
+## 0.11.1
+
+### Patch Changes
+
+- [#257](https://github.com/dgesteves/onsystem/pull/257) [`cb0e4e3`](https://github.com/dgesteves/onsystem/commit/cb0e4e3773d6f499006b467fe97ae1c03d58057b) - Zero config finds React Aria's Tailwind starter, or another flat folder of PascalCase components that wrap a primitives library (React Aria, Radix, Base UI, Headless UI, Ark UI), when it is copied into an app's `src/components/`, `components/` or `app/components/`, next to the app's `App.tsx`. Before, `inspect` found no component files, `check` checked the components as app code and said "No design-system components found: the component rules did not run", and `init --yes` stopped with "zero config found no design system". The same guard as for a flat `src/` applies: at least five such files, four in five of which import the library, so a folder of the app's own features is left alone. `inspect` says `detected src/components/ (7 components wrapping react-aria-components)`, the app's own `components/ui` is still read, and `init` writes the glob it found. Radix's icons (`@radix-ui/react-icons`) no longer count as a primitives library, for a flat `src/` too: five of an app's own components that each show a Radix icon were taken for a design system, and `check` skipped them as its files. The Claude Code hook's check of a monorepo root reads the same list.
+
 ## 0.11.0
 
 ### Minor Changes
