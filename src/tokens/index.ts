@@ -171,6 +171,10 @@ export function mergeTokens(tokens: Token[]): Token[] {
     if (existing.tailwind === undefined && token.tailwind !== undefined) {
       existing.tailwind = token.tailwind;
     }
+    // A DTCG file listed before the stylesheet: the stylesheet knows `-0.025em` is letter spacing.
+    if (existing.category === 'other' && token.category !== 'other') {
+      existing.category = token.category;
+    }
     existing.usage = [...new Set([...token.usage, ...existing.usage])];
     existing.description ??= token.description;
     if (token.modes) existing.modes = { ...token.modes, ...existing.modes };

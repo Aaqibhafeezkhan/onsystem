@@ -543,7 +543,12 @@ export function toDesignMd(tokens: readonly Token[], options: { name: string }):
       }
       // A step the project sets itself (`--spacing-4`) keeps its own value.
       for (const [key, value] of steps ?? []) if (!values.has(key)) values.set(key, value);
-      if (values.size) sections[section.key] = values;
+      // In scale order, with the steps the project sets among the others.
+      const step = (key: string) => (Number.isFinite(Number(key)) ? Number(key) : Infinity);
+      const ordered = steps
+        ? new Map([...values].sort(([a], [b]) => step(a) - step(b) || 0))
+        : values;
+      if (ordered.size) sections[section.key] = ordered;
     }
     body.push('', `## ${section.heading}`, '', section.intro, '', ...table(list, keys));
   }

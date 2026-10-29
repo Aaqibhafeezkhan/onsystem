@@ -413,6 +413,12 @@ describe('CSS custom-property tokens', () => {
     const json = parseDtcgTokens(toDtcg(css).text, 't.json').tokens;
     expect(json).toHaveLength(3);
     expect(mergeTokens([...css, ...json])).toEqual(css);
+    // Listed the other way round, a merged token takes the stylesheet's category: the DTCG file
+    // has no type for `-0.025em`, so it reads it as `other`.
+    expect(json[2]?.category).toBe('other');
+    expect(mergeTokens([...json, ...css]).map((t) => t.category)).toEqual(
+      css.map((t) => t.category),
+    );
     // Two tokens of the same key (`tight`) that make other classes stay apart.
     const leading = json.filter((t) => t.name === 'leading-tight');
     expect(mergeTokens([...css.filter((t) => t.name !== 'leading-tight'), ...leading])).toEqual([

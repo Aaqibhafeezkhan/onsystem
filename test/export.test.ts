@@ -393,6 +393,23 @@ describe('export, then read back', () => {
     ]);
   });
 
+  it('writes the spacing steps in scale order, with those the project sets among them', () => {
+    const { tokens } = parseCssTokens(
+      `@theme {
+  --spacing: 0.25rem;
+  --spacing-18: 4.5rem;
+  --spacing-4: 1.1rem;
+}`,
+      'app/globals.css',
+    );
+    const { text } = toDesignMd(tokens, { name: 'Steps' });
+    const spacing = /\nspacing:\n((?: {2}.*\n)+)/.exec(text)?.[1] ?? '';
+    const keys = [...spacing.matchAll(/^ {2}"?([^":]+)"?:/gm)].map((m) => Number(m[1]));
+    expect(keys).toEqual([...keys].sort((a, b) => a - b));
+    expect(spacing).toContain('  "4": 1.1rem\n');
+    expect(spacing).toContain('  "16": 4rem\n  "18": 4.5rem\n  "20": 5rem\n');
+  });
+
   it('writes a typography alias as the level it names, not a reference to a whole level', () => {
     const { tokens } = parseCssTokens(
       `@theme inline {
