@@ -1,3 +1,4 @@
+// Adapted from React Aria's Tailwind starter (Apache-2.0, see ../../LICENSE-react-aria), changed for this example.
 import { composeRenderProps } from "react-aria-components"
 import { twMerge } from "tailwind-merge"
 import { tv } from "tailwind-variants"

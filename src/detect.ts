@@ -459,7 +459,7 @@ function primitivesDependencies(pkg: Record<string, unknown>): string[] {
 
 /** `react-aria-components`, or `a primitives library (@radix-ui/react-dialog, @radix-ui/react-slot)`. */
 function primitivesNamed(dependencies: string[]): string {
-  if (dependencies.length === 1) return dependencies[0] ?? '';
+  if (dependencies.length <= 1) return dependencies[0] ?? 'a primitives library';
   const shown = dependencies.slice(0, 3).join(', ');
   const more = dependencies.length - 3;
   return `a primitives library (${more > 0 ? `${shown} and ${String(more)} more` : shown})`;

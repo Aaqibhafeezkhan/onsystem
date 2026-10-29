@@ -1,4 +1,5 @@
 "use client"
+// Adapted from React Aria's Tailwind starter (Apache-2.0, see ../../LICENSE-react-aria), changed for this example.
 import {
   Checkbox as RACCheckbox,
   composeRenderProps,
