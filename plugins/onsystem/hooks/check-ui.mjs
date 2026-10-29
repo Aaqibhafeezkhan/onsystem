@@ -96,7 +96,7 @@ const BASELINE_FILES = ['onsystem.baseline.json', 'design-system-mcp.baseline.js
 const DEFAULT_COMPONENT_DIRS = ['components/ui', 'src/components/ui'];
 // The primitives libraries a flat src/ of components wraps (PRIMITIVES in src/detect.ts).
 const PRIMITIVES =
-  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
+  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-(?!icons(?:\/|$))[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
 const BIN = process.env.ONSYSTEM_BIN || process.env.DESIGN_SYSTEM_MCP_BIN || undefined;
 
 const input = await readInput();

@@ -163,7 +163,8 @@ export const APP_STYLESHEETS = [
  *    from a registry is read through its `exports` alone, when they point at the
  *    component sources it publishes, not from `dist/` back to `src/`.
  * 4. A flat folder of components that wrap a primitives library, the way React
- *    Aria's Tailwind starter ships them (`src/Button.tsx`, `src/Checkbox.tsx`).
+ *    Aria's Tailwind starter ships them (`src/Button.tsx`, `src/Checkbox.tsx`), or the
+ *    same files copied into an app's `src/components/`, `components/` or `app/components/`.
  *
  * With more than one design system, the one the root's code imports most comes first
  * (`designSystems`). A candidate whose globs match no file is skipped. Returns undefined
@@ -376,7 +377,7 @@ export function detectProject(
 
   let flatWhy = 'no package.json';
   const flat = own
-    ? fromFlatFolder(root, own, (r) => {
+    ? fromFlatFolder(root, own, 'src', (r) => {
         flatWhy = r;
       })
     : undefined;
@@ -385,6 +386,21 @@ export function detectProject(
     return detection(root, [flat], false, flat.source);
   }
   step('a flat src/ of components', false, flatWhy);
+  // The same components copied into an app (`src/components/Button.tsx` next to `src/App.tsx`),
+  // read next to the app's own components/ui.
+  if (!own || !primitivesDependencies(own).length) return undefined;
+  for (const folder of COMPONENT_FOLDERS) {
+    if (!fs.existsSync(path.join(root, folder))) continue;
+    let why = '';
+    const inFolder = fromFlatFolder(root, own, folder, (r) => {
+      why = r;
+    });
+    if (inFolder && matchesAny(root, inFolder)) {
+      step(`a flat ${folder}/ of components`, true, inFolder.source);
+      return detection(root, [inFolder], true, inFolder.source);
+    }
+    step(`a flat ${folder}/ of components`, false, why || 'its components match no file');
+  }
   return undefined;
 }
 
@@ -411,50 +427,79 @@ function plural(n: number, one: string, many = `${one}s`): string {
   return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 }
 
-/** Libraries of unstyled primitives that design systems wrap. */
+/**
+ * Libraries of unstyled primitives that design systems wrap. Not Radix's icons
+ * (`@radix-ui/react-icons`), which an app's own components import as much as a design system's.
+ */
 const PRIMITIVES =
-  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
+  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-(?!icons(?:\/|$))[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
 
 /** Files that make `src/` an app rather than a library: entries and route folders. */
 const APP_ENTRIES = /^(?:main|index|App|app|root|entry-client|entry-server)\.[jt]sx?$/;
 const APP_FOLDERS = new Set(['app', 'pages', 'routes']);
 
-/** Fewer PascalCase files than this in `src/` are an app's, not a component library. */
+/** Fewer PascalCase files than this in the folder are an app's, not a component library. */
 const MIN_FLAT_COMPONENTS = 5;
 
 /**
- * A flat `src/` of components, as React Aria's Tailwind starter has it. It needs all of:
- * a dependency on a primitives library, no app entry (`main.tsx`, `App.tsx`) or route
- * folder in `src/`, and at least five PascalCase `.tsx`/`.jsx` files at its top level, four
- * in five of which import the primitives library. An app whose `src/` holds pages or
- * features imports its own components, not primitives, so it does not qualify.
+ * An app's folders of components, read like a flat `src/` when they are one: React Aria's
+ * starter copied into an app (`src/components/Button.tsx` next to `src/App.tsx`), or into a
+ * Next.js app's `components/` or `app/components/`.
  */
-function fromFlatFolder(
-  root: string,
-  pkg: Record<string, unknown>,
-  note: Note = ignore,
-): Found | undefined {
-  const dependencies = Object.keys({
+const COMPONENT_FOLDERS = ['src/components', 'components', 'app/components'];
+
+/** The primitives libraries among a package's dependencies. */
+function primitivesDependencies(pkg: Record<string, unknown>): string[] {
+  return Object.keys({
     ...asRecord(pkg.dependencies),
     ...asRecord(pkg.devDependencies),
     ...asRecord(pkg.peerDependencies),
   }).filter((name) => PRIMITIVES.test(name));
+}
+
+/** `react-aria-components`, or `a primitives library (@radix-ui/react-dialog, @radix-ui/react-slot)`. */
+function primitivesNamed(dependencies: string[]): string {
+  if (dependencies.length <= 1) return dependencies[0] ?? 'a primitives library';
+  const shown = dependencies.slice(0, 3).join(', ');
+  const more = dependencies.length - 3;
+  return `a primitives library (${more > 0 ? `${shown} and ${String(more)} more` : shown})`;
+}
+
+/**
+ * A flat folder of components, as React Aria's Tailwind starter has `src/`. It needs all of:
+ * a dependency on a primitives library, at least five PascalCase `.tsx`/`.jsx` files at the
+ * folder's top level, four in five of which import the primitives library, and, for `src/`,
+ * no app entry (`main.tsx`, `App.tsx`) or route folder in it. An app whose folder holds pages
+ * or features imports its own components, not primitives, so it does not qualify.
+ */
+function fromFlatFolder(
+  root: string,
+  pkg: Record<string, unknown>,
+  folder: string,
+  note: Note = ignore,
+): Found | undefined {
+  const dependencies = primitivesDependencies(pkg);
   if (!dependencies.length) {
     note('no dependency on a primitives library (React Aria, Radix, Base UI, Headless UI, Ark UI)');
     return undefined;
   }
 
-  const dir = path.join(root, 'src');
+  const dir = path.join(root, folder);
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
-    note('no src/ folder');
+    note(`no ${folder}/ folder`);
     return undefined;
   }
-  const app = entries.find(
-    (e) => (e.isFile() && APP_ENTRIES.test(e.name)) || (e.isDirectory() && APP_FOLDERS.has(e.name)),
-  );
+  const app =
+    folder === 'src'
+      ? entries.find(
+          (e) =>
+            (e.isFile() && APP_ENTRIES.test(e.name)) ||
+            (e.isDirectory() && APP_FOLDERS.has(e.name)),
+        )
+      : undefined;
   if (app) {
     note(`src/${app.name} makes src/ an app`);
     return undefined;
@@ -464,7 +509,7 @@ function fromFlatFolder(
     .map((e) => e.name);
   if (files.length < MIN_FLAT_COMPONENTS) {
     note(
-      `${plural(files.length, 'PascalCase .tsx file')} in src/, fewer than ${MIN_FLAT_COMPONENTS}`,
+      `${plural(files.length, 'PascalCase .tsx file')} in ${folder}/, fewer than ${MIN_FLAT_COMPONENTS}`,
     );
     return undefined;
   }
@@ -488,19 +533,24 @@ function fromFlatFolder(
   }
   if (wrapping * 5 < files.length * 4) {
     note(
-      `${wrapping} of ${files.length} files in src/ import ${dependencies[0] ?? 'a primitives library'}, fewer than four in five`,
+      `${wrapping} of ${files.length} files in ${folder}/ import ${primitivesNamed(dependencies)}, fewer than four in five`,
     );
     return undefined;
   }
 
   const library = [...libraries].sort((a, b) => b[1] - a[1])[0]?.[0] ?? dependencies[0] ?? '';
-  const stylesheet = STYLESHEETS.map((f) => path.join(root, f)).find((f) => fs.existsSync(f));
+  // A library's `src/` brings its own stylesheet; in an app, the app's stylesheets are the
+  // theme, where zero config looks for them anyway.
+  const stylesheet =
+    folder === 'src'
+      ? STYLESHEETS.map((f) => path.join(root, f)).find((f) => fs.existsSync(f))
+      : undefined;
   return {
-    components: ['src/*.{tsx,jsx}'],
+    components: [`${folder}/*.{tsx,jsx}`],
     tokens: stylesheet ? [escapePath(relativePath(root, stylesheet))] : [],
     imports: [],
     dirs: [dir],
-    source: `src/ (${String(files.length)} components wrapping ${library})`,
+    source: `${folder}/ (${String(files.length)} components wrapping ${library})`,
   };
 }
 

@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/* The app's tokens, next to Tailwind's: bg-primary, text-muted-foreground, border-border, ... */
+@theme {
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.21 0.034 264.665);
+  --color-muted: oklch(0.967 0.003 264.542);
+  --color-muted-foreground: oklch(0.446 0.03 256.802);
+  --color-border: oklch(0.872 0.01 258.338);
+  --color-primary: oklch(0.546 0.245 262.881);
+  --color-primary-hover: oklch(0.488 0.243 264.376);
+  --color-primary-foreground: oklch(1 0 0);
+  /* Errors and irreversible actions. */
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-hover: oklch(0.505 0.213 27.518);
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
+}
