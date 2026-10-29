@@ -53,7 +53,7 @@ export default [
 ];
 ```
 
-The plugin loads each design system once, in a worker thread (ESLint rules run synchronously and extraction does not), and answers each lint from what it has loaded. When that is more than two seconds old, the worker looks at the project's config and the design system's files again in the background, and the lints after that look get what it found, so an editor's ESLint server picks up a new component or variant, or a rule turned off in the config, without a restart. The lint that starts a look does not wait for it.
+The plugin loads each design system once, in a worker thread (ESLint rules run synchronously and extraction does not), and answers each lint from what it has loaded. When that is more than two seconds old, the worker looks at the project's config and the design system's files again in the background, and the lints after that look get what it found, so an editor's ESLint server picks up a new component or variant, or a rule turned off in the config, without a restart. The lint that starts a look does not wait for it: it is answered from what was loaded before, so after a change to the design system or the config, the file shows its earlier findings until it is linted again (the next edit, or the next save when the editor lints on save). A one-shot `eslint` run always loads fresh.
 
 Each ESLint run pays for the plugin on top of ESLint's own work: every file is parsed a second time, by TypeScript as `check` parses it, and each ESLint thread (`--concurrency`) loads the design system in a worker of its own. For a CI gate, `onsystem check` or the [GitHub Action](ci.md) does the same checks with neither cost; the plugin is for editors, and for a setup that runs only ESLint.
 

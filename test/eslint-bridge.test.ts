@@ -9,7 +9,15 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { main } from '../src/cli.js';
 import { load, looking, type LoadRequest } from '../src/eslint/worker.js';
+import { loadTarget } from '../src/workspace.js';
 import { fixture } from './helpers.js';
+
+// Counted, so that a test can see whether the worker's look at the project began before a lint
+// had its answer: that work is synchronous at first, and no timing in a test would show it.
+vi.mock('../src/workspace.js', async (importOriginal) => {
+  const workspace = await importOriginal<typeof import('../src/workspace.js')>();
+  return { ...workspace, loadTarget: vi.fn(workspace.loadTarget) };
+});
 
 // What the ESLint plugin carries over from the project and from ESLint's config in a process that
 // runs on, as an editor's ESLint server does: config edits, rule options and suppression typos,
@@ -221,6 +229,34 @@ describe('rule options and suppression comments', () => {
     const quiet = eslintFor(root, { rules: { 'onsystem/suppression': 'off' } });
     expect(await lint(quiet, root, ['app'])).toEqual([expected[1]]);
   });
+
+  // ESLint runs the rules in the order the config lists them. A file that could not be checked
+  // is said so by the first rule that runs, but not by `suppression`: it would be a warning about
+  // a comment.
+  it('leaves a file that could not be checked to the other rules, with suppression first', async () => {
+    const root = fixture({
+      'components/ui/button.tsx': BUTTON,
+      'onsystem.config.json': '{ "components": 42 }',
+      'app/page.tsx': RED,
+    });
+    const eslint = new ESLint({
+      cwd: root,
+      overrideConfigFile: true,
+      overrideConfig: [
+        { files: ['**/*.{ts,tsx,js,jsx}'], languageOptions: { parser: tseslint.parser } },
+        {
+          files: ['**/*.tsx'],
+          plugins: { onsystem: onsystem as unknown as ESLint.Plugin },
+          rules: { 'onsystem/suppression': 'warn' },
+        },
+        onsystem.configs.recommended,
+      ],
+    });
+    const [result] = await eslint.lintFiles(['app/page.tsx']);
+    expect(result?.messages.map((m) => [m.ruleId, m.severity, m.message.split(':')[0]])).toEqual([
+      ['onsystem/no-hardcoded-color', 2, 'onsystem could not check this file'],
+    ]);
+  });
 });
 
 describe('the loader worker', () => {
@@ -239,8 +275,9 @@ describe('the loader worker', () => {
 
   // An editor lints the file in front of it after each pause. Each such lint waited while the
   // worker looked at the design system again, longer the larger it is; now the lint gets the
-  // design system already loaded at once, and the worker looks again in the background.
-  it('answers ten lints after pauses at once on a design system of 400 components', async () => {
+  // design system already loaded, and the worker looks again in the background once the lint has
+  // its answer.
+  it('answers ten lints after pauses before looking again, on 400 components', async () => {
     const files: Record<string, string> = {
       'components/ui/button.tsx': button('"default" | "outline"'),
       'app/page.tsx':
@@ -259,19 +296,19 @@ describe('the loader worker', () => {
     const { version } = first;
     const known = { [first.root]: version };
 
-    const times: number[] = [];
+    const looks = () => vi.mocked(loadTarget).mock.calls.length;
     for (let i = 0; i < 10; i++) {
       vi.setSystemTime(Date.now() + 2500);
-      const started = performance.now();
+      const before = looks();
       const response = await load({ ...request, known });
-      times.push(performance.now() - started);
       // The design system it holds, which the plugin has: no data to send. The look it started
-      // is still under way.
+      // has not begun yet: not one part of it ran before the answer.
       expect(response).toEqual({ root: first.root, version });
+      expect(looks()).toBe(before);
       expect(await pending(looking())).toBe(true);
       await looking();
+      expect(looks()).toBe(before + 1);
     }
-    expect(times).toHaveLength(10);
 
     // A change is answered at first with what the worker holds, then from what the look found.
     fs.writeFileSync(

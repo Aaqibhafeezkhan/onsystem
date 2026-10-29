@@ -145,9 +145,15 @@ async function rebuild(project: Project, config: ResolvedConfig): Promise<Projec
   return { at: Date.now(), key, dependencies, version: versionOf(key, config), config, model, own };
 }
 
-/** Runs a look in the background, held in `looks` until it ends. */
+/**
+ * Runs a look in the background, held in `looks` until it ends. It starts on a later turn of the
+ * event loop, after the lint that started it has its answer: the start of a look (finding the
+ * project, reading its config, listing the design system's files) runs synchronously, and run at
+ * once it held up that answer for as long.
+ */
 function background(look: () => Promise<void>): Promise<void> {
-  const running: Promise<void> = look()
+  const running: Promise<void> = new Promise<void>((resolve) => setImmediate(resolve))
+    .then(look)
     .catch(() => undefined)
     .finally(() => looks.delete(running));
   looks.add(running);

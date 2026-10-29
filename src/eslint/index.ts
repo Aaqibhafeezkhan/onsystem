@@ -218,7 +218,8 @@ function createRule(id: RuleId | typeof SUPPRESSION, description: string): Rule.
           if ('skipped' in outcome) return;
           if ('error' in outcome) {
             // Once per file and pass, from the first rule that runs, rather than once per rule.
-            if (pass.reported) return;
+            // Not from `suppression`, a warning about a comment, when a config lists it first.
+            if (suppression || pass.reported) return;
             pass.reported = true;
             context.report({
               node,
