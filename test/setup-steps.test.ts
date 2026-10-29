@@ -67,8 +67,12 @@ describe('the steps /setup.md gives an agent', () => {
 
   it('record a baseline next to a config that has none, so the check passes', async () => {
     // The quickstart's step 1 has the user run `init`, which only offers the baseline.
-    const root = demo(['onsystem.config.json']);
-    expect(fs.existsSync(path.join(root, 'onsystem.config.json'))).toBe(true);
+    // The demo needs no config: give it one, as a project that already has one.
+    const root = demo();
+    fs.writeFileSync(
+      path.join(root, 'onsystem.config.json'),
+      JSON.stringify({ components: ['components/ui/**/*.tsx'], tokens: ['app/globals.css'] }),
+    );
     expect(fs.existsSync(path.join(root, 'onsystem.baseline.json'))).toBe(false);
 
     // Step 2: the config is kept, and nothing records the baseline...

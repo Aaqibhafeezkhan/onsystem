@@ -90,7 +90,7 @@ describe('extraction from a shadcn/ui-style system (types resolved)', () => {
   it('collects class names and attaches docs and examples', () => {
     const button = component(ds, 'Button');
     expect(button.classNames).toContain('bg-primary');
-    expect(button.docs?.file).toBe('docs/button.md');
+    expect(button.docs?.file).toBe('docs/components/button.md');
     expect(button.examples.map((e) => e.title)).toContain('Destructive action');
     expect(ds.relatedTokens(button).map((t) => t.name)).toEqual(
       expect.arrayContaining(['primary', 'destructive', 'ring', 'radius-md']),

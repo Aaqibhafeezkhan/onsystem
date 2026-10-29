@@ -31,6 +31,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm typecheck
+      # The root tsconfig leaves the examples out: each has its own, so a dependency update that
+      # breaks one fails here.
+      - name: Typecheck the examples
+        run: pnpm --filter "./examples/*" typecheck
       - run: pnpm build
       - name: Smoke test the built server over stdio
         run: pnpm smoke

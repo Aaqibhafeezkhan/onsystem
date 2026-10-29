@@ -14,7 +14,7 @@ import {
   rulesFor,
 } from '../src/config.js';
 import { matchesGlob } from '../src/util/paths.js';
-import { ACME_ROOT, DEMO_ROOT, fixture, load } from './helpers.js';
+import { ACME_ROOT, fixture, load } from './helpers.js';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dsm-config-'));
 afterAll(() => {
@@ -37,9 +37,9 @@ describe('loadConfig', () => {
   it('uses the config file directory as the root when given --config', async () => {
     const config = await loadConfig({
       cwd: '/',
-      config: path.join(DEMO_ROOT, 'onsystem.config.json'),
+      config: path.join(ACME_ROOT, 'onsystem.config.json'),
     });
-    expect(config.root).toBe(DEMO_ROOT);
+    expect(config.root).toBe(ACME_ROOT);
   });
 
   it('falls back to shadcn-friendly defaults without a config', async () => {
