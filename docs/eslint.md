@@ -40,7 +40,9 @@ Each file is checked as `onsystem check` checks it, with zero config in a shadcn
 - with the `// onsystem-disable-*` [suppression comments](rules.md#suppressing-findings), next to ESLint's own `eslint-disable` comments,
 - leaving out what `check .` leaves out: the files the config's `exclude` lists, the design system's own components, and files that render an image or an email.
 
-Findings have the same messages, positions and fixes as `check`, and `eslint --fix` applies the fixes. ESLint's config sets each rule's severity (`'onsystem/no-hardcoded-spacing': 'error'`). The [real-world corpus](how-it-works.md#on-real-codebases) also runs through the plugin (`pnpm corpus eslint`): on every one of its runs, it reports exactly the findings `check` reports.
+Findings have the same messages, positions and fixes as `check`, and `eslint --fix` applies the fixes. A misspelled rule in a suppression comment, which suppresses nothing, is reported by `onsystem/suppression` as a warning, as `check` reports it. ESLint's config sets each rule's severity (`'onsystem/no-hardcoded-spacing': 'error'`). The [real-world corpus](how-it-works.md#on-real-codebases) also runs through the plugin (`pnpm corpus eslint`): on every one of its runs, it reports exactly the findings `check` reports.
+
+A rule's options (`allow`) belong in the project's [config](configuration.md#config-file), where `check`, the MCP server and the Claude Code hook read them too. ESLint's config can set them as well, for ESLint only: `'onsystem/no-hardcoded-color': ['error', { allow: ['#fff'] }]` takes the place of the `allow` the project's config gives that rule. A rule the project's config turns off for a file stays off.
 
 When the project root or the config is not where it would be found from ESLint's working directory, say where in the settings, as `--root` and `--config` do:
 
@@ -51,7 +53,11 @@ export default [
 ];
 ```
 
-The plugin loads each design system once, in a worker thread (ESLint rules run synchronously and extraction does not), and looks at its files again at most every two seconds, so an editor's ESLint server picks up a new component or variant without a restart.
+The plugin loads each design system once, in a worker thread (ESLint rules run synchronously and extraction does not), and answers each lint from what it has loaded. When that is more than two seconds old, the worker looks at the project's config and the design system's files again in the background, and the lints after that look get what it found, so an editor's ESLint server picks up a new component or variant, or a rule turned off in the config, without a restart. The lint that starts a look does not wait for it: it is answered from what was loaded before, so after a change to the design system or the config, the file shows its earlier findings until it is linted again (the next edit, or the next save when the editor lints on save). A one-shot `eslint` run always loads fresh.
+
+Each ESLint run pays for the plugin on top of ESLint's own work: every file is parsed a second time, by TypeScript as `check` parses it, and each ESLint thread (`--concurrency`) loads the design system in a worker of its own. For a CI gate, `onsystem check` or the [GitHub Action](ci.md) does the same checks with neither cost; the plugin is for editors, and for a setup that runs only ESLint.
+
+ESLint's `--cache` keys each file on its own content and ESLint's config, not on the design system. After a design-system change, a file that did not change keeps the findings ESLint cached for it: a variant added to a component is still reported as unknown, and a variant taken out passes where the file uses it. Leave `--cache` out of runs with the onsystem rules, or delete `.eslintcache` when the design system changes. `check` and the Action cache no findings.
 
 A few things stay with the CLI. The [baseline](ci.md#adopting-it-in-an-existing-codebase) applies to `check` only. ESLint has its own: on ESLint 9.24 and later, `npx eslint . --suppress-all` records the findings already in the code in `eslint-suppressions.json`, which you commit, and later runs leave them out ([bulk suppressions](https://eslint.org/docs/latest/use/suppressions)). Once a recorded finding is fixed, ESLint fails the run until `npx eslint . --prune-suppressions` takes it out of the file. On older versions, use `eslint-disable` comments, or set the onsystem rules to `warn` and cap them with `--max-warnings` (it counts warnings only, and most onsystem rules default to `error`). ESLint reports syntax errors itself. Which files ESLint lints is up to its config (`ignores`), where `check` leaves out what git ignores.
 

@@ -103,7 +103,8 @@ const TOKENS = ':root {\n  --primary: oklch(0.55 0.2 260);\n}\n';
 
 describe('the ESLint plugin', () => {
   it('has every rule, and a recommended config at their default severities', () => {
-    expect(Object.keys(onsystem.rules).sort()).toEqual([...RULE_IDS].sort());
+    // And `suppression`, for a misspelled rule in a suppression comment.
+    expect(Object.keys(onsystem.rules).sort()).toEqual([...RULE_IDS, 'suppression'].sort());
     const { recommended } = onsystem.configs;
     expect(recommended.files).toEqual(['**/*.{tsx,jsx}']);
     expect(recommended.rules).toMatchObject({
@@ -283,9 +284,12 @@ describe('the ESLint plugin', () => {
       path.join(root, 'components/ui/button.tsx'),
       button('"default" | "outline" | "ghost"'),
     );
-    // The loader looks at the design system's files again once they are two seconds old.
+    // The loader looks at the design system's files again once they are two seconds old, in the
+    // background: the lint that finds them so is answered at once from the design system it
+    // holds, and the lints after the look get the change.
     await new Promise((resolve) => setTimeout(resolve, 2100));
-    expect(await rules()).toEqual([]);
+    expect(await rules()).toEqual(['onsystem/no-unknown-variant']);
+    await expect.poll(rules, { timeout: 10_000, interval: 100 }).toEqual([]);
   });
 
   it('runs on ESLint 9', async () => {

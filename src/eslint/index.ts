@@ -9,7 +9,8 @@
  * working directory), with the project's config: its `rules` and `overrides` turn rules off
  * per file, `// onsystem-disable-*` comments suppress findings, and the files `check .` leaves
  * out (the config's `exclude`, the design system's own components) are not checked. ESLint's
- * config sets each rule's severity.
+ * config sets each rule's severity, and can set a rule's options (`allow`) over the project's.
+ * `onsystem/suppression` reports a misspelled rule in a suppression comment, as check does.
  */
 import path from 'node:path';
 
@@ -19,10 +20,14 @@ import {
   DEFAULT_SEVERITY,
   DEFAULT_TEST_EXCLUDE,
   DEFAULT_TEST_FOLDERS,
+  RULE_IDS,
+  rulesFor,
+  type ResolvedRule,
   type RuleId,
+  type RuleOptions,
 } from '../config.js';
 import { DesignSystem } from '../design-system.js';
-import { RULES } from '../lint/index.js';
+import { checkSource, RULES } from '../lint/index.js';
 import type { CheckResult, TextEdit } from '../types.js';
 import { relativePath } from '../util/paths.js';
 import { NAME, VERSION } from '../version.js';
@@ -43,10 +48,15 @@ const passes = new WeakMap<SourceCode, { outcome: Outcome; reported: boolean }>(
 
 /**
  * A checked file's findings, with `fromSystem`: whether an import specifier in that file leads
- * to the design system.
+ * to the design system, and `checkWith`: the file checked by one rule alone, with options from
+ * ESLint's config over the ones the project's config gives the rule for the file.
  */
 type Outcome =
-  | { result: CheckResult; fromSystem: (specifier: string) => boolean }
+  | {
+      result: CheckResult;
+      fromSystem: (specifier: string) => boolean;
+      checkWith: (id: RuleId, options: RuleOptions) => CheckResult;
+    }
   | { skipped: true }
   | { error: string };
 
@@ -86,7 +96,22 @@ function run(cwd: string, file: string, text: string, settings: Settings): Outco
   const relative = relativePath(ds.root, file);
   const result = ds.check(text, relative);
   if (result.skipped) return { skipped: true };
-  return { result, fromSystem: (specifier) => ds.lint.isDesignSystemImport(specifier, relative) };
+  return {
+    result,
+    fromSystem: (specifier) => ds.lint.isDesignSystemImport(specifier, relative),
+    checkWith(id, options) {
+      // A rule the project's config turns off for the file stays off.
+      const own = rulesFor(ds.config, relative)[id];
+      const off: ResolvedRule = { severity: 'off', options: {} };
+      const rules = Object.fromEntries(
+        RULE_IDS.map((rule) => [
+          rule,
+          rule === id ? { ...own, options: { ...own.options, ...options } } : off,
+        ]),
+      ) as Record<RuleId, ResolvedRule>;
+      return checkSource(text, ds.lint, { filename: relative, rules });
+    },
+  };
 }
 
 /** The part of an ESLint AST node this file reads; JSX nodes are not in ESTree's types. */
@@ -158,18 +183,34 @@ function typeOnly(def: Scope.Definition): boolean {
   return def.type === 'ImportBinding' && (kind(def.node) === 'type' || kind(def.parent) === 'type');
 }
 
-function createRule(id: RuleId, description: string): Rule.RuleModule {
+/** A rule's options in ESLint's config, as in onsystem.config.json: `['error', { allow: ['#fff'] }]`. */
+const OPTIONS_SCHEMA: Rule.RuleMetaData['schema'] = [
+  {
+    type: 'object',
+    properties: { allow: { type: 'array', items: { type: 'string' } } },
+    additionalProperties: false,
+  },
+];
+
+/**
+ * Check's misspelled rule names in `// onsystem-disable-*` comments, which suppress nothing. A rule
+ * of its own, so that it is a warning, as check reports it, and can be turned off like the others.
+ */
+const SUPPRESSION = 'suppression';
+
+function createRule(id: RuleId | typeof SUPPRESSION, description: string): Rule.RuleModule {
+  const suppression = id === SUPPRESSION;
   return {
     meta: {
       type: 'problem',
-      docs: { description, url: `${RULES_PAGE}#${id}` },
-      fixable: 'code',
-      hasSuggestions: true,
-      schema: [],
+      docs: { description, url: `${RULES_PAGE}#${suppression ? 'suppressing-findings' : id}` },
+      ...(suppression ? {} : { fixable: 'code', hasSuggestions: true }),
+      schema: suppression ? [] : OPTIONS_SCHEMA,
     },
     create(context) {
       const file = path.resolve(context.cwd, context.filename);
       const settings = (context.settings.onsystem ?? {}) as Settings;
+      const options = (context.options as RuleOptions[] | undefined)?.[0];
       return {
         'Program:exit'(node) {
           const pass = passFor(context, file, settings);
@@ -177,7 +218,8 @@ function createRule(id: RuleId, description: string): Rule.RuleModule {
           if ('skipped' in outcome) return;
           if ('error' in outcome) {
             // Once per file and pass, from the first rule that runs, rather than once per rule.
-            if (pass.reported) return;
+            // Not from `suppression`, a warning about a comment, when a config lists it first.
+            if (suppression || pass.reported) return;
             pass.reported = true;
             context.report({
               node,
@@ -185,7 +227,11 @@ function createRule(id: RuleId, description: string): Rule.RuleModule {
             });
             return;
           }
-          for (const d of outcome.result.diagnostics) {
+          const { diagnostics } =
+            !suppression && options && Object.keys(options).length
+              ? outcome.checkWith(id, options)
+              : outcome.result;
+          for (const d of diagnostics) {
             if (d.ruleId !== id) continue;
             const edits = d.fix ?? [];
             const fix: Rule.ReportFixer = (fixer) =>
@@ -218,6 +264,7 @@ function createRule(id: RuleId, description: string): Rule.RuleModule {
 const rules = Object.fromEntries(
   RULES.map((rule) => [rule.id, createRule(rule.id, rule.description)]),
 );
+rules[SUPPRESSION] = createRule(SUPPRESSION, 'Suppression comments must name rules that exist.');
 
 const plugin = {
   meta: { name: NAME, version: VERSION },
@@ -226,17 +273,18 @@ const plugin = {
 } satisfies ESLint.Plugin;
 
 /**
- * Every rule at its default severity, for `.tsx` and `.jsx` files other than tests and stories,
- * which `check` also leaves out unless asked (`--include-tests`).
+ * Every rule at its default severity, and `suppression` as a warning, for `.tsx` and `.jsx` files
+ * other than tests and stories, which `check` also leaves out unless asked (`--include-tests`).
  */
 plugin.configs.recommended = {
   name: 'onsystem/recommended',
   files: ['**/*.{tsx,jsx}'],
   ignores: [DEFAULT_TEST_EXCLUDE, DEFAULT_TEST_FOLDERS],
   plugins: { onsystem: plugin },
-  rules: Object.fromEntries(
-    RULES.map((rule) => [`onsystem/${rule.id}`, DEFAULT_SEVERITY[rule.id]]),
-  ),
+  rules: {
+    ...Object.fromEntries(RULES.map((rule) => [`onsystem/${rule.id}`, DEFAULT_SEVERITY[rule.id]])),
+    [`onsystem/${SUPPRESSION}`]: 'warn',
+  },
 };
 
 export default plugin;
