@@ -52,8 +52,8 @@ describe('Performance and footprint (docs/how-it-works.md)', () => {
     const { text } = perfBlock();
     const caveat = /runs?\. (The corpus checkouts [^\n]*)/.exec(text)?.[1] ?? '';
     expect(caveat).toContain('reading the design system takes longer');
-    // perf.mjs writes it in a template literal, with its backticks escaped.
-    expect(read('scripts/perf.mjs')).toContain(caveat.replace(/`/g, '\\`'));
+    // perf.mjs writes it in a template literal, with its backslashes and backticks escaped.
+    expect(read('scripts/perf.mjs')).toContain(caveat.replace(/[\\`]/g, '\\$&'));
   });
 
   it('has the rows perf.mjs writes, each with a measured result', () => {
