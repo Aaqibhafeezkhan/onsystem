@@ -7,11 +7,14 @@
 // Run `pnpm build` first, and `pnpm corpus fetch --only chatbot --only midday` (same --dir or
 // CORPUS_DIR as here) for the two apps it checks. It measures on this machine, so the numbers
 // change with it: the table names the machine, and each time is the median of --runs runs.
+// Other work on the machine slows the runs: it prints the load average as it starts, and warns
+// when the load is high or a run from the cache is slower than the run without it.
 //
 // - `check` with the built CLI on two corpus apps, as the corpus checks them: every file, with
 //   the design system read again (--no-cache) and from the cache, then one file, which gives
 //   the time per file after the first. The checkouts have no node_modules (nothing in them is
-//   installed), so the types of the libraries their components wrap are not read.
+//   installed), so the types of the libraries their components wrap are not read: reading the
+//   design system takes longer in a project with its dependencies installed.
 // - The Claude Code hook (plugins/onsystem/hooks/check-ui.mjs) on one edit of the demo, which
 //   has its dependencies installed: with the built CLI as the project's install, and through
 //   npx with onsystem@<version> from npm, as the plugin runs it in a project without an install.
@@ -59,6 +62,11 @@ const corpusDir = path.resolve(
 const { version } = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 /** A folder for this run's npm cache, install and hook markers, removed at the end. */
 let scratch;
+const cores = os.cpus().length;
+/** A 1-minute load average above this, half the cores, means other work competed for the CPU. */
+const BUSY = cores / 2;
+/** The highest 1-minute load average seen after a batch of timed runs. */
+let peakLoad = 0;
 
 try {
   if (!Number.isInteger(RUNS) || RUNS < 1) fail('--runs expects a whole number of 1 or more.');
@@ -66,11 +74,18 @@ try {
   const apps = corpusApps();
   scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'onsystem-perf-'));
   const machine = describeMachine();
-  console.error(`Measuring onsystem ${version} on ${machine}, ${RUNS} runs each.`);
+  console.error(
+    `Measuring onsystem ${version} on ${machine}, ${RUNS} ${RUNS === 1 ? 'run' : 'runs'} each${loadAverage()}.`,
+  );
   const checks = apps.map(measureCheck);
   const hook = measureHook();
   const server = await measureServer(checks.find((c) => c.name === SERVER_APP));
   const pkg = measurePackage();
+  if (peakLoad > BUSY) {
+    warn(
+      `the 1-minute load average reached ${peakLoad.toFixed(2)} on ${cores} cores while it measured: other work may have slowed these times. Run it again when the machine is idle.`,
+    );
+  }
   const table = render({ machine, checks, hook, server, pkg });
   console.log(table);
   if (values.write) {
@@ -124,6 +139,11 @@ function measureCheck(app) {
   // The first run above wrote the cache: in node_modules/.cache/onsystem, or in the system temp
   // folder for a checkout without node_modules.
   const warm = median(times(() => cli(args, app.cwd)));
+  if (warm > cold) {
+    warn(
+      `on ${app.name}, \`check\` from the cache (${seconds(warm)}) was slower than with --no-cache (${seconds(cold)}): other work on the machine may have slowed it. Run it again when the machine is idle.`,
+    );
+  }
   const single = median(times(() => cli(['check', one, '--format', 'json'], app.cwd)));
   const largest = files
     .map((file) => ({ file, size: fs.statSync(path.resolve(app.cwd, file)).size }))
@@ -200,6 +220,7 @@ async function measureServer(app) {
         samples.push(performance.now() - t);
         if (result.isError) fail(`${name} failed: ${JSON.stringify(result.content)}`);
       }
+      sampleLoad();
       return median(samples);
     };
     const lines = fs.readFileSync(path.resolve(app.cwd, app.largest), 'utf8').split('\n').length;
@@ -311,7 +332,7 @@ function render({ machine, checks, hook, server, pkg }) {
     ],
   ];
   return [
-    `Measured with onsystem ${version} on ${machine}, on ${date}, with \`node scripts/perf.mjs\`: each time is the median of ${RUNS} ${RUNS === 1 ? 'run' : 'runs'}. The corpus checkouts have no \`node_modules\`, so the types of the libraries their components wrap are not read; the demo has its dependencies installed.`,
+    `Measured with onsystem ${version} on ${machine}, on ${date}, with \`node scripts/perf.mjs\`: each time is the median of ${RUNS} ${RUNS === 1 ? 'run' : 'runs'}. The corpus checkouts have no \`node_modules\`, so the types of the libraries their components wrap are not read: in a project with its dependencies installed, reading the design system takes longer. The demo, where the hook is measured, has its dependencies installed.`,
     '',
     table(['Measured', 'Result'], rows),
     '',
@@ -362,7 +383,28 @@ function times(fn) {
     fn();
     samples.push(performance.now() - t);
   }
+  sampleLoad();
   return samples;
+}
+
+/** `, load average 1.52 1.80 2.01` (1, 5 and 15 minutes), or '' on Windows, which has none. */
+function loadAverage() {
+  if (process.platform === 'win32') return '';
+  sampleLoad();
+  return `, load average ${os
+    .loadavg()
+    .map((n) => n.toFixed(2))
+    .join(' ')}`;
+}
+
+/** Keeps the highest 1-minute load average, read after each batch of timed runs. */
+function sampleLoad() {
+  peakLoad = Math.max(peakLoad, os.loadavg()[0]);
+}
+
+/** A warning on stderr, which the table on stdout and the doc it writes do not carry. */
+function warn(text) {
+  console.error(`Warning: ${text}`);
 }
 
 function median(samples) {

@@ -43,13 +43,13 @@ At a monorepo root with no design system of its own, every command works per pro
 
 ## `check`
 
-`onsystem check <paths...>` lints the files, folders and globs it is given with the rules `check_ui` runs ([rules](rules.md)). A folder stands for its `.tsx` and `.jsx` files; folders and globs leave out the design system's own component files, tests and stories, what the config's `exclude` adds and what git ignores, while a file named outright is always checked ([CI and baselines](ci.md)).
+`onsystem check <paths...>` lints the files, folders and globs it is given with the rules `check_ui` runs ([rules](rules.md)). A folder stands for its `.tsx` and `.jsx` files; folders and globs leave out the design system's own component files, tests and stories, what the config's `exclude` adds and what git ignores. A file named outright is checked too, unless it is one of the design system's own component files (`--include-design-system` checks those) or `--skip-excluded` leaves it out ([CI and baselines](ci.md)).
 
 It exits with:
 
 - `0` when there are no errors, and no more warnings than `--max-warnings`.
 - `1` when there are errors, or more warnings than `--max-warnings`.
-- `2` when it could not check: an unknown option, a broken config, paths that match no file, a file it could not read, or, with `--require-design-system`, no design system or nothing to check.
+- `2` when it could not check: an unknown option, no paths given, an unknown `--format`, a `--max-warnings` that is not an integer, a broken config, paths that match no file, a file it could not read, a `--baseline` file that does not exist (unless `--update-baseline` writes it), `--prune-baseline` with no baseline to prune, or, with `--require-design-system`, no design system or nothing to check.
 
 | Option                          | What it does                                                                                                                                                                |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

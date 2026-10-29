@@ -5,10 +5,13 @@ import { describe, expect, it } from 'vitest';
 
 import { loadConfig, RULE_IDS } from '../src/config.js';
 import { fixture, load, TSCONFIG } from './helpers.js';
+import { section } from './markdown.js';
 
 // "Can I add our own rules?" is the FAQ's answer to the question users ask once they see the
 // rules: what the config does with a rule id it does not know, what already covers the commonest
-// ask (no raw <a> where the design system has a Link), and where a new built-in rule starts.
+// ask (no raw <a> where the design system has a Link), and where a new built-in rule starts. No
+// plugin API for rules is planned, so the answer promises none. The answer on components outside
+// components/ui names the folders zero config reads, as docs/configuration.md does.
 
 const root = path.resolve(import.meta.dirname, '..');
 const read = (file: string) =>
@@ -24,6 +27,11 @@ function answer(question: string): string {
 
 describe('the FAQ on custom rules (site/lib/faq.ts)', () => {
   const text = answer('Can I add our own rules?');
+
+  it('promises no way to add rules to onsystem itself', () => {
+    expect(text).toContain('Not to onsystem itself. Its rules are a fixed set');
+    expect(text).not.toMatch(/\byet\b/);
+  });
 
   it('says the config rejects a rule id it does not know', async () => {
     expect(text).toContain('rejects a rule id it does not know');
@@ -61,5 +69,17 @@ export function Link(props: React.ComponentProps<"a">) {
       '(https://github.com/dgesteves/onsystem/blob/main/CONTRIBUTING.md#adding-a-lint-rule)',
     );
     expect(text).toContain('[ESLint plugin](/docs/eslint)');
+  });
+});
+
+describe('the FAQ on components outside components/ui (site/lib/faq.ts)', () => {
+  it('names the flat folders of primitives wrappers zero config reads', () => {
+    const text = answer('My components are not in components/ui. Do I need a config?');
+    const zeroConfig = section(read('docs/configuration.md'), 'Zero config');
+    for (const folder of ['src/', 'src/components/', 'components/', 'app/components/']) {
+      expect(text, folder).toContain(`\`${folder}\``);
+      expect(zeroConfig, folder).toContain(`\`${folder}\``);
+    }
+    expect(text).toContain('[zero config](/docs/configuration#zero-config)');
   });
 });

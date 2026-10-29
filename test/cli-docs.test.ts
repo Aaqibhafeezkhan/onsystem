@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import ts from 'typescript';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 
 import { main, type Io } from '../src/cli.js';
 import { CONFIG_FILES } from '../src/config.js';
@@ -222,8 +223,14 @@ describe('the CLI reference (docs/cli.md)', () => {
     expect(section(cli, '`inspect`')).toMatch(/^\| `--format <format>` +\| `json` /m);
   });
 
-  it('names every config file name the CLI looks for', () => {
+  it('names every config file name the CLI looks for, as docs/configuration.md does', () => {
     for (const name of CONFIG_FILES) expect(cli).toContain(`\`${name}\``);
+    // `onsystem.config.json` (or `.mjs`, `.js`, or `.ts` and `.mts` …) opens its Config file section.
+    const configFile = section(read('docs/configuration.md'), 'Config file').split('\n\n')[1];
+    for (const name of CONFIG_FILES) {
+      const ext = name.replace(/^onsystem\.config/, '');
+      expect(configFile, name).toMatch(new RegExp(`\`(?:onsystem\\.config)?\\${ext}\``));
+    }
   });
 
   it('is linked from the quickstart', () => {
@@ -232,12 +239,16 @@ describe('the CLI reference (docs/cli.md)', () => {
 });
 
 describe('the GitHub Action inputs (docs/required-check.md)', () => {
-  it('lists every input of action.yml with its default', () => {
-    const yml = read('action.yml');
-    const block = yml.slice(yml.indexOf('\ninputs:'), yml.indexOf('\noutputs:'));
-    const inputs = [
-      ...block.matchAll(/^ {2}([a-z-]+):\n {4}description:[^\n]*\n(?: {4}default: (.*)\n)?/gm),
-    ].map((m) => ({ name: m[1] ?? '', default: (m[2] ?? '').replace(/^'(.*)'$/, '$1') }));
+  it('lists every input of action.yml with its default, and no other', () => {
+    // Read with a YAML parser, so an input with a multi-line description, or with `required`
+    // before `default`, is not skipped.
+    const action = parse(read('action.yml')) as {
+      inputs: Record<string, { default?: string | number | boolean }>;
+    };
+    const inputs = Object.entries(action.inputs).map(([name, input]) => ({
+      name,
+      default: input.default === undefined ? '' : String(input.default),
+    }));
     expect(inputs.map((i) => i.name)).toContain('only-changed-lines');
     const doc = read('docs/required-check.md');
     for (const input of inputs) {
@@ -245,5 +256,10 @@ describe('the GitHub Action inputs (docs/required-check.md)', () => {
       expect(row, input.name).not.toBeNull();
       expect(row?.[1], input.name).toBe(input.default ? `\`${input.default}\`` : '');
     }
+    // One row per input: none left behind by an input that is gone.
+    const rows = [...section(doc, 'The workflow').matchAll(/^\| `([a-z-]+)` +\|/gm)].map(
+      (m) => m[1] ?? '',
+    );
+    expect(rows.sort()).toEqual(inputs.map((i) => i.name).sort());
   });
 });

@@ -43,9 +43,17 @@ describe('Performance and footprint (docs/how-it-works.md)', () => {
   it('says where, when and with what the numbers were measured', () => {
     const { text } = perfBlock();
     expect(text).toMatch(
-      /^\s*Measured with onsystem \d+\.\d+\.\d+ on .+ \(\d+ cores, \d+ GB\), .+, Node\.js \d+\.\d+\.\d+, on \d{4}-\d{2}-\d{2}, with `node scripts\/perf\.mjs`: each time is the median of \d+ runs\./,
+      /^\s*Measured with onsystem \d+\.\d+\.\d+ on .+ \(\d+ cores, \d+ GB\), .+, Node\.js \d+\.\d+\.\d+, on \d{4}-\d{2}-\d{2}, with `node scripts\/perf\.mjs`: each time is the median of \d+ runs?\./,
     );
     expect(fs.existsSync(path.join(root, 'scripts/perf.mjs'))).toBe(true);
+  });
+
+  it('says which way the missing node_modules cut, in the words perf.mjs writes', () => {
+    const { text } = perfBlock();
+    const caveat = /runs?\. (The corpus checkouts [^\n]*)/.exec(text)?.[1] ?? '';
+    expect(caveat).toContain('reading the design system takes longer');
+    // perf.mjs writes it in a template literal, with its backticks escaped.
+    expect(read('scripts/perf.mjs')).toContain(caveat.replace(/`/g, '\\`'));
   });
 
   it('has the rows perf.mjs writes, each with a measured result', () => {

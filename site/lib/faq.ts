@@ -63,7 +63,7 @@ export const faqEntries = (corpus: FaqCorpus): [question: string, answer: string
   ],
   [
     'My components are not in components/ui. Do I need a config?',
-    'Not if the app has a shadcn/ui `components.json`, imports a workspace package named like a design system (`@acme/ui`), is the design-system package itself, or keeps its components in a flat `src/` that wraps React Aria, Radix or another primitives library: [zero config](/docs/configuration#zero-config) finds those. Otherwise a config file with a `components` glob is enough. `npx -y onsystem inspect` prints what was found, and [troubleshooting](/docs/troubleshooting) covers what to do when it finds nothing.',
+    'Not if the app has a shadcn/ui `components.json`, imports a workspace package named like a design system (`@acme/ui`), is the design-system package itself, or keeps components that wrap React Aria, Radix or another primitives library in a flat `src/`, `src/components/`, `components/` or `app/components/`: [zero config](/docs/configuration#zero-config) finds those. Otherwise a config file with a `components` glob is enough. `npx -y onsystem inspect` prints what was found, and [troubleshooting](/docs/troubleshooting) covers what to do when it finds nothing.',
   ],
   [
     "Will check fail on my design system's own components?",
@@ -75,7 +75,7 @@ export const faqEntries = (corpus: FaqCorpus): [question: string, answer: string
   ],
   [
     'Can I add our own rules?',
-    "Not to onsystem itself yet. Its rules are a fixed set: the config sets each one to `error`, `warn` or `off` and rejects a rule id it does not know, and the hook, `check_ui`, `onsystem check` and the GitHub Action run only these. Two things cover most requests. A native element your design system wraps is already a finding: with a `Link` component, a raw `<a>` is reported by `prefer-design-system-component`, and the config's `elements` maps an element to the component that replaces it. For a rule only your team needs, write an ESLint rule: it runs next to onsystem's [ESLint plugin](/docs/eslint) in the editor and in CI, though not in the hook or `check_ui`. A rule most design systems would want is welcome as a pull request: [Adding a lint rule](https://github.com/dgesteves/onsystem/blob/main/CONTRIBUTING.md#adding-a-lint-rule) lists the steps.",
+    "Not to onsystem itself. Its rules are a fixed set: the config sets each one to `error`, `warn` or `off` and rejects a rule id it does not know, and the hook, `check_ui`, `onsystem check` and the GitHub Action run only these. Two things cover most requests. A native element your design system wraps is already a finding: with a `Link` component, a raw `<a>` is reported by `prefer-design-system-component`, and the config's `elements` maps an element to the component that replaces it. For a rule only your team needs, write an ESLint rule: it runs next to onsystem's [ESLint plugin](/docs/eslint) in the editor and in CI, though not in the hook or `check_ui`. A rule most design systems would want is welcome as a pull request: [Adding a lint rule](https://github.com/dgesteves/onsystem/blob/main/CONTRIBUTING.md#adding-a-lint-rule) lists the steps.",
   ],
   [
     'Does it work with Vue, Svelte or Angular?',
