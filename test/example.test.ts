@@ -224,6 +224,21 @@ describe('examples adapted from shadcn/ui', () => {
   });
 });
 
+describe("examples adapted from React Aria's Tailwind starter", () => {
+  it('react-aria says so and keeps its Apache-2.0 license', () => {
+    const { read, readme } = example('react-aria');
+    expect(readme).toContain(
+      'adapted from the [React Aria Tailwind starter](https://github.com/adobe/react-spectrum/tree/main/starters/tailwind) by Adobe ([Apache-2.0](LICENSE-react-aria)), changed for this example',
+    );
+    expect(readme).not.toContain('written for this example');
+    // The license as react-spectrum publishes it, with Adobe's copyright line.
+    const license = read('LICENSE-react-aria');
+    expect(license).toMatch(/^\s+Apache License\n\s+Version 2\.0, January 2004\n/);
+    expect(license).toContain('Copyright 2019 Adobe');
+    expect(license).toContain('4. Redistribution.');
+  });
+});
+
 describe('examples/tailwind-v3', () => {
   const { root } = example('tailwind-v3');
 

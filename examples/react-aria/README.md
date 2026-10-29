@@ -1,6 +1,6 @@
 # react-aria
 
-An app with React Aria Components in `src/components/`, next to its `src/App.tsx`, where they land when you copy React Aria's [Tailwind starter](https://react-aria.adobe.com/getting-started) into an app. onsystem finds them with no config: a flat folder of PascalCase components that wrap `react-aria-components`. The components are written for this example in the starter's style (`tailwind-variants`, `composeRenderProps`).
+An app with React Aria Components in `src/components/`, next to its `src/App.tsx`, where they land when you copy React Aria's [Tailwind starter](https://react-aria.adobe.com/getting-started) into an app. onsystem finds them with no config: a flat folder of PascalCase components that wrap `react-aria-components`. The components and their helpers in `src/components/` are adapted from the [React Aria Tailwind starter](https://github.com/adobe/react-spectrum/tree/main/starters/tailwind) by Adobe ([Apache-2.0](LICENSE-react-aria)), changed for this example: fewer components, styled with the tokens in `src/index.css`.
 
 | Path                   | What it is                                                                                                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -21,7 +21,7 @@ npm run inspect   # what onsystem read: components, props and tokens
 npm run check     # check the pages (exits 1: InviteForm.tsx has errors)
 ```
 
-The scripts run the latest onsystem release with npx. `inspect` prints `config (defaults)` and `detected src/components/ (7 components wrapping react-aria-components)`. Install first: the props come from React Aria's types, so without them `check` cannot tell that `checked` should be `isSelected`.
+The scripts run the latest onsystem release with npx. Finding the components in `src/components/` with no config needs onsystem 0.11.1 or later: `inspect` then prints `config (defaults)` and `detected src/components/ (7 components wrapping react-aria-components)`, and `check` reports the problems the table lists. An earlier release finds no components here, so `check` runs without the component rules. Install first: the props come from React Aria's types, so without them `check` cannot tell that `checked` should be `isSelected`.
 
 To have an agent write UI against it, set it up as the [shadcn-demo](https://github.com/dgesteves/onsystem/tree/main/examples/shadcn-demo#try-it) describes, from this folder.
 

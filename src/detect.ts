@@ -427,15 +427,18 @@ function plural(n: number, one: string, many = `${one}s`): string {
   return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 }
 
-/** Libraries of unstyled primitives that design systems wrap. */
+/**
+ * Libraries of unstyled primitives that design systems wrap. Not Radix's icons
+ * (`@radix-ui/react-icons`), which an app's own components import as much as a design system's.
+ */
 const PRIMITIVES =
-  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
+  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-(?!icons(?:\/|$))[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
 
 /** Files that make `src/` an app rather than a library: entries and route folders. */
 const APP_ENTRIES = /^(?:main|index|App|app|root|entry-client|entry-server)\.[jt]sx?$/;
 const APP_FOLDERS = new Set(['app', 'pages', 'routes']);
 
-/** Fewer PascalCase files than this in `src/` are an app's, not a component library. */
+/** Fewer PascalCase files than this in the folder are an app's, not a component library. */
 const MIN_FLAT_COMPONENTS = 5;
 
 /**
@@ -452,6 +455,14 @@ function primitivesDependencies(pkg: Record<string, unknown>): string[] {
     ...asRecord(pkg.devDependencies),
     ...asRecord(pkg.peerDependencies),
   }).filter((name) => PRIMITIVES.test(name));
+}
+
+/** `react-aria-components`, or `a primitives library (@radix-ui/react-dialog, @radix-ui/react-slot)`. */
+function primitivesNamed(dependencies: string[]): string {
+  if (dependencies.length === 1) return dependencies[0] ?? '';
+  const shown = dependencies.slice(0, 3).join(', ');
+  const more = dependencies.length - 3;
+  return `a primitives library (${more > 0 ? `${shown} and ${String(more)} more` : shown})`;
 }
 
 /**
@@ -522,7 +533,7 @@ function fromFlatFolder(
   }
   if (wrapping * 5 < files.length * 4) {
     note(
-      `${wrapping} of ${files.length} files in ${folder}/ import ${dependencies[0] ?? 'a primitives library'}, fewer than four in five`,
+      `${wrapping} of ${files.length} files in ${folder}/ import ${primitivesNamed(dependencies)}, fewer than four in five`,
     );
     return undefined;
   }

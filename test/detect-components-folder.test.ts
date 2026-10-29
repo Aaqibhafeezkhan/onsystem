@@ -172,6 +172,77 @@ describe('detectProject: a flat folder of components in an app', () => {
     expect(detectProject(none)).toBeUndefined();
   });
 
+  it("leaves an app's own components alone when they import Radix's icons", async () => {
+    // @radix-ui/react-icons is an icon set, not a primitives library: features use it too.
+    const feature = (name: string, className = 'p-4') =>
+      `import { StarIcon } from '@radix-ui/react-icons'
+export function ${name}({ title }: { title: string }) {
+  return <section className="${className}"><StarIcon /><h2>{title}</h2><button className="rounded">More</button></section>
+}
+`;
+    const app = (folder: string) =>
+      fixture({
+        'package.json': json({
+          name: 'icons-app',
+          private: true,
+          dependencies: { next: '^15.0.0', react: '^19.0.0', '@radix-ui/react-icons': '^1.3.0' },
+        }),
+        'app/globals.css': THEME,
+        ...Object.fromEntries(
+          ['Header', 'Sidebar', 'Footer', 'ProfileCard', 'PricingTable'].map((name) => [
+            `${folder}/${name}.tsx`,
+            feature(name, name === 'Header' ? 'p-4 text-[#ff0000]' : 'p-4'),
+          ]),
+        ),
+      });
+    expect(detectProject(app('components'))).toBeUndefined();
+    expect(detectProject(app('src'))).toBeUndefined();
+    // check holds them to the rules as app code, rather than skipping them as the design system.
+    const check = await run(['check', '.'], app('components'));
+    expect(check.text).toContain('Hardcoded color `text-[#ff0000]`');
+    expect(check.text).not.toContain('design-system files skipped');
+    const inspect = await run(['inspect', '--explain'], app('components'));
+    expect(inspect.text).toContain(
+      'no     a flat src/ of components: no dependency on a primitives library',
+    );
+  });
+
+  it('names the primitives libraries in inspect --explain', async () => {
+    const mixed = (dependencies: Record<string, string>) =>
+      fixture({
+        'package.json': json({ name: 'app', dependencies }),
+        'src/main.tsx': 'export {}\n',
+        ...starterIn('src/components'),
+        ...Object.fromEntries(
+          ['Header', 'Sidebar', 'Footer', 'Profile', 'Billing'].map((name) => [
+            `src/components/${name}.tsx`,
+            `import { Button } from "./Button"\nexport function ${name}() { return <Button>${name}</Button> }\n`,
+          ]),
+        ),
+      });
+    const one = await run(['inspect', '--explain'], mixed({ 'react-aria-components': '^1.22.0' }));
+    expect(one.text).toContain(
+      '6 of 11 files in src/components/ import react-aria-components, fewer than four in five',
+    );
+    // Any of them counts, so with more than one the line names them all, not the first.
+    const two = await run(
+      ['inspect', '--explain'],
+      mixed({ 'react-aria-components': '^1.22.0', '@radix-ui/react-dialog': '^1.1.0' }),
+    );
+    expect(two.text).toContain(
+      '6 of 11 files in src/components/ import a primitives library (react-aria-components, @radix-ui/react-dialog), fewer than four in five',
+    );
+  });
+
+  it("is the hook's list of primitives libraries", () => {
+    const literal = (file: string) =>
+      /const PRIMITIVES =\s*(\/.+\/);/.exec(
+        fs.readFileSync(path.resolve(import.meta.dirname, '..', file), 'utf8'),
+      )?.[1];
+    expect(literal('src/detect.ts')).toContain('@radix-ui');
+    expect(literal('plugins/onsystem/hooks/check-ui.mjs')).toBe(literal('src/detect.ts'));
+  });
+
   it('keeps a flat src/ of components first', () => {
     const root = fixture({
       'package.json': VITE_APP,
