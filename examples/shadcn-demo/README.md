@@ -2,14 +2,16 @@
 
 A small shadcn/ui-style design system to try `onsystem` on:
 
-| Path                           | What it is                                                                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `components/ui/*.tsx`          | `Button`, `Badge`, `Card`, `Dialog`, `Input`, built with `cva` and Radix (adapted from [shadcn/ui](https://ui.shadcn.com), MIT) |
-| `app/globals.css`              | Tailwind v4 tokens: `:root` / `.dark` custom properties mapped through `@theme inline`                                          |
-| `docs/*.md`                    | Usage guidelines and examples, one file per component                                                                           |
-| `app/settings/members.tsx`     | UI written against the design system. `check` reports nothing.                                                                  |
-| `app/settings/danger-zone.tsx` | UI written without it. `check` reports one problem per rule.                                                                    |
-| `onsystem.config.json`         | The config that ties it together                                                                                                |
+| Path                           | What it is                                                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components.json`              | shadcn/ui's config, as `npx shadcn init` writes it                                                                                                |
+| `components/ui/*.tsx`          | `Button`, `Badge`, `Card`, `Dialog`, `Input`, built with `cva` and Radix (adapted from [shadcn/ui](https://ui.shadcn.com), [MIT](LICENSE-shadcn)) |
+| `app/globals.css`              | Tailwind v4 tokens: `:root` / `.dark` custom properties mapped through `@theme inline`                                                            |
+| `docs/components/*.md`         | Usage guidelines and examples, one file per component                                                                                             |
+| `app/settings/members.tsx`     | UI written against the design system. `check` reports nothing.                                                                                    |
+| `app/settings/danger-zone.tsx` | UI written without it. `check` reports 11 problems, at least one for each of onsystem's 8 rules.                                                  |
+
+There is no onsystem config: like any shadcn/ui project, it needs none. `inspect` prints `config (defaults)` and finds the components through `components.json`, and the docs in `docs/components/`, where it looks by default.
 
 ## Try it
 

@@ -4,7 +4,7 @@
     "onsystem": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "onsystem@0.11.0"]
+      "args": ["-y", "onsystem@0.11.1"]
     }
   }
 }

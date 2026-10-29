@@ -61,7 +61,7 @@ import path from 'node:path';
 
 const PACKAGE = 'onsystem';
 // The exact release this plugin runs; scripts/sync-versions.mjs sets it with each release.
-const VERSION = '0.11.0';
+const VERSION = '0.11.1';
 const UI_FILE = /\.[jt]sx$/i;
 const MAX_FINDINGS = 30;
 // Both runs together, within the 60 seconds hooks.json gives the hook. Tests shorten it.
@@ -96,7 +96,7 @@ const BASELINE_FILES = ['onsystem.baseline.json', 'design-system-mcp.baseline.js
 const DEFAULT_COMPONENT_DIRS = ['components/ui', 'src/components/ui'];
 // The primitives libraries a flat src/ of components wraps (PRIMITIVES in src/detect.ts).
 const PRIMITIVES =
-  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
+  /^(?:react-aria-components|react-aria|radix-ui|@radix-ui\/react-(?!icons(?:\/|$))[\w-]+|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ark-ui\/react)(?:\/|$)/;
 const BIN = process.env.ONSYSTEM_BIN || process.env.DESIGN_SYSTEM_MCP_BIN || undefined;
 
 const input = await readInput();
