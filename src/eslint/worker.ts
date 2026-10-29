@@ -2,13 +2,20 @@
  * The ESLint plugin's loader, in a worker thread. ESLint rules run synchronously, and finding a
  * project's design system does not (config files written in code, globs, the extraction
  * cache), so the plugin asks this worker and waits for the answer (see `bridge.ts`).
+ *
+ * The worker keeps what it loaded and answers from it at once. Once that is two seconds old, the
+ * next lint starts a look at the project again (its config, then its design system's files) in
+ * the background, and the lints after the look get what it found. Waiting for the look instead
+ * held up every lint after a pause in an editor for as long as the look took, which grows with
+ * the design system.
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parentPort, type MessagePort } from 'node:worker_threads';
 
 import { excludedBy, type ResolvedConfig } from '../config.js';
-import { buildModel, componentFiles } from '../design-system.js';
+import { buildModel, componentFiles, fingerprint } from '../design-system.js';
 import type { DesignSystemModel } from '../types.js';
 import { relativePath } from '../util/paths.js';
 import { loadTarget } from '../workspace.js';
@@ -50,20 +57,42 @@ export interface Call {
 /** What the configs said (a design-system package's skipped, or its paths ignored), each said once. */
 const warned = new Set<string>();
 
-/** How long a loaded design system is trusted before its files are looked at again. */
+/** How long what a look found is used before a lint starts the next look. */
 const FRESH_MS = 2000;
 
-const targets = new Map<string, { at: number; target: Promise<Target> }>();
-const projects = new Map<
-  string,
-  {
-    at: number;
-    version: string;
-    config: ResolvedConfig;
-    model: DesignSystemModel;
-    own: Set<string>;
-  }
->();
+/** The project and config found from where ESLint runs and `settings.onsystem`, and when. */
+interface KeptTarget {
+  at: number;
+  /** A load that failed is kept too: the lints until the next look say why. */
+  target: Promise<Target>;
+  /** A look at it, then at the project of the file whose lint started the look, under way. */
+  looking?: Promise<void> | undefined;
+}
+
+/** A project's design system, as built for `config`. */
+interface Project {
+  at: number;
+  /** The fingerprint of what the model is built from: the files, and the config but its rules. */
+  key: string;
+  /** Files beyond the tracked ones that the model depends on, for the next fingerprint. */
+  dependencies: string[];
+  /** The fingerprint and the whole config, rules too: what the plugin holds when it has it. */
+  version: string;
+  config: ResolvedConfig;
+  model: DesignSystemModel;
+  /** The design system's own component files, by real path. */
+  own: Set<string>;
+  looking?: Promise<void> | undefined;
+}
+
+/** By where ESLint runs and its settings. */
+const targets = new Map<string, KeptTarget>();
+/**
+ * By target and project root: two targets can reach the same project with configs of their own
+ * (runs from two folders, two ESLint configs), and neither may be answered with the other's.
+ */
+const projects = new Map<string, Project>();
+const looks = new Set<Promise<void>>();
 
 function realPath(file: string): string {
   try {
@@ -73,24 +102,110 @@ function realPath(file: string): string {
   }
 }
 
-async function targetFor({ cwd, root, config }: LoadRequest): Promise<Target> {
-  const key = JSON.stringify([cwd, root, config]);
-  const cached = targets.get(key);
-  if (cached && Date.now() - cached.at < FRESH_MS) return cached.target;
-  const target = loadTarget({
+function loadTargetFor({ cwd, root, config }: LoadRequest): Promise<Target> {
+  return loadTarget({
     cwd,
     root: root === undefined ? undefined : path.resolve(cwd, root),
     config: config === undefined ? undefined : path.resolve(cwd, config),
   });
-  targets.set(key, { at: Date.now(), target });
-  return target;
+}
+
+function keep(target: Promise<Target>): KeptTarget {
+  // Awaited by later lints, which say why it failed: not an unhandled rejection meanwhile.
+  target.catch(() => undefined);
+  return { at: Date.now(), target };
+}
+
+/** The config a file is checked with: its own project's, from a monorepo root. */
+async function configFor(target: Target, file: string): Promise<ResolvedConfig> {
+  return target.workspace ? (await target.workspace.projectFor(file)).config : target.config;
+}
+
+function versionOf(key: string, config: ResolvedConfig): string {
+  return createHash('sha256').update(key).update(JSON.stringify(config)).digest('hex');
+}
+
+async function build(config: ResolvedConfig): Promise<Project> {
+  const {
+    model,
+    key = String(Date.now()),
+    dependencies = [],
+  } = await buildModel(config, { cache: true });
+  const own = new Set((await componentFiles(config)).map(realPath));
+  return { at: Date.now(), key, dependencies, version: versionOf(key, config), config, model, own };
+}
+
+/**
+ * `project` for `config` as the files are now: the same model when nothing it is built from has
+ * changed (a config edit that only changes rules, or no change at all), else a new build.
+ */
+async function rebuild(project: Project, config: ResolvedConfig): Promise<Project> {
+  if ((await fingerprint(config, project.dependencies)) !== project.key) return build(config);
+  const { key, dependencies, model, own } = project;
+  return { at: Date.now(), key, dependencies, version: versionOf(key, config), config, model, own };
+}
+
+/**
+ * Runs a look in the background, held in `looks` until it ends. It starts on a later turn of the
+ * event loop, after the lint that started it has its answer: the start of a look (finding the
+ * project, reading its config, listing the design system's files) runs synchronously, and run at
+ * once it held up that answer for as long.
+ */
+function background(look: () => Promise<void>): Promise<void> {
+  const running: Promise<void> = new Promise<void>((resolve) => setImmediate(resolve))
+    .then(look)
+    .catch(() => undefined)
+    .finally(() => looks.delete(running));
+  looks.add(running);
+  return running;
+}
+
+function projectKey(key: string, config: ResolvedConfig): string {
+  return JSON.stringify([key, config.root]);
+}
+
+/** A build that fails drops the project, so that the next lint builds it again and says why. */
+function lookAtProject(slot: string, project: Project, config: ResolvedConfig): Promise<void> {
+  project.looking = background(async () => {
+    try {
+      projects.set(slot, await rebuild(project, config));
+    } catch (error) {
+      if (projects.get(slot) === project) projects.delete(slot);
+      throw error;
+    }
+  });
+  return project.looking;
+}
+
+function lookAtTarget(key: string, kept: KeptTarget, request: LoadRequest): Promise<void> {
+  kept.looking = background(async () => {
+    const loading = loadTargetFor(request);
+    await loading.catch(() => undefined);
+    targets.set(key, keep(loading));
+    // The config may have changed: the file's project is looked at with the new one.
+    const config = await configFor(await loading, request.file);
+    const slot = projectKey(key, config);
+    const project = projects.get(slot);
+    if (project && !project.looking) await lookAtProject(slot, project, config);
+  });
+  return kept.looking;
+}
+
+/** Resolves when the looks under way have ended. Nothing waits on them but tests. */
+export function looking(): Promise<unknown> {
+  return Promise.all(looks);
 }
 
 export async function load(request: LoadRequest): Promise<LoadResponse> {
-  const target = await targetFor(request);
-  const config = target.workspace
-    ? (await target.workspace.projectFor(request.file)).config
-    : target.config;
+  const key = JSON.stringify([request.cwd, request.root, request.config]);
+  let kept = targets.get(key);
+  if (!kept) {
+    kept = keep(loadTargetFor(request));
+    targets.set(key, kept);
+  } else if (!kept.looking && Date.now() - kept.at >= FRESH_MS) {
+    void lookAtTarget(key, kept, request);
+  }
+  const config = await configFor(await kept.target, request.file);
 
   // On stderr, once per process: ESLint has no place for a warning that is about no one file.
   for (const text of config.warnings ?? []) {
@@ -99,12 +214,19 @@ export async function load(request: LoadRequest): Promise<LoadResponse> {
     process.stderr.write(`onsystem: ${text}\n`);
   }
 
-  let project = projects.get(config.root);
-  if (!project || Date.now() - project.at >= FRESH_MS) {
-    const { model, key } = await buildModel(config, { cache: true });
-    const own = new Set((await componentFiles(config)).map(realPath));
-    project = { at: Date.now(), version: key ?? String(Date.now()), config, model, own };
-    projects.set(config.root, project);
+  const slot = projectKey(key, config);
+  let project = projects.get(slot);
+  if (!project) {
+    project = await build(config);
+    projects.set(slot, project);
+  } else if (
+    !kept.looking &&
+    !project.looking &&
+    (project.config !== config || Date.now() - project.at >= FRESH_MS)
+  ) {
+    // Another project of a monorepo root, whose config a look at the root found again, or whose
+    // design system's files are due a look.
+    void lookAtProject(slot, project, config);
   }
 
   // What `check .` leaves out of a folder: the config's `exclude`, by the same test, and the
