@@ -16,6 +16,7 @@ import {
   mergeTokens,
   parseCssTokens,
   parseDtcgTokens,
+  toDtcg,
   TokenIndex,
 } from '../src/tokens/index.js';
 import { evaluateLength, lengthToPx } from '../src/tokens/units.js';
@@ -395,6 +396,35 @@ describe('CSS custom-property tokens', () => {
       'text-primary',
       'border-primary',
       'var(--color-primary)',
+    ]);
+  });
+
+  it('merges a @theme inline token, which has no custom property, by name and Tailwind key', () => {
+    const css = parseCssTokens(
+      `@theme inline {
+         --radius-sm: 6px;
+         --leading-tight: 1.25;
+         --tracking-tight: -0.025em;
+       }`,
+      't.css',
+    ).tokens;
+    expect(css.map((t) => t.cssVar)).toEqual([undefined, undefined, undefined]);
+    // The DTCG file exported from them keeps their names and Tailwind keys, and no custom property.
+    const json = parseDtcgTokens(toDtcg(css).text, 't.json').tokens;
+    expect(json).toHaveLength(3);
+    expect(mergeTokens([...css, ...json])).toEqual(css);
+    // Listed the other way round, a merged token takes the stylesheet's category: the DTCG file
+    // has no type for `-0.025em`, so it reads it as `other`.
+    expect(json[2]?.category).toBe('other');
+    expect(mergeTokens([...json, ...css]).map((t) => t.category)).toEqual(
+      css.map((t) => t.category),
+    );
+    // Two tokens of the same key (`tight`) that make other classes stay apart.
+    const leading = json.filter((t) => t.name === 'leading-tight');
+    expect(mergeTokens([...css.filter((t) => t.name !== 'leading-tight'), ...leading])).toEqual([
+      css[0],
+      css[2],
+      leading[0],
     ]);
   });
 

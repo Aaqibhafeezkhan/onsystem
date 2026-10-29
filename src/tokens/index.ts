@@ -144,7 +144,9 @@ function beforeV4(range: unknown): boolean {
 /**
  * DTCG files and the CSS generated from them often describe the same tokens.
  * Merge entries that share a custom property: keep the DTCG name and
- * description, and add the Tailwind mapping from CSS.
+ * description, and add the Tailwind mapping from CSS. A token without one (a
+ * `@theme inline` value, `rounded-sm`) merges with the token of its name and
+ * Tailwind key, such as the one a DTCG file exported from the stylesheet has.
  */
 export function mergeTokens(tokens: Token[]): Token[] {
   // Tailwind's built-in defaults (`--spacing`) only stand in until the project
@@ -152,18 +154,26 @@ export function mergeTokens(tokens: Token[]): Token[] {
   const overridden = new Set(
     tokens.filter((t) => t.origin !== 'tailwind-default').map((t) => themeKey(t)),
   );
-  const byVar = new Map<string, Token>();
+  const byKey = new Map<string, Token>();
   const out: Token[] = [];
   for (const token of tokens) {
     if (token.origin === 'tailwind-default' && overridden.has(themeKey(token))) continue;
-    const existing = token.cssVar ? byVar.get(token.cssVar) : undefined;
+    // Not by category: an exported `-0.025em` has no DTCG type, and reads back as `other`.
+    const key =
+      token.cssVar ??
+      (token.tailwind === undefined ? undefined : `${token.name}:${token.tailwind}`);
+    const existing = key === undefined ? undefined : byKey.get(key);
     if (!existing) {
-      if (token.cssVar) byVar.set(token.cssVar, token);
+      if (key !== undefined) byKey.set(key, token);
       out.push(token);
       continue;
     }
     if (existing.tailwind === undefined && token.tailwind !== undefined) {
       existing.tailwind = token.tailwind;
+    }
+    // A DTCG file listed before the stylesheet: the stylesheet knows `-0.025em` is letter spacing.
+    if (existing.category === 'other' && token.category !== 'other') {
+      existing.category = token.category;
     }
     existing.usage = [...new Set([...token.usage, ...existing.usage])];
     existing.description ??= token.description;
