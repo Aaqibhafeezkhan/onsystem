@@ -21,6 +21,26 @@ Run as is, with no config, on public apps: the counts the [corpus](../corpus) sn
 | [midday](https://github.com/midday-ai/midday) `5158731`, `apps/dashboard` | workspace package `@midday/ui` → 79 components | 1,340 in `src/`, including 98 icon-only buttons without an accessible name. Adopted with a [baseline](ci.md#adopting-it-in-an-existing-codebase)               |
 | [shadcn/ui](https://github.com/shadcn-ui/ui) website `0132174`            | custom `ui` alias → 68 components              | 124 in `app/` and `components/`, mostly raw colors (105)                                                                                                       |
 
+## Performance and footprint
+
+Reading the design system is the slow part: one TypeScript program over the component files. `check` and the server cache what they read and read it again only when those files change, so checking a file after that is syntax work. The hook runs one `check` per edit to a UI file. Without onsystem installed in the project, it runs `check` through npx, which starts npm first: a dev dependency ([pin the version](rollout.md#pin-the-version)) takes that out of every edit.
+
+Measured with onsystem 0.11.0 on Apple M1 Max (10 cores, 32 GB), macOS 27.0.1, Node.js 24.18.0, on 2026-10-29, with `node scripts/perf.mjs`: each time is the median of 5 runs. The corpus checkouts have no `node_modules`, so the types of the libraries their components wrap are not read: in a project with its dependencies installed, reading the design system takes longer. The demo, where the hook is measured, has its dependencies installed.
+
+| Measured                                                                                                                                     | Result                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `check` on [vercel/chatbot](https://github.com/vercel/chatbot) `c2f8235` (`app` and `components`: 61 files)                                  | 0.51 s, or 0.80 s with `--no-cache`. One file: 347 ms, then 2.6 ms for each other file                            |
+| `check` on [midday-ai/midday](https://github.com/midday-ai/midday) `5158731` (`apps/dashboard/src`: 569 files)                               | 1.35 s, or 1.68 s with `--no-cache`. One file: 465 ms, then 1.6 ms for each other file                            |
+| The Claude Code hook on one edit (the demo's `app/settings/danger-zone.tsx`), with onsystem installed in the project                         | 364 ms                                                                                                            |
+| The same edit through npx, as the plugin runs it in a project without an install (`onsystem@0.11.0` in npm's cache)                          | 1.14 s                                                                                                            |
+| The MCP server on [midday-ai/midday](https://github.com/midday-ai/midday) `5158731` (`apps/dashboard`, 79 components): `initialize` answered | 422 ms after it starts                                                                                            |
+| Its first tool call, which waits for the design system to be read (`--no-cache`)                                                             | 0.80 s after it starts                                                                                            |
+| `check_ui` on the app's largest file (1,349 lines)                                                                                           | 13 ms                                                                                                             |
+| `search_components`, `get_component` (`Button`)                                                                                              | 0.5 ms, 0.4 ms                                                                                                    |
+| The package (`onsystem@0.11.0` on npm)                                                                                                       | 0.9 MB unpacked, 16 files, 8 dependencies                                                                         |
+| Installed with npm into an empty project                                                                                                     | 15 packages, 42.2 MB on disk (24.3 MB of it TypeScript, which reads the components)                               |
+| Provenance                                                                                                                                   | Signed npm provenance (slsa.dev/provenance/v1): npm shows the workflow run and commit each release was built from |
+
 ## How it compares
 
 These tools work at different layers, and several combine well:
@@ -37,7 +57,7 @@ These tools work at different layers, and several combine well:
 
 ## Design decisions
 
-**Static analysis, not another model.** The agent is already the LLM; what it lacks is ground truth. Everything here is deterministic, takes milliseconds, makes no network requests, needs no API key, and can be unit-tested rule by rule. The cost: it cannot judge intent, such as whether a `Dialog` was the right call. That stays with the agent and the reviewer.
+**Static analysis, not another model.** The agent is already the LLM; what it lacks is ground truth. Everything here is deterministic, checks a file in milliseconds once the design system is read ([measured](#performance-and-footprint)), makes no network requests, needs no API key, and can be unit-tested rule by rule. The cost: it cannot judge intent, such as whether a `Dialog` was the right call. That stays with the agent and the reviewer.
 
 **The TypeScript checker over `react-docgen-typescript`.** react-docgen-typescript wraps the same API but hides the AST, and `cva()` parsing, composition and element inference all need it. One program serves all four. The runtime dependency is TypeScript 6, the last release with the JavaScript compiler API; TypeScript 7 (the Go port) does not expose a stable one yet.
 

@@ -56,7 +56,17 @@ describe('the docs sidebar', () => {
       ],
       ['Gate PRs', ['CI and baselines', 'GitHub Action']],
       ['Integrations', ['ESLint plugin']],
-      ['Reference', ['Configuration', 'Design-system packages', 'Design tokens', 'Rules', 'Tools']],
+      [
+        'Reference',
+        [
+          'Configuration',
+          'Design-system packages',
+          'Design tokens',
+          'Rules',
+          'Tools',
+          'CLI reference',
+        ],
+      ],
       ['Help', ['Troubleshooting', 'FAQ', 'How it works', 'Migrating']],
     ]);
     expect(DOCS_GROUPS).toEqual(DOCS_NAV.map((g) => g.group));

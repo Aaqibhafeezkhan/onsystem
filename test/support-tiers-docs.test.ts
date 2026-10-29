@@ -109,6 +109,16 @@ describe('the support tiers in docs/clients.md', () => {
     }
   });
 
+  it('the quickstart calls tested only the Tier 1 setups, and links the tiers', () => {
+    const row = /^\| Agents +\| (.*?) +\|/m.exec(read('docs/quickstart.md'))?.[1] ?? '';
+    expect(row).toContain('](clients.md#support-tiers)');
+    const tested = row.slice(0, row.indexOf('not yet run in it'));
+    expect(tested).toMatch(/^Tested in the client: /);
+    for (const { setup } of tiers().filter((r) => r.tier === '2')) {
+      expect(tested, setup).not.toContain(setup.replace(/ \(.*\)$/, ''));
+    }
+  });
+
   it('is linked from the top of the page, before any setup', () => {
     const intro = clients.slice(0, clients.indexOf('\n## '));
     expect(intro).toContain('](#support-tiers)');
