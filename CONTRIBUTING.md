@@ -30,7 +30,7 @@ pnpm typecheck       # tsc --noEmit
 pnpm --filter "./examples/*" typecheck   # the examples, against this package's types
 pnpm build           # tsdown, then schema.json from the config schema
 pnpm smoke           # the built server over stdio, every tool, against examples/shadcn-demo
-pnpm test            # Vitest, on Node 22 and 24 (Linux), and on Windows and macOS
+pnpm test            # Vitest, on Node 22, 24 and 26 (Linux), and on Windows and macOS
 pnpm pack-test       # npm pack, install into a new project, run it (Linux, Windows, macOS)
 ```
 
