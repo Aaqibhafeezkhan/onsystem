@@ -1,5 +1,17 @@
 # onsystem (formerly @dgesteves/design-system-mcp)
 
+## 0.11.2
+
+### Patch Changes
+
+- [#261](https://github.com/dgesteves/onsystem/pull/261) [`452e5c0`](https://github.com/dgesteves/onsystem/commit/452e5c0dad92be6e77868c6c7ef757c6f64bafe6) Thanks [@kasettadoo-sys](https://github.com/kasettadoo-sys)! - `onsystem --help` now says what the CLI does. `--config` names `onsystem.config.mts`, which is read along with the other four; `--tokens` names a DESIGN.md, which is a token file like a DTCG `.json` or a stylesheet; and `--format` lists `inspect: pretty | json`, which worked but was listed for `check` and `export` only. The CLI reference (`docs/cli.md`) already had all three.
+  
+  `onsystem inspect --format xml`, or a typo, now exits 2 with one line, as `check` and `export` do for a format they do not take. It printed the pretty output and exited 0, so a script that asked for JSON and got text read it as the design system having nothing in it. The check runs before the project is loaded, so it covers a monorepo root too.
+
+- [#260](https://github.com/dgesteves/onsystem/pull/260) [`be144d6`](https://github.com/dgesteves/onsystem/commit/be144d60ac55a400124b56b654c45beefe06fa12) Thanks [@kasettadoo-sys](https://github.com/kasettadoo-sys)! - `search_components` expands words for six more components. Sheet (`offcanvas`, `slideover`), Accordion (`expandable`, `faq`), Textarea (`multiline`), Slider (`range`), Calendar (`date`, `schedule`) and Command (`palette`, `cmdk`) had no synonyms, so "a range input", "a date field" and "a command palette" searched on the query's own words alone. `picker` reached Select only; it now reaches Calendar too, which is what "date picker" asks for. An avatar is found by `profile`, `initials`, `headshot` and `gravatar`, where the entry before mapped `avatar` to itself and did nothing.
+  
+  `drawer`, `collapsible` and `sidebar` stay out: each is a component of its own, and a design system that has one should rank it on its own name.
+
 ## 0.11.1
 
 ### Patch Changes
