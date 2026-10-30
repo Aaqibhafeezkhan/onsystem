@@ -215,6 +215,7 @@ function loadProjectConfig(
 ): Promise<ResolvedConfig> {
   const shared = {
     cwd: options.cwd,
+    cache: options.cache,
     includeDesignSystem: options.includeDesignSystem,
     jsonConfigOnly: options.jsonConfigOnly,
     jsonConfigWithin: options.jsonConfigWithin,

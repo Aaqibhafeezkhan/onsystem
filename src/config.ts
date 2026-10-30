@@ -407,6 +407,11 @@ export interface LoadConfigOptions {
   docs?: string[] | undefined;
   includeDesignSystem?: boolean | undefined;
   /**
+   * `false` (`--no-cache`): find the design system again rather than read what was kept on disk
+   * the last time ({@link detectProject}).
+   */
+  cache?: boolean | undefined;
+  /**
    * Read a JSON config only: a JavaScript or TypeScript config is an error rather than run.
    * For a project the MCP server found from the path a tool call names, which a prompt can
    * choose, unlike the folder the server was started in.
@@ -605,7 +610,7 @@ export async function loadConfigWith(
   const componentsSet = Boolean(options.components?.length) || configComponents !== undefined;
   const detection = componentsSet
     ? undefined
-    : detectProject(root, tsconfig, undefined, declared, finder(root));
+    : detectProject(root, tsconfig, undefined, declared, finder(root), options.cache !== false);
 
   // A token file named outright (not a glob) that does not exist is a typo, not "no tokens".
   // Not in a design-system package's config, whose own checks catch it: a package installed

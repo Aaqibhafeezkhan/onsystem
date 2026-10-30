@@ -23,7 +23,7 @@ Run as is, with no config, on public apps: the counts the [corpus](../corpus) sn
 
 ## Performance and footprint
 
-Reading the design system is the slow part: one TypeScript program over the component files. `check` and the server cache what they read and read it again only when those files change, so checking a file after that is syntax work. The hook runs one `check` per edit to a UI file. Without onsystem installed in the project, it runs `check` through npx, which starts npm first: a dev dependency ([pin the version](rollout.md#pin-the-version)) takes that out of every edit.
+Reading the design system is the slow part: one TypeScript program over the component files. `check` and the server cache what they read and read it again only when those files change, so checking a file after that is syntax work. The hook runs one `check` per edit to a UI file. Without onsystem installed in the project, it runs `check` through npx on the first edit in a project, which starts npm first; later edits there run the CLI npx installed with Node.js directly ([how](plugin.md#what-it-runs-and-what-it-touches)). A dev dependency ([pin the version](rollout.md#pin-the-version)) takes npm out of the first edit too.
 
 Measured with onsystem 0.11.0 on Apple M1 Max (10 cores, 32 GB), macOS 27.0.1, Node.js 24.18.0, on 2026-10-29, with `node scripts/perf.mjs`: each time is the median of 5 runs. The corpus checkouts have no `node_modules`, so the types of the libraries their components wrap are not read: in a project with its dependencies installed, reading the design system takes longer. The demo, where the hook is measured, has its dependencies installed.
 

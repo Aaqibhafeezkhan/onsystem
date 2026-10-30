@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 import { glob } from 'tinyglobby';
@@ -59,6 +58,7 @@ import type {
   TokenCategory,
 } from './types.js';
 import { silentLogger, type Logger } from './util/log.js';
+import { ownFolder, ownFolderAdvice, untrustedFolder } from './util/own-folder.js';
 import { globBase, isHomeOrAbove, isInside, matchesGlob, relativePath } from './util/paths.js';
 import { closest, plural, unique } from './util/strings.js';
 import { COLOR_UTILITY, parseUtility } from './lint/tailwind.js';
@@ -650,7 +650,9 @@ async function cacheKey(
 
 /**
  * Where the model is cached: the project's `node_modules/.cache`, else (`temp`) a folder of the
- * user's own in the system temp folder, `onsystem-<uid>`.
+ * user's own in the system temp folder, `onsystem-<uid>`, used only while it is theirs alone
+ * ({@link untrustedFolder}): on a multi-user host the temp folder is shared, and a model planted in
+ * it would reach the agent.
  */
 function cacheFile(root: string): { file: string; temp: boolean } {
   const nodeModules = path.join(root, 'node_modules');
@@ -658,25 +660,7 @@ function cacheFile(root: string): { file: string; temp: boolean } {
     return { file: path.join(nodeModules, '.cache', 'onsystem', 'model.json'), temp: false };
   }
   const id = createHash('sha256').update(root).digest('hex').slice(0, 16);
-  const user = process.getuid ? `-${process.getuid()}` : '';
-  return { file: path.join(os.tmpdir(), `onsystem${user}`, `${id}.json`), temp: true };
-}
-
-/**
- * Why the cache folder in the system temp folder cannot be trusted, or undefined when it can: it
- * must be a folder, not a link, that the user owns and no one else can write to. On a multi-user
- * host the temp folder is shared, and a model planted in it would reach the agent. With `create`,
- * it is created (or closed) for the user first. Windows gives each user a temp folder of their own.
- */
-async function untrustedCacheFolder(folder: string, create: boolean): Promise<string | undefined> {
-  if (!process.getuid) return undefined;
-  if (create) await fsp.mkdir(folder, { recursive: true, mode: 0o700 });
-  const stat = await fsp.lstat(folder);
-  if (!stat.isDirectory()) return `${folder} is not a folder`;
-  if (stat.uid !== process.getuid()) return `${folder} belongs to another user`;
-  if (!create && stat.mode & 0o022) return `other users can write to ${folder}`;
-  if (create && stat.mode & 0o077) await fsp.chmod(folder, 0o700);
-  return undefined;
+  return { file: path.join(ownFolder(), `${id}.json`), temp: true };
 }
 
 /**
@@ -727,7 +711,7 @@ export async function buildModel(
   let cached: { key?: string; dependencies?: string[]; model?: DesignSystemModel } | undefined;
   if (useCache && !options.oldProgram) {
     try {
-      const untrusted = temp && (await untrustedCacheFolder(path.dirname(cachePath), false));
+      const untrusted = temp && untrustedFolder(path.dirname(cachePath));
       if (!untrusted) cached = JSON.parse(await fsp.readFile(cachePath, 'utf8')) as typeof cached;
     } catch {
       // No cache yet, or unreadable: extract.
@@ -827,11 +811,11 @@ export async function buildModel(
     try {
       const folder = path.dirname(cachePath);
       let untrusted: string | undefined;
-      if (temp) untrusted = await untrustedCacheFolder(folder, true);
+      if (temp) untrusted = untrustedFolder(folder, true);
       else await fsp.mkdir(folder, { recursive: true });
       if (untrusted) {
         logger.warn(
-          `not caching the model: ${untrusted}. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR to a folder of your own.`,
+          `not caching the model: ${untrusted}. Install the project's dependencies, so the cache goes in node_modules, or ${ownFolderAdvice()}.`,
         );
       } else {
         await writeWhole(cachePath, JSON.stringify({ key, dependencies, model }), temp);
@@ -1060,6 +1044,7 @@ export class DesignSystemHost {
         loadConfig({
           root,
           config: configFile === designSystemPackage?.config ? undefined : configFile,
+          cache: this.options.cache,
         }));
     try {
       this.config = await load();

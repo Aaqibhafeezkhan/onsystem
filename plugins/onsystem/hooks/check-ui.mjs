@@ -36,9 +36,16 @@
 // with the cache, as when its cached list of versions is older than this release,
 // it runs once more with --prefer-online, which asks the registry. A failure of
 // the CLI it started, such as a broken config, is not retried.
+// The CLI npx starts writes where it is (ONSYSTEM_REMEMBER_CLI), and later edits
+// in the same project run that CLI with Node directly, without starting npm first,
+// while it is still this release. When it gives no results (it crashed, as when part
+// of its folder in npm's cache was removed), it is forgotten, and npx runs in that
+// same edit. Its path is kept per project, in the user's own
+// folder in the system temp folder, and read only while that folder and the file
+// are the user's alone (ownFolder), since the hook runs what it names.
 // It reads the project's files and writes nothing but markers in the system temp
-// folder, for the one-time notice and the pause; the only network access is npm's,
-// when npx needs the registry.
+// folder, for the one-time notice, the pause and the CLI's path; the only network
+// access is npm's, when npx needs the registry.
 // The check runs from the file's project folder, the nearest one with a config, a
 // components.json, a package.json or a project.json. In a monorepo whose root has a config or
 // a baseline (`init` at the root writes both), it runs from the root, as `check .` there does,
@@ -116,7 +123,7 @@ for (const target of targets) {
   // Where `check` runs: the project's folder, or the monorepo root whose config or baseline covers it.
   const root = (project && monorepoRoot(project)) ?? project ?? sessionDir;
   // The project's own install, which may be in the project's node_modules rather than the root's.
-  const cli = resolveCli(project ?? root);
+  const cli = resolveCli(project ?? root, root);
   const key = `${root}\0${cli.argv?.join('\0')}`;
   const job = jobs.get(key) ?? { root, cli, files: [] };
   jobs.set(key, job);
@@ -163,7 +170,8 @@ process.exit(0);
 
 /** Runs `check` on a job's files, and adds what it found to `blocks`, `notes` and `notices`. */
 function checkFiles(job) {
-  const { root, cli, files } = job;
+  const { root, files } = job;
+  let { cli } = job;
   if (!cli.argv) return cannotRun(job, 'npx was not found next to this Node.js.');
   // npm could not reach the registry, or npx ran out of time, less than OFFLINE_PAUSE ago: the
   // notice has been shown, and npx would wait as long again.
@@ -172,6 +180,21 @@ function checkFiles(job) {
 
   let run = check(job, cli.npx ? ['--prefer-offline'] : []);
   let results = resultsOf(run);
+  // The CLI npx started before gave no results (it crashed, printed no JSON or is gone, as when
+  // part of its folder in npm's cache was removed): it is forgotten, and npx runs in this edit, as
+  // on the first one, and can install it again. A broken config fails there too, and is reported
+  // below. Not after the time limit, which npx would not get.
+  if (results === undefined && cli.remembered && !timedOut(run)) {
+    try {
+      fs.rmSync(cli.remembered.remember, { force: true });
+    } catch {
+      // The hook reads it again on the next edit, and comes back here if it still fails.
+    }
+    job.cli = cli = cli.remembered;
+    if (paused(pause)) return;
+    run = check(job, ['--prefer-offline']);
+    results = resultsOf(run);
+  }
   // A run from the cache can fail where the registry would not: npm's cached list of versions can
   // predate this release, after the plugin moves to it. When npm itself failed, then, once more with
   // the registry, unless npm could not reach it, which a second run would not change. When the CLI
@@ -404,7 +427,11 @@ function check({ root, cli, files }, npm) {
       {
         cwd: root,
         encoding: 'utf8',
-        env: { ...process.env, NO_COLOR: '1' },
+        env: {
+          ...process.env,
+          NO_COLOR: '1',
+          ...(cli.remember ? { ONSYSTEM_REMEMBER_CLI: cli.remember } : {}),
+        },
         maxBuffer: 64 * 1024 * 1024,
         timeout: Math.max(deadline - Date.now(), 1),
         windowsHide: true,
@@ -690,9 +717,11 @@ function readJson(file) {
 
 /**
  * How to start the CLI: `argv` ([node, script] or ['npx']) runs an override, the project's
- * install, or npx (`npx: true`, without npm's flags and the package). No `argv`: no npx found.
+ * install, the CLI npx started before from `root`, the folder it runs in (with `remembered`, how
+ * to run npx instead), or npx (`npx: true`, without npm's flags and the package). No `argv`: no
+ * npx found.
  */
-function resolveCli(dir) {
+function resolveCli(dir, root) {
   if (BIN) return { argv: [process.execPath, BIN] };
   const installed = installedCli(dir);
   if (installed) return { argv: [process.execPath, installed] };
@@ -704,8 +733,86 @@ function resolveCli(dir) {
       path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npx-cli.js'),
       path.join(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js'),
     ].find((f) => fs.existsSync(f));
-  if (npx) return { argv: [process.execPath, npx], npx: true };
-  return { argv: process.platform === 'win32' ? undefined : ['npx'], npx: true };
+  if (npx) return throughNpx([process.execPath, npx], root);
+  return process.platform === 'win32' ? { argv: undefined, npx: true } : throughNpx(['npx'], root);
+}
+
+/**
+ * npx run as `argv` from `root`, or the CLI it started there for this release before, while that
+ * is still there: run with Node directly, with `remembered`, npx, for when it gives no results.
+ * `remember` is the file the CLI npx starts writes its path in, one per release, npx and folder,
+ * in the user's own folder in the system temp folder: npx runs a project's own install of the
+ * release when it has one, which is for that project alone.
+ */
+function throughNpx(argv, root) {
+  const folder = ownFolder();
+  if (!folder) return { argv, npx: true };
+  const key = createHash('sha256')
+    .update(`${VERSION}\0${argv.join('\0')}\0${root}`)
+    .digest('hex')
+    .slice(0, 16);
+  const remember = path.join(folder, `npx-cli-${key}`);
+  const npx = { argv, npx: true, remember };
+  const script = rememberedCli(remember);
+  return script ? { argv: [process.execPath, script], remembered: npx } : npx;
+}
+
+/**
+ * The CLI script whose path `file` holds, when it is still there and still this release's: the
+ * `bin` of the onsystem package it is in, at VERSION. `file` must be a file, not a link, that only
+ * the user can write to, as the CLI writes it.
+ */
+function rememberedCli(file) {
+  let script;
+  try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile()) return undefined;
+    if (process.getuid && (stat.uid !== process.getuid() || stat.mode & 0o022)) return undefined;
+    script = fs.readFileSync(file, 'utf8').trim();
+  } catch {
+    return undefined;
+  }
+  if (!path.isAbsolute(script)) return undefined;
+  // The bin is dist/cli.js in the package.
+  const dir = path.dirname(path.dirname(script));
+  const manifest = readJson(path.join(dir, 'package.json'));
+  const bin = typeof manifest?.bin === 'string' ? manifest.bin : manifest?.bin?.[PACKAGE];
+  const current =
+    manifest?.name === PACKAGE &&
+    manifest.version === VERSION &&
+    typeof bin === 'string' &&
+    path.resolve(dir, bin) === script;
+  return current && fs.existsSync(script) ? script : undefined;
+}
+
+/**
+ * The user's own folder in the system temp folder, `onsystem-<uid>` (`onsystem` on Windows),
+ * where the CLI caches too, created for the user alone. Undefined unless it is theirs alone, since
+ * the hook runs the CLI a file in it names: the rule of `untrustedFolder` in
+ * src/util/own-folder.ts, which this hook, run without the package, keeps a copy of. A folder, not
+ * a link; on Linux and macOS the user's, and no one else may write to it; on Windows, which has
+ * no such owner to check, inside the user's home folder, where Windows keeps their temp folder.
+ */
+function ownFolder() {
+  const user = process.getuid ? `-${process.getuid()}` : '';
+  const dir = path.join(os.tmpdir(), `onsystem${user}`);
+  try {
+    if (fs.mkdirSync(dir, { recursive: true, mode: 0o700 }) !== undefined) {
+      fs.chmodSync(dir, 0o700);
+    }
+    const stat = fs.lstatSync(dir);
+    if (!stat.isDirectory()) return undefined;
+    if (process.platform === 'win32' || !process.getuid) {
+      const home = fs.realpathSync.native(os.homedir());
+      const relative = path.relative(home, fs.realpathSync.native(dir));
+      return !relative.startsWith('..') && !path.isAbsolute(relative) ? dir : undefined;
+    }
+    if (stat.uid !== process.getuid() || stat.mode & 0o022) return undefined;
+    if (stat.mode & 0o077) fs.chmodSync(dir, 0o700);
+    return dir;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The CLI script of the project's own install, if it has one. */

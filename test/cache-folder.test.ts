@@ -81,19 +81,30 @@ describe('the cache outside node_modules', () => {
     expect((await build(root)).model.stats.fromCache).toBe(true);
   });
 
-  it.runIf(posix)('is not read from a folder other users can write to', async () => {
-    const root = fixture(PROJECT);
-    await build(root);
-    const [file = ''] = cached();
-    plant(file);
-    fs.chmodSync(path.dirname(file), 0o777);
-    const second = await build(root);
-    expect(second.model.stats.fromCache).toBe(false);
-    expect(description(second.model)).toBe('Runs an action.');
-    // The folder is the user's again, with the model just built in it.
-    expect(fs.statSync(path.dirname(file)).mode & 0o777).toBe(0o700);
-    expect((await build(root)).model.stats.fromCache).toBe(true);
-  });
+  it.runIf(posix)(
+    'is neither read from nor written to a folder other users can write to',
+    async () => {
+      const root = fixture(PROJECT);
+      await build(root);
+      const [file = ''] = cached();
+      plant(file);
+      const folder = path.dirname(file);
+      fs.chmodSync(folder, 0o777);
+      const warnings: string[] = [];
+      const second = await build(root, warnings);
+      expect(second.model.stats.fromCache).toBe(false);
+      expect(description(second.model)).toBe('Runs an action.');
+      expect(warnings).toEqual([
+        `not caching the model: other users can write to ${folder}. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR (TEMP on Windows) to a folder of your own.`,
+      ]);
+      // Refused, not closed and trusted: a file put in it before would stay.
+      expect(fs.statSync(folder).mode & 0o777).toBe(0o777);
+      expect((await build(root)).model.stats.fromCache).toBe(false);
+      const left = JSON.parse(fs.readFileSync(file, 'utf8')) as Pick<typeof second, 'model'>;
+      expect(description(left.model)).toBe('PLANTED');
+      fs.chmodSync(folder, 0o700);
+    },
+  );
 
   it.runIf(posix)('is neither read nor written through a link in place of its folder', async () => {
     const root = fixture(PROJECT);
@@ -114,7 +125,7 @@ describe('the cache outside node_modules', () => {
     expect(fs.lstatSync(folder).isSymbolicLink()).toBe(true);
     // In a shared temp folder the user may not be able to remove it: the warning says what to do.
     expect(warnings).toEqual([
-      `not caching the model: ${folder} is not a folder. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR to a folder of your own.`,
+      `not caching the model: ${folder} is not a folder. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR (TEMP on Windows) to a folder of your own.`,
     ]);
   });
 });
