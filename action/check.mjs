@@ -35,7 +35,29 @@ export function parseDiff(diff) {
   const changed = new Map();
   /** @type {[number, number][] | undefined} */
   let ranges;
+  // The lines of the hunk still to come, on the old side and the new: an added line that starts
+  // with `++ ` reads `+++ ` in the diff, and is not the header of another file.
+  let removed = 0;
+  let added = 0;
   for (const line of diff.split('\n')) {
+    if (removed || added) {
+      if (line.startsWith('-') && removed) {
+        removed--;
+        continue;
+      }
+      if (line.startsWith('+') && added) {
+        added--;
+        continue;
+      }
+      if (line.startsWith(' ') && removed && added) {
+        removed--;
+        added--;
+        continue;
+      }
+      // `\ No newline at end of file`.
+      if (line.startsWith('\\')) continue;
+      removed = added = 0;
+    }
     if (line.startsWith('+++ ')) {
       const name = unquote(line.slice(4).trimEnd());
       ranges = undefined;
@@ -44,10 +66,13 @@ export function parseDiff(diff) {
       changed.set(name.slice(2), ranges);
       continue;
     }
-    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
-    if (!hunk || !ranges) continue;
-    const start = Number(hunk[1]);
-    const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+    const hunk = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (!hunk) continue;
+    const start = Number(hunk[2]);
+    const count = hunk[3] === undefined ? 1 : Number(hunk[3]);
+    removed = hunk[1] === undefined ? 1 : Number(hunk[1]);
+    added = count;
+    if (!ranges) continue;
     ranges.push(count === 0 ? [Math.max(1, start), start + 1] : [start, start + count - 1]);
   }
   return changed;
@@ -141,9 +166,14 @@ function count(n, word) {
 /**
  * @param {string[]} args
  * @param {string} cwd
+ * @param {string[]} [trust] `-c safe.directory=…` options, from `trusted()`
  */
-function git(args, cwd) {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 });
+function git(args, cwd, trust = []) {
+  const result = spawnSync('git', [...trust, ...args], {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 512 * 1024 * 1024,
+  });
   return {
     ok: result.status === 0,
     out: (result.stdout ?? '').trim(),
@@ -169,34 +199,91 @@ function baseOf(env) {
 }
 
 /**
+ * Git options that let git read the checkout in a container job (`container:`), where the
+ * workspace belongs to another user and git refuses it ("dubious ownership") unless it is a
+ * safe.directory: each folder from `cwd` up to GITHUB_WORKSPACE, one of which is the top of the
+ * repository the workflow checked out. None outside the workspace, or outside Actions.
+ *
+ * @param {Io['env']} env
+ * @param {string} cwd
+ * @returns {string[]}
+ */
+export function trusted(env, cwd) {
+  if (!env.GITHUB_WORKSPACE) return [];
+  const workspace = realPath(env.GITHUB_WORKSPACE);
+  /** @type {string[]} */
+  const dirs = [];
+  for (let dir = realPath(cwd); ; dir = path.dirname(dir)) {
+    const rel = path.relative(workspace, dir);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return [];
+    dirs.push(dir);
+    if (!rel) break;
+  }
+  return dirs.flatMap((dir) => ['-c', `safe.directory=${dir.split(path.sep).join('/')}`]);
+}
+
+/**
+ * Git `-c key=value` options, such as `trusted()` gives, as the environment variables git reads
+ * the same settings from (GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>), after the
+ * entries `env` already has. The CLI the action runs gets them: in a container job its
+ * `git check-ignore` failed without the safe.directory entries, so git-ignored files were checked.
+ *
+ * @param {string[]} options `-c key=value` pairs
+ * @param {Io['env']} env
+ * @returns {Record<string, string>}
+ */
+export function configEnv(options, env) {
+  if (!options.length) return {};
+  /** @type {Record<string, string>} */
+  const vars = {};
+  const given = env.GIT_CONFIG_COUNT ?? '';
+  let n = /^\d+$/.test(given) ? Number(given) : 0;
+  for (let i = 1; i < options.length; i += 2) {
+    const setting = options[i] ?? '';
+    const at = setting.indexOf('=');
+    vars[`GIT_CONFIG_KEY_${n}`] = setting.slice(0, at);
+    vars[`GIT_CONFIG_VALUE_${n}`] = setting.slice(at + 1);
+    n++;
+  }
+  vars.GIT_CONFIG_COUNT = String(n);
+  return vars;
+}
+
+/**
  * The lines changed between the base and the files on disk, from where the base and the checked-out
  * commit last met. actions/checkout fetches one commit by default: what the comparison needs is
  * fetched here, a little history at a time.
  *
  * @param {string} base
  * @param {string} cwd
+ * @param {string[]} trust
  * @returns {{ top: string, changed: ChangedLines }}
  */
-function changedSince(base, cwd) {
-  const top = git(['rev-parse', '--show-toplevel'], cwd);
+function changedSince(base, cwd, trust) {
+  const top = git(['rev-parse', '--show-toplevel'], cwd, trust);
   if (!top.ok) throw new Error(`not in a git repository (${top.err})`);
-  const head = git(['rev-parse', 'HEAD'], cwd).out;
+  const head = git(['rev-parse', 'HEAD'], cwd, trust).out;
   /** @param {string[]} args */
   const fetch = (...args) => {
-    const fetched = git(['fetch', '--quiet', '--no-tags', '--no-recurse-submodules', ...args], cwd);
+    const fetched = git(
+      ['fetch', '--quiet', '--no-tags', '--no-recurse-submodules', ...args],
+      cwd,
+      trust,
+    );
     if (!fetched.ok) throw new Error(`git fetch ${args.join(' ')} failed: ${fetched.err}`);
   };
-  if (!git(['cat-file', '-e', `${base}^{commit}`], cwd).ok) fetch('--depth=1', 'origin', base);
-  let mergeBase = git(['merge-base', base, head], cwd);
+  if (!git(['cat-file', '-e', `${base}^{commit}`], cwd, trust).ok)
+    fetch('--depth=1', 'origin', base);
+  let mergeBase = git(['merge-base', base, head], cwd, trust);
   for (const deepen of [1, 10, 100, 1000]) {
     if (mergeBase.ok) break;
-    if (git(['rev-parse', '--is-shallow-repository'], cwd).out !== 'true') break;
+    if (git(['rev-parse', '--is-shallow-repository'], cwd, trust).out !== 'true') break;
     fetch(`--deepen=${deepen}`, 'origin', base, head);
-    mergeBase = git(['merge-base', base, head], cwd);
+    mergeBase = git(['merge-base', base, head], cwd, trust);
   }
-  if (!mergeBase.ok && git(['rev-parse', '--is-shallow-repository'], cwd).out === 'true') {
+  if (!mergeBase.ok && git(['rev-parse', '--is-shallow-repository'], cwd, trust).out === 'true') {
     fetch('--unshallow', 'origin', base, head);
-    mergeBase = git(['merge-base', base, head], cwd);
+    mergeBase = git(['merge-base', base, head], cwd, trust);
   }
   if (!mergeBase.ok) throw new Error(`no common history between ${base} and ${head}`);
   // Explicit options, so a user's git config (noprefix, relative, external diff) changes nothing.
@@ -216,6 +303,7 @@ function changedSince(base, cwd) {
       '--',
     ],
     cwd,
+    trust,
   );
   if (!diff.ok) throw new Error(`git diff failed: ${diff.err}`);
   return { top: realPath(top.out), changed: parseDiff(diff.out) };
@@ -340,17 +428,25 @@ export function run(io) {
 
   // What changed, before the check: a failed fetch is said plainly rather than after the output.
   const base = onlyChanged ? baseOf(env) : undefined;
+  const trust = trusted(env, cwd);
   // The repository root, which annotations are relative to: the git top-level, which the diff is
   // relative to too, or the workspace where git is missing or refuses the checkout.
-  let top = realPath(git(['rev-parse', '--show-toplevel'], cwd).out || env.GITHUB_WORKSPACE || cwd);
+  let top = realPath(
+    git(['rev-parse', '--show-toplevel'], cwd, trust).out || env.GITHUB_WORKSPACE || cwd,
+  );
   /** @type {ChangedLines | undefined} */
   let changed;
   if (base) {
     try {
-      ({ top, changed } = changedSince(base, cwd));
+      ({ top, changed } = changedSince(base, cwd, trust));
     } catch (error) {
+      const message = /** @type {Error} */ (error).message;
+      // A checkout git refuses to read is not one that lacks history.
+      const fix = /dubious ownership|safe\.directory/.test(message)
+        ? 'Add the checkout to git\'s safe.directory (git config --global --add safe.directory "$GITHUB_WORKSPACE")'
+        : 'Check out with fetch-depth: 0';
       io.stdout(
-        `::error title=onsystem::Could not work out which lines this pull request changed: ${data(/** @type {Error} */ (error).message)}. Check out with fetch-depth: 0, or set only-changed-lines: false to report every finding.`,
+        `::error title=onsystem::Could not work out which lines this pull request changed: ${data(message)}. ${fix}, or set only-changed-lines: false to report every finding.`,
       );
       return 1;
     }
@@ -375,6 +471,7 @@ export function run(io) {
     fs.writeFileSync(linesFile, JSON.stringify(changedLinesByPath(changed, top)));
   }
   const all = [...prefix, ...args];
+  const childEnv = { ...process.env, ...env };
   let checked;
   try {
     checked = spawnSync(command, shell ? all.map(shellQuote) : all, {
@@ -382,7 +479,7 @@ export function run(io) {
       encoding: 'utf8',
       shell,
       maxBuffer: 1024 * 1024 * 1024,
-      env: { ...process.env, ...env, ONSYSTEM_CHANGED_LINES: linesFile },
+      env: { ...childEnv, ...configEnv(trust, childEnv), ONSYSTEM_CHANGED_LINES: linesFile },
     });
   } finally {
     if (linesDir) fs.rmSync(linesDir, { recursive: true, force: true });
@@ -399,7 +496,15 @@ export function run(io) {
   }
   if (!Array.isArray(results)) {
     if (checked.stdout) io.stdout(checked.stdout.trimEnd());
-    const why = checked.error?.message ?? checked.stderr?.trim().split('\n')[0] ?? '';
+    // Why it could not check, not which project it checked: run from a folder with no project
+    // marker, the CLI says that first.
+    const why =
+      checked.error?.message ??
+      checked.stderr
+        ?.trim()
+        .split('\n')
+        .find((line) => !line.startsWith('Checking the project in ')) ??
+      '';
     io.stdout(
       `::error title=onsystem::onsystem check exited with ${checked.status ?? checked.signal}${why ? `: ${data(why)}` : ''}`,
     );

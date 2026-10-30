@@ -188,7 +188,7 @@ describe('onsystem check from a workspace root', () => {
     // No project has color tokens.
     expect(required.code).toBe(2);
     expect(required.stderr).toContain(
-      'check --require-design-system: no workspace package has a design system with components and color tokens (4 packages looked at)',
+      'check --require-design-system: no workspace package has a design system with components and color tokens (4 packages looked at; no color tokens in apps/admin, apps/web and packages/ui). See https://onsystem.vercel.app/docs/troubleshooting',
     );
     const themed = fixture({
       ...MONOREPO,
@@ -227,7 +227,7 @@ describe('onsystem check from a workspace root', () => {
       'workspace 4 packages (pnpm-workspace.yaml), 3 projects with a design system',
     );
     expect(stdout).toContain(
-      'apps/web (@acme/web)\n  detected   workspace package @acme/ui\n  files      3 component files, 0 token files, 0 docs\n  components 3 + 0 parts: Button, Card, Input',
+      'apps/web (@acme/web)\n  detected   workspace package @acme/ui\n  files      3 component files, 0 token files, 0 docs\n  components 3 + 0 parts: Button, Card, Input\n  tokens     none\n  missing    color tokens: check will not run no-hardcoded-color',
     );
     expect(stdout).toContain('Without a design system (1): packages/utils');
     const parsed = JSON.parse(

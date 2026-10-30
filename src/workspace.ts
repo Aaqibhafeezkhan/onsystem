@@ -271,7 +271,8 @@ export function findProjectRoot(target: string, home = os.homedir()): string | u
   return dir;
 }
 
-function samePath(a: string, b: string): boolean {
+/** Whether `a` and `b` are the same folder, as the platform compares paths (case-insensitive on Windows). */
+export function samePath(a: string, b: string): boolean {
   return path.relative(path.resolve(a), path.resolve(b)) === '';
 }
 

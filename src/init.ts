@@ -328,7 +328,10 @@ export async function init(
         ['check', '.', '--update-baseline', ...(options.cache ? [] : ['--no-cache'])],
         checkIo,
       );
-      if (recorded.stdout) io.stdout(recorded.stdout);
+      // `check` ran in the root: the file it names is relative to the root, and is named here
+      // relative to the working directory, as the config file is (`../../onsystem.baseline.json`).
+      const shown = relativePath(io.cwd, path.join(root, BASELINE_FILE)) || BASELINE_FILE;
+      if (recorded.stdout) io.stdout(recorded.stdout.replace(` → ${BASELINE_FILE}`, ` → ${shown}`));
       baselineWritten = fs.existsSync(path.join(root, BASELINE_FILE));
     } else {
       io.stdout(`No baseline written; \`${NAME} check . --update-baseline\` records one later.`);
