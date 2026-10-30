@@ -1,4 +1,6 @@
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { escapePath, globSync } from 'tinyglobby';
@@ -8,6 +10,7 @@ import { buildEntries, exportedFiles, moduleFile, sourceTarget } from './package
 import { importedStylesheets } from './tokens/imports.js';
 import { globBase, isHomeOrAbove, isInside, pathOf, relativePath, toPosix } from './util/paths.js';
 import { unique } from './util/strings.js';
+import { VERSION } from './version.js';
 
 /**
  * How apps import a design-system module, from a package's `exports`:
@@ -177,6 +180,10 @@ export const APP_STYLESHEETS = [
  * `declared` is the dependency whose config the root takes on ({@link findDesignSystemPackage}):
  * it is read first among the dependencies in step 3, whatever its name, and also when it is
  * installed from a registry rather than a workspace package.
+ *
+ * A design system found in one dependency's `exports` (step 3) is kept on disk beside the
+ * cached model, and read from there while nothing it came from changes ({@link keptDetection}):
+ * following a package's barrels parses every file they lead to, and `check` runs once per edit.
  */
 export function detectProject(
   root: string,
@@ -184,6 +191,31 @@ export function detectProject(
   trace?: DetectionStep[],
   declared?: Pick<DesignSystemPackage, 'name' | 'dir' | 'installed'>,
   packages: PackageFinder = new PackageFinder(root),
+): Detection | undefined {
+  // A trace (`inspect --explain`) is of every candidate, looked at again.
+  if (trace) return detectAll(root, tsconfig, trace, declared, packages);
+  const key = JSON.stringify([
+    VERSION,
+    path.resolve(root),
+    tsconfig ?? null,
+    declared ? [declared.name, declared.dir, declared.installed] : null,
+  ]);
+  const kept = keptDetection(root, key, declared, packages);
+  if (kept) return kept;
+  const inputs: Inputs = { located: [], dirs: [], keep: false };
+  const detection = detectAll(root, tsconfig, undefined, declared, packages, inputs);
+  if (detection && inputs.keep) keepDetection(root, key, inputs, detection);
+  return detection;
+}
+
+/** {@link detectProject} without the copy kept on disk, noting in `inputs` what it read. */
+function detectAll(
+  root: string,
+  tsconfig: string | undefined,
+  trace: DetectionStep[] | undefined,
+  declared: Pick<DesignSystemPackage, 'name' | 'dir' | 'installed'> | undefined,
+  packages: PackageFinder,
+  inputs?: Inputs,
 ): Detection | undefined {
   const step = (candidate: string, accepted: boolean, reason: string) =>
     trace?.push({ candidate, accepted, reason });
@@ -257,6 +289,8 @@ export function detectProject(
     );
   }
   let imported: Map<string, Set<string>> | undefined;
+  // A workspace package read other than through its exports: its tsconfig or the root's code.
+  let unwatched = false;
   // Packages published without their sources whose type declarations are read instead.
   let declarations: Set<string> | undefined;
   /** What the trace adds for an installed package whose sources are not read. */
@@ -275,6 +309,7 @@ export function detectProject(
     // Else a workspace package, or one installed from a registry.
     const workspaceDir = own ? undefined : packages.find(name);
     const installedDir = own || workspaceDir ? undefined : packages.installed(name);
+    inputs?.located.push([name, workspaceDir ?? null, installedDir ?? null]);
     const kind = (own?.installed ?? installedDir !== undefined) ? 'installed' : 'workspace';
     const candidate = `${kind} package ${name}`;
     // What components.json already points into.
@@ -290,13 +325,24 @@ export function detectProject(
     }
     const reasons: string[] = [];
     const note: Note = (r) => reasons.push(r);
+    inputs?.dirs.push(dir);
     // An installed package that declares no config is read through its exports alone, when
     // they point at the component sources it publishes: its compiled files are not read.
-    const result = installedDir
-      ? fromPackage(root, dir, pkg, note, true)
-      : (fromPackage(root, dir, pkg, note) ??
-        fromPackageComponentsJson(root, dir, pkg, packages, note) ??
-        fromImports(root, dir, name, (imported ??= importedSubpaths(root, names)).get(name), note));
+    const exported = fromPackage(root, dir, pkg, note, installedDir !== undefined);
+    if (!exported && !installedDir) unwatched = true;
+    const result =
+      exported ??
+      (installedDir
+        ? undefined
+        : (fromPackageComponentsJson(root, dir, pkg, packages, note) ??
+          fromImports(
+            root,
+            dir,
+            name,
+            (imported ??= importedSubpaths(root, names)).get(name),
+            note,
+          )));
+    if (result) inputs?.dirs.push(...result.dirs);
     if (result && matchesAny(root, result)) {
       found.push({
         ...result,
@@ -338,7 +384,15 @@ export function detectProject(
     if (found.length === 1) {
       const [only] = found;
       const source = only?.source ?? '';
-      if (!only || !read.length) return detection(root, found, withDefaults, source);
+      if (!only || !read.length) {
+        // Found in one dependency's exports, with nothing read from the root but its
+        // package.json and that it has no components.json: kept on disk.
+        if (inputs) {
+          const ownExports = own?.exports !== undefined || typeof own?.main === 'string';
+          inputs.keep = !shadcn && !ownExports && !unwatched;
+        }
+        return detection(root, found, withDefaults, source);
+      }
       return {
         ...detection(root, [...found, ...registries], withDefaults, named(source)),
         designSystems: [{ source, components: only.components, imports: 0 }, ...read],
@@ -1736,6 +1790,173 @@ function cachedManifest(file: string): Record<string, unknown> | undefined {
 function fileStamp(file: string): string {
   const stats = fs.statSync(file, { throwIfNoEntry: false });
   return stats ? `${String(stats.mtimeMs)}:${String(stats.size)}` : '-';
+}
+
+/** What a detection read, so that it can be kept on disk ({@link keepDetection}). */
+interface Inputs {
+  /** Each dependency looked at: its workspace folder and the folder it is installed in, if any. */
+  located: [name: string, workspace: string | null, installed: string | null][];
+  /** The folders whose files it read: each dependency's, and its components'. */
+  dirs: string[];
+  /** Whether it read nothing else from the root but its package.json and components.json. */
+  keep: boolean;
+}
+
+/** A detection kept on disk, with what tells whether it still holds. */
+interface KeptDetection {
+  key: string;
+  /** {@link inputsStamp} of `dirs`. */
+  stamp: string;
+  located: Inputs['located'];
+  dirs: string[];
+  detection: Detection;
+}
+
+/** More files than this in the folders a detection read, and it is not kept. */
+const MAX_WATCHED_FILES = 5000;
+/**
+ * A detection is kept only when the files it read are older than this. A file written again
+ * within the same tick of its file system's clock (a few milliseconds on Linux, a second on
+ * HFS+) keeps its mtime, and with its size unchanged, the change would go unseen.
+ */
+const SETTLED_MS = 2000;
+
+/**
+ * Where a detection is kept: beside the cached model, in the project's `node_modules/.cache`,
+ * else (`temp`) in the user's own folder in the system temp folder, `onsystem-<uid>`.
+ */
+function detectionFile(root: string): { file: string; temp: boolean } {
+  const nodeModules = path.join(root, 'node_modules');
+  if (fs.existsSync(nodeModules)) {
+    return { file: path.join(nodeModules, '.cache', 'onsystem', 'detection.json'), temp: false };
+  }
+  const id = createHash('sha256').update(path.resolve(root)).digest('hex').slice(0, 16);
+  const user = process.getuid ? `-${String(process.getuid())}` : '';
+  return { file: path.join(os.tmpdir(), `onsystem${user}`, `${id}.detection.json`), temp: true };
+}
+
+/**
+ * Whether `folder`, in the system temp folder, is the user's alone: a folder, not a link, that
+ * they own and no one else can write to. The temp folder of a multi-user host is shared, and a
+ * detection planted in it would decide what is read as the design system. With `create`, it is
+ * created (or closed) for the user first. Windows gives each user a temp folder of their own.
+ */
+function ownFolder(folder: string, create: boolean): boolean {
+  if (create) fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
+  if (!process.getuid) return true;
+  const stat = fs.lstatSync(folder);
+  if (!stat.isDirectory() || stat.uid !== process.getuid()) return false;
+  if (create && stat.mode & 0o077) fs.chmodSync(folder, 0o700);
+  return create || !(stat.mode & 0o022);
+}
+
+/**
+ * A hash of the size and mtime of the root's package.json and components.json and of every file
+ * in `dirs` (outside `node_modules` and `.git`), and the newest mtime among them. Undefined when
+ * there are more than MAX_WATCHED_FILES files.
+ */
+function inputsStamp(
+  root: string,
+  dirs: readonly string[],
+): { stamp: string; newest: number } | undefined {
+  const hash = createHash('sha256');
+  let newest = 0;
+  let count = 0;
+  const add = (file: string) => {
+    const stats = fs.statSync(file, { throwIfNoEntry: false });
+    hash.update(`${file}\0${stats ? `${String(stats.mtimeMs)}:${String(stats.size)}` : '-'}\n`);
+    if (stats) newest = Math.max(newest, stats.mtimeMs);
+  };
+  add(path.join(root, 'package.json'));
+  add(path.join(root, 'components.json'));
+  const walk = (dir: string): boolean => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      // Missing: a folder created later changes the stamp.
+      add(dir);
+      return true;
+    }
+    for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      if (entry.name === 'node_modules' || entry.name === '.git') continue;
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!walk(file)) return false;
+      } else if (++count > MAX_WATCHED_FILES) {
+        return false;
+      } else {
+        add(file);
+      }
+    }
+    return true;
+  };
+  for (const dir of dirs) if (!walk(dir)) return undefined;
+  return { stamp: hash.digest('hex'), newest };
+}
+
+/**
+ * The detection kept on disk for this `key` (the version, root, tsconfig and declared package),
+ * while it still holds: every dependency it looked at is found where it was, and no file in the
+ * folders it read, nor the root's package.json or components.json, has changed size or mtime.
+ */
+function keptDetection(
+  root: string,
+  key: string,
+  declared: Pick<DesignSystemPackage, 'name'> | undefined,
+  packages: PackageFinder,
+): Detection | undefined {
+  try {
+    const { file, temp } = detectionFile(root);
+    if (temp && !ownFolder(path.dirname(file), false)) return undefined;
+    const kept = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<KeptDetection>;
+    if (kept.key !== key || !kept.detection || !kept.located || !kept.dirs) return undefined;
+    if (inputsStamp(root, kept.dirs)?.stamp !== kept.stamp) return undefined;
+    for (const [name, workspace, installed] of kept.located) {
+      if (name === declared?.name) continue;
+      const found = packages.find(name) ?? null;
+      if (found !== workspace) return undefined;
+      if (!found && (packages.installed(name) ?? null) !== installed) return undefined;
+    }
+    return kept.detection;
+  } catch {
+    // None kept, or unreadable: detect.
+    return undefined;
+  }
+}
+
+/** Keeps a detection on disk for {@link keptDetection}, when the files it read have settled. */
+function keepDetection(root: string, key: string, inputs: Inputs, detection: Detection): void {
+  const dirs = unique(inputs.dirs.map((d) => path.resolve(d)));
+  const outermost = dirs.filter((d) => !dirs.some((other) => other !== d && isInside(other, d)));
+  if (outermost.some(isHomeOrAbove)) return;
+  try {
+    const stamped = inputsStamp(root, outermost);
+    if (!stamped || Date.now() - stamped.newest < SETTLED_MS) return;
+    const { file, temp } = detectionFile(root);
+    if (temp) {
+      if (!ownFolder(path.dirname(file), true)) return;
+    } else {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+    }
+    const kept: KeptDetection = {
+      key,
+      stamp: stamped.stamp,
+      located: inputs.located,
+      dirs: outermost,
+      detection,
+    };
+    // Written beside it, then renamed into place: a run reading it never sees half.
+    const partial = `${file}.${String(process.pid)}-${randomUUID()}.tmp`;
+    try {
+      fs.writeFileSync(partial, JSON.stringify(kept), temp ? { mode: 0o600 } : {});
+      fs.renameSync(partial, file);
+    } finally {
+      fs.rmSync(partial, { force: true });
+    }
+  } catch {
+    // Not kept: the next run detects again.
+  }
 }
 
 /** `@acme/ui`, `@acme/ui-kit`, `@acme/design-system`, `acme-ui`; not `@acme/email-components`. */
