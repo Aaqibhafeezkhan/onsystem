@@ -49,16 +49,21 @@ function settle(dir: string): void {
 }
 
 describe('detection kept on disk', () => {
+  // The system temp folder, as os.tmpdir() reads it: TMPDIR, or TEMP and TMP on Windows.
+  const TEMP_VARS = ['TMPDIR', 'TEMP', 'TMP'];
   let temp: string;
-  let saved: string | undefined;
+  let saved: (string | undefined)[] = [];
   beforeEach(() => {
-    saved = process.env.TMPDIR;
+    saved = TEMP_VARS.map((name) => process.env[name]);
     temp = fs.mkdtempSync(path.join(os.tmpdir(), 'onsystem-detect-test-'));
-    process.env.TMPDIR = temp;
+    for (const name of TEMP_VARS) process.env[name] = temp;
   });
   afterEach(() => {
-    if (saved === undefined) delete process.env.TMPDIR;
-    else process.env.TMPDIR = saved;
+    TEMP_VARS.forEach((name, i) => {
+      const value = saved[i];
+      if (value === undefined) Reflect.deleteProperty(process.env, name);
+      else process.env[name] = value;
+    });
     fs.rmSync(temp, { recursive: true, force: true });
   });
 
