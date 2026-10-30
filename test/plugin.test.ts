@@ -246,23 +246,29 @@ describe('packages for other agents', () => {
     ]);
     const plugin = readJson('plugins/onsystem-cursor/.cursor-plugin/plugin.json');
     expect(plugin).toMatchObject({ name: 'onsystem', version, logo: 'icon.svg' });
-    // The fields of Cursor's manifest reference (cursor.com/docs/reference/plugins), and no other:
-    // `displayName` is the Claude Code plugin's, not Cursor's.
+    // The properties of Cursor's manifest schema (github.com/cursor/plugins,
+    // schemas/plugin.schema.json), and no other: the schema sets additionalProperties to false.
     const fields = [
       'name',
+      'displayName',
       'description',
       'version',
+      'minClientVersions',
       'author',
+      'publisher',
       'homepage',
       'repository',
       'license',
-      'keywords',
       'logo',
-      'rules',
+      'keywords',
+      'category',
+      'tags',
+      'commands',
       'agents',
       'skills',
-      'commands',
+      'rules',
       'hooks',
+      'variables',
       'mcpServers',
     ];
     expect(Object.keys(plugin).filter((key) => !fields.includes(key))).toEqual([]);
