@@ -246,6 +246,26 @@ describe('packages for other agents', () => {
     ]);
     const plugin = readJson('plugins/onsystem-cursor/.cursor-plugin/plugin.json');
     expect(plugin).toMatchObject({ name: 'onsystem', version, logo: 'icon.svg' });
+    // The fields of Cursor's manifest reference (cursor.com/docs/reference/plugins), and no other:
+    // `displayName` is the Claude Code plugin's, not Cursor's.
+    const fields = [
+      'name',
+      'description',
+      'version',
+      'author',
+      'homepage',
+      'repository',
+      'license',
+      'keywords',
+      'logo',
+      'rules',
+      'agents',
+      'skills',
+      'commands',
+      'hooks',
+      'mcpServers',
+    ];
+    expect(Object.keys(plugin).filter((key) => !fields.includes(key))).toEqual([]);
     expect(plugin.name).toMatch(/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/);
     expect(fs.existsSync(path.join(CURSOR, 'icon.svg'))).toBe(true);
     const skill = frontMatter(path.join(CURSOR, SKILL));
