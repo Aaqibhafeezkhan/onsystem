@@ -11,18 +11,27 @@ import type { Call, LoadRequest, LoadResponse } from './worker.js';
 const TIMEOUT_MS = 120_000;
 
 let worker: Worker | undefined;
+/**
+ * Set to 1 by the worker's exit handler, before it answers what it was asked. Its `exit` event
+ * reaches this thread only when ESLint's next file is already waiting on the stopped worker.
+ */
+let stopped = new Int32Array(new SharedArrayBuffer(4));
 
 function start(): Worker {
-  if (worker) return worker;
-  worker = new Worker(new URL('./eslint-worker.js', import.meta.url));
-  worker.unref();
-  worker.on('error', () => {
-    worker = undefined;
+  if (worker && Atomics.load(stopped, 0) === 0) return worker;
+  stopped = new Int32Array(new SharedArrayBuffer(4));
+  const current = new Worker(new URL('./eslint-worker.js', import.meta.url), {
+    workerData: { stopped },
   });
-  worker.on('exit', () => {
-    worker = undefined;
-  });
-  return worker;
+  current.unref();
+  // A stopped worker's events come after its successor started: they must not forget that one.
+  const forget = () => {
+    if (worker === current) worker = undefined;
+  };
+  current.on('error', forget);
+  current.on('exit', forget);
+  worker = current;
+  return current;
 }
 
 export function loadSync(request: LoadRequest): LoadResponse {
