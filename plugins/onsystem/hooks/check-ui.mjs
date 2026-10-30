@@ -37,10 +37,9 @@
 // it runs once more with --prefer-online, which asks the registry. A failure of
 // the CLI it started, such as a broken config, is not retried.
 // The CLI npx starts writes where it is (ONSYSTEM_REMEMBER_CLI), and later edits
-// run that CLI with Node directly, without npm, while it is still this release:
-// npm's start takes about 0.4 s of each edit. Its path is kept in the user's own
-// folder in the system temp folder, which no one else can write to, since the hook
-// runs what it names.
+// run that CLI with Node directly, without starting npm first, while it is still
+// this release. Its path is kept in the user's own folder in the system temp
+// folder, which no one else can write to, since the hook runs what it names.
 // It reads the project's files and writes nothing but markers in the system temp
 // folder, for the one-time notice, the pause and the CLI's path; the only network
 // access is npm's, when npx needs the registry.
