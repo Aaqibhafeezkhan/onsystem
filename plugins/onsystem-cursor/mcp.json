@@ -2,7 +2,7 @@
   "mcpServers": {
     "onsystem": {
       "command": "npx",
-      "args": ["-y", "onsystem@0.11.2"]
+      "args": ["-y", "onsystem@0.12.0"]
     }
   }
 }
