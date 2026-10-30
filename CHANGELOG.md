@@ -1,5 +1,21 @@
 # onsystem (formerly @dgesteves/design-system-mcp)
 
+## 0.12.1
+
+### Patch Changes
+
+- [#263](https://github.com/dgesteves/onsystem/pull/263) [`fe63cfe`](https://github.com/dgesteves/onsystem/commit/fe63cfe0f339f1f529056d3a398c2be3af0a54f0) - `check` on one file starts sooner, which the Claude Code hook does on every edit. The CLI turns on Node's compile cache (Node.js 22.1 and later), so the CLI and TypeScript are not compiled again on each run; it is kept in the user's own folder in the system temp folder, `onsystem-<uid>`, in a `compile-cache` folder onsystem creates for the user alone. An app whose design system zero config finds in a package's `exports` keeps what it found beside the cached model, and reads it from there until a file in that package, or the app's `package.json` or `components.json`, changes, or another build of onsystem runs: following the package's barrels parsed every file they lead to, on every run. `--no-cache` finds it again. On midday's dashboard and dub's web app, `check` on one file went from 0.51 s to 0.33 s and from 0.77 s to 0.43 s.
+  
+  In a project without onsystem installed, the hook runs it through npx on the first edit in that project only: the CLI npx started says where it is, and the next edits there run it with Node directly, without starting npm, while it is still the plugin's release. When that CLI gives no results, as when part of npm's copy was removed, the hook forgets it and runs npx in that same edit.
+  
+  `onsystem-<uid>` is used only while it is the user's alone. One that others can write to is now skipped, for the cached model too, rather than closed and used, and on Windows the folder is used only inside the user's home folder. SECURITY.md lists what is kept there.
+
+- [#265](https://github.com/dgesteves/onsystem/pull/265) [`3cc1fe0`](https://github.com/dgesteves/onsystem/commit/3cc1fe0906c36bfb36ce4396a5f1f57820bcb877) - An unknown component that looks like a part of a family the design system has, but is like none of its parts, is no longer taken for the part spelled closest. `DialogContent` in a design system on React Aria, whose `Dialog` is the content, got "Did you mean <DialogFooter>?"; it now gets "Did you mean <Dialog>, or one of its parts: DialogTrigger, DialogHeader, DialogFooter, DialogTitle?", with no rename. So do `DropdownMenuContent` and `ContextMenuContent` there, which were taken for the submenu's `DropdownMenuSubContent` and `ContextMenuSubContent`. A misspelled part (`DialogTitel`, `AvatarImg`) is still taken for that part, while a part unlike the one spelled closest no longer is: `SidebarDivider` was taken for `SidebarProvider`, `CardToggle` for `CardTitle` and `CarouselProvider` for `CarouselPrevious`.
+  
+  `asChild` on a React Aria trigger (`<DialogTrigger asChild>`), which renders no element of its own, now says that the trigger takes the element that opens it as a child: a button, a menu item for a submenu's trigger, and the area you right-click for a context menu's. On a React Aria component, whose `render` is a function, `asChild`, `as`, `component` and `href` no longer get Base UI's advice (`render={<Link href="…" />}`), which React Aria's `render` does not take: they say to use a link component for a link, or to pass `href` to a component that takes it (`SidebarMenuButton`, `BreadcrumbLink`). A `render` function of the design system's own keeps the old advice.
+  
+  The ESLint plugin no longer waits two minutes on a file when its loader worker stopped before it answered, as `process.exit()` in an `onsystem.config.mjs`, an uncaught error or an unhandled rejection makes it: every file of the run, a file sent to it while it was busy too, fails at once with "the design system's loader stopped before it answered", and why.
+
 ## 0.12.0
 
 ### Minor Changes
