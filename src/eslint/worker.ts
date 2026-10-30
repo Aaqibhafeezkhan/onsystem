@@ -12,7 +12,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parentPort, type MessagePort } from 'node:worker_threads';
+import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 
 import { excludedBy, type ResolvedConfig } from '../config.js';
 import { buildModel, componentFiles, fingerprint } from '../design-system.js';
@@ -261,12 +261,16 @@ function answer({ signal, port }: Call, response: LoadResponse): void {
 if (parentPort) {
   // A worker that stops before it answers (`process.exit()` in a config written in code, an
   // uncaught error) left ESLint waiting the bridge's whole timeout on every file, with a message
-  // that blamed a slow load. Its exit handlers still run, so they answer with why it stopped.
+  // that blamed a slow load. Its exit handlers still run, so they answer with why it stopped, and
+  // tell the bridge to start another worker for the next file.
   let crash: unknown;
   process.on('uncaughtExceptionMonitor', (error) => {
     crash = error;
   });
   process.on('exit', (code) => {
+    // First, so that the next file starts another worker instead of waiting on this one.
+    const { stopped } = (workerData ?? {}) as { stopped?: Int32Array };
+    if (stopped) Atomics.store(stopped, 0, 1);
     const why = crash instanceof Error ? `: ${crash.message}` : ` (exit code ${String(code)})`;
     for (const call of pending) {
       answer(call, { error: `the design system's loader stopped before it answered${why}` });

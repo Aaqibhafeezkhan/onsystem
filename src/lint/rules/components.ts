@@ -298,7 +298,8 @@ function enclosingComponent(node: ts.Node): string | undefined {
  * The component an unknown name most likely means: the closest spelling (`DialogTitel` is
  * `DialogTitle`), unless the name is a part of a family that has no such part. `DialogContent`
  * in a system whose Dialog is the content (React Aria) was spelled closest to another part,
- * `DialogFooter`, which means something else: the family's component is named instead, with its
+ * `DialogFooter`, which means something else, and `DropdownMenuContent` to
+ * `DropdownMenuSubContent`, a submenu's: the family's component is named instead, with its
  * parts. Undefined when nothing is close.
  */
 function guessComponent(
@@ -314,12 +315,17 @@ function guessComponent(
     )
     .sort((a, b) => b.length - a.length)[0];
   if (family === undefined) return guess === undefined ? undefined : { name: guess };
-  // Another part of the family, spelled like this one but for the family's name, is a typo of it.
+  // Another part of the family, spelled like this one but for the family's name, is a typo of it:
+  // within half the part's length (`Titel`), or two edits of a short one (`Img` for `Image`). A
+  // part that is this one with a word in front (`SubContent` for `Content`) is another part.
   const part = name.slice(family.length);
   const sibling = guess !== undefined && guess !== family && guess.startsWith(family);
-  if (sibling && closest(part, [guess.slice(family.length)], 1 / 2) !== undefined) {
-    return { name: guess };
-  }
+  const other = sibling ? guess.slice(family.length) : '';
+  const typo =
+    !(other.length > part.length && other.endsWith(part)) &&
+    editDistance(part.toLowerCase(), other.toLowerCase()) <=
+      Math.max(2, Math.floor(part.length / 2));
+  if (sibling && typo) return { name: guess };
   const parts = target.components.get(family)?.subcomponents ?? [];
   if (parts.length) return { name: family, parts };
   // A part unlike any of the family's, of a component without parts (`ButtonGroup` next to
@@ -482,6 +488,43 @@ const PROP_EQUIVALENTS: string[][] = [
 /** Props other libraries compose with, which no prop of a similar spelling stands in for. */
 const FOREIGN_COMPOSITION = new Set(['href', 'as', 'component']);
 
+/** React Aria's packages: a component whose props come from one is built on React Aria. */
+const REACT_ARIA = /^(?:react-aria-components|react-aria|@react-aria\/|@react-types\/)/;
+
+/**
+ * Whether the component's `render` is React Aria's, a function that returns an element of the
+ * same kind: `DOMRenderFunction<"button", …>`, or that type spelled out
+ * (`((props: …, renderProps: …) => …)`) on a component whose props come from React Aria. A
+ * render function of the design system's own (`(props) => ReactNode`) may return a link.
+ */
+function reactAriaRender(component: ComponentInfo): boolean {
+  const type = component.props.find((p) => p.name === 'render')?.type;
+  if (type === undefined) return false;
+  if (/^\(*DOMRenderFunction</.test(type)) return true;
+  return (
+    /^\(*props\b/.test(type) &&
+    (REACT_ARIA.test(component.library ?? '') ||
+      component.inherits.some((inherited) => REACT_ARIA.test(inherited.from)))
+  );
+}
+
+/**
+ * The child a trigger that composes neither way takes, as React Aria's do: a button opens a
+ * dialog, menu, popover or tooltip, a menu item a submenu, and a context menu opens on a
+ * right-click anywhere in the area it wraps. Other triggers name no element.
+ */
+function triggerHint(tag: string): string {
+  if (/ContextMenuTrigger$/.test(tag)) {
+    return `It takes the area that opens the menu on a right-click as a child: <${tag}>…</${tag}>.`;
+  }
+  const child = /Sub(?:menu)?Trigger$/.test(tag)
+    ? 'MenuItem'
+    : /(?:Dialog|Sheet|Drawer|Menu|Popover|Tooltip)Trigger$/.test(tag)
+      ? 'Button'
+      : undefined;
+  return `It takes the element that opens it as a child: <${tag}>${child ? `<${child}>…</${child}>` : ''}…</${tag}>.`;
+}
+
 /**
  * Radix composes with `asChild` and a child element, Base UI with a `render`
  * element; shadcn/ui ships both, and agents mix them up, or bring `as`, `component`
@@ -489,7 +532,7 @@ const FOREIGN_COMPOSITION = new Set(['href', 'as', 'component']);
  * boolean, and a button with an `href` is still no link), so this explains the
  * other way instead of offering a fix. React Aria has neither: a trigger takes the
  * element that opens it as a child, and `render` is a function that returns an
- * element of the same kind, so a link is a link component.
+ * element of the same kind, so a link is a link component, or the component's own `href`.
  */
 function compositionHint(
   name: string,
@@ -501,21 +544,21 @@ function compositionHint(
   const radixExample = `<${tag} asChild><Link href="…">…</Link></${tag}>`;
   const base = `compose with render`;
   const baseExample = `<${tag} render={<Link href="…" />}>…</${tag}>`;
-  const render = component.props.find((p) => p.name === 'render');
-  const ariaRender = render !== undefined && /^(?:DOMRenderFunction<|\(props\b)/.test(render.type);
   const composing = ['asChild', 'as', 'component', 'render'].includes(name);
   if (composing && !known.has('asChild') && !known.has('render') && /Trigger$/.test(tag)) {
-    return {
-      text: `It takes the element that opens it as a child: <${tag}><Button>…</Button>…</${tag}>.`,
-    };
+    return { text: triggerHint(tag) };
   }
-  if (ariaRender && (composing || name === 'href')) {
-    return {
-      text:
-        name === 'href'
-          ? 'For a link, use a link component: React Aria’s render only swaps in an element of the same kind.'
-          : `React Aria components take no ${name}. For a link, use a link component: render={(props) => …} only swaps in an element of the same kind.`,
-    };
+  if (reactAriaRender(component) && (composing || name === 'href')) {
+    const link = 'For a link, use a link component:';
+    if (name === 'href') {
+      return { text: `${link} React Aria’s render only swaps in an element of the same kind.` };
+    }
+    const none = `React Aria components take no "${name}" prop.`;
+    return known.has('href')
+      ? { prop: 'href', text: `${none} For a link, pass href: <${tag} href="…">…</${tag}>.` }
+      : {
+          text: `${none} ${link} render={(props) => …} only swaps in an element of the same kind.`,
+        };
   }
   if (name === 'href') {
     if (known.has('asChild')) {

@@ -9,8 +9,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { fixture } from './helpers.js';
 
 // The ESLint plugin waits for its loader worker to answer. A worker that stopped before it
-// answered (`process.exit()` in a config written in code) left every lint waiting the bridge's
-// whole timeout, 120 seconds, and then blamed a slow load. Built as it ships, into a folder of
+// answered (`process.exit()` in a config written in code, an uncaught error) left every file of
+// the lint waiting the bridge's whole timeout, 120 seconds, and then blamed a slow load. Built as it ships, into a folder of
 // its own, as in eslint-bridge.test.ts, since test files run in parallel.
 const REPO = path.resolve(import.meta.dirname, '..');
 const OUT = path.join(REPO, 'node_modules/.cache/onsystem-eslint-worker-exit-test');
@@ -37,27 +37,52 @@ beforeAll(async () => {
   });
 });
 
+const STOPPED =
+  "onsystem could not check this file: the design system's loader stopped before it answered";
+
 describe('a loader worker that stops before it answers', () => {
-  it('fails the lint at once, saying so', async () => {
-    const root = fixture({
-      'onsystem.config.mjs': 'process.exit(1);\nexport default {};\n',
-      'components/ui/button.tsx':
-        'export function Button(props: React.ComponentProps<"button">) { return <button {...props} /> }',
-      'app/page.tsx': 'export default () => <div className="bg-[#ff0000]">Hi</div>\n',
-    });
-    const eslint = new ESLint({
-      cwd: root,
-      overrideConfigFile: true,
-      overrideConfig: [
-        { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.parser } },
-        onsystem.configs.recommended,
-      ],
-    });
-    const started = Date.now();
-    const [result] = await eslint.lintFiles(['app/page.tsx']);
-    expect(Date.now() - started).toBeLessThan(30_000);
-    expect(result?.messages.map((m) => m.message)).toEqual([
-      "onsystem could not check this file: the design system's loader stopped before it answered (exit code 1)",
-    ]);
-  }, 150_000);
+  // Each file of the run: the worker's `exit` event reaches the bridge only after ESLint has
+  // moved on to the next file, so that file used to wait on the stopped worker.
+  it.each([
+    ['process.exit()', 'process.exit(1);\nexport default {};\n', ' (exit code 1)'],
+    [
+      'an uncaught error',
+      'setImmediate(() => { throw new Error("boom in config") });\nawait new Promise((r) => setTimeout(r, 1000));\nexport default {};\n',
+      ': boom in config',
+    ],
+    [
+      'an unhandled rejection',
+      'Promise.reject(new Error("unhandled in config"));\nawait new Promise((r) => setTimeout(r, 1000));\nexport default {};\n',
+      ': unhandled in config',
+    ],
+  ])(
+    'fails every file at once after %s, saying why',
+    async (_, config, why) => {
+      const root = fixture({
+        'onsystem.config.mjs': config,
+        'components/ui/button.tsx':
+          'export function Button(props: React.ComponentProps<"button">) { return <button {...props} /> }',
+        'app/a.tsx': 'export default () => <div className="bg-[#ff0000]">Hi</div>\n',
+        'app/b.tsx': 'export default () => <div className="bg-[#00ff00]">Hi</div>\n',
+        'app/c.tsx': 'export default () => <div className="bg-[#0000ff]">Hi</div>\n',
+      });
+      const eslint = new ESLint({
+        cwd: root,
+        overrideConfigFile: true,
+        overrideConfig: [
+          { files: ['**/*.{ts,tsx}'], languageOptions: { parser: tseslint.parser } },
+          onsystem.configs.recommended,
+        ],
+      });
+      const started = Date.now();
+      const results = await eslint.lintFiles(['app/a.tsx', 'app/b.tsx', 'app/c.tsx']);
+      expect(Date.now() - started).toBeLessThan(30_000);
+      expect(results.map((r) => r.messages.map((m) => m.message))).toEqual([
+        [`${STOPPED}${why}`],
+        [`${STOPPED}${why}`],
+        [`${STOPPED}${why}`],
+      ]);
+    },
+    400_000,
+  );
 });
