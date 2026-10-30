@@ -12,7 +12,12 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
+import {
+  parentPort,
+  receiveMessageOnPort,
+  workerData,
+  type MessagePort,
+} from 'node:worker_threads';
 
 import { excludedBy, type ResolvedConfig } from '../config.js';
 import { buildModel, componentFiles, fingerprint } from '../design-system.js';
@@ -259,6 +264,7 @@ function answer({ signal, port }: Call, response: LoadResponse): void {
 }
 
 if (parentPort) {
+  const port = parentPort;
   // A worker that stops before it answers (`process.exit()` in a config written in code, an
   // uncaught error) left ESLint waiting the bridge's whole timeout on every file, with a message
   // that blamed a slow load. Its exit handlers still run, so they answer with why it stopped, and
@@ -272,6 +278,10 @@ if (parentPort) {
     const { stopped } = (workerData ?? {}) as { stopped?: Int32Array };
     if (stopped) Atomics.store(stopped, 0, 1);
     const why = crash instanceof Error ? `: ${crash.message}` : ` (exit code ${String(code)})`;
+    // And the calls it never read, posted while it was busy (a config's timer that blocks, then
+    // exits): they are still on its port, and would wait the bridge's whole timeout too.
+    let queued: { message: unknown } | undefined;
+    while ((queued = receiveMessageOnPort(port))) pending.add(queued.message as Call);
     for (const call of pending) {
       answer(call, { error: `the design system's loader stopped before it answered${why}` });
     }

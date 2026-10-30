@@ -115,6 +115,53 @@ export default () => <Avatar><AvatarImg src="/me.png" /></Avatar>`;
     ]);
   });
 
+  it('does not take a part for one spelled like it but unlike it', async () => {
+    // Within half the part's length, these were renamed: `Toggle` is three edits from `Title`,
+    // `Provider` four from `Previous`.
+    const families = await load(
+      fixture(
+        {
+          'tsconfig.json': TSCONFIG,
+          'components/ui/card.tsx': `import * as React from "react"
+export function Card(props: { children?: React.ReactNode }) { return <div>{props.children}</div> }
+export function CardHeader(props: { children?: React.ReactNode }) { return <div>{props.children}</div> }
+export function CardTitle(props: { children?: React.ReactNode }) { return <h3>{props.children}</h3> }
+export function CardContent(props: { children?: React.ReactNode }) { return <div>{props.children}</div> }`,
+          'components/ui/carousel.tsx': `import * as React from "react"
+export function Carousel(props: { children?: React.ReactNode }) { return <div>{props.children}</div> }
+export function CarouselContent(props: { children?: React.ReactNode }) { return <div>{props.children}</div> }
+export function CarouselItem(props: { children?: React.ReactNode }) { return <div>{props.children}</div> }
+export function CarouselPrevious(props: { children?: React.ReactNode }) { return <button>{props.children}</button> }
+export function CarouselNext(props: { children?: React.ReactNode }) { return <button>{props.children}</button> }`,
+        },
+        { nodeModules: true },
+      ),
+    );
+    const code = `import { Card, CardTitle } from "@/components/ui/card"
+import { Carousel, CarouselPrevious } from "@/components/ui/carousel"
+export default () => (
+  <>
+    <Card><CardToggle /><CardTitle>Hi</CardTitle><CardContnt>Body</CardContnt></Card>
+    <CarouselProvider><Carousel><CarouselPrevious /></Carousel></CarouselProvider>
+  </>
+)`;
+    const found = findings(families, code, 'no-unknown-component');
+    expect(found.map((d) => [d.message, d.fix?.[0]?.text])).toEqual([
+      [
+        'Unknown component <CardToggle>. Did you mean <Card>, or one of its parts: CardHeader, CardTitle, CardContent?',
+        undefined,
+      ],
+      [
+        'Unknown component <CardContnt>. Did you mean <CardContent> (import { CardContent } from "@/components/ui/card")?',
+        undefined,
+      ],
+      [
+        'Unknown component <CarouselProvider>. Did you mean <Carousel>, or one of its parts: CarouselContent, CarouselItem, CarouselPrevious, CarouselNext?',
+        undefined,
+      ],
+    ]);
+  });
+
   it('does not take a component of its own for a part of a component without parts', () => {
     const code = `import { Button, ButtonGroup } from "@/components/ui/button"
 export default () => <ButtonGroup><Button>Hi</Button></ButtonGroup>`;
@@ -191,6 +238,31 @@ export default () => <SidebarMenuButton asChild><Link href="/docs">Docs</Link></
         '<SidebarMenuButton> has no prop "asChild". React Aria components take no "asChild" prop. For a link, pass href: <SidebarMenuButton href="…">…</SidebarMenuButton>.',
         'href',
       ],
+    ]);
+  });
+});
+
+describe('a trigger that renders its own button', () => {
+  it('gets no hint to put the button inside, which would nest one button in another', async () => {
+    const own = await load(
+      fixture(
+        {
+          'tsconfig.json': TSCONFIG,
+          'components/ui/dialog.tsx': `import * as React from "react"
+export function Dialog(props: { children?: React.ReactNode }) { return <div>{props.children}</div> }
+export function DialogTrigger(props: React.ComponentProps<"button">) { return <button type="button" {...props} /> }`,
+          'components/ui/button.tsx': `import * as React from "react"
+export function Button(props: React.ComponentProps<"button">) { return <button {...props} /> }`,
+        },
+        { nodeModules: true },
+      ),
+    );
+    expect(own.getComponent('DialogTrigger')?.element).toBe('button');
+    const code = `import { Button } from "@/components/ui/button"
+import { Dialog, DialogTrigger } from "@/components/ui/dialog"
+export default () => <Dialog><DialogTrigger asChild><Button>Open</Button></DialogTrigger></Dialog>`;
+    expect(findings(own, code, 'no-unknown-prop').map((d) => [d.message, d.suggestion])).toEqual([
+      ['<DialogTrigger> has no prop "asChild".', undefined],
     ]);
   });
 });

@@ -316,15 +316,17 @@ function guessComponent(
     .sort((a, b) => b.length - a.length)[0];
   if (family === undefined) return guess === undefined ? undefined : { name: guess };
   // Another part of the family, spelled like this one but for the family's name, is a typo of it:
-  // within half the part's length (`Titel`), or two edits of a short one (`Img` for `Image`). A
-  // part that is this one with a word in front (`SubContent` for `Content`) is another part.
+  // within a third of the part's length (`Separatr`), or two edits of a short one (`Titel`, `Img`
+  // for `Image`). Half its length took unlike parts for typos (`Divider` for `Provider`, `Toggle`
+  // for `Title`). A part that is this one with a word in front (`SubContent` for `Content`) is
+  // another part.
   const part = name.slice(family.length);
   const sibling = guess !== undefined && guess !== family && guess.startsWith(family);
   const other = sibling ? guess.slice(family.length) : '';
   const typo =
     !(other.length > part.length && other.endsWith(part)) &&
     editDistance(part.toLowerCase(), other.toLowerCase()) <=
-      Math.max(2, Math.floor(part.length / 2));
+      Math.max(2, Math.floor(part.length / 3));
   if (sibling && typo) return { name: guess };
   const parts = target.components.get(family)?.subcomponents ?? [];
   if (parts.length) return { name: family, parts };
@@ -545,7 +547,14 @@ function compositionHint(
   const base = `compose with render`;
   const baseExample = `<${tag} render={<Link href="…" />}>…</${tag}>`;
   const composing = ['asChild', 'as', 'component', 'render'].includes(name);
-  if (composing && !known.has('asChild') && !known.has('render') && /Trigger$/.test(tag)) {
+  // React Aria's triggers render no element of their own; one that renders a button takes none.
+  if (
+    composing &&
+    !known.has('asChild') &&
+    !known.has('render') &&
+    component.element === undefined &&
+    /Trigger$/.test(tag)
+  ) {
     return { text: triggerHint(tag) };
   }
   if (reactAriaRender(component) && (composing || name === 'href')) {
