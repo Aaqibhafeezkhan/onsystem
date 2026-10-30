@@ -83,7 +83,7 @@ describe('onsystem check', () => {
     // Relative to the repository root, which GitHub resolves annotations against: the demo is
     // a folder of this repository.
     expect(stdout.split('\n')[0]).toBe(
-      '::error file=examples/shadcn-demo/app/settings/danger-zone.tsx,line=11,col=22,endLine=11,endColumn=38,title=no-hardcoded-color::Hardcoded color `border-[#ef4444]`. Nearest token destructive (ΔE 0.071) → `border-destructive`.',
+      '::error file=examples/shadcn-demo/app/settings/danger-zone.tsx,line=11,col=22,endLine=11,endColumn=38,title=onsystem%3A no-hardcoded-color::Hardcoded color `border-[#ef4444]`. Nearest token destructive (ΔE 0.071) → `border-destructive`.',
     );
   });
 

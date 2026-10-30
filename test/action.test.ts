@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { annotation, cli, onChangedLines, parseDiff, run } from '../action/check.mjs';
 import { fixture } from './helpers.js';
@@ -202,6 +202,37 @@ describe('the GitHub Action, in parts', () => {
     });
   });
 
+  it('reads an added line that starts with ++ as part of its hunk, not as a file header', () => {
+    // `++ counter;` added reads `+++ counter;` in the diff: taken for a header, it dropped the
+    // file's later hunks, and the findings on them were not reported.
+    const diff = [
+      'diff --git a/app/f.tsx b/app/f.tsx',
+      '--- a/app/f.tsx',
+      '+++ b/app/f.tsx',
+      '@@ -3,0 +4 @@',
+      '+++ counter;',
+      '@@ -10 +11,2 @@',
+      '--- removed',
+      '+-- kept',
+      '+++ added',
+      '\\ No newline at end of file',
+      '@@ -20,0 +22 @@',
+      '+x',
+      '+++ b/app/g.tsx',
+      '@@ -1 +1 @@',
+      '-a',
+      '+b',
+    ].join('\n');
+    expect(Object.fromEntries(parseDiff(diff))).toEqual({
+      'app/f.tsx': [
+        [4, 4],
+        [11, 12],
+        [22, 22],
+      ],
+      'app/g.tsx': [[1, 1]],
+    });
+  });
+
   it('keeps the findings that overlap a changed range', () => {
     const finding = (line: number, endLine = line) => ({
       file: 'a.tsx',
@@ -368,6 +399,31 @@ describe('the GitHub Action', () => {
       payload: { merge_group: { base_sha: base } },
     });
     expect(queue.outputs).toEqual({ errors: '1', warnings: '0', 'outside-diff': '1' });
+  });
+
+  it("reads a checkout that git takes for another user's, as in a container job", () => {
+    // In a `container:` job the workspace belongs to another user, and git refuses to read it
+    // ("dubious ownership") unless it is a safe.directory. Git's own test switch stands in, with
+    // no system or global config, where a runner may list every folder as safe.
+    const { root, base } = repository();
+    const web = path.join(root, 'apps/web');
+    vi.stubEnv('GIT_TEST_ASSUME_DIFFERENT_OWNER', '1');
+    vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
+    vi.stubEnv('GIT_CONFIG_GLOBAL', path.join(fixture({ gitconfig: '' }), 'gitconfig'));
+    try {
+      expect(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: web }).status).not.toBe(0);
+      const result = action(web, { payload: pr(base) }, { GITHUB_WORKSPACE: root });
+      expect(result.stdout).toContain('::error file=apps/web/app/page.tsx,line=4,');
+      expect(result.outputs).toEqual({ errors: '1', warnings: '0', 'outside-diff': '1' });
+      // Outside the workspace it is not the checkout: git's advice, not fetch-depth.
+      const elsewhere = action(web, { payload: pr(base) }, { GITHUB_WORKSPACE: fixture({}) });
+      expect(elsewhere.code).toBe(1);
+      expect(elsewhere.stdout).toMatch(
+        /^::error title=onsystem::Could not work out which lines this pull request changed: not in a git repository \(.*dubious ownership.*\. Add the checkout to git's safe\.directory \(git config --global --add safe\.directory "\$GITHUB_WORKSPACE"\), or set only-changed-lines: false to report every finding\.$/,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('names files from GITHUB_WORKSPACE when there is no git repository', () => {

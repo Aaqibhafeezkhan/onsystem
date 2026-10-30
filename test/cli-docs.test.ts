@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import ts from 'typescript';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -206,6 +207,34 @@ describe('the CLI reference (docs/cli.md)', () => {
         expect(expected, `${row.flags.join(', ')} under "${heading}"`).toContain(heading);
       }
     }
+  });
+
+  it('rejects each option under the commands --help does not give it to', async () => {
+    // `check . --out report.json` wrote no file and exited as if it had.
+    let tried = 0;
+    for (const option of options) {
+      if (!option.commands.length) continue;
+      for (const command of COMMANDS.filter((c) => !option.commands.includes(c))) {
+        for (const flag of option.flags) {
+          const err: string[] = [];
+          const io: Io = {
+            cwd: DEMO_ROOT,
+            color: false,
+            stdout: () => {},
+            stderr: (t) => err.push(t),
+            // `serve` that took the option would start here, and not on stdin.
+            transport: InMemoryTransport.createLinkedPair()[1],
+          };
+          const args = [command, flag, ...(option.arg ? ['x'] : [])];
+          expect(await main(args, io), args.join(' ')).toBe(2);
+          expect(err.join('\n'), args.join(' ')).toBe(
+            `${command}: ${flag} is an option of ${option.commands.join(', ').replace(/, (\w+)$/, ' and $1')} only. Run onsystem --help for usage.`,
+          );
+          tried++;
+        }
+      }
+    }
+    expect(tried).toBeGreaterThan(50);
   });
 
   it('runs inspect --format json, the value its row names', async () => {

@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline/promises';
 import { parseArgs } from 'node:util';
@@ -47,7 +48,7 @@ import { stderrLogger, silentLogger } from './util/log.js';
 import { isInside, relativePath, SCRIPT_FILE, toPosix } from './util/paths.js';
 import { plural, unique } from './util/strings.js';
 import { NAME, VERSION } from './version.js';
-import { loadTarget, type Project, type Workspace } from './workspace.js';
+import { hasProjectMarker, loadTarget, type Project, type Workspace } from './workspace.js';
 import { detectProject, type DetectionStep } from './detect.js';
 
 const DOCS = 'https://onsystem.vercel.app/docs';
@@ -75,7 +76,10 @@ project: each file is checked against the design system of the nearest folder
 with a config, components.json or package.json, and inspect lists every project.
 
 Options
-  --root <dir>            Project root (default: the config file's directory, or cwd)
+  --root <dir>            Project root (default: the config file's directory, or
+                          cwd; from a folder with no config, components.json,
+                          package.json or project.json, the nearest folder above
+                          it with one)
   --config <file>         Config file (default: onsystem.config.{json,ts,mts,js,mjs})
   --components <glob>     Component sources, repeatable (default: found through
                           components.json or a workspace package, else
@@ -88,7 +92,8 @@ Options
                           inspect: pretty | json (default: pretty);
                           export: dtcg | design-md
   --out <file>            export: write to this file instead of stdout
-  --max-warnings <n>      check: exit 1 when there are more than n warnings
+  --max-warnings <n>      check: exit 1 when there are more than n warnings (-1:
+                          no limit)
   --update-baseline       check: record the current findings as accepted, and exit 0
   --prune-baseline        check: drop baseline entries that no longer occur, and
                           accept nothing new
@@ -171,6 +176,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       args: argv,
       allowPositionals: true,
       allowNegative: true,
+      tokens: true,
       options: {
         root: { type: 'string' },
         config: { type: 'string' },
@@ -202,7 +208,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     io.stderr(`${(error as Error).message}\n\nRun ${NAME} --help for usage.`);
     return 2;
   }
-  const { values, positionals } = parsed;
+  const { values, positionals, tokens } = parsed;
   if (values.help) {
     io.stdout(HELP);
     return 0;
@@ -217,6 +223,17 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     io.stdout(HELP);
     return 0;
   }
+  // An option of another command would be ignored: `check . --out report.json` wrote no file.
+  for (const token of tokens) {
+    if (token.kind !== 'option') continue;
+    const commands = COMMAND_OPTIONS[token.name];
+    if (commands && isCommand(command) && !commands.includes(command)) {
+      io.stderr(
+        `${command}: ${token.rawName} is an option of ${listOf(commands, commands.length)} only. Run ${NAME} --help for usage.`,
+      );
+      return 2;
+    }
+  }
   // `--root ${workspaceFolder}` from a client that does not expand variables
   // would make a folder of that name the project.
   let root = values.root;
@@ -225,6 +242,13 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       `--root "${root}" holds a variable the client did not expand; using the working directory instead${command === 'serve' ? ", or the client's roots when it holds no project" : ''}.`,
     );
     root = undefined;
+  }
+  // Run from a folder of a project (`app/settings`), zero config found no design system there
+  // and passed every file: the commands work on the project around it, as the Claude Code hook
+  // does. The server finds its project from the client's roots.
+  const given = [values.config, values.components, values.tokens, values.docs];
+  if (root === undefined && command !== 'serve' && given.every((v) => v === undefined)) {
+    root = enclosingProject(io.cwd);
   }
   const configOptions = {
     cwd: io.cwd,
@@ -286,11 +310,67 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       io.stderr(error.message);
       return 2;
     }
+    // Ctrl+D or Ctrl+C at one of init's questions, rather than a stack trace. 130, as a shell
+    // reports a command the user interrupted.
+    if ((error as Error).name === 'AbortError') {
+      io.stderr(`${command}: cancelled; nothing after that question was done.`);
+      return 130;
+    }
     // Exit 1 means findings. A run that failed (a file it cannot read, a bug) exits 2, as a
     // broken config does, so CI fails the job rather than taking an empty report for findings.
     io.stderr((error as Error).stack ?? String(error));
     return 2;
   }
+}
+
+const COMMANDS = ['serve', 'check', 'inspect', 'export', 'init'] as const;
+type Command = (typeof COMMANDS)[number];
+
+function isCommand(name: string): name is Command {
+  return (COMMANDS as readonly string[]).includes(name);
+}
+
+/**
+ * The options that `--help` gives to some commands only (`check:` in its text), by parser name.
+ * The others apply to every command. test/cli-docs.test.ts holds the two together.
+ */
+const COMMAND_OPTIONS: Partial<Record<string, readonly Command[]>> = {
+  watch: ['serve'],
+  format: ['check', 'inspect', 'export'],
+  out: ['export'],
+  'max-warnings': ['check'],
+  'update-baseline': ['check'],
+  'prune-baseline': ['check'],
+  baseline: ['check'],
+  'ignore-baseline': ['check'],
+  'include-design-system': ['check'],
+  'include-tests': ['check'],
+  'skip-excluded': ['check'],
+  'quiet-without-design-system': ['check'],
+  'require-design-system': ['check'],
+  explain: ['inspect'],
+  yes: ['init'],
+  force: ['init'],
+};
+
+/**
+ * The project around `cwd` when `cwd` is none: the nearest folder above it with a config, a
+ * components.json, a package.json or a project.json, relative to `cwd` (`../..`), as a command
+ * that names it with `--root` would. Undefined when `cwd` has one of those, or a baseline (a run
+ * from there recorded it), or when no folder below the home folder has one.
+ */
+function enclosingProject(cwd: string): string | undefined {
+  const baselines = [BASELINE_FILE, LEGACY_BASELINE_FILE];
+  if (hasProjectMarker(cwd) || baselines.some((name) => fs.existsSync(path.join(cwd, name)))) {
+    return undefined;
+  }
+  const home = path.resolve(os.homedir());
+  let dir = path.dirname(cwd);
+  while (dir !== path.dirname(dir) && dir !== home) {
+    if (hasProjectMarker(dir)) return path.relative(cwd, dir);
+    dir = path.dirname(dir);
+  }
+  return undefined;
 }
 
 interface CheckValues {
@@ -363,12 +443,14 @@ async function check(
     io.stderr(`check: unknown --format "${format}" (pretty, json, github, sarif)`);
     return 2;
   }
-  const maxWarnings =
-    values['max-warnings'] === undefined ? undefined : Number(values['max-warnings']);
-  if (maxWarnings !== undefined && !Number.isInteger(maxWarnings)) {
-    io.stderr('check: --max-warnings expects an integer');
+  // A whole number: Number() reads an empty value (an unset variable) as 0. A negative one is
+  // no limit, as in ESLint (`--max-warnings=-1`).
+  const given = values['max-warnings'];
+  if (given !== undefined && !/^-?\d+$/.test(given)) {
+    io.stderr(`check: --max-warnings expects a whole number (-1 for no limit), not "${given}"`);
     return 2;
   }
+  const maxWarnings = given === undefined || Number(given) < 0 ? undefined : Number(given);
 
   const target = await loadTarget(configOptions);
   warnDeprecated(target.config.deprecations, format, io);
@@ -1058,8 +1140,15 @@ async function selectInWorkspace(
     }
     if (!complete) {
       const packages = workspace.projects.length + workspace.others.length;
+      // What each project with part of one lacks: `no color tokens in apps/web and apps/admin`.
+      const lacking = new Map<string, string[]>();
+      for (const p of workspace.projects) {
+        const gap = missingFrom(await load(p));
+        if (gap) lacking.set(gap.what, [...(lacking.get(gap.what) ?? []), p.dir]);
+      }
+      const why = [...lacking].map(([what, dirs]) => `; ${what} in ${listOf(dirs)}`).join('');
       io.stderr(
-        `check --require-design-system: no workspace package has a design system with components and color tokens (${plural(packages, 'package')} looked at). See ${DOCS}/troubleshooting`,
+        `check --require-design-system: no workspace package has a design system with components and color tokens (${plural(packages, 'package')} looked at${why}). See ${DOCS}/troubleshooting`,
       );
       return 2;
     }
@@ -1155,6 +1244,11 @@ async function inspect(
   }
   lines.push('', `Tokens (${model.tokens.length})`);
   for (const [category, n] of tokenCounts(model)) lines.push(`  ${category.padEnd(18)} ${n}`);
+  // What check says after its findings, said before it runs.
+  const gap = missingFrom(ds);
+  if (gap) {
+    lines.push('', `${gap.found}: check will not run ${gap.rules}. See ${DOCS}/configuration`);
+  }
   if (model.warnings.length) {
     lines.push('', 'Warnings');
     for (const warning of model.warnings) lines.push(`  ${warning}`);
@@ -1164,6 +1258,31 @@ async function inspect(
   const missing = values.explain ? undefined : missingDependencies([{ ds }]);
   if (missing) io.stderr(missing);
   return 0;
+}
+
+/**
+ * What a design system lacks for `check` to run all its rules, as `DesignSystem.notice()` says
+ * after a check: components, color tokens or both. Undefined when it has both.
+ */
+function missingFrom(ds: DesignSystem): { what: string; found: string; rules: string } | undefined {
+  const components = ds.model.components.length > 0;
+  const colors = ds.tokenIndex.has('color');
+  if (components && colors) return undefined;
+  if (components) {
+    return { what: 'no color tokens', found: 'No color tokens found', rules: 'no-hardcoded-color' };
+  }
+  if (colors) {
+    return {
+      what: 'no components',
+      found: 'No design-system components found',
+      rules: 'the component rules',
+    };
+  }
+  return {
+    what: 'no components or color tokens',
+    found: 'No design system found (no components or color tokens)',
+    rules: 'the component rules or no-hardcoded-color',
+  };
 }
 
 /**
@@ -1304,6 +1423,7 @@ async function inspectWorkspace(
     const { model } = ds;
     const roots = ds.roots();
     const tokens = [...tokenCounts(model)].map(([category, n]) => `${category} ${n}`);
+    const gap = missingFrom(ds);
     const own =
       project.config.configFile &&
       (project.config.configFile !== workspace.configFile || project.config.designSystemPackage)
@@ -1318,6 +1438,9 @@ async function inspectWorkspace(
       `  files      ${plural(model.stats.files.components, 'component file')}, ${plural(model.stats.files.tokens, 'token file')}, ${plural(model.stats.files.docs, 'doc')}`,
       `  components ${roots.length} + ${ds.components.length - roots.length} parts${roots.length ? `: ${listNames(roots.map((c) => c.name))}` : ''}`,
       `  tokens     ${tokens.length ? tokens.join(', ') : 'none'}`,
+      ...(gap
+        ? [`  missing    ${gap.what.replace(/^no /, '')}: check will not run ${gap.rules}`]
+        : []),
       ...(model.warnings.length
         ? [`  warnings   ${model.warnings.length}: ${model.warnings[0] ?? ''}`]
         : []),
