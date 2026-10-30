@@ -3,27 +3,38 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { annotation, cli, onChangedLines, parseDiff, run } from '../action/check.mjs';
+import { annotation, cli, configEnv, onChangedLines, parseDiff, run } from '../action/check.mjs';
 import { fixture } from './helpers.js';
 
 // The GitHub Action (action.yml, action/check.mjs) against real git repositories, with a stand-in
 // for the CLI that reports `bg-[#…]` as an error and `p-[13px]` as a warning on whatever line has
-// them. CI runs the action itself, with the built CLI, on the pull request (the `action` job).
+// them, and leaves out what git ignores, as the CLI does. CI runs the action itself, with the
+// built CLI, on the pull request (the `action` job).
 
-const STUB = `import fs from 'node:fs';
+const STUB = `import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 const args = process.argv.slice(2);
 if (process.env.STUB_ARGS) fs.writeFileSync(process.env.STUB_ARGS, JSON.stringify(args));
 if (process.env.STUB_FAIL) {
+  // Run from a folder with no package.json, the CLI first says which project above it it checks.
+  let up = process.cwd();
+  while (!fs.existsSync(path.join(up, 'package.json')) && path.dirname(up) !== up) up = path.dirname(up);
+  if (up !== process.cwd() && fs.existsSync(path.join(up, 'package.json')))
+    console.error('Checking the project in ' + path.relative(process.cwd(), up).split(path.sep).join('/'));
   console.error('check --require-design-system: no components were found.');
   process.exit(2);
 }
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
   entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
+const found = walk(args[1]).filter((f) => f.endsWith('.tsx')).sort();
+const ignored = spawnSync('git', ['check-ignore', '-z', '--stdin'], {
+  input: found.map((f) => f.split(path.sep).join('/')).join('\\0'), encoding: 'utf8' });
+const skip = new Set(ignored.status === 0 ? ignored.stdout.split('\\0').filter(Boolean).map((f) => path.resolve(f)) : []);
 const results = [];
-for (const file of walk(args[1]).filter((f) => f.endsWith('.tsx')).sort()) {
+for (const file of found.filter((f) => !skip.has(path.resolve(f)))) {
   const diagnostics = [];
   fs.readFileSync(file, 'utf8').split('\\n').forEach((text, i) => {
     for (const [needle, ruleId, severity] of [
@@ -202,6 +213,55 @@ describe('the GitHub Action, in parts', () => {
     });
   });
 
+  it('reads an added line that starts with ++ as part of its hunk, not as a file header', () => {
+    // `++ counter;` added reads `+++ counter;` in the diff: taken for a header, it dropped the
+    // file's later hunks, and the findings on them were not reported.
+    const diff = [
+      'diff --git a/app/f.tsx b/app/f.tsx',
+      '--- a/app/f.tsx',
+      '+++ b/app/f.tsx',
+      '@@ -3,0 +4 @@',
+      '+++ counter;',
+      '@@ -10 +11,2 @@',
+      '--- removed',
+      '+-- kept',
+      '+++ added',
+      '\\ No newline at end of file',
+      '@@ -20,0 +22 @@',
+      '+x',
+      '+++ b/app/g.tsx',
+      '@@ -1 +1 @@',
+      '-a',
+      '+b',
+    ].join('\n');
+    expect(Object.fromEntries(parseDiff(diff))).toEqual({
+      'app/f.tsx': [
+        [4, 4],
+        [11, 12],
+        [22, 22],
+      ],
+      'app/g.tsx': [[1, 1]],
+    });
+  });
+
+  it("passes git's -c options to the CLI as GIT_CONFIG_* variables, after those already set", () => {
+    const trust = ['-c', 'safe.directory=/w/repo/apps', '-c', 'safe.directory=/w/repo'];
+    expect(configEnv(trust, { GIT_CONFIG_COUNT: '2' })).toEqual({
+      GIT_CONFIG_KEY_2: 'safe.directory',
+      GIT_CONFIG_VALUE_2: '/w/repo/apps',
+      GIT_CONFIG_KEY_3: 'safe.directory',
+      GIT_CONFIG_VALUE_3: '/w/repo',
+      GIT_CONFIG_COUNT: '4',
+    });
+    expect(configEnv(['-c', 'a.b=c=d'], {})).toEqual({
+      GIT_CONFIG_KEY_0: 'a.b',
+      GIT_CONFIG_VALUE_0: 'c=d',
+      GIT_CONFIG_COUNT: '1',
+    });
+    // Outside Actions there is nothing to add, and the count is left as it is.
+    expect(configEnv([], { GIT_CONFIG_COUNT: '2' })).toEqual({});
+  });
+
   it('keeps the findings that overlap a changed range', () => {
     const finding = (line: number, endLine = line) => ({
       file: 'a.tsx',
@@ -370,6 +430,43 @@ describe('the GitHub Action', () => {
     expect(queue.outputs).toEqual({ errors: '1', warnings: '0', 'outside-diff': '1' });
   });
 
+  it("reads a checkout that git takes for another user's, as in a container job", () => {
+    // In a `container:` job the workspace belongs to another user, and git refuses to read it
+    // ("dubious ownership") unless it is a safe.directory. Git's own test switch stands in, with
+    // no system or global config, where a runner may list every folder as safe.
+    const { root, base } = repository();
+    const web = path.join(root, 'apps/web');
+    // Files git ignores, each with an error the CLI must not report: one through .gitignore, and
+    // one through an excludes file set in the environment, which the action adds to.
+    fs.writeFileSync(path.join(web, '.gitignore'), 'app/generated.tsx\n');
+    fs.writeFileSync(path.join(web, 'app/generated.tsx'), PAGE);
+    fs.writeFileSync(path.join(web, 'app/local.tsx'), PAGE);
+    const excludes = path.join(fixture({ excludes: 'local.tsx\n' }), 'excludes');
+    vi.stubEnv('GIT_TEST_ASSUME_DIFFERENT_OWNER', '1');
+    vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
+    vi.stubEnv('GIT_CONFIG_GLOBAL', path.join(fixture({ gitconfig: '' }), 'gitconfig'));
+    vi.stubEnv('GIT_CONFIG_COUNT', '1');
+    vi.stubEnv('GIT_CONFIG_KEY_0', 'core.excludesFile');
+    vi.stubEnv('GIT_CONFIG_VALUE_0', excludes);
+    try {
+      expect(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: web }).status).not.toBe(0);
+      const result = action(web, { payload: pr(base) }, { GITHUB_WORKSPACE: root });
+      expect(result.stdout).toContain('::error file=apps/web/app/page.tsx,line=4,');
+      // The CLI's own git reads the checkout too: neither ignored file is checked.
+      expect(result.stdout).not.toContain('generated.tsx');
+      expect(result.stdout).not.toContain('local.tsx');
+      expect(result.outputs).toEqual({ errors: '1', warnings: '0', 'outside-diff': '1' });
+      // Outside the workspace it is not the checkout: git's advice, not fetch-depth.
+      const elsewhere = action(web, { payload: pr(base) }, { GITHUB_WORKSPACE: fixture({}) });
+      expect(elsewhere.code).toBe(1);
+      expect(elsewhere.stdout).toMatch(
+        /^::error title=onsystem::Could not work out which lines this pull request changed: not in a git repository \(.*dubious ownership.*\. Add the checkout to git's safe\.directory \(git config --global --add safe\.directory "\$GITHUB_WORKSPACE"\), or set only-changed-lines: false to report every finding\.$/,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('names files from GITHUB_WORKSPACE when there is no git repository', () => {
     // A checkout without git (actions/checkout falls back to the REST API), on a push.
     const root = fixture({ 'apps/web/app/page.tsx': PAGE });
@@ -420,6 +517,19 @@ describe('the GitHub Action', () => {
     const result = action(path.join(root, 'apps/web'), { payload: pr(base) }, { STUB_FAIL: '1' });
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('no components were found');
+    expect(result.stdout).toBe(
+      '::error title=onsystem::onsystem check exited with 2: check --require-design-system: no components were found.',
+    );
+  });
+
+  it('fails with why check could not run, not which project it checked', () => {
+    // From a working-directory with no project marker, the CLI checks the project above it and
+    // says so first: the annotation took that line for the reason.
+    const { root, base } = repository();
+    fs.writeFileSync(path.join(root, 'package.json'), '{ "name": "app" }');
+    const result = action(path.join(root, 'apps/web'), { payload: pr(base) }, { STUB_FAIL: '1' });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Checking the project in ../..');
     expect(result.stdout).toBe(
       '::error title=onsystem::onsystem check exited with 2: check --require-design-system: no components were found.',
     );

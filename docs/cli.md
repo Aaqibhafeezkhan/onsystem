@@ -20,11 +20,13 @@ It needs Node.js 20.19 or later. The options are the ones `onsystem --help` prin
 
 At a monorepo root with no design system of its own, every command works per project: each file is checked against the design system of the nearest folder with a config, a `components.json` or a `package.json`, and `inspect` lists every project ([monorepo roots](configuration.md#monorepo-roots)).
 
+A command given another command's option exits 2: `check . --out report.json` would write no file. `serve` only says on stderr that it ignores the option, and starts, so a stale argument in an agent's MCP config does not leave the agent without the server.
+
 ## Options for every command
 
 | Option                | What it does                                                                                                                                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--root <dir>`        | The project root. By default, the folder of the file `--config` names, or the working directory                                                                                                                                                                          |
+| `--root <dir>`        | The project root. By default, the folder of the file `--config` names, or the working directory, or the project around it (below)                                                                                                                                        |
 | `--config <file>`     | The config file. By default, the first of `onsystem.config.json`, `onsystem.config.ts`, `onsystem.config.mts`, `onsystem.config.js` and `onsystem.config.mjs` in the root; the TypeScript ones need Node.js 22.18 or later ([config file](configuration.md#config-file)) |
 | `--components <glob>` | Component sources, repeatable. By default, what [zero config](configuration.md#zero-config) finds                                                                                                                                                                        |
 | `--tokens <file>`     | A token file, repeatable: a DTCG `.json`, a stylesheet or a `DESIGN.md` ([where tokens come from](tokens.md#where-tokens-come-from))                                                                                                                                     |
@@ -32,6 +34,8 @@ At a monorepo root with no design system of its own, every command works per pro
 | `--no-cache`          | Ignores the cache of what it read from the design system (in `node_modules/.cache/onsystem`, or the system temp folder without a `node_modules`), and reads it all again                                                                                                 |
 | `-h`, `--help`        | Prints the help                                                                                                                                                                                                                                                          |
 | `-v`, `--version`     | Prints the version                                                                                                                                                                                                                                                       |
+
+Run from a folder with no config, `components.json`, `package.json` or `project.json` (such as `app/settings`), `check`, `inspect`, `export` and `init` take the nearest folder above it with one as the root, as the Claude Code hook does, and `check` says so: `Checking the project in ../..`. They keep the working directory when given `--root`, `--config`, `--components`, `--tokens` or `--docs`, in a folder with a baseline, and in the home folder; the home folder and the filesystem root are never taken. A folder with a `components/ui` or `src/components/ui` folder of its own is kept too, as a design system without a `package.json`, unless it is the project's `src` or `app` folder, or the project has a `components.json` or a config, which say where its components are. `--root .` keeps the working directory.
 
 ## `serve`
 
@@ -49,12 +53,12 @@ It exits with:
 
 - `0` when there are no errors, and no more warnings than `--max-warnings`.
 - `1` when there are errors, or more warnings than `--max-warnings`.
-- `2` when it could not check: an unknown option, no paths given, an unknown `--format`, a `--max-warnings` that is not an integer, a broken config, paths that match no file, a file it could not read, a `--baseline` file that does not exist (unless `--update-baseline` writes it), `--prune-baseline` with no baseline to prune, or, with `--require-design-system`, no design system or nothing to check.
+- `2` when it could not check: an unknown option, an option of another command (such as `--out`), no paths given, an unknown `--format`, a `--max-warnings` that is empty (an unset variable, `--max-warnings=`) or not a whole number, a broken config, paths that match no file, a file it could not read, a `--baseline` file that does not exist (unless `--update-baseline` writes it), `--prune-baseline` with no baseline to prune, or, with `--require-design-system`, no design system or nothing to check.
 
 | Option                          | What it does                                                                                                                                                                |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--format <format>`             | `pretty` (the default), `json`, `github` (annotations on the pull request) or `sarif` ([code scanning](ci.md#code-scanning-and-other-sarif-tools))                          |
-| `--max-warnings <n>`            | Exits 1 when there are more than `n` warnings                                                                                                                               |
+| `--max-warnings <n>`            | Exits 1 when there are more than `n` warnings. `--max-warnings=-1` is no limit, as in ESLint (with `=`: a `-1` on its own reads as an option)                               |
 | `--update-baseline`             | Records the current findings as accepted in the baseline, and exits 0 ([adopting it in an existing codebase](ci.md#adopting-it-in-an-existing-codebase))                    |
 | `--prune-baseline`              | Drops the baseline entries that no longer occur, and accepts nothing new                                                                                                    |
 | `--baseline <file>`             | The baseline file. By default `onsystem.baseline.json` in the root, used whenever it exists                                                                                 |
