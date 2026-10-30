@@ -1,6 +1,6 @@
 # Contributing
 
-Bug reports with a minimal snippet and the `inspect` output are the most useful contribution: most fixes start from one. For a change in behaviour, open an issue first so we can agree on it before you write it.
+Bug reports with a minimal snippet and the `inspect` output are the most useful contribution: most fixes start from one. For a change in behaviour, open an issue first so we can agree on it before you write it. Issues that make a good first change are labelled [good first issue](https://github.com/dgesteves/onsystem/labels/good%20first%20issue).
 
 ## New integrations
 
@@ -17,6 +17,8 @@ corepack enable
 pnpm install
 ```
 
+Without Corepack, install pnpm 11 with npm (`npm install -g pnpm@11`), then run `pnpm install`. Until the first `pnpm build`, `pnpm install` warns that it failed to create a bin at `site/node_modules/.bin/onsystem`: the website depends on this package, whose `dist/cli.js` the build writes. The warning is harmless.
+
 ## Checks
 
 CI runs these on every pull request, in this order:
@@ -25,13 +27,16 @@ CI runs these on every pull request, in this order:
 pnpm lint            # ESLint
 pnpm format:check    # Prettier (pnpm format writes)
 pnpm typecheck       # tsc --noEmit
+pnpm --filter "./examples/*" typecheck   # the examples, against this package's types
 pnpm build           # tsdown, then schema.json from the config schema
 pnpm smoke           # the built server over stdio, every tool, against examples/shadcn-demo
-pnpm test            # Vitest, on Node 22 and 24 (Linux), and on Windows and macOS
+pnpm test            # Vitest, on Node 22, 24 and 26 (Linux), and on Windows and macOS
 pnpm pack-test       # npm pack, install into a new project, run it (Linux, Windows, macOS)
 ```
 
 A pull request that touches `src/` also runs the [real-world corpus](#real-world-corpus), which is not a required check yet.
+
+The Website job builds the site, which renders `docs/*.md` and data generated from the built library: after `pnpm build`, it runs `pnpm --filter site generate`, then the site's `test`, `typecheck`, `lint` and `build`. Run them when you change the docs or `site/`. To see a docs page as the website shows it, run `pnpm build`, then `pnpm --filter site dev`, which serves the site on http://localhost:3300.
 
 `pnpm smoke` spawns `dist/cli.js` the way an MCP client does, so it catches what unit tests cannot: a broken build, a tool that fails over stdio, output that no longer parses. It connects twice, on the 2025 protocol and on 2026-07-28. Run it after `pnpm build`; add `--verbose` to see every response. CI also runs `check` on the demo's clean page (it must pass) and the Claude Code hook on its draft (it must block).
 
