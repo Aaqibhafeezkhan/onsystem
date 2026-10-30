@@ -50,7 +50,8 @@ export function formatDiagnostics(
       const file = options.uri ? options.uri(result.file) : result.file;
       return result.diagnostics.map((d) => {
         const level = d.severity === 'error' ? 'error' : 'warning';
-        const props = `file=${escapeProperty(file)},line=${d.line},col=${d.column},endLine=${d.endLine},endColumn=${d.endColumn},title=${escapeProperty(d.ruleId)}`;
+        // Titled as the GitHub Action titles them (action/check.mjs), so both read the same.
+        const props = `file=${escapeProperty(file)},line=${d.line},col=${d.column},endLine=${d.endLine},endColumn=${d.endColumn},title=${escapeProperty(`onsystem: ${d.ruleId}`)}`;
         return `::${level} ${props}::${escapeData(d.message)}`;
       });
     });
