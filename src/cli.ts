@@ -48,7 +48,13 @@ import { stderrLogger, silentLogger } from './util/log.js';
 import { isInside, relativePath, SCRIPT_FILE, toPosix } from './util/paths.js';
 import { plural, unique } from './util/strings.js';
 import { NAME, VERSION } from './version.js';
-import { hasProjectMarker, loadTarget, type Project, type Workspace } from './workspace.js';
+import {
+  hasProjectMarker,
+  loadTarget,
+  samePath,
+  type Project,
+  type Workspace,
+} from './workspace.js';
 import { detectProject, type DetectionStep } from './detect.js';
 
 const DOCS = 'https://onsystem.vercel.app/docs';
@@ -92,8 +98,8 @@ Options
                           inspect: pretty | json (default: pretty);
                           export: dtcg | design-md
   --out <file>            export: write to this file instead of stdout
-  --max-warnings <n>      check: exit 1 when there are more than n warnings (-1:
-                          no limit)
+  --max-warnings <n>      check: exit 1 when there are more than n warnings
+                          (--max-warnings=-1: no limit)
   --update-baseline       check: record the current findings as accepted, and exit 0
   --prune-baseline        check: drop baseline entries that no longer occur, and
                           accept nothing new
@@ -224,14 +230,23 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     return 0;
   }
   // An option of another command would be ignored: `check . --out report.json` wrote no file.
+  // The server only says so: a stale flag in an MCP client's args (`["onsystem", "-y"]`) must not
+  // leave the client with a server that does not start.
+  const ignored = new Set<string>();
   for (const token of tokens) {
     if (token.kind !== 'option') continue;
     const commands = COMMAND_OPTIONS[token.name];
-    if (commands && isCommand(command) && !commands.includes(command)) {
+    if (!commands || !isCommand(command) || commands.includes(command)) continue;
+    const owners = listOf(commands, commands.length);
+    if (command !== 'serve') {
       io.stderr(
-        `${command}: ${token.rawName} is an option of ${listOf(commands, commands.length)} only. Run ${NAME} --help for usage.`,
+        `${command}: ${token.rawName} is an option of ${owners} only. Run ${NAME} --help for usage.`,
       );
       return 2;
+    }
+    if (!ignored.has(token.rawName)) {
+      ignored.add(token.rawName);
+      io.stderr(`serve: ${token.rawName} is an option of ${owners} only, so it is ignored.`);
     }
   }
   // `--root ${workspaceFolder}` from a client that does not expand variables
@@ -247,8 +262,9 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
   // and passed every file: the commands work on the project around it, as the Claude Code hook
   // does. The server finds its project from the client's roots.
   const given = [values.config, values.components, values.tokens, values.docs];
+  let walkedUp: string | undefined;
   if (root === undefined && command !== 'serve' && given.every((v) => v === undefined)) {
-    root = enclosingProject(io.cwd);
+    root = walkedUp = enclosingProject(io.cwd);
   }
   const configOptions = {
     cwd: io.cwd,
@@ -279,7 +295,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
         });
         return 0;
       case 'check':
-        return await check(rest, configOptions, values, io);
+        return await check(rest, configOptions, values, io, walkedUp);
       case 'inspect':
         return await inspect(configOptions, values, io);
       case 'export':
@@ -311,9 +327,10 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
       return 2;
     }
     // Ctrl+D or Ctrl+C at one of init's questions, rather than a stack trace. 130, as a shell
-    // reports a command the user interrupted.
-    if ((error as Error).name === 'AbortError') {
-      io.stderr(`${command}: cancelled; nothing after that question was done.`);
+    // reports a command the user interrupted. On a line of its own: the cursor is still on the
+    // question's line.
+    if (command === 'init' && (error as Error).name === 'AbortError') {
+      io.stderr('\ninit: cancelled; nothing after that question was done.');
       return 130;
     }
     // Exit 1 means findings. A run that failed (a file it cannot read, a bug) exits 2, as a
@@ -356,19 +373,22 @@ const COMMAND_OPTIONS: Partial<Record<string, readonly Command[]>> = {
 /**
  * The project around `cwd` when `cwd` is none: the nearest folder above it with a config, a
  * components.json, a package.json or a project.json, relative to `cwd` (`../..`), as a command
- * that names it with `--root` would. Undefined when `cwd` has one of those, or a baseline (a run
- * from there recorded it), or when no folder below the home folder has one.
+ * that names it with `--root` would. Undefined when `cwd` has one of those, a baseline (a run
+ * from there recorded it) or a folder zero config reads components from (a design system with
+ * no package.json), when `cwd` is the home folder, or when no folder up to the home folder or
+ * the filesystem root, neither of which counts, has one.
  */
 function enclosingProject(cwd: string): string | undefined {
-  const baselines = [BASELINE_FILE, LEGACY_BASELINE_FILE];
-  if (hasProjectMarker(cwd) || baselines.some((name) => fs.existsSync(path.join(cwd, name)))) {
+  const own = [BASELINE_FILE, LEGACY_BASELINE_FILE, 'components/ui', 'src/components/ui'];
+  if (hasProjectMarker(cwd) || own.some((name) => fs.existsSync(path.join(cwd, name)))) {
     return undefined;
   }
-  const home = path.resolve(os.homedir());
-  let dir = path.dirname(cwd);
-  while (dir !== path.dirname(dir) && dir !== home) {
+  // A stray ~/package.json is not the project, as for findProjectRoot.
+  const home = os.homedir();
+  if (samePath(cwd, home)) return undefined;
+  for (let dir = path.dirname(cwd); dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    if (samePath(dir, home)) return undefined;
     if (hasProjectMarker(dir)) return path.relative(cwd, dir);
-    dir = path.dirname(dir);
   }
   return undefined;
 }
@@ -418,11 +438,16 @@ interface NoMatch {
   jsxGlobs: string[];
 }
 
+/**
+ * `walkedUp`: the root, relative to the working directory, when the run took the project around
+ * the working directory as its root (`enclosingProject`).
+ */
 async function check(
   patterns: string[],
   configOptions: LoadConfigOptions,
   values: CheckValues,
   io: Io,
+  walkedUp?: string,
 ): Promise<number> {
   if (values['quiet-without-design-system'] && values['require-design-system']) {
     io.stderr('check: pass --quiet-without-design-system or --require-design-system, not both');
@@ -447,17 +472,27 @@ async function check(
   // no limit, as in ESLint (`--max-warnings=-1`).
   const given = values['max-warnings'];
   if (given !== undefined && !/^-?\d+$/.test(given)) {
-    io.stderr(`check: --max-warnings expects a whole number (-1 for no limit), not "${given}"`);
+    io.stderr(
+      `check: --max-warnings expects a whole number (--max-warnings=-1 for no limit), not "${given}"`,
+    );
     return 2;
   }
   const maxWarnings = given === undefined || Number(given) < 0 ? undefined : Number(given);
 
+  // Which project a run from inside one checks, once: on stderr when stdout is JSON, SARIF or
+  // workflow commands. Not for a hook, which prints nothing when there is nothing to say.
+  const where = walkedUp === undefined ? undefined : toPosix(walkedUp);
+  if (where !== undefined && !values['quiet-without-design-system']) {
+    const text = `Checking the project in ${where}`;
+    if (format === 'pretty') io.stdout(text);
+    else io.stderr(text);
+  }
   const target = await loadTarget(configOptions);
   warnDeprecated(target.config.deprecations, format, io);
   warnDeprecated(configWarnings(target), format, io);
   const selection = target.workspace
     ? await selectInWorkspace(target.workspace, patterns, values, format, io)
-    : await selectInProject(target.config, patterns, values, format, io);
+    : await selectInProject(target.config, patterns, values, format, io, where);
   if (typeof selection === 'number') return selection;
   // The hints repeat the options that decide the findings and the baseline, so the command they
   // suggest rewrites the same file from the same findings.
@@ -926,13 +961,17 @@ function jsxNotice(
     : `${files.length.toLocaleString('en-US')} .js files have JSX (${listOf(files)}), but folders are checked for .tsx and .jsx files, so they were not checked. Name them to check them: \`${check}\`.`;
 }
 
-/** One project: the root's config and design system for every file. */
+/**
+ * One project: the root's config and design system for every file. `where`: the root as the
+ * notices name it, when the run is not from there.
+ */
 async function selectInProject(
   config: ResolvedConfig,
   patterns: string[],
   values: CheckValues,
   format: OutputFormat,
   io: Io,
+  where?: string,
 ): Promise<Selection | NoMatch | number> {
   const ds = await loadDesignSystem(config, { cache: values.cache, logger: silentLogger });
   // Folders and globs leave out what the config excludes (tests and stories by default) and
@@ -988,7 +1027,7 @@ async function selectInProject(
   // A run that found no components or no color tokens passes without having
   // checked them: say so, and fail in CI when asked to, unless the components come from a
   // published library (MUI), whose colors may be in Sass: then it only says so.
-  const notice = ds.notice();
+  const notice = ds.notice(where);
   if (notice && values['require-design-system'] && !ds.hasDesignSystem()) {
     io.stderr(`check --require-design-system: ${notice}`);
     for (const text of notReadNotices([{ ds }])) io.stderr(text);
@@ -1049,6 +1088,9 @@ async function selectInWorkspace(
     if (!found) throw new Error(`No project for ${file}`);
     return found;
   };
+  // A project's folder as the notices name it: relative to the working directory, as the files
+  // are, so a run from a folder below the root does not call the root `.`.
+  const shown = (p: Project) => relativePath(io.cwd, p.root) || '.';
   const designSystems = new Map<string, Promise<DesignSystem>>();
   const load = (p: Project) => {
     let ds = designSystems.get(p.root);
@@ -1144,7 +1186,7 @@ async function selectInWorkspace(
       const lacking = new Map<string, string[]>();
       for (const p of workspace.projects) {
         const gap = missingFrom(await load(p));
-        if (gap) lacking.set(gap.what, [...(lacking.get(gap.what) ?? []), p.dir]);
+        if (gap) lacking.set(gap.what, [...(lacking.get(gap.what) ?? []), shown(p)]);
       }
       const why = [...lacking].map(([what, dirs]) => `; ${what} in ${listOf(dirs)}`).join('');
       io.stderr(
@@ -1168,13 +1210,13 @@ async function selectInWorkspace(
     const notice = ds?.notice();
     if (!ds || !notice) continue;
     const gap = gaps.get(notice) ?? { ds, dirs: [] };
-    gap.dirs.push(p.dir);
+    gap.dirs.push(shown(p));
     gaps.set(notice, gap);
   }
   const notices = [...gaps.values()].map(({ ds, dirs }) => ds.notice(listOf(dirs)) ?? '');
   const checkedProjects = unique(files.map(project)).flatMap((p) => {
     const ds = loaded.get(p.root);
-    return ds ? [{ ds, dir: p.dir }] : [];
+    return ds ? [{ ds, dir: shown(p) }] : [];
   });
   notices.push(...notReadNotices(checkedProjects));
   const used = unique(files.map((file) => project(file).root)).length;

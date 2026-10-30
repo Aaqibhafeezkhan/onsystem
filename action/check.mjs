@@ -223,6 +223,33 @@ export function trusted(env, cwd) {
 }
 
 /**
+ * Git `-c key=value` options, such as `trusted()` gives, as the environment variables git reads
+ * the same settings from (GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>), after the
+ * entries `env` already has. The CLI the action runs gets them: in a container job its
+ * `git check-ignore` failed without the safe.directory entries, so git-ignored files were checked.
+ *
+ * @param {string[]} options `-c key=value` pairs
+ * @param {Io['env']} env
+ * @returns {Record<string, string>}
+ */
+export function configEnv(options, env) {
+  if (!options.length) return {};
+  /** @type {Record<string, string>} */
+  const vars = {};
+  const given = env.GIT_CONFIG_COUNT ?? '';
+  let n = /^\d+$/.test(given) ? Number(given) : 0;
+  for (let i = 1; i < options.length; i += 2) {
+    const setting = options[i] ?? '';
+    const at = setting.indexOf('=');
+    vars[`GIT_CONFIG_KEY_${n}`] = setting.slice(0, at);
+    vars[`GIT_CONFIG_VALUE_${n}`] = setting.slice(at + 1);
+    n++;
+  }
+  vars.GIT_CONFIG_COUNT = String(n);
+  return vars;
+}
+
+/**
  * The lines changed between the base and the files on disk, from where the base and the checked-out
  * commit last met. actions/checkout fetches one commit by default: what the comparison needs is
  * fetched here, a little history at a time.
@@ -444,6 +471,7 @@ export function run(io) {
     fs.writeFileSync(linesFile, JSON.stringify(changedLinesByPath(changed, top)));
   }
   const all = [...prefix, ...args];
+  const childEnv = { ...process.env, ...env };
   let checked;
   try {
     checked = spawnSync(command, shell ? all.map(shellQuote) : all, {
@@ -451,7 +479,7 @@ export function run(io) {
       encoding: 'utf8',
       shell,
       maxBuffer: 1024 * 1024 * 1024,
-      env: { ...process.env, ...env, ONSYSTEM_CHANGED_LINES: linesFile },
+      env: { ...childEnv, ...configEnv(trust, childEnv), ONSYSTEM_CHANGED_LINES: linesFile },
     });
   } finally {
     if (linesDir) fs.rmSync(linesDir, { recursive: true, force: true });

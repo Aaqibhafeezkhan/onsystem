@@ -8,7 +8,7 @@ import { parse } from 'yaml';
 
 import { main, type Io } from '../src/cli.js';
 import { CONFIG_FILES } from '../src/config.js';
-import { DEMO_ROOT } from './helpers.js';
+import { DEMO_ROOT, fixture } from './helpers.js';
 import { section } from './markdown.js';
 
 // docs/cli.md is the CLI reference, and the options it lists are the ones `--help` prints and the
@@ -210,26 +210,37 @@ describe('the CLI reference (docs/cli.md)', () => {
   });
 
   it('rejects each option under the commands --help does not give it to', async () => {
-    // `check . --out report.json` wrote no file and exited as if it had.
+    // `check . --out report.json` wrote no file and exited as if it had. `serve` says it ignores
+    // the option and starts, as an MCP client that passes a stale one needs it to.
     let tried = 0;
+    // No project here: the server that starts reads nothing until a client asks.
+    const empty = fixture({});
     for (const option of options) {
       if (!option.commands.length) continue;
+      const owners = option.commands.join(', ').replace(/, (\w+)$/, ' and $1');
       for (const command of COMMANDS.filter((c) => !option.commands.includes(c))) {
         for (const flag of option.flags) {
           const err: string[] = [];
           const io: Io = {
-            cwd: DEMO_ROOT,
+            cwd: command === 'serve' ? empty : DEMO_ROOT,
             color: false,
             stdout: () => {},
             stderr: (t) => err.push(t),
-            // `serve` that took the option would start here, and not on stdin.
+            // `serve` starts here, and not on stdin.
             transport: InMemoryTransport.createLinkedPair()[1],
           };
           const args = [command, flag, ...(option.arg ? ['x'] : [])];
-          expect(await main(args, io), args.join(' ')).toBe(2);
-          expect(err.join('\n'), args.join(' ')).toBe(
-            `${command}: ${flag} is an option of ${option.commands.join(', ').replace(/, (\w+)$/, ' and $1')} only. Run onsystem --help for usage.`,
-          );
+          if (command === 'serve') {
+            expect(await main(args, io), args.join(' ')).toBe(0);
+            expect(err.join('\n'), args.join(' ')).toBe(
+              `serve: ${flag} is an option of ${owners} only, so it is ignored.`,
+            );
+          } else {
+            expect(await main(args, io), args.join(' ')).toBe(2);
+            expect(err.join('\n'), args.join(' ')).toBe(
+              `${command}: ${flag} is an option of ${owners} only. Run onsystem --help for usage.`,
+            );
+          }
           tried++;
         }
       }
