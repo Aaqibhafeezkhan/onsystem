@@ -246,6 +246,32 @@ describe('packages for other agents', () => {
     ]);
     const plugin = readJson('plugins/onsystem-cursor/.cursor-plugin/plugin.json');
     expect(plugin).toMatchObject({ name: 'onsystem', version, logo: 'icon.svg' });
+    // The properties of Cursor's manifest schema (github.com/cursor/plugins,
+    // schemas/plugin.schema.json), and no other: the schema sets additionalProperties to false.
+    const fields = [
+      'name',
+      'displayName',
+      'description',
+      'version',
+      'minClientVersions',
+      'author',
+      'publisher',
+      'homepage',
+      'repository',
+      'license',
+      'logo',
+      'keywords',
+      'category',
+      'tags',
+      'commands',
+      'agents',
+      'skills',
+      'rules',
+      'hooks',
+      'variables',
+      'mcpServers',
+    ];
+    expect(Object.keys(plugin).filter((key) => !fields.includes(key))).toEqual([]);
     expect(plugin.name).toMatch(/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/);
     expect(fs.existsSync(path.join(CURSOR, 'icon.svg'))).toBe(true);
     const skill = frontMatter(path.join(CURSOR, SKILL));
