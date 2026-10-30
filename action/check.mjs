@@ -496,7 +496,15 @@ export function run(io) {
   }
   if (!Array.isArray(results)) {
     if (checked.stdout) io.stdout(checked.stdout.trimEnd());
-    const why = checked.error?.message ?? checked.stderr?.trim().split('\n')[0] ?? '';
+    // Why it could not check, not which project it checked: run from a folder with no project
+    // marker, the CLI says that first.
+    const why =
+      checked.error?.message ??
+      checked.stderr
+        ?.trim()
+        .split('\n')
+        .find((line) => !line.startsWith('Checking the project in ')) ??
+      '';
     io.stdout(
       `::error title=onsystem::onsystem check exited with ${checked.status ?? checked.signal}${why ? `: ${data(why)}` : ''}`,
     );

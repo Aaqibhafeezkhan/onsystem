@@ -20,7 +20,7 @@ It needs Node.js 20.19 or later. The options are the ones `onsystem --help` prin
 
 At a monorepo root with no design system of its own, every command works per project: each file is checked against the design system of the nearest folder with a config, a `components.json` or a `package.json`, and `inspect` lists every project ([monorepo roots](configuration.md#monorepo-roots)).
 
-An option listed under one command exits 2 when another command is given it: `check . --out report.json` would write no file. `serve` only says on stderr that it ignores it, and starts, so a stale argument in an agent's MCP config does not leave the agent without the server.
+A command given another command's option exits 2: `check . --out report.json` would write no file. `serve` only says on stderr that it ignores the option, and starts, so a stale argument in an agent's MCP config does not leave the agent without the server.
 
 ## Options for every command
 
@@ -35,7 +35,7 @@ An option listed under one command exits 2 when another command is given it: `ch
 | `-h`, `--help`        | Prints the help                                                                                                                                                                                                                                                          |
 | `-v`, `--version`     | Prints the version                                                                                                                                                                                                                                                       |
 
-Run from a folder with no config, `components.json`, `package.json` or `project.json` (such as `app/settings`), `check`, `inspect`, `export` and `init` take the nearest folder above it with one as the root, as the Claude Code hook does, and `check` says so: `Checking the project in ../..`. They keep the working directory when given `--root`, `--config`, `--components`, `--tokens` or `--docs`, in a folder with a baseline or a `components/ui` or `src/components/ui` folder, and in the home folder; the home folder and the filesystem root are never taken. `--root .` keeps the working directory.
+Run from a folder with no config, `components.json`, `package.json` or `project.json` (such as `app/settings`), `check`, `inspect`, `export` and `init` take the nearest folder above it with one as the root, as the Claude Code hook does, and `check` says so: `Checking the project in ../..`. They keep the working directory when given `--root`, `--config`, `--components`, `--tokens` or `--docs`, in a folder with a baseline, and in the home folder; the home folder and the filesystem root are never taken. A folder with a `components/ui` or `src/components/ui` folder of its own is kept too, as a design system without a `package.json`, unless it is the project's `src` or `app` folder, or the project has a `components.json` or a config, which say where its components are. `--root .` keeps the working directory.
 
 ## `serve`
 

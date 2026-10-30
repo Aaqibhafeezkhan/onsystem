@@ -33,6 +33,41 @@ async function run(args: string[], cwd = DEMO_ROOT, prompt?: Io['prompt']) {
   return { code, stdout: out.join('\n'), stderr: err.join('\n') };
 }
 
+/**
+ * The demo's files with its design system under `dir` (`src/components/ui`), its stylesheet at
+ * `css` and its settings pages in `pages`, named through `alias` (`@/components/ui`) by
+ * components.json and tsconfig.json, as a Next.js project with a src folder, or a React Router
+ * one with app, has them.
+ */
+function demoUnder(layout: {
+  dir: string;
+  alias: string;
+  css: string;
+  pages: string;
+}): Record<string, string> {
+  const { dir, alias, css, pages } = layout;
+  const read = (file: string) =>
+    fs.readFileSync(path.join(DEMO_ROOT, file), 'utf8').replaceAll('"@/', `"${alias}/`);
+  const files: Record<string, string> = {
+    'package.json': read('package.json'),
+    'components.json': read('components.json').replace('"app/globals.css"', `"${css}"`),
+    'tsconfig.json': JSON.stringify({
+      compilerOptions: {
+        jsx: 'react-jsx',
+        strict: true,
+        paths: { [`${alias}/*`]: [`./${dir}/*`] },
+      },
+    }),
+    [css]: read('app/globals.css'),
+    [`${dir}/lib/utils.ts`]: read('lib/utils.ts'),
+    [`${pages}/danger-zone.tsx`]: read('app/settings/danger-zone.tsx'),
+  };
+  for (const name of fs.readdirSync(path.join(DEMO_ROOT, 'components/ui'))) {
+    files[`${dir}/components/ui/${name}`] = read(`components/ui/${name}`);
+  }
+  return files;
+}
+
 const WARN_ONLY = [
   '--config',
   path.join(import.meta.dirname, 'fixtures/warn-only.config.json'),
@@ -232,6 +267,42 @@ describe('a run from a folder inside a project', () => {
       const cwd = path.join(outer, dir);
       const { stdout } = await run(['inspect', '--no-cache'], cwd);
       expect(stdout.split('\n')[0], dir).toBe(`root     ${cwd}`);
+    }
+  });
+
+  it("goes up from the project's src or app folder, which holds the components it reads", async () => {
+    // From src in a src layout, or from app in a React Router one, the folder's components/ui
+    // kept it as the root, where components.json and the tsconfig paths were not read: findings
+    // were lost (4 errors rather than 8 from src, 1 from app, with no color tokens).
+    const layouts = [
+      { dir: 'src', alias: '@', css: 'src/app/globals.css', pages: 'src/app/settings' },
+      { dir: 'app', alias: '~', css: 'app/app.css', pages: 'app/settings' },
+    ];
+    for (const layout of layouts) {
+      const { dir, pages } = layout;
+      const root = fixture(demoUnder(layout), { nodeModules: true });
+      const page = `${pages}/danger-zone.tsx`;
+      const diagnostics = async (cwd: string) => {
+        const file = path.relative(cwd, path.join(root, page)).split(path.sep).join('/');
+        const { stdout, stderr } = await run(
+          ['check', file, '--format', 'json', '--no-cache'],
+          cwd,
+        );
+        const results = JSON.parse(stdout) as { diagnostics: { ruleId: string }[] }[];
+        return { stderr, found: results.flatMap((r) => r.diagnostics) };
+      };
+      const fromRoot = await diagnostics(root);
+      expect(
+        fromRoot.found.map((d) => d.ruleId),
+        dir,
+      ).toEqual(
+        expect.arrayContaining(['no-unknown-component', 'no-unknown-prop', 'no-hardcoded-color']),
+      );
+      const fromDir = await diagnostics(path.join(root, dir));
+      expect(fromDir.stderr, dir).toBe('Checking the project in ..');
+      expect(fromDir.found, dir).toEqual(fromRoot.found);
+      const fromSettings = await diagnostics(path.join(root, pages));
+      expect(fromSettings.found, dir).toEqual(fromRoot.found);
     }
   });
 

@@ -29,6 +29,7 @@ import {
 import {
   ConfigError,
   excludedBy,
+  hasOwnConfig,
   RULE_IDS,
   rulesFor,
   type LoadConfigOptions,
@@ -373,24 +374,32 @@ const COMMAND_OPTIONS: Partial<Record<string, readonly Command[]>> = {
 /**
  * The project around `cwd` when `cwd` is none: the nearest folder above it with a config, a
  * components.json, a package.json or a project.json, relative to `cwd` (`../..`), as a command
- * that names it with `--root` would. Undefined when `cwd` has one of those, a baseline (a run
- * from there recorded it) or a folder zero config reads components from (a design system with
- * no package.json), when `cwd` is the home folder, or when no folder up to the home folder or
- * the filesystem root, neither of which counts, has one.
+ * that names it with `--root` would. Undefined when `cwd` has one of those or a baseline (a run
+ * from there recorded it), when `cwd` is the home folder, or when no folder up to the home folder
+ * or the filesystem root, neither of which counts, has one. Undefined, too, when `cwd` has a
+ * folder zero config reads components from (a design system with no package.json) and the
+ * project above would not read it: `cwd` is not the project's `src` or `app` folder, which hold
+ * its own code, and the project has no components.json or config to say where its components are.
  */
 function enclosingProject(cwd: string): string | undefined {
-  const own = [BASELINE_FILE, LEGACY_BASELINE_FILE, 'components/ui', 'src/components/ui'];
-  if (hasProjectMarker(cwd) || own.some((name) => fs.existsSync(path.join(cwd, name)))) {
+  const has = (dir: string, name: string) => fs.existsSync(path.join(dir, name));
+  if (hasProjectMarker(cwd) || [BASELINE_FILE, LEGACY_BASELINE_FILE].some((f) => has(cwd, f))) {
     return undefined;
   }
   // A stray ~/package.json is not the project, as for findProjectRoot.
   const home = os.homedir();
+  const never = (dir: string) => samePath(dir, home) || dir === path.dirname(dir);
   if (samePath(cwd, home)) return undefined;
-  for (let dir = path.dirname(cwd); dir !== path.dirname(dir); dir = path.dirname(dir)) {
-    if (samePath(dir, home)) return undefined;
-    if (hasProjectMarker(dir)) return path.relative(cwd, dir);
-  }
-  return undefined;
+  let above = path.dirname(cwd);
+  while (!never(above) && !hasProjectMarker(above)) above = path.dirname(above);
+  if (never(above)) return undefined;
+  const ownComponents = ['components/ui', 'src/components/ui'].some((f) => has(cwd, f));
+  const readAbove =
+    ['src', 'app'].some((name) => samePath(cwd, path.join(above, name))) ||
+    has(above, 'components.json') ||
+    hasOwnConfig(above);
+  if (ownComponents && !readAbove) return undefined;
+  return path.relative(cwd, above);
 }
 
 interface CheckValues {

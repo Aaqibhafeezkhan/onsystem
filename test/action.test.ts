@@ -19,6 +19,11 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 if (process.env.STUB_ARGS) fs.writeFileSync(process.env.STUB_ARGS, JSON.stringify(args));
 if (process.env.STUB_FAIL) {
+  // Run from a folder with no package.json, the CLI first says which project above it it checks.
+  let up = process.cwd();
+  while (!fs.existsSync(path.join(up, 'package.json')) && path.dirname(up) !== up) up = path.dirname(up);
+  if (up !== process.cwd() && fs.existsSync(path.join(up, 'package.json')))
+    console.error('Checking the project in ' + path.relative(process.cwd(), up).split(path.sep).join('/'));
   console.error('check --require-design-system: no components were found.');
   process.exit(2);
 }
@@ -512,6 +517,19 @@ describe('the GitHub Action', () => {
     const result = action(path.join(root, 'apps/web'), { payload: pr(base) }, { STUB_FAIL: '1' });
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('no components were found');
+    expect(result.stdout).toBe(
+      '::error title=onsystem::onsystem check exited with 2: check --require-design-system: no components were found.',
+    );
+  });
+
+  it('fails with why check could not run, not which project it checked', () => {
+    // From a working-directory with no project marker, the CLI checks the project above it and
+    // says so first: the annotation took that line for the reason.
+    const { root, base } = repository();
+    fs.writeFileSync(path.join(root, 'package.json'), '{ "name": "app" }');
+    const result = action(path.join(root, 'apps/web'), { payload: pr(base) }, { STUB_FAIL: '1' });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Checking the project in ../..');
     expect(result.stdout).toBe(
       '::error title=onsystem::onsystem check exited with 2: check --require-design-system: no components were found.',
     );
