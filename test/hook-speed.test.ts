@@ -282,7 +282,8 @@ describe('detection kept on disk', () => {
     // The stamp changes with any file of the build, not only with the module's own.
     const build = fixture({ 'detect.js': 'a', 'chunks/package-source.js': 'b' });
     const before = codeStampOf(build);
-    fs.writeFileSync(path.join(build, 'chunks/package-source.js'), 'c');
+    // At another size: within one tick of the file system's clock, the mtime can stay the same.
+    fs.writeFileSync(path.join(build, 'chunks/package-source.js'), 'export {};');
     expect(codeStampOf(build)).not.toBe(before);
   });
 
