@@ -16,6 +16,15 @@ export function ownFolder(): string {
 }
 
 /**
+ * What the user can do when the {@link ownFolder} cannot be trusted: os.tmpdir() reads TMPDIR on
+ * Linux and macOS and TEMP on Windows, where the folder must also be inside the home folder.
+ */
+export function ownFolderAdvice(): string {
+  const windows = process.platform === 'win32' || !process.getuid;
+  return `set TMPDIR (TEMP on Windows) to a folder of your own${windows ? ' inside your home folder' : ''}`;
+}
+
+/**
  * Why `dir` (the {@link ownFolder}) cannot be trusted, or undefined when it can. What is kept in
  * it decides what code runs and what is read as the design system, and the system temp folder
  * can be shared. With `create`, it is created first, for the user alone.
@@ -30,7 +39,11 @@ export function ownFolder(): string {
  */
 export function untrustedFolder(dir: string, create = false): string | undefined {
   try {
-    if (create) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // mkdir applies the umask, which may leave the user without access to it: the folder it
+    // made is set to theirs alone.
+    if (create && fs.mkdirSync(dir, { recursive: true, mode: 0o700 }) !== undefined) {
+      fs.chmodSync(dir, 0o700);
+    }
     const stat = fs.lstatSync(dir);
     if (!stat.isDirectory()) return `${dir} is not a folder`;
     if (process.platform === 'win32' || !process.getuid) {

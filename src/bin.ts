@@ -15,11 +15,12 @@ const own = !untrustedFolder(folder, true);
 // Node.js keeps the code it compiled for the CLI and TypeScript, so a run after the first starts
 // sooner: the Claude Code hook starts one per edit. The cache is turned on before the CLI loads,
 // which is why the CLI is imported below rather than at the top. Node.js 22.1 and later; skipped
-// on Node.js 20, and when NODE_DISABLE_COMPILE_CACHE is set.
-if (own) {
-  (module as Partial<Pick<typeof module, 'enableCompileCache'>>).enableCompileCache?.(
-    path.join(folder, 'compile-cache'),
-  );
+// on Node.js 20, and when NODE_DISABLE_COMPILE_CACHE is set. Its folder is created here for the
+// user alone, since Node.js would create it with the umask, and held to the same rule.
+const compileCache = path.join(folder, 'compile-cache');
+const node = module as Partial<Pick<typeof module, 'enableCompileCache'>>;
+if (own && node.enableCompileCache && !untrustedFolder(compileCache, true)) {
+  node.enableCompileCache(compileCache);
 }
 
 // The Claude Code hook names a file when npx starts the CLI: the CLI writes its own path in it,

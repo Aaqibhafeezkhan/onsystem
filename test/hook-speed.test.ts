@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { main, type Io } from '../src/cli.js';
 import { loadConfig } from '../src/config.js';
 import { codeStampOf, detectProject, type DetectionStep } from '../src/detect.js';
-import { untrustedFolder } from '../src/util/own-folder.js';
+import { ownFolderAdvice, untrustedFolder } from '../src/util/own-folder.js';
 import { fixture } from './helpers.js';
 
 // Each edit an agent makes runs `check` through the Claude Code hook in a new process. Three
@@ -360,6 +360,16 @@ describe("the user's own temp folder on Windows", () => {
     fs.symlinkSync(dir, link);
     expect(untrustedFolder(link)).toBe(`${link} is not a folder`);
   });
+
+  it('says to set TEMP, inside the home folder, when the folder cannot be used', () => {
+    // The end of the cache's warning. os.tmpdir() reads TEMP there, not TMPDIR.
+    expect(ownFolderAdvice()).toBe(
+      'set TMPDIR (TEMP on Windows) to a folder of your own inside your home folder',
+    );
+    if (platform) Object.defineProperty(process, 'platform', platform);
+    if (posix)
+      expect(ownFolderAdvice()).toBe('set TMPDIR (TEMP on Windows) to a folder of your own');
+  });
 });
 
 /** A module of src/ as JavaScript. */
@@ -455,7 +465,7 @@ describe('check-ui hook: the CLI npx started', () => {
       STUB_LOG: cliLog,
     };
     /** An edit to `app/page.tsx` in `dir`, by the hook run with `node` options and `more` env. */
-    const edit = (dir = project, node: string[] = [], more: Record<string, string> = {}) =>
+    const hook = (dir = project, node: string[] = [], more: Record<string, string> = {}) =>
       spawnSync(process.execPath, [...node, HOOK], {
         input: JSON.stringify({
           hook_event_name: 'PostToolUse',
@@ -466,7 +476,9 @@ describe('check-ui hook: the CLI npx started', () => {
         }),
         encoding: 'utf8',
         env: { ...environment, ...more },
-      }).status;
+      });
+    /** The hook's exit code for such an edit. */
+    const edit = (...args: Parameters<typeof hook>) => hook(...args).status;
     const lines = (file: string) =>
       fs
         .readFileSync(file, 'utf8')
@@ -478,7 +490,7 @@ describe('check-ui hook: the CLI npx started', () => {
       (
         lines(cliLog) as { script: string; compileCache: string | null; remember: string | null }[]
       ).map((run) => ({ ...run, script: fs.realpathSync(run.script) }));
-    return { cache, own, script, tmp, environment, edit, npxRuns, cliRuns };
+    return { cache, own, script, tmp, environment, hook, edit, npxRuns, cliRuns };
   }
 
   it('runs it with Node directly on later edits, while it is still this release', () => {
@@ -514,6 +526,60 @@ describe('check-ui hook: the CLI npx started', () => {
     fs.renameSync(script, `${script}.gone`);
     edit();
     expect(npxRuns()).toBe(4);
+  });
+
+  it('forgets it and runs npx in the same edit when it gives no results', () => {
+    const { cache, script, hook, edit, npxRuns, cliRuns } = setup();
+    expect(edit()).toBe(0);
+    const remember = cliRuns()[0]?.remember ?? '';
+    // Part of npm's copy removed: its package.json and bin are still there, and it crashes.
+    fs.rmSync(path.join(cache, 'node_modules/onsystem/dist/main.js'));
+    // npx installs it again, here in another folder of npm's cache.
+    const again = fixture(under('node_modules/onsystem', binPackage()));
+    const fresh = fs.realpathSync(path.join(again, 'node_modules/onsystem/dist/cli.js'));
+    const run = hook(undefined, [], { NPX_CACHE: again });
+    expect(run.status).toBe(0);
+    // Checked, with no notice.
+    expect(run.stdout).toBe('');
+    expect(npxRuns()).toBe(2);
+    expect(fs.readFileSync(remember, 'utf8')).toBe(fresh);
+    // The next edits run the new copy directly.
+    expect(edit()).toBe(0);
+    expect(npxRuns()).toBe(2);
+    expect(cliRuns().map((r) => [r.script, r.remember])).toEqual([
+      [script, remember],
+      [fresh, remember],
+      [fresh, null],
+    ]);
+  });
+
+  it('runs npx once per edit, and says why, when that fails too', () => {
+    const { cache, hook, npxRuns } = setup();
+    expect(hook().status).toBe(0);
+    fs.rmSync(path.join(cache, 'node_modules/onsystem/dist/main.js'));
+    for (const runs of [2, 3]) {
+      const run = hook();
+      expect(run.status).toBe(0);
+      expect(npxRuns()).toBe(runs);
+      expect((JSON.parse(run.stdout) as { systemMessage: string }).systemMessage).toContain(
+        'onsystem could not check app/page.tsx',
+      );
+    }
+  });
+
+  it('does not run npx after it, when it ran out of time', () => {
+    const { cache, hook, npxRuns, cliRuns } = setup();
+    expect(hook().status).toBe(0);
+    const remember = cliRuns()[0]?.remember ?? '';
+    fs.writeFileSync(
+      path.join(cache, 'node_modules/onsystem/dist/main.js'),
+      'export function main() {\n  return new Promise((done) => setTimeout(done, 30_000));\n}\n',
+    );
+    const run = hook(undefined, [], { ONSYSTEM_HOOK_TIMEOUT: '2000' });
+    expect(run.status).toBe(0);
+    expect(run.stderr).toContain('it did not finish within 2 seconds.');
+    expect(npxRuns()).toBe(1);
+    expect(fs.existsSync(remember)).toBe(true);
   });
 
   it('remembers it for the project npx ran in, not for others', () => {
@@ -599,6 +665,49 @@ describe('check-ui hook: the CLI npx started', () => {
     expect(path.dirname(run?.compileCache ?? '')).toBe(path.join(own, 'compile-cache'));
     if (posix) expect(fs.statSync(own).mode & 0o777).toBe(0o700);
   });
+
+  it.runIf(compileCache && posix)(
+    'creates the compile cache folder for the user alone, whatever the umask',
+    () => {
+      // Node.js creates the folder it is given with the umask: 0777 under umask 000.
+      const { own, script, environment, cliRuns } = setup();
+      const umask = ['--import', `data:text/javascript,${encodeURIComponent('process.umask(0);')}`];
+      const run = spawnSync(process.execPath, [...umask, script, 'check', 'x.tsx'], {
+        encoding: 'utf8',
+        env: environment,
+      });
+      expect(run.status).toBe(0);
+      expect(path.dirname(cliRuns()[0]?.compileCache ?? '')).toBe(path.join(own, 'compile-cache'));
+      expect(fs.statSync(own).mode & 0o777).toBe(0o700);
+      expect(fs.statSync(path.join(own, 'compile-cache')).mode & 0o777).toBe(0o700);
+    },
+  );
+
+  it.runIf(compileCache && posix)(
+    'skips a compile cache folder that is a link or that others can write to',
+    () => {
+      const { own, script, environment, cliRuns } = setup();
+      const run = () =>
+        spawnSync(process.execPath, [script, 'check', 'x.tsx'], {
+          encoding: 'utf8',
+          env: environment,
+        }).status;
+      const folder = path.join(own, 'compile-cache');
+      fs.mkdirSync(own, { mode: 0o700 });
+      fs.mkdirSync(folder);
+      fs.chmodSync(folder, 0o777);
+      expect(run()).toBe(0);
+      // Refused, not closed and used: a file put in it before would stay.
+      expect(fs.statSync(folder).mode & 0o777).toBe(0o777);
+      expect(fs.readdirSync(folder)).toEqual([]);
+      fs.rmSync(folder, { recursive: true });
+      const elsewhere = fixture({});
+      fs.symlinkSync(elsewhere, folder);
+      expect(run()).toBe(0);
+      expect(fs.readdirSync(elsewhere)).toEqual([]);
+      expect(cliRuns().map((r) => r.compileCache)).toEqual([null, null]);
+    },
+  );
 
   it.runIf(posix)('neither remembers nor caches in a temp folder other users can write to', () => {
     const { own, edit, npxRuns, cliRuns } = setup();

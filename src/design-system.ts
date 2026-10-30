@@ -58,7 +58,7 @@ import type {
   TokenCategory,
 } from './types.js';
 import { silentLogger, type Logger } from './util/log.js';
-import { ownFolder, untrustedFolder } from './util/own-folder.js';
+import { ownFolder, ownFolderAdvice, untrustedFolder } from './util/own-folder.js';
 import { globBase, isHomeOrAbove, isInside, matchesGlob, relativePath } from './util/paths.js';
 import { closest, plural, unique } from './util/strings.js';
 import { COLOR_UTILITY, parseUtility } from './lint/tailwind.js';
@@ -815,7 +815,7 @@ export async function buildModel(
       else await fsp.mkdir(folder, { recursive: true });
       if (untrusted) {
         logger.warn(
-          `not caching the model: ${untrusted}. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR to a folder of your own.`,
+          `not caching the model: ${untrusted}. Install the project's dependencies, so the cache goes in node_modules, or ${ownFolderAdvice()}.`,
         );
       } else {
         await writeWhole(cachePath, JSON.stringify({ key, dependencies, model }), temp);

@@ -95,7 +95,7 @@ describe('the cache outside node_modules', () => {
       expect(second.model.stats.fromCache).toBe(false);
       expect(description(second.model)).toBe('Runs an action.');
       expect(warnings).toEqual([
-        `not caching the model: other users can write to ${folder}. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR to a folder of your own.`,
+        `not caching the model: other users can write to ${folder}. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR (TEMP on Windows) to a folder of your own.`,
       ]);
       // Refused, not closed and trusted: a file put in it before would stay.
       expect(fs.statSync(folder).mode & 0o777).toBe(0o777);
@@ -125,7 +125,7 @@ describe('the cache outside node_modules', () => {
     expect(fs.lstatSync(folder).isSymbolicLink()).toBe(true);
     // In a shared temp folder the user may not be able to remove it: the warning says what to do.
     expect(warnings).toEqual([
-      `not caching the model: ${folder} is not a folder. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR to a folder of your own.`,
+      `not caching the model: ${folder} is not a folder. Install the project's dependencies, so the cache goes in node_modules, or set TMPDIR (TEMP on Windows) to a folder of your own.`,
     ]);
   });
 });
