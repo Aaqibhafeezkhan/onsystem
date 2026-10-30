@@ -37,9 +37,10 @@
 // it runs once more with --prefer-online, which asks the registry. A failure of
 // the CLI it started, such as a broken config, is not retried.
 // The CLI npx starts writes where it is (ONSYSTEM_REMEMBER_CLI), and later edits
-// run that CLI with Node directly, without starting npm first, while it is still
-// this release. Its path is kept in the user's own folder in the system temp
-// folder, which no one else can write to, since the hook runs what it names.
+// in the same project run that CLI with Node directly, without starting npm first,
+// while it is still this release. Its path is kept per project, in the user's own
+// folder in the system temp folder, and read only while that folder and the file
+// are the user's alone (ownFolder), since the hook runs what it names.
 // It reads the project's files and writes nothing but markers in the system temp
 // folder, for the one-time notice, the pause and the CLI's path; the only network
 // access is npm's, when npx needs the registry.
@@ -120,7 +121,7 @@ for (const target of targets) {
   // Where `check` runs: the project's folder, or the monorepo root whose config or baseline covers it.
   const root = (project && monorepoRoot(project)) ?? project ?? sessionDir;
   // The project's own install, which may be in the project's node_modules rather than the root's.
-  const cli = resolveCli(project ?? root);
+  const cli = resolveCli(project ?? root, root);
   const key = `${root}\0${cli.argv?.join('\0')}`;
   const job = jobs.get(key) ?? { root, cli, files: [] };
   jobs.set(key, job);
@@ -698,10 +699,10 @@ function readJson(file) {
 
 /**
  * How to start the CLI: `argv` ([node, script] or ['npx']) runs an override, the project's
- * install, the CLI npx started before, or npx (`npx: true`, without npm's flags and the package).
- * No `argv`: no npx found.
+ * install, the CLI npx started before from `root`, the folder it runs in, or npx (`npx: true`,
+ * without npm's flags and the package). No `argv`: no npx found.
  */
-function resolveCli(dir) {
+function resolveCli(dir, root) {
   if (BIN) return { argv: [process.execPath, BIN] };
   const installed = installedCli(dir);
   if (installed) return { argv: [process.execPath, installed] };
@@ -713,20 +714,21 @@ function resolveCli(dir) {
       path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npx-cli.js'),
       path.join(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js'),
     ].find((f) => fs.existsSync(f));
-  if (npx) return throughNpx([process.execPath, npx]);
-  return process.platform === 'win32' ? { argv: undefined, npx: true } : throughNpx(['npx']);
+  if (npx) return throughNpx([process.execPath, npx], root);
+  return process.platform === 'win32' ? { argv: undefined, npx: true } : throughNpx(['npx'], root);
 }
 
 /**
- * npx run as `argv`, or the CLI it started for this release before, while that is still there:
- * run with Node directly. `remember` is the file the CLI npx starts writes its path in, one per
- * release and npx, in the user's own folder in the system temp folder.
+ * npx run as `argv` from `root`, or the CLI it started there for this release before, while that
+ * is still there: run with Node directly. `remember` is the file the CLI npx starts writes its path
+ * in, one per release, npx and folder, in the user's own folder in the system temp folder: npx
+ * runs a project's own install of the release when it has one, which is for that project alone.
  */
-function throughNpx(argv) {
+function throughNpx(argv, root) {
   const folder = ownFolder();
   if (!folder) return { argv, npx: true };
   const key = createHash('sha256')
-    .update(`${VERSION}\0${argv.join('\0')}`)
+    .update(`${VERSION}\0${argv.join('\0')}\0${root}`)
     .digest('hex')
     .slice(0, 16);
   const remember = path.join(folder, `npx-cli-${key}`);
@@ -736,11 +738,15 @@ function throughNpx(argv) {
 
 /**
  * The CLI script whose path `file` holds, when it is still there and still this release's: the
- * `bin` of the onsystem package it is in, at VERSION.
+ * `bin` of the onsystem package it is in, at VERSION. `file` must be a file, not a link, that only
+ * the user can write to, as the CLI writes it.
  */
 function rememberedCli(file) {
   let script;
   try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile()) return undefined;
+    if (process.getuid && (stat.uid !== process.getuid() || stat.mode & 0o022)) return undefined;
     script = fs.readFileSync(file, 'utf8').trim();
   } catch {
     return undefined;
@@ -759,19 +765,28 @@ function rememberedCli(file) {
 }
 
 /**
- * The user's own folder in the system temp folder, `onsystem-<uid>`, where the CLI caches too:
- * created for the user alone, and undefined when someone else could write to it, since the hook
- * runs the CLI a file in it names. Windows gives each user a temp folder of their own.
+ * The user's own folder in the system temp folder, `onsystem-<uid>` (`onsystem` on Windows),
+ * where the CLI caches too, created for the user alone. Undefined unless it is theirs alone, since
+ * the hook runs the CLI a file in it names: the rule of `untrustedFolder` in
+ * src/util/own-folder.ts, which this hook, run without the package, keeps a copy of. A folder, not
+ * a link; on Linux and macOS the user's, and no one else may write to it; on Windows, which has
+ * no such owner to check, inside the user's home folder, where Windows keeps their temp folder.
  */
 function ownFolder() {
   const user = process.getuid ? `-${process.getuid()}` : '';
   const dir = path.join(os.tmpdir(), `onsystem${user}`);
   try {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    if (!process.getuid) return dir;
     const stat = fs.lstatSync(dir);
-    const own = stat.isDirectory() && stat.uid === process.getuid() && !(stat.mode & 0o022);
-    return own ? dir : undefined;
+    if (!stat.isDirectory()) return undefined;
+    if (process.platform === 'win32' || !process.getuid) {
+      const home = fs.realpathSync.native(os.homedir());
+      const relative = path.relative(home, fs.realpathSync.native(dir));
+      return !relative.startsWith('..') && !path.isAbsolute(relative) ? dir : undefined;
+    }
+    if (stat.uid !== process.getuid() || stat.mode & 0o022) return undefined;
+    if (stat.mode & 0o077) fs.chmodSync(dir, 0o700);
+    return dir;
   } catch {
     return undefined;
   }

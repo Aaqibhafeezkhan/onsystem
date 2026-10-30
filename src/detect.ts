@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { escapePath, globSync } from 'tinyglobby';
 
 import { readProjectConfig, type ProjectConfig } from './extract/program.js';
 import { buildEntries, exportedFiles, moduleFile, sourceTarget } from './package-source.js';
 import { importedStylesheets } from './tokens/imports.js';
+import { ownFolder, untrustedFolder } from './util/own-folder.js';
 import { globBase, isHomeOrAbove, isInside, pathOf, relativePath, toPosix } from './util/paths.js';
 import { unique } from './util/strings.js';
 import { VERSION } from './version.js';
@@ -184,6 +185,7 @@ export const APP_STYLESHEETS = [
  * A design system found in one dependency's `exports` (step 3) is kept on disk beside the
  * cached model, and read from there while nothing it came from changes ({@link keptDetection}):
  * following a package's barrels parses every file they lead to, and `check` runs once per edit.
+ * Without `cache` (`--no-cache`), it is neither read nor kept.
  */
 export function detectProject(
   root: string,
@@ -191,20 +193,24 @@ export function detectProject(
   trace?: DetectionStep[],
   declared?: Pick<DesignSystemPackage, 'name' | 'dir' | 'installed'>,
   packages: PackageFinder = new PackageFinder(root),
+  cache = true,
 ): Detection | undefined {
   // A trace (`inspect --explain`) is of every candidate, looked at again.
-  if (trace) return detectAll(root, tsconfig, trace, declared, packages);
+  if (trace || !cache) return detectAll(root, tsconfig, trace, declared, packages);
+  const code = codeStamp();
+  if (!code) return detectAll(root, tsconfig, undefined, declared, packages);
   const key = JSON.stringify([
     VERSION,
+    code,
     path.resolve(root),
     tsconfig ?? null,
     declared ? [declared.name, declared.dir, declared.installed] : null,
   ]);
   const kept = keptDetection(root, key, declared, packages);
-  if (kept) return kept;
+  if (kept && 'detection' in kept) return kept.detection;
   const inputs: Inputs = { located: [], dirs: [], keep: false };
   const detection = detectAll(root, tsconfig, undefined, declared, packages, inputs);
-  if (detection && inputs.keep) keepDetection(root, key, inputs, detection);
+  if (detection && inputs.keep) keepDetection(root, key, inputs, detection, kept?.crowded);
   return detection;
 }
 
@@ -1802,15 +1808,26 @@ interface Inputs {
   keep: boolean;
 }
 
-/** A detection kept on disk, with what tells whether it still holds. */
-interface KeptDetection {
-  key: string;
-  /** {@link inputsStamp} of `dirs`. */
-  stamp: string;
-  located: Inputs['located'];
+/**
+ * Folders that held more than MAX_WATCHED_FILES files, so that a detection reading them is not
+ * kept, and they are not walked again on each run while `stamp` ({@link folderStamp}) holds.
+ */
+interface Crowded {
   dirs: string[];
-  detection: Detection;
+  stamp: string;
 }
+
+/** A detection kept on disk, with what tells whether it still holds, or folders too big to watch. */
+type KeptDetection = { key: string } & (
+  | {
+      /** {@link inputsStamp} of `dirs`. */
+      stamp: string;
+      located: Inputs['located'];
+      dirs: string[];
+      detection: Detection;
+    }
+  | { crowded: Crowded }
+);
 
 /** More files than this in the folders a detection read, and it is not kept. */
 const MAX_WATCHED_FILES = 5000;
@@ -1820,10 +1837,56 @@ const MAX_WATCHED_FILES = 5000;
  * HFS+) keeps its mtime, and with its size unchanged, the change would go unseen.
  */
 const SETTLED_MS = 2000;
+/** More files than this in this module's folder, and only this module's file stamps the code. */
+const MAX_CODE_FILES = 500;
+
+const byName = (a: fs.Dirent, b: fs.Dirent) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+
+let code: string | null | undefined;
+/**
+ * A stamp of the code that is running ({@link codeStampOf} this module's folder: `dist`, or `src`
+ * run from source), so that a detection kept by another build of onsystem is not read, whatever
+ * its version says. Undefined when it cannot be read: nothing is kept then.
+ */
+function codeStamp(): string | undefined {
+  if (code === undefined) {
+    try {
+      const self = fileURLToPath(import.meta.url);
+      code = codeStampOf(path.dirname(self), self);
+    } catch {
+      code = null;
+    }
+  }
+  return code ?? undefined;
+}
+
+/**
+ * A hash of the size and mtime of every file in `dir` (outside `node_modules`), or of `self`
+ * alone when it holds more than MAX_CODE_FILES: a module bundled into a folder of other files.
+ */
+export function codeStampOf(dir: string, self?: string): string {
+  const files: string[] = [];
+  const walk = (folder: string): boolean => {
+    for (const entry of fs.readdirSync(folder, { withFileTypes: true }).sort(byName)) {
+      if (entry.name === 'node_modules') continue;
+      const file = path.join(folder, entry.name);
+      if (entry.isDirectory()) {
+        if (!walk(file)) return false;
+      } else if (files.push(file) > MAX_CODE_FILES) {
+        return false;
+      }
+    }
+    return true;
+  };
+  const stamped = walk(dir) || !self ? files : [self];
+  const hash = createHash('sha256');
+  for (const file of stamped) hash.update(`${file}\0${fileStamp(file)}\n`);
+  return hash.digest('hex').slice(0, 16);
+}
 
 /**
  * Where a detection is kept: beside the cached model, in the project's `node_modules/.cache`,
- * else (`temp`) in the user's own folder in the system temp folder, `onsystem-<uid>`.
+ * else (`temp`) in the user's own folder in the system temp folder ({@link ownFolder}).
  */
 function detectionFile(root: string): { file: string; temp: boolean } {
   const nodeModules = path.join(root, 'node_modules');
@@ -1831,29 +1894,14 @@ function detectionFile(root: string): { file: string; temp: boolean } {
     return { file: path.join(nodeModules, '.cache', 'onsystem', 'detection.json'), temp: false };
   }
   const id = createHash('sha256').update(path.resolve(root)).digest('hex').slice(0, 16);
-  const user = process.getuid ? `-${String(process.getuid())}` : '';
-  return { file: path.join(os.tmpdir(), `onsystem${user}`, `${id}.detection.json`), temp: true };
-}
-
-/**
- * Whether `folder`, in the system temp folder, is the user's alone: a folder, not a link, that
- * they own and no one else can write to. The temp folder of a multi-user host is shared, and a
- * detection planted in it would decide what is read as the design system. With `create`, it is
- * created (or closed) for the user first. Windows gives each user a temp folder of their own.
- */
-function ownFolder(folder: string, create: boolean): boolean {
-  if (create) fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
-  if (!process.getuid) return true;
-  const stat = fs.lstatSync(folder);
-  if (!stat.isDirectory() || stat.uid !== process.getuid()) return false;
-  if (create && stat.mode & 0o077) fs.chmodSync(folder, 0o700);
-  return create || !(stat.mode & 0o022);
+  return { file: path.join(ownFolder(), `${id}.detection.json`), temp: true };
 }
 
 /**
  * A hash of the size and mtime of the root's package.json and components.json and of every file
- * in `dirs` (outside `node_modules` and `.git`), and the newest mtime among them. Undefined when
- * there are more than MAX_WATCHED_FILES files.
+ * and folder in `dirs` (outside `node_modules` and `.git`), and the newest mtime among them. A
+ * folder's mtime changes when a file in it is added, removed or renamed. Undefined when there are
+ * more than MAX_WATCHED_FILES files.
  */
 function inputsStamp(
   root: string,
@@ -1878,7 +1926,8 @@ function inputsStamp(
       add(dir);
       return true;
     }
-    for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    add(dir);
+    for (const entry of entries.sort(byName)) {
       if (entry.name === 'node_modules' || entry.name === '.git') continue;
       const file = path.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -1895,22 +1944,35 @@ function inputsStamp(
   return { stamp: hash.digest('hex'), newest };
 }
 
+/** A hash of the size and mtime of the folders `dirs` themselves, not of what is in them. */
+function folderStamp(dirs: readonly string[]): string {
+  const hash = createHash('sha256');
+  for (const dir of dirs) hash.update(`${dir}\0${fileStamp(dir)}\n`);
+  return hash.digest('hex');
+}
+
 /**
- * The detection kept on disk for this `key` (the version, root, tsconfig and declared package),
- * while it still holds: every dependency it looked at is found where it was, and no file in the
- * folders it read, nor the root's package.json or components.json, has changed size or mtime.
+ * The detection kept on disk for this `key` (the version and build, root, tsconfig and declared
+ * package), while it still holds: every dependency it looked at is found where it was, and no
+ * file in the folders it read, nor the root's package.json or components.json, has changed size
+ * or mtime. Or the folders a detection for this key found too big to watch.
  */
 function keptDetection(
   root: string,
   key: string,
   declared: Pick<DesignSystemPackage, 'name'> | undefined,
   packages: PackageFinder,
-): Detection | undefined {
+): { detection: Detection } | { crowded: Crowded } | undefined {
   try {
     const { file, temp } = detectionFile(root);
-    if (temp && !ownFolder(path.dirname(file), false)) return undefined;
-    const kept = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<KeptDetection>;
-    if (kept.key !== key || !kept.detection || !kept.located || !kept.dirs) return undefined;
+    if (temp && untrustedFolder(path.dirname(file))) return undefined;
+    const kept = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<
+      Extract<KeptDetection, { detection: Detection }> &
+        Extract<KeptDetection, { crowded: Crowded }>
+    >;
+    if (kept.key !== key) return undefined;
+    if (kept.crowded) return { crowded: kept.crowded };
+    if (!kept.detection || !kept.located || !kept.dirs) return undefined;
     if (inputsStamp(root, kept.dirs)?.stamp !== kept.stamp) return undefined;
     for (const [name, workspace, installed] of kept.located) {
       if (name === declared?.name) continue;
@@ -1918,34 +1980,43 @@ function keptDetection(
       if (found !== workspace) return undefined;
       if (!found && (packages.installed(name) ?? null) !== installed) return undefined;
     }
-    return kept.detection;
+    return { detection: kept.detection };
   } catch {
     // None kept, or unreadable: detect.
     return undefined;
   }
 }
 
-/** Keeps a detection on disk for {@link keptDetection}, when the files it read have settled. */
-function keepDetection(root: string, key: string, inputs: Inputs, detection: Detection): void {
+/**
+ * Keeps a detection on disk for {@link keptDetection}, when the files it read have settled. When
+ * its folders hold too many files to watch, keeps that instead, so that they are not walked on
+ * each run: `crowded`, what was kept for them before.
+ */
+function keepDetection(
+  root: string,
+  key: string,
+  inputs: Inputs,
+  detection: Detection,
+  crowded: Crowded | undefined,
+): void {
   const dirs = unique(inputs.dirs.map((d) => path.resolve(d)));
   const outermost = dirs.filter((d) => !dirs.some((other) => other !== d && isInside(other, d)));
   if (outermost.some(isHomeOrAbove)) return;
   try {
+    const sameDirs =
+      crowded?.dirs.length === outermost.length && crowded.dirs.every((d, i) => d === outermost[i]);
+    if (sameDirs && crowded.stamp === folderStamp(outermost)) return;
     const stamped = inputsStamp(root, outermost);
-    if (!stamped || Date.now() - stamped.newest < SETTLED_MS) return;
+    if (stamped && Date.now() - stamped.newest < SETTLED_MS) return;
     const { file, temp } = detectionFile(root);
     if (temp) {
-      if (!ownFolder(path.dirname(file), true)) return;
+      if (untrustedFolder(path.dirname(file), true)) return;
     } else {
       fs.mkdirSync(path.dirname(file), { recursive: true });
     }
-    const kept: KeptDetection = {
-      key,
-      stamp: stamped.stamp,
-      located: inputs.located,
-      dirs: outermost,
-      detection,
-    };
+    const kept: KeptDetection = stamped
+      ? { key, stamp: stamped.stamp, located: inputs.located, dirs: outermost, detection }
+      : { key, crowded: { dirs: outermost, stamp: folderStamp(outermost) } };
     // Written beside it, then renamed into place: a run reading it never sees half.
     const partial = `${file}.${String(process.pid)}-${randomUUID()}.tmp`;
     try {

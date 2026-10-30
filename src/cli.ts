@@ -234,6 +234,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     tokens: values.tokens,
     docs: values.docs,
     includeDesignSystem: values['include-design-system'],
+    cache: values.cache,
   };
 
   try {
