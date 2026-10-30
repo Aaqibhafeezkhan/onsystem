@@ -294,6 +294,44 @@ function enclosingComponent(node: ts.Node): string | undefined {
 
 // ─── no-unknown-component ───────────────────────────────────────────────────
 
+/**
+ * The component an unknown name most likely means: the closest spelling (`DialogTitel` is
+ * `DialogTitle`), unless the name is a part of a family that has no such part. `DialogContent`
+ * in a system whose Dialog is the content (React Aria) was spelled closest to another part,
+ * `DialogFooter`, which means something else: the family's component is named instead, with its
+ * parts. Undefined when nothing is close.
+ */
+function guessComponent(
+  name: string,
+  target: RuleContext['target'],
+): { name: string; parts?: string[] } | undefined {
+  const guess = closest(name, target.names());
+  // The longest component name that `name` starts with, before another word: `Dialog`.
+  const family = target
+    .names()
+    .filter(
+      (n) => n.length < name.length && name.startsWith(n) && /[A-Z]/.test(name[n.length] ?? ''),
+    )
+    .sort((a, b) => b.length - a.length)[0];
+  if (family === undefined) return guess === undefined ? undefined : { name: guess };
+  // Another part of the family, spelled like this one but for the family's name, is a typo of it.
+  const part = name.slice(family.length);
+  const sibling = guess !== undefined && guess !== family && guess.startsWith(family);
+  if (sibling && closest(part, [guess.slice(family.length)], 1 / 2) !== undefined) {
+    return { name: guess };
+  }
+  const parts = target.components.get(family)?.subcomponents ?? [];
+  if (parts.length) return { name: family, parts };
+  // A part unlike any of the family's, of a component without parts (`ButtonGroup` next to
+  // `Button`), is another component: not a sibling's name.
+  return guess === undefined || sibling ? undefined : { name: guess };
+}
+
+/** `, or one of its parts: DialogTrigger, DialogFooter` for a family's component. */
+function partsOf(guess: { parts?: string[] }): string {
+  return guess.parts ? `, or one of its parts: ${guess.parts.join(', ')}` : '';
+}
+
 export const noUnknownComponent: Rule = {
   id: 'no-unknown-component',
   description:
@@ -338,36 +376,37 @@ export const noUnknownComponent: Rule = {
       }
 
       if (resolution.kind === 'missing-export') {
-        const guess = closest(resolution.name, target.names());
+        const guess = guessComponent(resolution.name, target);
         context.report({
           ...range,
           message:
             `"${resolution.name}" is not a design-system component (imported from "${resolution.source}").` +
             (guess
-              ? ` Did you mean <${guess}>?`
+              ? ` Did you mean <${guess.name}>${partsOf(guess)}?`
               : ' Use search_components to find an existing one.'),
-          suggestion: guess ? `<${guess}>` : undefined,
+          suggestion: guess ? `<${guess.name}>` : undefined,
         });
         continue;
       }
 
       if (resolution.kind === 'unresolved') {
-        const guess = closest(resolution.name, target.names());
-        const component = guess ? target.components.get(guess) : undefined;
+        const guess = guessComponent(resolution.name, target);
+        const component = guess ? target.components.get(guess.name) : undefined;
         if (guess && component) {
           // A close name is only a safe rename when it is in scope: `<Cards>` in a
           // fragment without imports may be an app component the agent has not
           // imported yet, not a typo of `<Card>`.
-          const binding = context.analysis.imports.get(guess.split('.')[0] ?? guess);
+          const binding = context.analysis.imports.get(guess.name.split('.')[0] ?? guess.name);
           const inScope =
             binding !== undefined && target.isDesignSystemImport(binding.source, context.file);
           context.report({
             ...range,
             message: inScope
-              ? `Unknown component <${resolution.name}>. Did you mean <${guess}>?`
-              : `Unknown component <${resolution.name}>. Did you mean <${guess}> (${importLine(component, context)})?`,
-            suggestion: `<${guess}>`,
-            fix: inScope ? renameTag(context, element, guess) : undefined,
+              ? `Unknown component <${resolution.name}>. Did you mean <${guess.name}>${partsOf(guess)}?`
+              : `Unknown component <${resolution.name}>. Did you mean <${guess.name}> (${importLine(component, context)})${partsOf(guess)}?`,
+            suggestion: `<${guess.name}>`,
+            // The family's component is another component, not a spelling of this one.
+            fix: inScope && !guess.parts ? renameTag(context, element, guess.name) : undefined,
           });
         } else if (context.analysis.imports.size > 0) {
           // Only for whole modules: fragments without imports routinely use
@@ -448,17 +487,36 @@ const FOREIGN_COMPOSITION = new Set(['href', 'as', 'component']);
  * element; shadcn/ui ships both, and agents mix them up, or bring `as`, `component`
  * or `href` from other libraries. Renaming the prop is not enough (`asChild` is a
  * boolean, and a button with an `href` is still no link), so this explains the
- * other way instead of offering a fix.
+ * other way instead of offering a fix. React Aria has neither: a trigger takes the
+ * element that opens it as a child, and `render` is a function that returns an
+ * element of the same kind, so a link is a link component.
  */
 function compositionHint(
   name: string,
   known: Set<string>,
   tag: string,
-): { prop: string; text: string } | undefined {
+  component: ComponentInfo,
+): { prop?: string; text: string } | undefined {
   const radix = `compose with asChild and a single child`;
   const radixExample = `<${tag} asChild><Link href="…">…</Link></${tag}>`;
   const base = `compose with render`;
   const baseExample = `<${tag} render={<Link href="…" />}>…</${tag}>`;
+  const render = component.props.find((p) => p.name === 'render');
+  const ariaRender = render !== undefined && /^(?:DOMRenderFunction<|\(props\b)/.test(render.type);
+  const composing = ['asChild', 'as', 'component', 'render'].includes(name);
+  if (composing && !known.has('asChild') && !known.has('render') && /Trigger$/.test(tag)) {
+    return {
+      text: `It takes the element that opens it as a child: <${tag}><Button>…</Button>…</${tag}>.`,
+    };
+  }
+  if (ariaRender && (composing || name === 'href')) {
+    return {
+      text:
+        name === 'href'
+          ? 'For a link, use a link component: React Aria’s render only swaps in an element of the same kind.'
+          : `React Aria components take no ${name}. For a link, use a link component: render={(props) => …} only swaps in an element of the same kind.`,
+    };
+  }
   if (name === 'href') {
     if (known.has('asChild')) {
       return { prop: 'asChild', text: `For a link, Radix components ${radix}: ${radixExample}.` };
@@ -550,7 +608,7 @@ export const noUnknownProp: Rule = {
         ) {
           continue;
         }
-        const composition = compositionHint(name, known, element.tag);
+        const composition = compositionHint(name, known, element.tag, component);
         if (composition) {
           context.report({
             start: attribute.name.getStart(context.sourceFile),

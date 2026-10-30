@@ -249,11 +249,37 @@ export async function load(request: LoadRequest): Promise<LoadResponse> {
   };
 }
 
-parentPort?.on('message', ({ request, signal, port }: Call) => {
+/** Calls not answered yet: the answer wakes the ESLint thread that waits for it. */
+const pending = new Set<Call>();
+
+function answer({ signal, port }: Call, response: LoadResponse): void {
+  port.postMessage(response);
+  Atomics.store(signal, 0, 1);
+  Atomics.notify(signal, 0);
+}
+
+if (parentPort) {
+  // A worker that stops before it answers (`process.exit()` in a config written in code, an
+  // uncaught error) left ESLint waiting the bridge's whole timeout on every file, with a message
+  // that blamed a slow load. Its exit handlers still run, so they answer with why it stopped.
+  let crash: unknown;
+  process.on('uncaughtExceptionMonitor', (error) => {
+    crash = error;
+  });
+  process.on('exit', (code) => {
+    const why = crash instanceof Error ? `: ${crash.message}` : ` (exit code ${String(code)})`;
+    for (const call of pending) {
+      answer(call, { error: `the design system's loader stopped before it answered${why}` });
+    }
+    pending.clear();
+  });
+}
+
+parentPort?.on('message', (call: Call) => {
+  const { request } = call;
+  pending.add(call);
   const reply = (response: LoadResponse) => {
-    port.postMessage(response);
-    Atomics.store(signal, 0, 1);
-    Atomics.notify(signal, 0);
+    if (pending.delete(call)) answer(call, response);
   };
   load({ ...request, file: path.resolve(request.cwd, request.file) }).then(
     reply,
